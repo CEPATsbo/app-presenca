@@ -1,9 +1,6 @@
-// Import the functions you need from the SDKs you need
-import { initializeApp } from "firebase/app";
-// TODO: Add SDKs for Firebase products that you want to use
-// https://firebase.google.com/docs/web/setup#available-libraries
+import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
+import { getFirestore, collection, query, where, onSnapshot } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
 
-// Your web app's Firebase configuration
 const firebaseConfig = {
   apiKey: "AIzaSyBV7RPjk3cFTqL-aIpflJcUojKg1ZXMLuU",
   authDomain: "voluntarios-ativos---cepat.firebaseapp.com",
@@ -13,26 +10,12 @@ const firebaseConfig = {
   appId: "1:66122858261:web:7fa21f1805463b5c08331c"
 };
 
-// Initialize Firebase
-const firebaseConfig = {
-  apiKey: "AIzaSyBV7RPjk3cFTqL-aIpflJcUojKg1ZXMLuU",
-  authDomain: "voluntarios-ativos---cepat.firebaseapp.com",
-  projectId: "voluntarios-ativos---cepat",
-  storageBucket: "voluntarios-ativos---cepat.firebasestorage.app",
-  messagingSenderId: "66122858261",
-  appId: "1:66122858261:web:7fa21f1805463b5c08331c"
-};
-// -------------------------------------------------------------
-
-// Inicializa o Firebase
-firebase.initializeApp(firebaseConfig);
-const db = firebase.firestore();
+const app = initializeApp(firebaseConfig);
+const db = getFirestore(app);
 
 const listaPresencaDiv = document.getElementById('lista-presenca');
 
-// Função para renderizar a lista de presentes na tela
 function renderizarLista(presentes) {
-    // Agrupa os presentes por atividade
     const porAtividade = presentes.reduce((acc, pessoa) => {
         const atividade = pessoa.atividade;
         if (!acc[atividade]) {
@@ -42,20 +25,19 @@ function renderizarLista(presentes) {
         return acc;
     }, {});
 
-    listaPresencaDiv.innerHTML = ''; // Limpa a lista antes de redesenhar
+    listaPresencaDiv.innerHTML = '';
 
-    // Cria o HTML para cada grupo de atividade
-    for (const atividade in porAtividade) {
+    for (const atividade of Object.keys(porAtividade).sort()) {
         const grupoDiv = document.createElement('div');
         grupoDiv.className = 'atividade-grupo';
-        
+
         const titulo = document.createElement('h2');
         titulo.className = 'atividade-titulo';
         titulo.textContent = atividade;
         grupoDiv.appendChild(titulo);
 
         const listaUl = document.createElement('ul');
-        porAtividade[atividade].sort().forEach(nome => { // Ordena os nomes em ordem alfabética
+        porAtividade[atividade].sort().forEach(nome => {
             const itemLi = document.createElement('li');
             itemLi.textContent = nome;
             listaUl.appendChild(itemLi);
@@ -66,23 +48,20 @@ function renderizarLista(presentes) {
     }
 }
 
-
-// Ouve as mudanças na coleção de presenças em TEMPO REAL
 function carregarPresencas() {
     const hoje = new Date().toISOString().split('T')[0];
+    const q = query(collection(db, "presencas"), where("data", "==", hoje));
 
-    db.collection("presencas").where("data", "==", hoje)
-      .onSnapshot((querySnapshot) => {
-          const presentes = [];
-          querySnapshot.forEach((doc) => {
-              presentes.push(doc.data());
-          });
-          renderizarLista(presentes);
-      }, (error) => {
-          console.error("Erro ao buscar presenças: ", error);
-          listaPresencaDiv.innerHTML = <p style="color:red;">Erro ao carregar dados.</p>;
-      });
+    onSnapshot(q, (querySnapshot) => {
+        const presentes = [];
+        querySnapshot.forEach((doc) => {
+            presentes.push(doc.data());
+        });
+        renderizarLista(presentes);
+    }, (error) => {
+        console.error("Erro ao buscar presenças: ", error);
+        listaPresencaDiv.innerHTML = `<p style="color:red;">Erro ao carregar dados.</p>`;
+    });
 }
 
-// Inicia o carregamento quando a página abre
 window.onload = carregarPresencas;
