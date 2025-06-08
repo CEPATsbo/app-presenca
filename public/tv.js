@@ -14,14 +14,13 @@ const firebaseConfig = {
 };
 
 // Initialize Firebase
-const app = initializeApp(firebaseConfig);
 const firebaseConfig = {
-  apiKey: "SEU_API_KEY",
-  authDomain: "SEU_AUTH_DOMAIN",
-  projectId: "SEU_PROJECT_ID",
-  storageBucket: "SEU_STORAGE_BUCKET",
-  messagingSenderId: "SEU_MESSAGING_SENDER_ID",
-  appId: "SEU_APP_ID"
+  apiKey: "AIzaSyBV7RPjk3cFTqL-aIpflJcUojKg1ZXMLuU",
+  authDomain: "voluntarios-ativos---cepat.firebaseapp.com",
+  projectId: "voluntarios-ativos---cepat",
+  storageBucket: "voluntarios-ativos---cepat.firebasestorage.app",
+  messagingSenderId: "66122858261",
+  appId: "1:66122858261:web:7fa21f1805463b5c08331c"
 };
 // -------------------------------------------------------------
 
