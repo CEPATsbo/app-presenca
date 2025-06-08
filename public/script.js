@@ -1,9 +1,13 @@
+// Passo 1: Importa as funções que precisamos do Firebase.
+// Isto agora está no topo do arquivo, como deve ser.
+import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
+import { getFirestore, doc, setDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
 
-// Garante que o script só rode depois que a página HTML for totalmente carregada
+// Passo 2: Garante que o resto do script só rode depois que a página HTML for totalmente carregada
 document.addEventListener('DOMContentLoaded', () => {
 
     // =================================================================
-    //  COLE AQUI O SEU OBJETO 'firebaseConfig' COMPLETO DO BLOCO DE NOTAS
+    //  COLE AQUI O SEU OBJETO 'firebaseConfig' COMPLETO
     // =================================================================
     const firebaseConfig = {
   apiKey: "AIzaSyBV7RPjk3cFTqL-aIpflJcUojKg1ZXMLuU",
@@ -15,16 +19,11 @@ document.addEventListener('DOMContentLoaded', () => {
 };
     // =================================================================
 
-
-    // Importa as funções que precisamos do Firebase v9+
-    import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
-    import { getFirestore, doc, setDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
-
     // Inicializa o Firebase
     const app = initializeApp(firebaseConfig);
     const db = getFirestore(app);
 
-    // --- LISTA DE ATIVIDADES ATUALIZADA ---
+    // --- LISTA DE ATIVIDADES ---
     const listaDeAtividades = [
         "Recepção/Acolhimento", "Passe de Harmonização", "Apoio", "Biblioteca", 
         "Entrevistas", "Encaminhamento", "Câmaras de Passe", "Diretoria", 
@@ -48,6 +47,8 @@ document.addEventListener('DOMContentLoaded', () => {
     let monitorInterval;
 
     function criarCheckboxesDeAtividade() {
+        if(!atividadeContainer) return;
+        atividadeContainer.innerHTML = '';
         listaDeAtividades.sort().forEach(atividade => {
             const div = document.createElement('div');
             div.className = 'checkbox-item';
