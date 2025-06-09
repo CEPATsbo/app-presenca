@@ -3,11 +3,11 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
 import { getFirestore, doc, setDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
 
-// Passo 2: Garante que o resto do script só rode depois que a página HTML for totalmente carregada
+// Passo 2: Garante que o script só rode depois que a página HTML for totalmente carregada
 document.addEventListener('DOMContentLoaded', () => {
 
     // =================================================================
-    //  COLE AQUI O SEU OBJETO 'firebaseConfig' COMPLETO
+    //  COLE AQUI O SEU OBJETO 'firebaseConfig' COMPLETO DO SITE DO FIREBASE
     // =================================================================
     const firebaseConfig = {
   apiKey: "AIzaSyBV7RPjk3cFTqL-aIpflJcUojKg1ZXMLuU",
@@ -19,11 +19,11 @@ document.addEventListener('DOMContentLoaded', () => {
 };
     // =================================================================
 
-    // Inicializa o Firebase
+  // Inicializa o Firebase
     const app = initializeApp(firebaseConfig);
     const db = getFirestore(app);
 
-    // --- LISTA DE ATIVIDADES ---
+    // --- LISTA DE ATIVIDADES ATUALIZADA ---
     const listaDeAtividades = [
         "Recepção/Acolhimento", "Passe de Harmonização", "Apoio", "Biblioteca", 
         "Entrevistas", "Encaminhamento", "Câmaras de Passe", "Diretoria", 
@@ -33,7 +33,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // --- CONFIGURAÇÕES DO LOCAL ---
     const CASA_ESPIRITA_LAT = -22.7532;
     const CASA_ESPIRITA_LON = -47.3334;
-    const RAIO_EM_METROS = 100;
+    const RAIO_EM_METROS = 30;
 
     // Elementos da página
     const loginArea = document.getElementById('login-area');
@@ -42,13 +42,34 @@ document.addEventListener('DOMContentLoaded', () => {
     const feedback = document.getElementById('feedback');
     const statusText = document.getElementById('status-text');
     const atividadeContainer = document.getElementById('atividade-container');
+    const toggleAtividadesBtn = document.getElementById('toggle-atividades');
+    const atividadeWrapper = document.getElementById('atividade-wrapper');
 
     let userInfo = {};
     let monitorInterval;
 
+    // --- LÓGICA ATUALIZADA PARA LIMITAR A SELEÇÃO ---
+    function handleCheckboxChange() {
+        const checkboxesMarcados = document.querySelectorAll('input[name="atividade"]:checked');
+        const totalMarcados = checkboxesMarcados.length;
+        const todosCheckboxes = document.querySelectorAll('input[name="atividade"]');
+
+        if (totalMarcados >= 3) {
+            // Se 3 ou mais estão marcados, desabilita todos os que NÃO estão marcados
+            todosCheckboxes.forEach(checkbox => {
+                if (!checkbox.checked) {
+                    checkbox.disabled = true;
+                }
+            });
+        } else {
+            // Se menos de 3 estão marcados, habilita todos
+            todosCheckboxes.forEach(checkbox => {
+                checkbox.disabled = false;
+            });
+        }
+    }
+
     function criarCheckboxesDeAtividade() {
-        if(!atividadeContainer) return;
-        atividadeContainer.innerHTML = '';
         listaDeAtividades.sort().forEach(atividade => {
             const div = document.createElement('div');
             div.className = 'checkbox-item';
@@ -57,12 +78,23 @@ document.addEventListener('DOMContentLoaded', () => {
             checkbox.id = atividade.replace(/\s+/g, '-');
             checkbox.name = 'atividade';
             checkbox.value = atividade;
+            // Adiciona o listener para o evento de mudança (marcar/desmarcar)
+            checkbox.addEventListener('change', handleCheckboxChange); 
             const label = document.createElement('label');
             label.htmlFor = checkbox.id;
             label.textContent = atividade;
             div.appendChild(checkbox);
             div.appendChild(label);
             atividadeContainer.appendChild(div);
+        });
+    }
+
+    // --- LÓGICA PARA O BOTÃO DO MENU SUSPENSO ---
+    if (toggleAtividadesBtn) {
+        toggleAtividadesBtn.addEventListener('click', () => {
+            atividadeWrapper.classList.toggle('hidden');
+            const seta = toggleAtividadesBtn.innerHTML.includes('▼') ? '▲' : '▼';
+            toggleAtividadesBtn.innerHTML = `Selecione suas atividades (até 3) ${seta}`;
         });
     }
 
@@ -135,10 +167,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 alert("Por favor, selecione pelo menos uma atividade.");
                 return;
             }
-            if (atividadesSelecionadas.length > 3) {
-                alert("Você pode selecionar no máximo 3 atividades.");
-                return;
-            }
+            // A validação de > 3 não é mais necessária aqui, pois a UI já impede.
             const atividadesArray = Array.from(atividadesSelecionadas).map(cb => cb.value);
             const atividadesString = atividadesArray.join(', ');
             userInfo = { nome, atividade: atividadesString };
