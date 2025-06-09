@@ -177,7 +177,7 @@ document.addEventListener('DOMContentLoaded', () => {
             document.getElementById('display-nome').textContent = nome;
             document.getElementById('display-atividade').textContent = atividadesString;
             checarLocalizacao();
-            monitorInterval = setInterval(checarLocalizacao, 60000);
+            monitorInterval = setInterval(checarLocalizacao, 600000);
         });
     }
 
@@ -191,7 +191,7 @@ document.addEventListener('DOMContentLoaded', () => {
             document.getElementById('display-nome').textContent = userInfo.nome;
             document.getElementById('display-atividade').textContent = userInfo.atividade;
             checarLocalizacao();
-            monitorInterval = setInterval(checarLocalizacao, 60000);
+            monitorInterval = setInterval(checarLocalizacao, 600000);
         }
     }
 
