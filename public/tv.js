@@ -1,10 +1,8 @@
-import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
-import { getFirestore, collection, query, where, onSnapshot } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
-
+// Garante que o script só rode depois que a página HTML for totalmente carregada
 document.addEventListener('DOMContentLoaded', () => {
 
     // =================================================================
-    //  COLE AQUI O MESMO OBJETO 'firebaseConfig'
+    //  COLE AQUI O SEU OBJETO 'firebaseConfig' COMPLETO
     // =================================================================
     const firebaseConfig = {
   apiKey: "AIzaSyBV7RPjk3cFTqL-aIpflJcUojKg1ZXMLuU",
@@ -16,29 +14,44 @@ document.addEventListener('DOMContentLoaded', () => {
 };
     // =================================================================
 
+    // Importa as funções que precisamos do Firebase v9+
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
+    import { getFirestore, collection, query, where, onSnapshot } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
+
+    // Inicializa o Firebase
     const app = initializeApp(firebaseConfig);
     const db = getFirestore(app);
 
     const listaPresencaDiv = document.getElementById('lista-presenca');
 
+    // --- FUNÇÃO ATUALIZADA PARA LIDAR COM MÚLTIPLAS ATIVIDADES ---
     function renderizarLista(presentes) {
+        // Cria um objeto para agrupar nomes por atividade
         const porAtividade = presentes.reduce((acc, pessoa) => {
-            const atividades = pessoa.atividade.split(', ');
-            atividades.forEach(atividade => {
+            // Separa a string de atividades (ex: "Apoio, Passe") em um array
+            const atividadesIndividuais = pessoa.atividade.split(', ');
+
+            // Para cada atividade individual, adiciona o nome do voluntário
+            atividadesIndividuais.forEach(atividade => {
+                // Se o grupo da atividade ainda não existe, cria um array vazio
                 if (!acc[atividade]) {
                     acc[atividade] = [];
                 }
-                // Evita adicionar nomes duplicados na mesma atividade
-                if (!acc[atividade].includes(pessoa.nome)) {
-                    acc[atividade].push(pessoa.nome);
-                }
+                // Adiciona o nome da pessoa ao grupo da atividade
+                acc[atividade].push(pessoa.nome);
             });
+            
             return acc;
         }, {});
 
+        // Limpa a lista antiga da tela
         listaPresencaDiv.innerHTML = '';
 
-        for (const atividade of Object.keys(porAtividade).sort()) {
+        // Pega as chaves (nomes das atividades) e as ordena alfabeticamente
+        const atividadesOrdenadas = Object.keys(porAtividade).sort();
+
+        // Cria o HTML para cada grupo de atividade, agora na ordem correta
+        for (const atividade of atividadesOrdenadas) {
             const grupoDiv = document.createElement('div');
             grupoDiv.className = 'atividade-grupo';
             
@@ -48,6 +61,7 @@ document.addEventListener('DOMContentLoaded', () => {
             grupoDiv.appendChild(titulo);
 
             const listaUl = document.createElement('ul');
+            // Ordena os nomes dos voluntários dentro de cada atividade
             porAtividade[atividade].sort().forEach(nome => {
                 const itemLi = document.createElement('li');
                 itemLi.textContent = nome;
@@ -55,7 +69,7 @@ document.addEventListener('DOMContentLoaded', () => {
             });
             grupoDiv.appendChild(listaUl);
 
-            listaPresencaDiv.appendChild(listaUl);
+            listaPresencaDiv.appendChild(grupoDiv);
         }
     }
 
@@ -75,5 +89,6 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
+    // Inicia o carregamento dos dados quando a página abre
     carregarPresencas();
 });
