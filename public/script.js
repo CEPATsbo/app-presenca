@@ -27,13 +27,13 @@ document.addEventListener('DOMContentLoaded', () => {
     const listaDeAtividades = [
         "Recepção/Acolhimento", "Passe de Harmonização", "Apoio", "Biblioteca", 
         "Entrevistas", "Encaminhamento", "Câmaras de Passe", "Diretoria", 
-        "Preleção", "Música/Coral", "Evangelização infantil", "Mídias digitais"
+        "Preleção", "Música/Coral", "Evangelização infantil", "Mídias digitais", "Mocidade", "Escola de Pais", "9 EAE", "10 EAE"
     ];
 
     // --- CONFIGURAÇÕES DO LOCAL ---
-    const CASA_ESPIRITA_LAT = -22.7532;
-    const CASA_ESPIRITA_LON = -47.4139;
-    const RAIO_EM_METROS = 100;
+    const CASA_ESPIRITA_LAT = -22.75553;
+    const CASA_ESPIRITA_LON = -47.36945;
+    const RAIO_EM_METROS = 30;
 
     // Elementos da página
     const loginArea = document.getElementById('login-area');
