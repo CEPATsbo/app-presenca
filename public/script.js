@@ -19,7 +19,7 @@ document.addEventListener('DOMContentLoaded', () => {
 };
     // =================================================================
 
-  // Inicializa o Firebase
+    // Inicializa o Firebase
     const app = initializeApp(firebaseConfig);
     const db = getFirestore(app);
 
@@ -31,9 +31,9 @@ document.addEventListener('DOMContentLoaded', () => {
     ];
 
     // --- CONFIGURAÇÕES DO LOCAL ---
-    const CASA_ESPIRITA_LAT = -22.754655;
-    const CASA_ESPIRITA_LON = -47.402106;
-    const RAIO_EM_METROS = 30;
+    const CASA_ESPIRITA_LAT = -22.7532;
+    const CASA_ESPIRITA_LON = -47.4139;
+    const RAIO_EM_METROS = 100;
 
     // Elementos da página
     const loginArea = document.getElementById('login-area');
@@ -48,21 +48,18 @@ document.addEventListener('DOMContentLoaded', () => {
     let userInfo = {};
     let monitorInterval;
 
-    // --- LÓGICA ATUALIZADA PARA LIMITAR A SELEÇÃO ---
     function handleCheckboxChange() {
         const checkboxesMarcados = document.querySelectorAll('input[name="atividade"]:checked');
         const totalMarcados = checkboxesMarcados.length;
         const todosCheckboxes = document.querySelectorAll('input[name="atividade"]');
 
         if (totalMarcados >= 3) {
-            // Se 3 ou mais estão marcados, desabilita todos os que NÃO estão marcados
             todosCheckboxes.forEach(checkbox => {
                 if (!checkbox.checked) {
                     checkbox.disabled = true;
                 }
             });
         } else {
-            // Se menos de 3 estão marcados, habilita todos
             todosCheckboxes.forEach(checkbox => {
                 checkbox.disabled = false;
             });
@@ -78,7 +75,6 @@ document.addEventListener('DOMContentLoaded', () => {
             checkbox.id = atividade.replace(/\s+/g, '-');
             checkbox.name = 'atividade';
             checkbox.value = atividade;
-            // Adiciona o listener para o evento de mudança (marcar/desmarcar)
             checkbox.addEventListener('change', handleCheckboxChange); 
             const label = document.createElement('label');
             label.htmlFor = checkbox.id;
@@ -89,7 +85,6 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    // --- LÓGICA PARA O BOTÃO DO MENU SUSPENSO ---
     if (toggleAtividadesBtn) {
         toggleAtividadesBtn.addEventListener('click', () => {
             atividadeWrapper.classList.toggle('hidden');
@@ -146,7 +141,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (distancia <= RAIO_EM_METROS) {
                 registrarPresenca();
             } else {
-                feedback.textContent = `Ainda fora da área de registro. Tentando novamente em 1 minuto.`;
+                feedback.textContent = `Ainda fora da área de registro. Tentando novamente em 10 minutos.`;
                 feedback.style.color = "orange";
             }
         }, (error) => {
@@ -167,7 +162,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 alert("Por favor, selecione pelo menos uma atividade.");
                 return;
             }
-            // A validação de > 3 não é mais necessária aqui, pois a UI já impede.
+            if (atividadesSelecionadas.length > 3) {
+                alert("Você pode selecionar no máximo 3 atividades.");
+                return;
+            }
             const atividadesArray = Array.from(atividadesSelecionadas).map(cb => cb.value);
             const atividadesString = atividadesArray.join(', ');
             userInfo = { nome, atividade: atividadesString };
@@ -177,7 +175,7 @@ document.addEventListener('DOMContentLoaded', () => {
             document.getElementById('display-nome').textContent = nome;
             document.getElementById('display-atividade').textContent = atividadesString;
             checarLocalizacao();
-            monitorInterval = setInterval(checarLocalizacao, 600000);
+            monitorInterval = setInterval(checarLocalizacao, 600000); // 10 minutos
         });
     }
 
@@ -191,9 +189,24 @@ document.addEventListener('DOMContentLoaded', () => {
             document.getElementById('display-nome').textContent = userInfo.nome;
             document.getElementById('display-atividade').textContent = userInfo.atividade;
             checarLocalizacao();
-            monitorInterval = setInterval(checarLocalizacao, 600000);
+            monitorInterval = setInterval(checarLocalizacao, 600000); // 10 minutos
         }
     }
 
     inicializarPagina();
-});
+
+    // =================================================================
+    //  NOVO BLOCO DE CÓDIGO PARA REGISTRAR O SERVICE WORKER (LUGAR CORRETO)
+    // =================================================================
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('/sw.js').then(registration => {
+          console.log('ServiceWorker registrado com sucesso:', registration);
+        }).catch(err => {
+          console.log('Registro do ServiceWorker falhou:', err);
+        });
+      });
+    }
+    // =================================================================
+
+}); // Fim do addEventListener 'DOMContentLoaded'
