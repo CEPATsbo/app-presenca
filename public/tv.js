@@ -1,8 +1,7 @@
-// Passo 1: Importa as funções do Firebase no topo do módulo.
+// Importa as funções do Firebase no topo do módulo.
 import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
 import { getFirestore, collection, query, where, onSnapshot } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
 
-// Passo 2: Garante que o código que manipula a página só rode depois dela carregar.
 document.addEventListener('DOMContentLoaded', () => {
 
     // =================================================================
@@ -18,15 +17,31 @@ document.addEventListener('DOMContentLoaded', () => {
 };
     // =================================================================
 
-    // Inicializa o Firebase
     const app = initializeApp(firebaseConfig);
     const db = getFirestore(app);
 
-    // Elementos da Página
     const listaPresencaDiv = document.getElementById('lista-presenca');
+    const dataHojeSpan = document.getElementById('data-hoje');
+    
+    let dataAtualFormatada = ''; 
+    let unsubscribe; 
 
-    // Função para renderizar a lista na tela
+    function getEAtualizarDataFormatada() {
+        const hoje = new Date();
+        const dia = String(hoje.getDate()).padStart(2, '0');
+        const mes = String(hoje.getMonth() + 1).padStart(2, '0');
+        const ano = hoje.getFullYear();
+        
+        if(dataHojeSpan) {
+            dataHojeSpan.textContent = `(${dia}/${mes}/${ano})`;
+        }
+        
+        return hoje.toISOString().split('T')[0];
+    }
+
     function renderizarLista(presentes) {
+        if(!listaPresencaDiv) return;
+
         const porAtividade = presentes.reduce((acc, pessoa) => {
             const atividadesIndividuais = pessoa.atividade.split(', ');
             atividadesIndividuais.forEach(atividade => {
@@ -43,7 +58,6 @@ document.addEventListener('DOMContentLoaded', () => {
         listaPresencaDiv.innerHTML = '';
 
         const atividadesOrdenadas = Object.keys(porAtividade).sort();
-
         for (const atividade of atividadesOrdenadas) {
             const grupoDiv = document.createElement('div');
             grupoDiv.className = 'atividade-grupo';
@@ -60,16 +74,23 @@ document.addEventListener('DOMContentLoaded', () => {
                 listaUl.appendChild(itemLi);
             });
             grupoDiv.appendChild(listaUl);
+            
             listaPresencaDiv.appendChild(grupoDiv);
         }
     }
 
-    // Função para carregar os dados do Firestore em tempo real
     function carregarPresencas() {
-        const hoje = new Date().toISOString().split('T')[0];
-        const q = query(collection(db, "presencas"), where("data", "==", hoje));
+        if (unsubscribe) {
+            unsubscribe();
+            console.log("Listener antigo do Firebase desligado.");
+        }
 
-        onSnapshot(q, (querySnapshot) => {
+        dataAtualFormatada = getEAtualizarDataFormatada();
+        
+        const q = query(collection(db, "presencas"), where("data", "==", dataAtualFormatada));
+
+        unsubscribe = onSnapshot(q, (querySnapshot) => {
+            console.log(`Dados recebidos para a data ${dataAtualFormatada}. Documentos: ${querySnapshot.size}`);
             const presentes = [];
             querySnapshot.forEach((doc) => {
                 presentes.push(doc.data());
@@ -77,10 +98,24 @@ document.addEventListener('DOMContentLoaded', () => {
             renderizarLista(presentes);
         }, (error) => {
             console.error("Erro ao buscar presenças: ", error);
-            listaPresencaDiv.innerHTML = `<p style="color:red;">Não foi possível carregar os dados. Verifique as regras de segurança do Firestore ou o console para mais detalhes.</p>`;
+            if(listaPresencaDiv){
+                listaPresencaDiv.innerHTML = `<p style="color:red;">Não foi possível carregar os dados.</p>`;
+            }
         });
+        console.log(`Novo listener do Firebase iniciado para a data ${dataAtualFormatada}.`);
     }
 
-    // Inicia o carregamento assim que a página estiver pronta
+    // --- LÓGICA PRINCIPAL DE EXECUÇÃO ---
+    
+    // 1. Carrega as presenças do dia atual assim que a página abre
     carregarPresencas();
+
+    // 2. A cada 1 minuto, verifica se o dia mudou
+    setInterval(() => {
+        const novaDataParaConsulta = new Date().toISOString().split('T')[0];
+        if (novaDataParaConsulta !== dataAtualFormatada) {
+            console.log("Virada de dia detectada! Reiniciando o painel...");
+            carregarPresencas();
+        }
+    }, 60000); // Verifica a cada 60 segundos
 });
