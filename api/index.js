@@ -1,8 +1,7 @@
 // VERSÃO 2.0 - GERADOR DE RELATÓRIO DE TEXTO
 
+// Carrega as variáveis de ambiente
 require('dotenv').config();
-
-// Importa as bibliotecas necessárias com 'require'
 const admin = require('firebase-admin');
 
 // Configura o Firebase Admin (apenas se ainda não foi inicializado)
@@ -14,25 +13,25 @@ if (!admin.apps.length) {
     });
   } catch (error) {
     console.error("ERRO FATAL ao inicializar Firebase Admin:", error);
-    // Em caso de erro na inicialização, a função não funcionará.
-    // Isso geralmente aponta para um problema na variável de ambiente.
   }
 }
 const db = admin.firestore();
 
-// Esta é a função que a Vercel vai executar quando o link for acessado
-export default async function handler(request, response) {
+// Esta é a função que a Vercel vai executar quando o link /api for acessado
+module.exports = async (request, response) => {
   try {
     const hoje = new Date().toISOString().split('T')[0];
     console.log(`Buscando registros para o relatório de ${hoje}`);
 
     const snapshot = await db.collection('presencas').where('data', '==', hoje).get();
 
+    // Define o cabeçalho da resposta como texto puro
+    response.setHeader('Content-Type', 'text/plain; charset=utf-8');
+
     if (snapshot.empty) {
       console.log('Nenhum registro encontrado para hoje.');
-      // Define o cabeçalho como texto puro e envia a resposta
-      response.setHeader('Content-Type', 'text/plain; charset=utf-8');
-      return response.status(200).send(`Relatório de Presença - ${new Date().toLocaleDateString('pt-BR')}\n\nNenhum voluntário presente registrado hoje.`);
+      const relatorioVazio = `Relatório de Presença - ${new Date().toLocaleDateString('pt-BR')}\n\nNenhum voluntário presente registrado hoje.`;
+      return response.status(200).send(relatorioVazio);
     }
 
     const presentes = [];
@@ -54,13 +53,11 @@ export default async function handler(request, response) {
       relatorioTexto += `  Atividade(s): ${p.atividade}\n\n`;
     });
 
-    // Define o cabeçalho como texto puro e envia a resposta
-    response.setHeader('Content-Type', 'text/plain; charset=utf-8');
+    // Envia o relatório como resposta
     response.status(200).send(relatorioTexto);
 
   } catch (error) {
     console.error("Erro ao gerar o relatório:", error);
-    response.setHeader('Content-Type', 'text/plain; charset=utf-8');
     response.status(500).send("Ocorreu um erro interno ao gerar o relatório. Verifique os logs da função na Vercel.");
   }
-}
+};
