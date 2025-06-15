@@ -31,9 +31,9 @@ document.addEventListener('DOMContentLoaded', () => {
     ];
 
     // --- CONFIGURAÇÕES DO LOCAL ---
-    const CASA_ESPIRITA_LAT = -22.754655;
-    const CASA_ESPIRITA_LON = -47.402106;
-    const RAIO_EM_METROS = 30;
+    const CASA_ESPIRITA_LAT = -22.75544;
+    const CASA_ESPIRITA_LON = -47.36947;
+    const RAIO_EM_METROS = 40;
 
     // Elementos da página
     const loginArea = document.getElementById('login-area');
