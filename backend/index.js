@@ -1,6 +1,8 @@
 // VERSÃO 2.0 - GERADOR DE RELATÓRIO DE TEXTO
 
 require('dotenv').config();
+
+// Importa as bibliotecas necessárias com 'require'
 const admin = require('firebase-admin');
 
 // Configura o Firebase Admin (apenas se ainda não foi inicializado)
