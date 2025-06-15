@@ -1,80 +1,64 @@
+// VERSÃO 2.0 - GERADOR DE RELATÓRIO DE TEXTO
+
 require('dotenv').config();
 const admin = require('firebase-admin');
-const cron = require('node-cron');
-const sgMail = require('@sendgrid/mail');
 
-// Configura o SendGrid
-sgMail.setApiKey(process.env.SENDGRID_API_KEY);
-
-// Configura o Firebase Admin
-// Tenta carregar as credenciais da variável de ambiente (para a Vercel)
-let serviceAccount;
-if (process.env.FIREBASE_SERVICE_ACCOUNT_JSON) {
-  // Se estiver na Vercel, lê o JSON da variável de ambiente
-  serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT_JSON);
-} else {
-  // Se estiver no seu computador, lê o JSON do arquivo local
-  serviceAccount = require('./serviceAccountKey.json');
+// Configura o Firebase Admin (apenas se ainda não foi inicializado)
+if (!admin.apps.length) {
+  try {
+    const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT_JSON);
+    admin.initializeApp({
+      credential: admin.credential.cert(serviceAccount)
+    });
+  } catch (error) {
+    console.error("ERRO FATAL ao inicializar Firebase Admin:", error);
+    // Em caso de erro na inicialização, a função não funcionará.
+    // Isso geralmente aponta para um problema na variável de ambiente.
+  }
 }
-admin.initializeApp({
-  credential: admin.credential.cert(serviceAccount)
-});
 const db = admin.firestore();
 
-// Função para buscar os presentes do dia e enviar o e-mail
-async function enviarRelatorioDiario() {
+// Esta é a função que a Vercel vai executar quando o link for acessado
+export default async function handler(request, response) {
+  try {
     const hoje = new Date().toISOString().split('T')[0];
-    console.log([${new Date().toLocaleString('pt-BR')}] Executando tarefa de envio de e-mail...);
+    console.log(`Buscando registros para o relatório de ${hoje}`);
 
-    try {
-        const snapshot = await db.collection('presencas').where('data', '==', hoje).get();
+    const snapshot = await db.collection('presencas').where('data', '==', hoje).get();
 
-        if (snapshot.empty) {
-            console.log('Nenhuma presença registrada hoje. E-mail não será enviado.');
-            return;
-        }
-
-        const presentes = [];
-        snapshot.forEach(doc => {
-            presentes.push(doc.data());
-        });
-
-        // Ordena por nome em ordem alfabética
-        presentes.sort((a, b) => a.nome.localeCompare(b.nome));
-
-        // Cria o corpo do e-mail em HTML
-        let htmlBody = <h1>Relatório de Presença - ${new Date().toLocaleDateString('pt-BR')}</h1>;
-        htmlBody += <h2>Total de ${presentes.length} voluntários presentes.</h2>;
-        htmlBody += '<ul>';
-        presentes.forEach(p => {
-            htmlBody += <li><strong>${p.nome}</strong> - ${p.atividade}</li>;
-        });
-        htmlBody += '</ul>';
-
-        const msg = {
-            to: process.env.EMAIL_TO,
-            from: process.env.EMAIL_FROM,
-            subject: Relatório de Presença Voluntária - ${new Date().toLocaleDateString('pt-BR')},
-            html: htmlBody,
-        };
-
-        await sgMail.send(msg);
-        console.log('Relatório de e-mail enviado com sucesso!');
-
-    } catch (error) {
-        console.error('Erro ao gerar ou enviar o relatório:', error);
+    if (snapshot.empty) {
+      console.log('Nenhum registro encontrado para hoje.');
+      // Define o cabeçalho como texto puro e envia a resposta
+      response.setHeader('Content-Type', 'text/plain; charset=utf-8');
+      return response.status(200).send(`Relatório de Presença - ${new Date().toLocaleDateString('pt-BR')}\n\nNenhum voluntário presente registrado hoje.`);
     }
+
+    const presentes = [];
+    snapshot.forEach(doc => {
+      presentes.push(doc.data());
+    });
+    console.log(`Encontrados ${presentes.length} registros.`);
+
+    // Ordena por nome
+    presentes.sort((a, b) => a.nome.localeCompare(b.nome));
+
+    // Monta o relatório em formato de texto
+    let relatorioTexto = `Relatório de Presença - ${new Date().toLocaleDateString('pt-BR')}\n`;
+    relatorioTexto += `==================================================\n`;
+    relatorioTexto += `Total de ${presentes.length} voluntários presentes.\n\n`;
+
+    presentes.forEach(p => {
+      relatorioTexto += `- Nome: ${p.nome}\n`;
+      relatorioTexto += `  Atividade(s): ${p.atividade}\n\n`;
+    });
+
+    // Define o cabeçalho como texto puro e envia a resposta
+    response.setHeader('Content-Type', 'text/plain; charset=utf-8');
+    response.status(200).send(relatorioTexto);
+
+  } catch (error) {
+    console.error("Erro ao gerar o relatório:", error);
+    response.setHeader('Content-Type', 'text/plain; charset=utf-8');
+    response.status(500).send("Ocorreu um erro interno ao gerar o relatório. Verifique os logs da função na Vercel.");
+  }
 }
-
-// Agenda a tarefa para rodar todos os dias às 23:59
-// Formato: 'minuto hora * * dia-da-semana'
-cron.schedule('59 23 * * *', enviarRelatorioDiario, {
-    scheduled: true,
-    timezone: "America/Sao_Paulo"
-});
-
-console.log('Backend iniciado. Tarefa de e-mail agendada para 23:59 todos os dias.');
-
-// Para teste imediato, você pode chamar a função aqui:
-// enviarRelatorioDiario();
-
