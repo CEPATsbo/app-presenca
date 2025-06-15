@@ -1,6 +1,5 @@
-// VERSÃO 2.0 - GERADOR DE RELATÓRIO DE TEXTO
+// VERSÃO 2.1 - Relatório com consulta por data
 
-// Carrega as variáveis de ambiente
 require('dotenv').config();
 const admin = require('firebase-admin');
 
@@ -17,21 +16,39 @@ if (!admin.apps.length) {
 }
 const db = admin.firestore();
 
-// Esta é a função que a Vercel vai executar quando o link /api for acessado
-module.exports = async (request, response) => {
+// Esta é a função que a Vercel vai executar
+export default async function handler(request, response) {
   try {
-    const hoje = new Date().toISOString().split('T')[0];
-    console.log(`Buscando registros para o relatório de ${hoje}`);
+    // --- LÓGICA ATUALIZADA PARA LER A DATA DO LINK ---
+    let dataParaConsulta;
+    
+    // Verifica se o parâmetro ?data= foi passado no link
+    if (request.query.data) {
+      // Validação simples do formato YYYY-MM-DD
+      const formatoValido = /^\d{4}-\d{2}-\d{2}$/.test(request.query.data);
+      if (formatoValido) {
+        dataParaConsulta = request.query.data;
+      } else {
+        // Se o formato for inválido, retorna um erro amigável
+        response.setHeader('Content-Type', 'text/plain; charset=utf-8');
+        return response.status(400).send("Formato de data inválido. Use AAAA-MM-DD.");
+      }
+    } else {
+      // Se nenhum parâmetro de data for passado, usa a data de hoje
+      dataParaConsulta = new Date().toISOString().split('T')[0];
+    }
+    // --- FIM DA LÓGICA ATUALIZADA ---
 
-    const snapshot = await db.collection('presencas').where('data', '==', hoje).get();
+    const dataFormatadaParaExibicao = new Date(dataParaConsulta + 'T12:00:00Z').toLocaleDateString('pt-BR');
+    console.log(`Buscando registros para o relatório de ${dataParaConsulta}`);
 
-    // Define o cabeçalho da resposta como texto puro
+    const snapshot = await db.collection('presencas').where('data', '==', dataParaConsulta).get();
+
     response.setHeader('Content-Type', 'text/plain; charset=utf-8');
 
     if (snapshot.empty) {
-      console.log('Nenhum registro encontrado para hoje.');
-      const relatorioVazio = `Relatório de Presença - ${new Date().toLocaleDateString('pt-BR')}\n\nNenhum voluntário presente registrado hoje.`;
-      return response.status(200).send(relatorioVazio);
+      console.log(`Nenhum registro encontrado para ${dataParaConsulta}.`);
+      return response.status(200).send(`Relatório de Presença - ${dataFormatadaParaExibicao}\n\nNenhum voluntário presente registrado neste dia.`);
     }
 
     const presentes = [];
@@ -40,11 +57,9 @@ module.exports = async (request, response) => {
     });
     console.log(`Encontrados ${presentes.length} registros.`);
 
-    // Ordena por nome
     presentes.sort((a, b) => a.nome.localeCompare(b.nome));
 
-    // Monta o relatório em formato de texto
-    let relatorioTexto = `Relatório de Presença - ${new Date().toLocaleDateString('pt-BR')}\n`;
+    let relatorioTexto = `Relatório de Presença - ${dataFormatadaParaExibicao}\n`;
     relatorioTexto += `==================================================\n`;
     relatorioTexto += `Total de ${presentes.length} voluntários presentes.\n\n`;
 
@@ -52,12 +67,12 @@ module.exports = async (request, response) => {
       relatorioTexto += `- Nome: ${p.nome}\n`;
       relatorioTexto += `  Atividade(s): ${p.atividade}\n\n`;
     });
-
-    // Envia o relatório como resposta
+    
     response.status(200).send(relatorioTexto);
 
   } catch (error) {
     console.error("Erro ao gerar o relatório:", error);
+    response.setHeader('Content-Type', 'text/plain; charset=utf-8');
     response.status(500).send("Ocorreu um erro interno ao gerar o relatório. Verifique os logs da função na Vercel.");
   }
 };
