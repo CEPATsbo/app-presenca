@@ -1,13 +1,14 @@
-// Passo 1: Importa as funções que precisamos do Firebase.
-// Isto agora está no topo do arquivo, como deve ser.
+// VERSÃO FINAL E CORRIGIDA - SCRIPT.JS - 17/06/2025
+
+// Importa as funções que precisamos do Firebase.
 import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
 import { getFirestore, doc, setDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
 
-// Passo 2: Garante que o script só rode depois que a página HTML for totalmente carregada
+// Garante que o resto do script só rode depois que a página HTML for totalmente carregada.
 document.addEventListener('DOMContentLoaded', () => {
 
     // =================================================================
-    //  COLE AQUI O SEU OBJETO 'firebaseConfig' COMPLETO DO SITE DO FIREBASE
+    //  COLE AQUI O SEU OBJETO 'firebaseConfig' COMPLETO
     // =================================================================
     const firebaseConfig = {
   apiKey: "AIzaSyBV7RPjk3cFTqL-aIpflJcUojKg1ZXMLuU",
@@ -23,16 +24,18 @@ document.addEventListener('DOMContentLoaded', () => {
     const app = initializeApp(firebaseConfig);
     const db = getFirestore(app);
 
-    // --- LISTA DE ATIVIDADES ATUALIZADA ---
+    // --- LISTA DE ATIVIDADES ---
     const listaDeAtividades = [
         "Recepção/Acolhimento", "Passe de Harmonização", "Apoio", "Biblioteca", 
         "Entrevistas", "Encaminhamento", "Câmaras de Passe", "Diretoria", 
-        "Preleção", "Música/Coral", "Evangelização infantil", "Mídias digitais", "Mocidade", "Escola de Pais", "9 EAE", "10 EAE"
+        "Preleção", "Música/Coral", "Evangelização infantil", "Mídias digitais", 
+        "Mocidade", "Vivência Espírita", "9EAE", "10EAE", "Escola de Pais", "Vibrações", 
+        "Colegiado Mediúnico", "Bazar", "Cantina"
     ];
 
     // --- CONFIGURAÇÕES DO LOCAL ---
-    const CASA_ESPIRITA_LAT = -22.75544;
-    const CASA_ESPIRITA_LON = -47.36947;
+    const CASA_ESPIRITA_LAT = -22.75553; // Coordenadas Reais da Casa
+    const CASA_ESPIRITA_LON = -47.36945;
     const RAIO_EM_METROS = 40;
 
     // Elementos da página
@@ -67,6 +70,8 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function criarCheckboxesDeAtividade() {
+        if(!atividadeContainer) return;
+        atividadeContainer.innerHTML = '';
         listaDeAtividades.sort().forEach(atividade => {
             const div = document.createElement('div');
             div.className = 'checkbox-item';
@@ -104,11 +109,20 @@ document.addEventListener('DOMContentLoaded', () => {
         return R * c;
     }
 
+    // Função com a correção de Fuso Horário
     async function registrarPresenca() {
         if (!userInfo.nome) return;
+        
         const hoje = new Date();
-        const dataFormatada = hoje.toISOString().split('T')[0];
+        // Lógica para pegar a data correta de São Paulo
+        const ano = hoje.toLocaleString('en-US', { year: 'numeric', timeZone: 'America/Sao_Paulo' });
+        const mes = hoje.toLocaleString('en-US', { month: '2-digit', timeZone: 'America/Sao_Paulo' });
+        const dia = hoje.toLocaleString('en-US', { day: '2-digit', timeZone: 'America/Sao_Paulo' });
+        // Reorganiza para o formato AAAA-MM-DD
+        const dataFormatada = `${ano}-${dia}-${mes}`;
+
         const idDocumento = `${dataFormatada}_${userInfo.nome.replace(/\s+/g, '_')}`;
+        
         try {
             await setDoc(doc(db, "presencas", idDocumento), {
                 nome: userInfo.nome,
@@ -116,8 +130,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 timestamp: serverTimestamp(),
                 data: dataFormatada
             });
-            console.log("Presença registrada no Firestore!");
-            feedback.textContent = `Presença registrada com sucesso às ${hoje.toLocaleTimeString()}`;
+            console.log("Presença registrada no Firestore com a data correta:", dataFormatada);
+            feedback.textContent = `Presença registrada com sucesso às ${hoje.toLocaleTimeString('pt-BR')}`;
             feedback.style.color = "green";
             if (monitorInterval) clearInterval(monitorInterval);
         } catch (error) {
@@ -162,10 +176,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 alert("Por favor, selecione pelo menos uma atividade.");
                 return;
             }
-            if (atividadesSelecionadas.length > 3) {
-                alert("Você pode selecionar no máximo 3 atividades.");
-                return;
-            }
             const atividadesArray = Array.from(atividadesSelecionadas).map(cb => cb.value);
             const atividadesString = atividadesArray.join(', ');
             userInfo = { nome, atividade: atividadesString };
@@ -195,9 +205,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     inicializarPagina();
 
-    // =================================================================
-    //  NOVO BLOCO DE CÓDIGO PARA REGISTRAR O SERVICE WORKER (LUGAR CORRETO)
-    // =================================================================
+    // Registra o Service Worker (se estivermos implementando o PWA)
     if ('serviceWorker' in navigator) {
       window.addEventListener('load', () => {
         navigator.serviceWorker.register('/sw.js').then(registration => {
@@ -207,6 +215,4 @@ document.addEventListener('DOMContentLoaded', () => {
         });
       });
     }
-    // =================================================================
-
-}); // Fim do addEventListener 'DOMContentLoaded'
+});
