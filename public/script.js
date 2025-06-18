@@ -1,4 +1,4 @@
-// VERSÃO 2.4 - CORREÇÃO CRÍTICA NA FUNÇÃO DE DATA
+// VERSÃO 2.5 - Adiciona botão Sair/Resetar
 
 import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
 import { getFirestore, doc, setDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
@@ -42,20 +42,16 @@ document.addEventListener('DOMContentLoaded', () => {
     const atividadeContainer = document.getElementById('atividade-container');
     const toggleAtividadesBtn = document.getElementById('toggle-atividades');
     const atividadeWrapper = document.getElementById('atividade-wrapper');
+    // --- NOVO ELEMENTO ---
+    const btnSair = document.getElementById('btn-sair');
 
     let userInfo = {};
     let monitorInterval;
 
-    // --- FUNÇÃO DE DATA CORRIGIDA ---
     function getDataDeHojeSP() {
-        // Usamos Intl.DateTimeFormat para uma formatação segura de data por fuso horário
         const formatador = new Intl.DateTimeFormat('en-CA', {
-            year: 'numeric',
-            month: '2-digit',
-            day: '2-digit',
-            timeZone: 'America/Sao_Paulo'
+            year: 'numeric', month: '2-digit', day: '2-digit', timeZone: 'America/Sao_Paulo'
         });
-        // Retorna a data diretamente no formato AAAA-MM-DD
         return formatador.format(new Date());
     }
 
@@ -97,20 +93,18 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function getDistance(lat1, lon1, lat2, lon2) {
-        const R = 6371 * 1000; // Raio da Terra em metros
+        const R = 6371 * 1000;
         const dLat = (lat2 - lat1) * Math.PI / 180;
         const dLon = (lon2 - lon1) * Math.PI / 180;
         const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) + Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLon / 2) * Math.sin(dLon / 2);
         const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-        return R * c; // Distância em metros
+        return R * c;
     }
     
     async function registrarPresenca() {
         if (!userInfo.nome) return;
-        
-        const dataFormatada = getDataDeHojeSP(); // Usa a nova função corrigida
+        const dataFormatada = getDataDeHojeSP();
         const idDocumento = `${dataFormatada}_${userInfo.nome.replace(/\s+/g, '_')}`;
-        
         try {
             await setDoc(doc(db, "presencas", idDocumento), {
                 nome: userInfo.nome,
@@ -130,10 +124,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function checarLocalizacao() {
-        if (!navigator.geolocation) {
-            statusText.textContent = "Geolocalização não é suportada.";
-            return;
-        }
+        if (!navigator.geolocation) return;
         navigator.geolocation.getCurrentPosition((position) => {
             const distancia = getDistance(position.coords.latitude, position.coords.longitude, CASA_ESPIRITA_LAT, CASA_ESPIRITA_LON);
             console.log(`Distância até o centro: ${distancia.toFixed(2)} metros.`);
@@ -141,7 +132,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (distancia <= RAIO_EM_METROS) {
                 registrarPresenca();
             } else {
-                feedback.textContent = `Ainda fora da área de registro. Próxima tentativa em breve.`;
+                feedback.textContent = `Ainda fora da área de registro. Tentando novamente em 10 minutos.`;
                 feedback.style.color = "orange";
             }
         }, () => {
@@ -158,7 +149,7 @@ document.addEventListener('DOMContentLoaded', () => {
             
             const atividadesArray = Array.from(atividadesSelecionadas).map(cb => cb.value);
             const dataDeHoje = getDataDeHojeSP();
-
+            
             userInfo = { 
                 nome, 
                 atividade: atividadesArray.join(', '),
@@ -176,7 +167,21 @@ document.addEventListener('DOMContentLoaded', () => {
         document.getElementById('display-nome').textContent = userInfo.nome;
         document.getElementById('display-atividade').textContent = userInfo.atividade;
         checarLocalizacao();
-        monitorInterval = setInterval(checarLocalizacao, 600000); // 10 minutos
+        monitorInterval = setInterval(checarLocalizacao, 600000);
+    }
+
+    // --- NOVA LÓGICA PARA O BOTÃO SAIR ---
+    if (btnSair) {
+        btnSair.addEventListener('click', (event) => {
+            event.preventDefault(); // Impede o link de pular para o topo da página
+            
+            const confirmacao = confirm('Tem certeza que deseja sair? Suas atividades de hoje serão esquecidas e você voltará para a tela de cadastro.');
+            
+            if (confirmacao) {
+                localStorage.removeItem('userInfo');
+                window.location.reload(); // Recarrega a página para o estado inicial
+            }
+        });
     }
 
     function inicializarPagina() {
@@ -188,11 +193,9 @@ document.addEventListener('DOMContentLoaded', () => {
         const dataDeHoje = getDataDeHojeSP();
 
         if (savedInfo.loginDate === dataDeHoje) {
-            console.log("Mesmo dia, restaurando sessão completa.");
             userInfo = savedInfo;
             mostrarTelaDeStatus();
         } else {
-            console.log("Novo dia detectado. Resetando atividades e mantendo o nome.");
             nomeInput.value = savedInfo.nome;
         }
     }
