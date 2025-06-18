@@ -1,4 +1,5 @@
-// Importa as funções do Firebase no topo do módulo.
+// VERSÃO 2.2 - CORREÇÃO DE FUSO HORÁRIO
+
 import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
 import { getFirestore, collection, query, where, onSnapshot } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
 
@@ -23,20 +24,27 @@ document.addEventListener('DOMContentLoaded', () => {
     const listaPresencaDiv = document.getElementById('lista-presenca');
     const dataHojeSpan = document.getElementById('data-hoje');
     
-    let dataAtualFormatada = ''; 
+    let dataAtualParaConsulta = ''; 
     let unsubscribe; 
 
-    function getEAtualizarDataFormatada() {
-        const hoje = new Date();
-        const dia = String(hoje.getDate()).padStart(2, '0');
-        const mes = String(hoje.getMonth() + 1).padStart(2, '0');
-        const ano = hoje.getFullYear();
-        
-        if(dataHojeSpan) {
+    // --- NOVA FUNÇÃO DE DATA COM FUSO HORÁRIO CORRETO ---
+    function getDataDeHojeSP() {
+        const formatador = new Intl.DateTimeFormat('en-CA', {
+            year: 'numeric',
+            month: '2-digit',
+            day: '2-digit',
+            timeZone: 'America/Sao_Paulo'
+        });
+        return formatador.format(new Date());
+    }
+
+    // Função para atualizar a data visível no título (dd/mm/aaaa)
+    function atualizarDataVisivel(dataString) {
+        if (dataHojeSpan) {
+            // A dataString já vem como AAAA-MM-DD
+            const [ano, mes, dia] = dataString.split('-');
             dataHojeSpan.textContent = `(${dia}/${mes}/${ano})`;
         }
-        
-        return hoje.toISOString().split('T')[0];
     }
 
     function renderizarLista(presentes) {
@@ -56,6 +64,11 @@ document.addEventListener('DOMContentLoaded', () => {
         }, {});
 
         listaPresencaDiv.innerHTML = '';
+
+        if (Object.keys(porAtividade).length === 0) {
+            listaPresencaDiv.innerHTML = '<p style="font-size: 3vh; text-align: center;">Aguardando os primeiros registros do dia...</p>';
+            return;
+        }
 
         const atividadesOrdenadas = Object.keys(porAtividade).sort();
         for (const atividade of atividadesOrdenadas) {
@@ -80,17 +93,22 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function carregarPresencas() {
+        // Desliga o listener antigo para evitar múltiplas execuções
         if (unsubscribe) {
             unsubscribe();
             console.log("Listener antigo do Firebase desligado.");
         }
 
-        dataAtualFormatada = getEAtualizarDataFormatada();
+        // Usa a nova função para pegar a data correta de São Paulo
+        dataAtualParaConsulta = getDataDeHojeSP();
+        atualizarDataVisivel(dataAtualParaConsulta); // Atualiza o título
         
-        const q = query(collection(db, "presencas"), where("data", "==", dataAtualFormatada));
+        console.log(`Iniciando busca de presenças para a data: ${dataAtualParaConsulta}`);
+        const q = query(collection(db, "presencas"), where("data", "==", dataAtualParaConsulta));
 
+        // Cria o novo listener para a data correta
         unsubscribe = onSnapshot(q, (querySnapshot) => {
-            console.log(`Dados recebidos para a data ${dataAtualFormatada}. Documentos: ${querySnapshot.size}`);
+            console.log(`Dados recebidos para a data ${dataAtualParaConsulta}. Documentos: ${querySnapshot.size}`);
             const presentes = [];
             querySnapshot.forEach((doc) => {
                 presentes.push(doc.data());
@@ -99,10 +117,10 @@ document.addEventListener('DOMContentLoaded', () => {
         }, (error) => {
             console.error("Erro ao buscar presenças: ", error);
             if(listaPresencaDiv){
-                listaPresencaDiv.innerHTML = `<p style="color:red;">Não foi possível carregar os dados.</p>`;
+                listaPresencaDiv.innerHTML = `<p style="color:red; text-align:center;">Não foi possível carregar os dados.</p>`;
             }
         });
-        console.log(`Novo listener do Firebase iniciado para a data ${dataAtualFormatada}.`);
+        console.log(`Novo listener do Firebase iniciado para a data ${dataAtualParaConsulta}.`);
     }
 
     // --- LÓGICA PRINCIPAL DE EXECUÇÃO ---
@@ -110,11 +128,14 @@ document.addEventListener('DOMContentLoaded', () => {
     // 1. Carrega as presenças do dia atual assim que a página abre
     carregarPresencas();
 
-    // 2. A cada 1 minuto, verifica se o dia mudou
+    // 2. A cada 1 minuto, verifica se o dia mudou (usando a data de São Paulo)
     setInterval(() => {
-        const novaDataParaConsulta = new Date().toISOString().split('T')[0];
-        if (novaDataParaConsulta !== dataAtualFormatada) {
-            console.log("Virada de dia detectada! Reiniciando o painel...");
+        const novaDataSP = getDataDeHojeSP();
+        if (novaDataSP !== dataAtualParaConsulta) {
+            console.log(`Virada de dia detectada! (de ${dataAtualParaConsulta} para ${novaDataSP}). Reiniciando o painel...`);
+            // Limpa a tela imediatamente antes de carregar novos dados
+            if(listaPresencaDiv) listaPresencaDiv.innerHTML = '';
+            // Carrega os dados para o novo dia
             carregarPresencas();
         }
     }, 60000); // Verifica a cada 60 segundos
