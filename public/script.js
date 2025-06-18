@@ -1,10 +1,8 @@
-// VERSÃO FINAL E CORRIGIDA - SCRIPT.JS - 17/06/2025
+// VERSÃO 2.3 - RESET DIÁRIO DE ATIVIDADES
 
-// Importa as funções que precisamos do Firebase.
 import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
 import { getFirestore, doc, setDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
 
-// Garante que o resto do script só rode depois que a página HTML for totalmente carregada.
 document.addEventListener('DOMContentLoaded', () => {
 
     // =================================================================
@@ -20,11 +18,9 @@ document.addEventListener('DOMContentLoaded', () => {
 };
     // =================================================================
 
-    // Inicializa o Firebase
     const app = initializeApp(firebaseConfig);
     const db = getFirestore(app);
 
-    // --- LISTA DE ATIVIDADES ---
     const listaDeAtividades = [
         "Recepção/Acolhimento", "Passe de Harmonização", "Apoio", "Biblioteca", 
         "Entrevistas", "Encaminhamento", "Câmaras de Passe", "Diretoria", 
@@ -33,14 +29,13 @@ document.addEventListener('DOMContentLoaded', () => {
         "Colegiado Mediúnico", "Bazar", "Cantina"
     ];
 
-    // --- CONFIGURAÇÕES DO LOCAL ---
     const CASA_ESPIRITA_LAT = -22.75553; // Coordenadas Reais da Casa
     const CASA_ESPIRITA_LON = -47.36945;
     const RAIO_EM_METROS = 40;
 
-    // Elementos da página
     const loginArea = document.getElementById('login-area');
     const statusArea = document.getElementById('status-area');
+    const nomeInput = document.getElementById('nome');
     const btnRegistrar = document.getElementById('btn-registrar');
     const feedback = document.getElementById('feedback');
     const statusText = document.getElementById('status-text');
@@ -51,22 +46,23 @@ document.addEventListener('DOMContentLoaded', () => {
     let userInfo = {};
     let monitorInterval;
 
+    // Função para obter a data atual no fuso horário de São Paulo, formato AAAA-MM-DD
+    function getDataDeHojeSP() {
+        const hoje = new Date();
+        const ano = hoje.toLocaleString('en-US', { year: 'numeric', timeZone: 'America/Sao_Paulo' });
+        const mes = hoje.toLocaleString('en-US', { month: '2-digit', timeZone: 'America/Sao_Paulo' });
+        const dia = hoje.toLocaleString('en-US', { day: '2-digit', timeZone: 'America/Sao_Paulo' });
+        const partesData = mes.split('/');
+        // Formato americano é MM/DD, então o dia é o segundo elemento
+        return `${ano}-${partesData[0].padStart(2, '0')}-${partesData[1].padStart(2, '0')}`;
+    }
+
     function handleCheckboxChange() {
         const checkboxesMarcados = document.querySelectorAll('input[name="atividade"]:checked');
         const totalMarcados = checkboxesMarcados.length;
-        const todosCheckboxes = document.querySelectorAll('input[name="atividade"]');
-
-        if (totalMarcados >= 3) {
-            todosCheckboxes.forEach(checkbox => {
-                if (!checkbox.checked) {
-                    checkbox.disabled = true;
-                }
-            });
-        } else {
-            todosCheckboxes.forEach(checkbox => {
-                checkbox.disabled = false;
-            });
-        }
+        document.querySelectorAll('input[name="atividade"]').forEach(checkbox => {
+            checkbox.disabled = totalMarcados >= 3 && !checkbox.checked;
+        });
     }
 
     function criarCheckboxesDeAtividade() {
@@ -80,7 +76,7 @@ document.addEventListener('DOMContentLoaded', () => {
             checkbox.id = atividade.replace(/\s+/g, '-');
             checkbox.name = 'atividade';
             checkbox.value = atividade;
-            checkbox.addEventListener('change', handleCheckboxChange); 
+            checkbox.addEventListener('change', handleCheckboxChange);
             const label = document.createElement('label');
             label.htmlFor = checkbox.id;
             label.textContent = atividade;
@@ -99,28 +95,18 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function getDistance(lat1, lon1, lat2, lon2) {
-        const R = 6371e3;
-        const φ1 = lat1 * Math.PI / 180;
-        const φ2 = lat2 * Math.PI / 180;
-        const Δφ = (lat2 - lat1) * Math.PI / 180;
-        const Δλ = (lon2 - lon1) * Math.PI / 180;
-        const a = Math.sin(Δφ / 2) * Math.sin(Δφ / 2) + Math.cos(φ1) * Math.cos(φ2) * Math.sin(Δλ / 2) * Math.sin(Δλ / 2);
+        const R = 6371; // Raio da Terra em km
+        const dLat = (lat2 - lat1) * Math.PI / 180;
+        const dLon = (lon2 - lon1) * Math.PI / 180;
+        const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) + Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLon / 2) * Math.sin(dLon / 2);
         const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-        return R * c;
+        return R * c * 1000; // Distância em metros
     }
-
-    // Função com a correção de Fuso Horário
+    
     async function registrarPresenca() {
         if (!userInfo.nome) return;
-        
-        const hoje = new Date();
-        // Lógica para pegar a data correta de São Paulo
-        const ano = hoje.toLocaleString('en-US', { year: 'numeric', timeZone: 'America/Sao_Paulo' });
-        const mes = hoje.toLocaleString('en-US', { month: '2-digit', timeZone: 'America/Sao_Paulo' });
-        const dia = hoje.toLocaleString('en-US', { day: '2-digit', timeZone: 'America/Sao_Paulo' });
-        // Reorganiza para o formato AAAA-MM-DD
-        const dataFormatada = `${ano}-${dia}-${mes}`;
 
+        const dataFormatada = getDataDeHojeSP();
         const idDocumento = `${dataFormatada}_${userInfo.nome.replace(/\s+/g, '_')}`;
         
         try {
@@ -131,7 +117,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 data: dataFormatada
             });
             console.log("Presença registrada no Firestore com a data correta:", dataFormatada);
-            feedback.textContent = `Presença registrada com sucesso às ${hoje.toLocaleTimeString('pt-BR')}`;
+            feedback.textContent = `Presença registrada com sucesso às ${new Date().toLocaleTimeString('pt-BR')}`;
             feedback.style.color = "green";
             if (monitorInterval) clearInterval(monitorInterval);
         } catch (error) {
@@ -142,77 +128,77 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function checarLocalizacao() {
-        if (!('geolocation' in navigator)) {
-            statusText.textContent = "Geolocalização não é suportada.";
-            return;
-        }
         navigator.geolocation.getCurrentPosition((position) => {
-            const userLat = position.coords.latitude;
-            const userLon = position.coords.longitude;
-            const distancia = getDistance(userLat, userLon, CASA_ESPIRITA_LAT, CASA_ESPIRITA_LON);
+            const distancia = getDistance(position.coords.latitude, position.coords.longitude, CASA_ESPIRITA_LAT, CASA_ESPIRITA_LON);
             console.log(`Distância até o centro: ${distancia.toFixed(2)} metros.`);
             feedback.textContent = `Você está a ${distancia.toFixed(0)} metros de distância.`;
             if (distancia <= RAIO_EM_METROS) {
                 registrarPresenca();
             } else {
-                feedback.textContent = `Ainda fora da área de registro. Tentando novamente em 10 minutos.`;
+                feedback.textContent = `Ainda fora da área de registro. Próxima tentativa em breve.`;
                 feedback.style.color = "orange";
             }
-        }, (error) => {
-            statusText.textContent = `Erro ao obter localização: ${error.message}`;
-            statusText.style.color = 'red';
+        }, () => {
+            statusText.textContent = `Não foi possível obter a localização. Verifique as permissões.`;
         }, { enableHighAccuracy: true });
     }
     
     if (btnRegistrar) {
         btnRegistrar.addEventListener('click', () => {
-            const nome = document.getElementById('nome').value;
+            const nome = nomeInput.value;
             const atividadesSelecionadas = document.querySelectorAll('input[name="atividade"]:checked');
-            if (!nome) {
-                alert("Por favor, preencha seu nome.");
-                return;
-            }
-            if (atividadesSelecionadas.length === 0) {
-                alert("Por favor, selecione pelo menos uma atividade.");
-                return;
-            }
+            if (!nome) return alert("Por favor, preencha seu nome.");
+            if (atividadesSelecionadas.length === 0) return alert("Por favor, selecione pelo menos uma atividade.");
+            
             const atividadesArray = Array.from(atividadesSelecionadas).map(cb => cb.value);
-            const atividadesString = atividadesArray.join(', ');
-            userInfo = { nome, atividade: atividadesString };
+            const dataDeHoje = getDataDeHojeSP();
+
+            // *** AQUI SALVAMOS A DATA JUNTO COM OS DADOS ***
+            userInfo = { 
+                nome, 
+                atividade: atividadesArray.join(', '),
+                loginDate: dataDeHoje 
+            };
+            
             localStorage.setItem('userInfo', JSON.stringify(userInfo));
-            loginArea.classList.add('hidden');
-            statusArea.classList.remove('hidden');
-            document.getElementById('display-nome').textContent = nome;
-            document.getElementById('display-atividade').textContent = atividadesString;
-            checarLocalizacao();
-            monitorInterval = setInterval(checarLocalizacao, 600000); // 10 minutos
+            mostrarTelaDeStatus();
         });
+    }
+
+    function mostrarTelaDeStatus() {
+        loginArea.classList.add('hidden');
+        statusArea.classList.remove('hidden');
+        document.getElementById('display-nome').textContent = userInfo.nome;
+        document.getElementById('display-atividade').textContent = userInfo.atividade;
+        checarLocalizacao();
+        monitorInterval = setInterval(checarLocalizacao, 600000); // 10 minutos
     }
 
     function inicializarPagina() {
         criarCheckboxesDeAtividade();
-        const savedInfo = localStorage.getItem('userInfo');
-        if (savedInfo) {
-            userInfo = JSON.parse(savedInfo);
-            loginArea.classList.add('hidden');
-            statusArea.classList.remove('hidden');
-            document.getElementById('display-nome').textContent = userInfo.nome;
-            document.getElementById('display-atividade').textContent = userInfo.atividade;
-            checarLocalizacao();
-            monitorInterval = setInterval(checarLocalizacao, 600000); // 10 minutos
+        const savedInfoString = localStorage.getItem('userInfo');
+        if (!savedInfoString) return;
+
+        const savedInfo = JSON.parse(savedInfoString);
+        const dataDeHoje = getDataDeHojeSP();
+
+        // *** AQUI ESTÁ A NOVA LÓGICA DE VERIFICAÇÃO ***
+        if (savedInfo.loginDate === dataDeHoje) {
+            // Se a data salva é a de hoje, o usuário já se "logou".
+            console.log("Mesmo dia, restaurando sessão completa.");
+            userInfo = savedInfo;
+            mostrarTelaDeStatus();
+        } else {
+            // Se for um novo dia, lembramos apenas do nome.
+            console.log("Novo dia detectado. Resetando atividades e mantendo o nome.");
+            nomeInput.value = savedInfo.nome; // Pré-preenche o nome para facilitar
+            // Não fazemos mais nada, o usuário verá a tela de login com o nome já preenchido.
         }
     }
 
     inicializarPagina();
 
-    // Registra o Service Worker (se estivermos implementando o PWA)
     if ('serviceWorker' in navigator) {
-      window.addEventListener('load', () => {
-        navigator.serviceWorker.register('/sw.js').then(registration => {
-          console.log('ServiceWorker registrado com sucesso:', registration);
-        }).catch(err => {
-          console.log('Registro do ServiceWorker falhou:', err);
-        });
-      });
+      window.addEventListener('load', () => navigator.serviceWorker.register('/sw.js'));
     }
 });
