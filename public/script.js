@@ -1,4 +1,4 @@
-// VERSÃO 2.3 - RESET DIÁRIO DE ATIVIDADES
+// VERSÃO 2.4 - CORREÇÃO CRÍTICA NA FUNÇÃO DE DATA
 
 import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
 import { getFirestore, doc, setDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
@@ -46,15 +46,17 @@ document.addEventListener('DOMContentLoaded', () => {
     let userInfo = {};
     let monitorInterval;
 
-    // Função para obter a data atual no fuso horário de São Paulo, formato AAAA-MM-DD
+    // --- FUNÇÃO DE DATA CORRIGIDA ---
     function getDataDeHojeSP() {
-        const hoje = new Date();
-        const ano = hoje.toLocaleString('en-US', { year: 'numeric', timeZone: 'America/Sao_Paulo' });
-        const mes = hoje.toLocaleString('en-US', { month: '2-digit', timeZone: 'America/Sao_Paulo' });
-        const dia = hoje.toLocaleString('en-US', { day: '2-digit', timeZone: 'America/Sao_Paulo' });
-        const partesData = mes.split('/');
-        // Formato americano é MM/DD, então o dia é o segundo elemento
-        return `${ano}-${partesData[0].padStart(2, '0')}-${partesData[1].padStart(2, '0')}`;
+        // Usamos Intl.DateTimeFormat para uma formatação segura de data por fuso horário
+        const formatador = new Intl.DateTimeFormat('en-CA', {
+            year: 'numeric',
+            month: '2-digit',
+            day: '2-digit',
+            timeZone: 'America/Sao_Paulo'
+        });
+        // Retorna a data diretamente no formato AAAA-MM-DD
+        return formatador.format(new Date());
     }
 
     function handleCheckboxChange() {
@@ -95,18 +97,18 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function getDistance(lat1, lon1, lat2, lon2) {
-        const R = 6371; // Raio da Terra em km
+        const R = 6371 * 1000; // Raio da Terra em metros
         const dLat = (lat2 - lat1) * Math.PI / 180;
         const dLon = (lon2 - lon1) * Math.PI / 180;
         const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) + Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLon / 2) * Math.sin(dLon / 2);
         const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-        return R * c * 1000; // Distância em metros
+        return R * c; // Distância em metros
     }
     
     async function registrarPresenca() {
         if (!userInfo.nome) return;
-
-        const dataFormatada = getDataDeHojeSP();
+        
+        const dataFormatada = getDataDeHojeSP(); // Usa a nova função corrigida
         const idDocumento = `${dataFormatada}_${userInfo.nome.replace(/\s+/g, '_')}`;
         
         try {
@@ -128,6 +130,10 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function checarLocalizacao() {
+        if (!navigator.geolocation) {
+            statusText.textContent = "Geolocalização não é suportada.";
+            return;
+        }
         navigator.geolocation.getCurrentPosition((position) => {
             const distancia = getDistance(position.coords.latitude, position.coords.longitude, CASA_ESPIRITA_LAT, CASA_ESPIRITA_LON);
             console.log(`Distância até o centro: ${distancia.toFixed(2)} metros.`);
@@ -153,7 +159,6 @@ document.addEventListener('DOMContentLoaded', () => {
             const atividadesArray = Array.from(atividadesSelecionadas).map(cb => cb.value);
             const dataDeHoje = getDataDeHojeSP();
 
-            // *** AQUI SALVAMOS A DATA JUNTO COM OS DADOS ***
             userInfo = { 
                 nome, 
                 atividade: atividadesArray.join(', '),
@@ -182,17 +187,13 @@ document.addEventListener('DOMContentLoaded', () => {
         const savedInfo = JSON.parse(savedInfoString);
         const dataDeHoje = getDataDeHojeSP();
 
-        // *** AQUI ESTÁ A NOVA LÓGICA DE VERIFICAÇÃO ***
         if (savedInfo.loginDate === dataDeHoje) {
-            // Se a data salva é a de hoje, o usuário já se "logou".
             console.log("Mesmo dia, restaurando sessão completa.");
             userInfo = savedInfo;
             mostrarTelaDeStatus();
         } else {
-            // Se for um novo dia, lembramos apenas do nome.
             console.log("Novo dia detectado. Resetando atividades e mantendo o nome.");
-            nomeInput.value = savedInfo.nome; // Pré-preenche o nome para facilitar
-            // Não fazemos mais nada, o usuário verá a tela de login com o nome já preenchido.
+            nomeInput.value = savedInfo.nome;
         }
     }
 
