@@ -1,6 +1,6 @@
-// VERSÃO 2.6 CORRIGIDA - Histórico de Presença Individual
+// VERSÃO 2.6 - CORREÇÃO DO BOTÃO DE ATIVIDADES
 
-// Importa as funções que precisamos do Firebase, incluindo as novas para a consulta de histórico
+// Importa as funções que precisamos do Firebase
 import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
 import { getFirestore, doc, setDoc, serverTimestamp, collection, query, where, getDocs, orderBy } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
 
@@ -22,7 +22,6 @@ document.addEventListener('DOMContentLoaded', () => {
     const app = initializeApp(firebaseConfig);
     const db = getFirestore(app);
 
-    // --- LISTA DE ATIVIDADES COMPLETA ---
     const listaDeAtividades = [
         "Recepção/Acolhimento", "Passe de Harmonização", "Apoio", "Biblioteca", 
         "Entrevistas", "Encaminhamento", "Câmaras de Passe", "Diretoria", 
@@ -31,12 +30,11 @@ document.addEventListener('DOMContentLoaded', () => {
         "Colegiado Mediúnico", "Bazar", "Cantina"
     ];
 
-    // --- CONFIGURAÇÕES DO LOCAL ---
     const CASA_ESPIRITA_LAT = -22.75553; // Coordenadas Reais da Casa
     const CASA_ESPIRITA_LON = -47.36945;
     const RAIO_EM_METROS = 40;
 
-    // --- ELEMENTOS DA PÁGINA ---
+    // Elementos da página
     const loginArea = document.getElementById('login-area');
     const statusArea = document.getElementById('status-area');
     const nomeInput = document.getElementById('nome');
@@ -45,7 +43,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const statusText = document.getElementById('status-text');
     const atividadeContainer = document.getElementById('atividade-container');
     const toggleAtividadesBtn = document.getElementById('toggle-atividades');
-    const atividadeWrapper = document.getElementById('atividade-wrapper');
+    const atividadeWrapper = document.getElementById('atividade-wrapper'); // <-- A linha que faltava
     const btnSair = document.getElementById('btn-sair');
     const btnVerHistorico = document.getElementById('btn-ver-historico');
     const historicoContainer = document.getElementById('historico-container');
@@ -57,9 +55,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // --- FUNÇÕES DO APLICATIVO ---
 
     function getDataDeHojeSP() {
-        const formatador = new Intl.DateTimeFormat('en-CA', {
-            year: 'numeric', month: '2-digit', day: '2-digit', timeZone: 'America/Sao_Paulo'
-        });
+        const formatador = new Intl.DateTimeFormat('en-CA', { year: 'numeric', month: '2-digit', day: '2-digit', timeZone: 'America/Sao_Paulo' });
         return formatador.format(new Date());
     }
 
@@ -142,7 +138,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 timestamp: serverTimestamp(),
                 data: dataFormatada
             });
-            console.log("Presença registrada no Firestore:", dataFormatada);
+            console.log("Presença registrada no Firestore com a data correta:", dataFormatada);
             feedback.textContent = `Presença registrada com sucesso às ${new Date().toLocaleTimeString('pt-BR')}`;
             feedback.style.color = "green";
             if (monitorInterval) clearInterval(monitorInterval);
@@ -153,7 +149,10 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function checarLocalizacao() {
-        if (!navigator.geolocation) return;
+        if (!navigator.geolocation) {
+            statusText.textContent = "Geolocalização não é suportada.";
+            return;
+        }
         navigator.geolocation.getCurrentPosition((position) => {
             const distancia = getDistance(position.coords.latitude, position.coords.longitude, CASA_ESPIRITA_LAT, CASA_ESPIRITA_LON);
             feedback.textContent = `Você está a ${distancia.toFixed(0)} metros de distância.`;
@@ -161,6 +160,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 registrarPresenca();
             } else {
                 feedback.textContent = `Ainda fora da área de registro. Tentando novamente em 10 minutos.`;
+                feedback.style.color = "orange";
             }
         }, () => {
             statusText.textContent = `Não foi possível obter a localização.`;
@@ -192,6 +192,16 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // --- LÓGICA DOS BOTÕES ---
 
+    if (toggleAtividadesBtn) {
+        toggleAtividadesBtn.addEventListener('click', () => {
+            if (atividadeWrapper) {
+                atividadeWrapper.classList.toggle('hidden');
+                const seta = toggleAtividadesBtn.innerHTML.includes('▼') ? '▲' : '▼';
+                toggleAtividadesBtn.innerHTML = `Selecione suas atividades (até 3) ${seta}`;
+            }
+        });
+    }
+
     if (btnRegistrar) {
         btnRegistrar.addEventListener('click', () => {
             const nome = nomeInput.value;
@@ -220,12 +230,15 @@ document.addEventListener('DOMContentLoaded', () => {
     if (btnVerHistorico) {
         btnVerHistorico.addEventListener('click', () => {
             historicoContainer.classList.toggle('hidden');
-            if (!historicoContainer.classList.contains('hidden')) {
+            if (!historicoContainer.classList.contains('hidden') && userInfo.nome) {
                 carregarHistoricoDoVoluntario(userInfo.nome);
             }
         });
     }
     
-    // Inicia a aplicação
     inicializarPagina();
+
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => navigator.serviceWorker.register('/sw.js'));
+    }
 });
