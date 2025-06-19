@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin - Mural de Recados</title>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background-color: #f0f2f5; display: flex; justify-content: center; align-items: center; min-height: 100vh; margin: 0; }
+        .container { background-color: white; padding: 40px; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.15); text-align: center; width: 90%; max-width: 500px; }
+        h1 { color: #333; margin-top: 0; }
+        textarea { width: 100%; height: 150px; padding: 10px; margin-bottom: 20px; border: 1px solid #ccc; border-radius: 6px; font-family: inherit; font-size: 1em; box-sizing: border-box; resize: vertical; }
+        button { width: 100%; padding: 15px; background-color: #007bff; color: white; border: none; border-radius: 6px; font-size: 1.1em; font-weight: bold; cursor: pointer; transition: background-color 0.2s; }
+        button:hover { background-color: #0056b3; }
+        p#feedback { font-weight: bold; min-height: 20px; margin-top: 15px;}
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Mural de Recados</h1>
+        <textarea id="texto-mural" placeholder="Digite a mensagem do dia aqui..."></textarea>
+        <button id="btn-salvar">Salvar Mensagem</button>
+        <p id="feedback"></p>
+    </div>
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
+        import { getFirestore, doc, setDoc, getDoc } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
+
+        // =================================================================
+        //  COLE AQUI O SEU OBJETO 'firebaseConfig' COMPLETO
+        // =================================================================
+        const firebaseConfig = {
+  apiKey: "AIzaSyBV7RPjk3cFTqL-aIpflJcUojKg1ZXMLuU",
+  authDomain: "voluntarios-ativos---cepat.firebaseapp.com",
+  projectId: "voluntarios-ativos---cepat",
+  storageBucket: "voluntarios-ativos---cepat.firebasestorage.app",
+  messagingSenderId: "66122858261",
+  appId: "1:66122858261:web:7fa21f1805463b5c08331c"
+};
+        // =================================================================
+
+        // --- SENHA DE ACESSO ---
+        const SENHA_ADMIN = "admin"; // IMPORTANTE: Mude esta senha para algo seguro!
+
+        const app = initializeApp(firebaseConfig);
+        const db = getFirestore(app);
+
+        const txtMural = document.getElementById('texto-mural');
+        const btnSalvar = document.getElementById('btn-salvar');
+        const feedback = document.getElementById('feedback');
+        const muralRef = doc(db, "configuracoes", "mural");
+
+        async function carregarMensagemAtual() {
+            try {
+                const muralDoc = await getDoc(muralRef);
+                if (muralDoc.exists() && muralDoc.data().mensagem) {
+                    txtMural.value = muralDoc.data().mensagem;
+                }
+            } catch (error) {
+                console.error("Erro ao carregar mensagem atual:", error);
+            }
+        }
+
+        function autenticar() {
+            const senhaDigitada = prompt("Por favor, digite a senha de administrador para continuar:", "");
+            if (senhaDigitada !== SENHA_ADMIN) {
+                alert("Senha incorreta!");
+                document.body.innerHTML = "<h1>Acesso Negado</h1>";
+                return false;
+            }
+            carregarMensagemAtual();
+            return true;
+        }
+
+        btnSalvar.addEventListener('click', async () => {
+            const novaMensagem = txtMural.value;
+            feedback.textContent = "Salvando...";
+            try {
+                await setDoc(muralRef, { mensagem: novaMensagem });
+                feedback.textContent = "Mensagem salva com sucesso!";
+                feedback.style.color = "green";
+            } catch (error) {
+                console.error("Erro ao salvar mensagem: ", error);
+                feedback.textContent = "Erro ao salvar. Tente novamente.";
+                feedback.style.color = "red";
+            }
+        });
+
+        autenticar();
+    </script>
+</body>
+</html>
