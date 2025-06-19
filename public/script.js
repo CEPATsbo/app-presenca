@@ -22,9 +22,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     const db = getFirestore(app);
     
     let listaDeAtividades = [];
-    const CASA_ESPIRITA_LAT = -22.75553; // Coordenadas Reais da Casa
-    const CASA_ESPIRITA_LON = -47.36945;
-    const RAIO_EM_METROS = 40;
+    const CASA_ESPIRITA_LAT = -22.754672; // Coordenadas Reais da Casa
+    const CASA_ESPIRITA_LON = -47.402098;
+    const RAIO_EM_METROS = 100;
     
     const loginArea = document.getElementById('login-area');
     const statusArea = document.getElementById('status-area');
