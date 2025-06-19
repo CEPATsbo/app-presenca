@@ -1,4 +1,4 @@
-// VERSÃO 2.6 - Adiciona Mural de Recados
+// VERSÃO FINAL - Atividades Dinâmicas
 
 import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
 import { getFirestore, doc, setDoc, getDoc, serverTimestamp, collection, query, where, getDocs, orderBy } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
@@ -21,19 +21,45 @@ document.addEventListener('DOMContentLoaded', () => {
     const app = initializeApp(firebaseConfig);
     const db = getFirestore(app);
 
-    const listaDeAtividades = ["Recepção/Acolhimento", "Passe de Harmonização", "Apoio", "Biblioteca", 
-        "Entrevistas", "Encaminhamento", "Câmaras de Passe", "Diretoria", 
-        "Preleção", "Música/Coral", "Evangelização infantil", "Mídias digitais", 
-        "Mocidade", "Vivência Espírita", "9EAE", "10EAE", "Escola de Pais", "Vibrações", 
-        "Colegiado Mediúnico", "Bazar", "Cantina"];
+    let listaDeAtividades = []; // Começa vazia, será preenchida pelo Firebase
+    
     const CASA_ESPIRITA_LAT = -22.75553; // Coordenadas Reais da Casa
     const CASA_ESPIRITA_LON = -47.36945;
     const RAIO_EM_METROS = 40;
-    const loginArea = document.getElementById('login-area'), statusArea = document.getElementById('status-area'), nomeInput = document.getElementById('nome'), btnRegistrar = document.getElementById('btn-registrar'), feedback = document.getElementById('feedback'), statusText = document.getElementById('status-text'), atividadeContainer = document.getElementById('atividade-container'), toggleAtividadesBtn = document.getElementById('toggle-atividades'), atividadeWrapper = document.getElementById('atividade-wrapper'), btnSair = document.getElementById('btn-sair'), btnVerHistorico = document.getElementById('btn-ver-historico'), historicoContainer = document.getElementById('historico-container'), listaHistorico = document.getElementById('lista-historico');
-    const muralContainer = document.getElementById('mural-container'); // Elemento do Mural
+
+    const loginArea = document.getElementById('login-area');
+    const statusArea = document.getElementById('status-area');
+    const nomeInput = document.getElementById('nome');
+    const btnRegistrar = document.getElementById('btn-registrar');
+    const feedback = document.getElementById('feedback');
+    const statusText = document.getElementById('status-text');
+    const atividadeContainer = document.getElementById('atividade-container');
+    const toggleAtividadesBtn = document.getElementById('toggle-atividades');
+    const atividadeWrapper = document.getElementById('atividade-wrapper');
+    const btnSair = document.getElementById('btn-sair');
+    const btnVerHistorico = document.getElementById('btn-ver-historico');
+    const historicoContainer = document.getElementById('historico-container');
+    const listaHistorico = document.getElementById('lista-historico');
+    const muralContainer = document.getElementById('mural-container');
 
     let userInfo = {};
     let monitorInterval;
+
+    async function buscarAtividadesDoFirestore() {
+        try {
+            const q = query(collection(db, "atividades"), where("ativo", "==", true), orderBy("nome"));
+            const querySnapshot = await getDocs(q);
+            const atividadesDoBanco = [];
+            querySnapshot.forEach((doc) => {
+                atividadesDoBanco.push(doc.data().nome);
+            });
+            listaDeAtividades = atividadesDoBanco;
+            criarCheckboxesDeAtividade(); // Agora cria os checkboxes com a lista do banco
+        } catch (error) {
+            console.error("Erro ao buscar atividades: ", error);
+            alert("Não foi possível carregar a lista de atividades. Verifique o console (F12) para detalhes. Pode ser necessário criar um índice no Firebase.");
+        }
+    }
 
     async function carregarMural() {
         if (!muralContainer) return;
@@ -41,6 +67,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const muralRef = doc(db, "configuracoes", "mural");
             const muralDoc = await getDoc(muralRef);
             if (muralDoc.exists() && muralDoc.data().mensagem) {
+                muralContainer.style.display = 'block';
                 muralContainer.innerText = muralDoc.data().mensagem;
             } else {
                 muralContainer.style.display = 'none';
@@ -51,47 +78,10 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    function getDataDeHojeSP() {
-        const formatador = new Intl.DateTimeFormat('en-CA', { year: 'numeric', month: '2-digit', day: '2-digit', timeZone: 'America/Sao_Paulo' });
-        return formatador.format(new Date());
-    }
-
-    async function carregarHistoricoDoVoluntario(nomeDoVoluntario) {
-        if (!nomeDoVoluntario || !listaHistorico) return;
-        listaHistorico.innerHTML = '<li>Carregando...</li>';
-        const q = query(collection(db, "presencas"), where("nome", "==", nomeDoVoluntario), orderBy("data", "desc"));
-        try {
-            const querySnapshot = await getDocs(q);
-            listaHistorico.innerHTML = '';
-            if (querySnapshot.empty) {
-                listaHistorico.innerHTML = '<li>Nenhuma presença encontrada.</li>';
-                return;
-            }
-            querySnapshot.forEach((doc) => {
-                const dados = doc.data();
-                const [ano, mes, dia] = dados.data.split('-');
-                const dataFormatada = `${dia}/${mes}/${ano}`;
-                const item = document.createElement('li');
-                item.textContent = `Data: ${dataFormatada} - Atividade(s): ${dados.atividade}`;
-                listaHistorico.appendChild(item);
-            });
-        } catch (error) {
-            console.error("Erro ao buscar histórico: ", error);
-            listaHistorico.innerHTML = '<li>Erro ao carregar histórico.</li>';
-        }
-    }
-
-    function handleCheckboxChange() {
-        const checkboxesMarcados = document.querySelectorAll('input[name="atividade"]:checked');
-        document.querySelectorAll('input[name="atividade"]').forEach(checkbox => {
-            checkbox.disabled = checkboxesMarcados.length >= 3 && !checkbox.checked;
-        });
-    }
-
     function criarCheckboxesDeAtividade() {
         if (!atividadeContainer) return;
         atividadeContainer.innerHTML = '';
-        listaDeAtividades.sort().forEach(atividade => {
+        listaDeAtividades.forEach(atividade => {
             const div = document.createElement('div');
             div.className = 'checkbox-item';
             const checkbox = document.createElement('input');
@@ -106,6 +96,38 @@ document.addEventListener('DOMContentLoaded', () => {
             div.appendChild(checkbox);
             div.appendChild(label);
             atividadeContainer.appendChild(div);
+        });
+    }
+
+    async function inicializarPagina() {
+        await carregarMural();
+        await buscarAtividadesDoFirestore();
+
+        const savedInfoString = localStorage.getItem('userInfo');
+        if (!savedInfoString) {
+             console.log("Nenhuma informação de usuário salva.");
+             return;
+        }
+
+        const savedInfo = JSON.parse(savedInfoString);
+        const dataDeHoje = getDataDeHojeSP();
+        
+        if (savedInfo.loginDate === dataDeHoje) {
+            userInfo = savedInfo;
+            mostrarTelaDeStatus();
+        } else {
+            userInfo = { nome: savedInfo.nome };
+            nomeInput.value = savedInfo.nome;
+        }
+    }
+    
+    // Cole aqui as outras funções: handleCheckboxChange, toggleAtividadesBtn, getDistance, registrarPresenca, checarLocalizacao, mostrarTelaDeStatus, e a lógica dos botões.
+    // O código delas não muda. Para garantir, vou colar abaixo.
+
+    function handleCheckboxChange() {
+        const checkboxesMarcados = document.querySelectorAll('input[name="atividade"]:checked');
+        document.querySelectorAll('input[name="atividade"]').forEach(checkbox => {
+            checkbox.disabled = checkboxesMarcados.length >= 3 && !checkbox.checked;
         });
     }
 
@@ -125,7 +147,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
         return R * c;
     }
-
+    
     async function registrarPresenca() {
         if (!userInfo.nome) return;
         const dataFormatada = getDataDeHojeSP();
@@ -137,8 +159,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 timestamp: serverTimestamp(),
                 data: dataFormatada
             });
-            console.log("Presença registrada no Firestore:", dataFormatada);
+            console.log("Presença registrada no Firestore com a data correta:", dataFormatada);
             feedback.textContent = `Presença registrada com sucesso às ${new Date().toLocaleTimeString('pt-BR')}`;
+            feedback.style.color = "green";
             if (monitorInterval) clearInterval(monitorInterval);
         } catch (error) {
             console.error("Erro ao registrar presença: ", error);
@@ -155,12 +178,13 @@ document.addEventListener('DOMContentLoaded', () => {
                 registrarPresenca();
             } else {
                 feedback.textContent = `Ainda fora da área de registro. Tentando novamente em 10 minutos.`;
+                feedback.style.color = "orange";
             }
         }, () => {
             statusText.textContent = `Não foi possível obter a localização.`;
         }, { enableHighAccuracy: true });
     }
-
+    
     function mostrarTelaDeStatus() {
         loginArea.classList.add('hidden');
         statusArea.classList.remove('hidden');
@@ -176,6 +200,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const atividadesSelecionadas = document.querySelectorAll('input[name="atividade"]:checked');
             if (!nome) return alert("Por favor, preencha seu nome.");
             if (atividadesSelecionadas.length === 0) return alert("Por favor, selecione pelo menos uma atividade.");
+            
             const atividadesArray = Array.from(atividadesSelecionadas).map(cb => cb.value);
             const dataDeHoje = getDataDeHojeSP();
             userInfo = { nome, atividade: atividadesArray.join(', '), loginDate: dataDeHoje };
@@ -202,26 +227,17 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         });
     }
-
-    function inicializarPagina() {
-        carregarMural(); // Carrega a mensagem do mural
-        criarCheckboxesDeAtividade();
-        const savedInfoString = localStorage.getItem('userInfo');
-        if (!savedInfoString) return;
-        const savedInfo = JSON.parse(savedInfoString);
-        const dataDeHoje = getDataDeHojeSP();
-        if (savedInfo.loginDate === dataDeHoje) {
-            userInfo = savedInfo;
-            mostrarTelaDeStatus();
-        } else {
-            userInfo = { nome: savedInfo.nome };
-            nomeInput.value = savedInfo.nome;
-        }
+    
+    function getDataDeHojeSP() {
+        const formatador = new Intl.DateTimeFormat('en-CA', { year: 'numeric', month: '2-digit', day: '2-digit', timeZone: 'America/Sao_Paulo' });
+        return formatador.format(new Date());
     }
 
-    inicializarPagina();
-
+    // Registra o Service Worker
     if ('serviceWorker' in navigator) {
       window.addEventListener('load', () => navigator.serviceWorker.register('/sw.js'));
     }
+
+    // Finalmente, inicia a página
+    inicializarPagina();
 });
