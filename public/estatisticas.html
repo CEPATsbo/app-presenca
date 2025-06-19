@@ -43,8 +43,35 @@
             font-weight: bold;
             text-align: center;
         }
-        .nav-link:hover {
-            text-decoration: underline;
+        .nav-link:hover { text-decoration: underline; }
+
+        /* --- NOVOS ESTILOS PARA LEGENDA E GRÁFICO DINÂMICO --- */
+        .legenda-container {
+            display: flex;
+            justify-content: center;
+            gap: 20px;
+            margin-bottom: 15px;
+            flex-wrap: wrap;
+        }
+        .legenda-item {
+            display: flex;
+            align-items: center;
+            font-size: 0.9em;
+        }
+        .cor-box {
+            width: 15px;
+            height: 15px;
+            margin-right: 8px;
+            border: 1px solid rgba(0,0,0,0.2);
+        }
+        .cor-verde { background-color: rgba(46, 125, 50, 0.7); }
+        .cor-amarela { background-color: rgba(255, 206, 86, 0.7); }
+        .cor-vermelha { background-color: rgba(211, 47, 47, 0.7); }
+
+        /* Container do gráfico com altura dinâmica */
+        .chart-wrapper {
+            position: relative;
+            /* A altura será definida pelo JavaScript */
         }
     </style>
 </head>
@@ -61,8 +88,15 @@
 
         <div id="charts-grid" class="grid-container" style="display: none;">
             <div class="chart-card">
-                <h2>Voluntários Mais Frequentes</h2>
-                <canvas id="graficoVoluntarios"></canvas>
+                <h2>Frequência de Voluntários</h2>
+                <div class="legenda-container">
+                    <div class="legenda-item"><span class="cor-box cor-verde"></span> Top 10 Mais Frequentes</div>
+                    <div class="legenda-item"><span class="cor-box cor-amarela"></span> Frequência Intermediária</div>
+                    <div class="legenda-item"><span class="cor-box cor-vermelha"></span> 10 Menos Frequentes</div>
+                </div>
+                <div class="chart-wrapper">
+                    <canvas id="graficoVoluntarios"></canvas>
+                </div>
             </div>
             <div class="chart-card">
                 <h2>Atividades Mais Realizadas</h2>
@@ -122,7 +156,6 @@
                 }
             }
             
-            // --- FUNÇÃO ATUALIZADA COM A LÓGICA DE CORES ---
             function processarErenderizarGraficos(presencas) {
                 const contagemVoluntarios = {};
                 const contagemAtividades = {};
@@ -134,40 +167,50 @@
                     });
                 });
                 
-                // Ordena TODOS os voluntários por frequência
                 const todosOsVoluntarios = Object.entries(contagemVoluntarios).sort(([,a],[,b]) => b-a);
                 
-                // --- LÓGICA PARA DEFINIR AS CORES ---
                 const totalVoluntarios = todosOsVoluntarios.length;
                 const coresDasBarras = todosOsVoluntarios.map((item, index) => {
                     if (index < 10) {
-                        return 'rgba(46, 125, 50, 0.7)'; // Verde para o Top 10
+                        return 'rgba(46, 125, 50, 0.7)'; // Verde
                     }
-                    // A lógica para 'menos frequentes' só se aplica se tivermos mais de 20 voluntários
+                    // A cor vermelha só se aplica se tivermos mais de 20 voluntários para ter um "meio"
                     else if (totalVoluntarios > 20 && index >= totalVoluntarios - 10) {
-                        return 'rgba(211, 47, 47, 0.7)'; // Vermelho para os 10 últimos
+                        return 'rgba(211, 47, 47, 0.7)'; // Vermelho
                     }
                     else {
-                        return 'rgba(255, 206, 86, 0.7)'; // Amarelo para os do meio
+                        return 'rgba(255, 206, 86, 0.7)'; // Amarelo
                     }
                 });
+
+                // --- LÓGICA PARA ALTURA DINÂMICA DO GRÁFICO ---
+                const canvasVoluntarios = document.getElementById('graficoVoluntarios');
+                const alturaPorBarra = 35; // 35 pixels de altura para cada barra
+                const alturaMinima = 300; // Altura mínima de 300px
+                const alturaCalculada = Math.max(alturaMinima, totalVoluntarios * alturaPorBarra);
+                canvasVoluntarios.parentElement.style.height = `${alturaCalculada}px`;
                 
-                // Renderização do Gráfico de Voluntários (agora com todos e com cores dinâmicas)
-                new Chart(document.getElementById('graficoVoluntarios'), {
+                new Chart(canvasVoluntarios, {
                     type: 'bar',
                     data: {
-                        labels: todosOsVoluntarios.map(item => item[0]), // Nomes
+                        labels: todosOsVoluntarios.map(item => item[0]),
                         datasets: [{
                             label: 'Nº de Presenças',
-                            data: todosOsVoluntarios.map(item => item[1]), // Contagem
-                            backgroundColor: coresDasBarras, // Usa nosso array de cores
+                            data: todosOsVoluntarios.map(item => item[1]),
+                            backgroundColor: coresDasBarras,
                             borderColor: 'rgba(0, 0, 0, 0.2)',
                             borderWidth: 1
                         }]
                     },
                     options: { 
-                        indexAxis: 'y', // Deixa as barras na horizontal
-                        scales: { x: { beginAtZero: true } }
+                        indexAxis: 'y',
+                        maintainAspectRatio: false, // Permite que o gráfico cresça na altura
+                        scales: { x: { beginAtZero: true } },
+                        plugins: {
+                            legend: {
+                                display: false // Desliga a legenda automática
+                            }
+                        }
                     }
                 });
 
