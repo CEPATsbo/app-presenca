@@ -1,4 +1,4 @@
-// VERSÃO 2.2 - CORREÇÃO DE FUSO HORÁRIO
+// VERSÃO 2.3 - Painel da TV com Carrossel Automático
 
 import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
 import { getFirestore, collection, query, where, onSnapshot } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
@@ -18,33 +18,75 @@ document.addEventListener('DOMContentLoaded', () => {
 };
     // =================================================================
 
+    // --- CONFIGURAÇÕES DO CARROSSEL ---
+    const GRUPOS_POR_PAGINA = 6; // Quantos blocos de atividade cabem na sua TV? Ajuste este número.
+    const TEMPO_POR_PAGINA = 15000; // 15 segundos por página (15000 milissegundos)
+    // ------------------------------------
+
     const app = initializeApp(firebaseConfig);
     const db = getFirestore(app);
 
     const listaPresencaDiv = document.getElementById('lista-presenca');
     const dataHojeSpan = document.getElementById('data-hoje');
     
-    let dataAtualParaConsulta = ''; 
+    let dataAtualParaConsulta = '';
     let unsubscribe; 
+    let intervaloCarrossel; // Variável para controlar o timer do carrossel
 
-    // --- NOVA FUNÇÃO DE DATA COM FUSO HORÁRIO CORRETO ---
     function getDataDeHojeSP() {
         const formatador = new Intl.DateTimeFormat('en-CA', {
-            year: 'numeric',
-            month: '2-digit',
-            day: '2-digit',
-            timeZone: 'America/Sao_Paulo'
+            year: 'numeric', month: '2-digit', day: '2-digit', timeZone: 'America/Sao_Paulo'
         });
         return formatador.format(new Date());
     }
 
-    // Função para atualizar a data visível no título (dd/mm/aaaa)
     function atualizarDataVisivel(dataString) {
         if (dataHojeSpan) {
-            // A dataString já vem como AAAA-MM-DD
             const [ano, mes, dia] = dataString.split('-');
             dataHojeSpan.textContent = `(${dia}/${mes}/${ano})`;
         }
+    }
+    
+    // --- NOVA LÓGICA DO CARROSSEL ---
+    function gerenciarCarrossel() {
+        // Para o carrossel antigo antes de começar um novo
+        if (intervaloCarrossel) clearInterval(intervaloCarrossel);
+
+        const todosOsGrupos = Array.from(listaPresencaDiv.children);
+        if (todosOsGrupos.length === 0) return;
+
+        // Esconde todos os grupos
+        todosOsGrupos.forEach(grupo => grupo.classList.remove('visivel'));
+
+        const totalPaginas = Math.ceil(todosOsGrupos.length / GRUPOS_POR_PAGINA);
+        let paginaAtual = 0;
+
+        function mostrarPagina(pagina) {
+            // Esconde todos novamente para garantir
+            todosOsGrupos.forEach(grupo => grupo.classList.remove('visivel'));
+            
+            const inicio = pagina * GRUPOS_POR_PAGINA;
+            const fim = inicio + GRUPOS_POR_PAGINA;
+            const gruposDaPagina = todosOsGrupos.slice(inicio, fim);
+
+            // Mostra apenas os grupos da página atual
+            gruposDaPagina.forEach(grupo => grupo.classList.add('visivel'));
+        }
+
+        // Mostra a primeira página imediatamente
+        mostrarPagina(paginaAtual);
+
+        // Se só tiver uma página, não precisa alternar
+        if (totalPaginas <= 1) return;
+
+        // Inicia o timer para alternar as páginas
+        intervaloCarrossel = setInterval(() => {
+            paginaAtual++;
+            if (paginaAtual >= totalPaginas) {
+                paginaAtual = 0; // Volta para a primeira página
+            }
+            mostrarPagina(paginaAtual);
+        }, TEMPO_POR_PAGINA);
     }
 
     function renderizarLista(presentes) {
@@ -53,20 +95,17 @@ document.addEventListener('DOMContentLoaded', () => {
         const porAtividade = presentes.reduce((acc, pessoa) => {
             const atividadesIndividuais = pessoa.atividade.split(', ');
             atividadesIndividuais.forEach(atividade => {
-                if (!acc[atividade]) {
-                    acc[atividade] = [];
-                }
-                if (!acc[atividade].includes(pessoa.nome)) {
-                    acc[atividade].push(pessoa.nome);
-                }
+                if (!acc[atividade]) acc[atividade] = [];
+                if (!acc[atividade].includes(pessoa.nome)) acc[atividade].push(pessoa.nome);
             });
             return acc;
         }, {});
 
-        listaPresencaDiv.innerHTML = '';
+        listaPresencaDiv.innerHTML = ''; // Limpa tudo antes de recriar os blocos
 
         if (Object.keys(porAtividade).length === 0) {
             listaPresencaDiv.innerHTML = '<p style="font-size: 3vh; text-align: center;">Aguardando os primeiros registros do dia...</p>';
+            if (intervaloCarrossel) clearInterval(intervaloCarrossel); // Para o carrossel se não há ninguém
             return;
         }
 
@@ -87,56 +126,38 @@ document.addEventListener('DOMContentLoaded', () => {
                 listaUl.appendChild(itemLi);
             });
             grupoDiv.appendChild(listaUl);
-            
             listaPresencaDiv.appendChild(grupoDiv);
         }
+
+        // Depois que todos os blocos foram criados, inicia o carrossel
+        gerenciarCarrossel();
     }
 
     function carregarPresencas() {
-        // Desliga o listener antigo para evitar múltiplas execuções
-        if (unsubscribe) {
-            unsubscribe();
-            console.log("Listener antigo do Firebase desligado.");
-        }
+        if (unsubscribe) unsubscribe();
 
-        // Usa a nova função para pegar a data correta de São Paulo
         dataAtualParaConsulta = getDataDeHojeSP();
-        atualizarDataVisivel(dataAtualParaConsulta); // Atualiza o título
+        atualizarDataVisivel(dataAtualParaConsulta);
         
-        console.log(`Iniciando busca de presenças para a data: ${dataAtualParaConsulta}`);
         const q = query(collection(db, "presencas"), where("data", "==", dataAtualParaConsulta));
 
-        // Cria o novo listener para a data correta
         unsubscribe = onSnapshot(q, (querySnapshot) => {
-            console.log(`Dados recebidos para a data ${dataAtualParaConsulta}. Documentos: ${querySnapshot.size}`);
             const presentes = [];
-            querySnapshot.forEach((doc) => {
-                presentes.push(doc.data());
-            });
+            querySnapshot.forEach((doc) => presentes.push(doc.data()));
             renderizarLista(presentes);
         }, (error) => {
             console.error("Erro ao buscar presenças: ", error);
-            if(listaPresencaDiv){
-                listaPresencaDiv.innerHTML = `<p style="color:red; text-align:center;">Não foi possível carregar os dados.</p>`;
-            }
+            if(listaPresencaDiv) listaPresencaDiv.innerHTML = `<p style="color:red;">Não foi possível carregar os dados.</p>`;
         });
-        console.log(`Novo listener do Firebase iniciado para a data ${dataAtualParaConsulta}.`);
     }
 
-    // --- LÓGICA PRINCIPAL DE EXECUÇÃO ---
-    
-    // 1. Carrega as presenças do dia atual assim que a página abre
     carregarPresencas();
 
-    // 2. A cada 1 minuto, verifica se o dia mudou (usando a data de São Paulo)
     setInterval(() => {
         const novaDataSP = getDataDeHojeSP();
         if (novaDataSP !== dataAtualParaConsulta) {
-            console.log(`Virada de dia detectada! (de ${dataAtualParaConsulta} para ${novaDataSP}). Reiniciando o painel...`);
-            // Limpa a tela imediatamente antes de carregar novos dados
-            if(listaPresencaDiv) listaPresencaDiv.innerHTML = '';
-            // Carrega os dados para o novo dia
+            console.log("Virada de dia detectada! Reiniciando o painel...");
             carregarPresencas();
         }
-    }, 60000); // Verifica a cada 60 segundos
+    }, 60000);
 });
