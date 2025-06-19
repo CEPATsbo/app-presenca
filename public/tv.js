@@ -1,4 +1,4 @@
-// VERSÃO 2.3 - Painel da TV com Carrossel Automático
+// VERSÃO FINAL E INTEGRADA - TV COM CHECK-OUT E CARROSSEL
 
 import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
 import { getFirestore, collection, query, where, onSnapshot } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
@@ -20,7 +20,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // --- CONFIGURAÇÕES DO CARROSSEL ---
     const GRUPOS_POR_PAGINA = 6; // Quantos blocos de atividade cabem na sua TV? Ajuste este número.
-    const TEMPO_POR_PAGINA = 15000; // 15 segundos por página (15000 milissegundos)
+    const TEMPO_POR_PAGINA = 12000; // 12 segundos por página (15000 milissegundos)
     // ------------------------------------
 
     const app = initializeApp(firebaseConfig);
@@ -31,12 +31,10 @@ document.addEventListener('DOMContentLoaded', () => {
     
     let dataAtualParaConsulta = '';
     let unsubscribe; 
-    let intervaloCarrossel; // Variável para controlar o timer do carrossel
+    let intervaloCarrossel;
 
     function getDataDeHojeSP() {
-        const formatador = new Intl.DateTimeFormat('en-CA', {
-            year: 'numeric', month: '2-digit', day: '2-digit', timeZone: 'America/Sao_Paulo'
-        });
+        const formatador = new Intl.DateTimeFormat('en-CA', { year: 'numeric', month: '2-digit', day: '2-digit', timeZone: 'America/Sao_Paulo' });
         return formatador.format(new Date());
     }
 
@@ -47,43 +45,31 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
     
-    // --- NOVA LÓGICA DO CARROSSEL ---
     function gerenciarCarrossel() {
-        // Para o carrossel antigo antes de começar um novo
         if (intervaloCarrossel) clearInterval(intervaloCarrossel);
-
         const todosOsGrupos = Array.from(listaPresencaDiv.children);
         if (todosOsGrupos.length === 0) return;
 
-        // Esconde todos os grupos
         todosOsGrupos.forEach(grupo => grupo.classList.remove('visivel'));
 
         const totalPaginas = Math.ceil(todosOsGrupos.length / GRUPOS_POR_PAGINA);
         let paginaAtual = 0;
 
         function mostrarPagina(pagina) {
-            // Esconde todos novamente para garantir
             todosOsGrupos.forEach(grupo => grupo.classList.remove('visivel'));
-            
             const inicio = pagina * GRUPOS_POR_PAGINA;
             const fim = inicio + GRUPOS_POR_PAGINA;
             const gruposDaPagina = todosOsGrupos.slice(inicio, fim);
-
-            // Mostra apenas os grupos da página atual
             gruposDaPagina.forEach(grupo => grupo.classList.add('visivel'));
         }
 
-        // Mostra a primeira página imediatamente
         mostrarPagina(paginaAtual);
-
-        // Se só tiver uma página, não precisa alternar
         if (totalPaginas <= 1) return;
 
-        // Inicia o timer para alternar as páginas
         intervaloCarrossel = setInterval(() => {
             paginaAtual++;
             if (paginaAtual >= totalPaginas) {
-                paginaAtual = 0; // Volta para a primeira página
+                paginaAtual = 0;
             }
             mostrarPagina(paginaAtual);
         }, TEMPO_POR_PAGINA);
@@ -101,11 +87,10 @@ document.addEventListener('DOMContentLoaded', () => {
             return acc;
         }, {});
 
-        listaPresencaDiv.innerHTML = ''; // Limpa tudo antes de recriar os blocos
-
+        listaPresencaDiv.innerHTML = '';
         if (Object.keys(porAtividade).length === 0) {
-            listaPresencaDiv.innerHTML = '<p style="font-size: 3vh; text-align: center;">Aguardando os primeiros registros do dia...</p>';
-            if (intervaloCarrossel) clearInterval(intervaloCarrossel); // Para o carrossel se não há ninguém
+            listaPresencaDiv.innerHTML = '<p style="font-size: 3vh; text-align: center;">Aguardando voluntários presentes...</p>';
+            if (intervaloCarrossel) clearInterval(intervaloCarrossel);
             return;
         }
 
@@ -113,12 +98,10 @@ document.addEventListener('DOMContentLoaded', () => {
         for (const atividade of atividadesOrdenadas) {
             const grupoDiv = document.createElement('div');
             grupoDiv.className = 'atividade-grupo';
-            
             const titulo = document.createElement('h2');
             titulo.className = 'atividade-titulo';
             titulo.textContent = atividade;
             grupoDiv.appendChild(titulo);
-
             const listaUl = document.createElement('ul');
             porAtividade[atividade].sort().forEach(nome => {
                 const itemLi = document.createElement('li');
@@ -128,18 +111,19 @@ document.addEventListener('DOMContentLoaded', () => {
             grupoDiv.appendChild(listaUl);
             listaPresencaDiv.appendChild(grupoDiv);
         }
-
-        // Depois que todos os blocos foram criados, inicia o carrossel
         gerenciarCarrossel();
     }
 
     function carregarPresencas() {
         if (unsubscribe) unsubscribe();
-
         dataAtualParaConsulta = getDataDeHojeSP();
         atualizarDataVisivel(dataAtualParaConsulta);
         
-        const q = query(collection(db, "presencas"), where("data", "==", dataAtualParaConsulta));
+        const q = query(
+            collection(db, "presencas"), 
+            where("data", "==", dataAtualParaConsulta),
+            where("status", "==", "presente")
+        );
 
         unsubscribe = onSnapshot(q, (querySnapshot) => {
             const presentes = [];
@@ -147,7 +131,7 @@ document.addEventListener('DOMContentLoaded', () => {
             renderizarLista(presentes);
         }, (error) => {
             console.error("Erro ao buscar presenças: ", error);
-            if(listaPresencaDiv) listaPresencaDiv.innerHTML = `<p style="color:red;">Não foi possível carregar os dados.</p>`;
+            if(listaPresencaDiv) listaPresencaDiv.innerHTML = `<p style="color:red;">Não foi possível carregar dados. Pode ser necessário criar um índice no Firebase.</p>`;
         });
     }
 
