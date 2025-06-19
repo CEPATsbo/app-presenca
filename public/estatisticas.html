@@ -23,7 +23,7 @@
         .header p { margin: 5px 0 0; color: #555; font-size: 1.1em; text-align: center; }
         .grid-container {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+            grid-template-columns: repeat(auto-fit, minmax(450px, 1fr));
             gap: 30px;
         }
         .chart-card {
@@ -35,7 +35,6 @@
         .chart-card h2 { margin-top: 0; font-size: 1.3em; color: #444; border-bottom: 1px solid #eee; padding-bottom: 10px; }
         #loading-message { font-size: 1.5em; text-align: center; padding: 50px; }
         
-        /* Estilo para o novo link de navegação */
         .nav-link {
             display: block;
             margin-top: 20px;
@@ -62,7 +61,7 @@
 
         <div id="charts-grid" class="grid-container" style="display: none;">
             <div class="chart-card">
-                <h2>Top 10 Voluntários Mais Frequentes</h2>
+                <h2>Voluntários Mais Frequentes</h2>
                 <canvas id="graficoVoluntarios"></canvas>
             </div>
             <div class="chart-card">
@@ -73,7 +72,6 @@
     </div>
 
     <script type="module">
-        // Importa as funções que precisamos do Firebase
         import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
         import { getFirestore, collection, query, where, getDocs, Timestamp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
 
@@ -124,6 +122,7 @@
                 }
             }
             
+            // --- FUNÇÃO ATUALIZADA COM A LÓGICA DE CORES ---
             function processarErenderizarGraficos(presencas) {
                 const contagemVoluntarios = {};
                 const contagemAtividades = {};
@@ -135,23 +134,53 @@
                     });
                 });
                 
-                const top10Voluntarios = Object.entries(contagemVoluntarios).sort(([,a],[,b]) => b-a).slice(0, 10);
-                const atividadesOrdenadas = Object.entries(contagemAtividades).sort(([,a],[,b]) => b-a);
+                // Ordena TODOS os voluntários por frequência
+                const todosOsVoluntarios = Object.entries(contagemVoluntarios).sort(([,a],[,b]) => b-a);
                 
+                // --- LÓGICA PARA DEFINIR AS CORES ---
+                const totalVoluntarios = todosOsVoluntarios.length;
+                const coresDasBarras = todosOsVoluntarios.map((item, index) => {
+                    if (index < 10) {
+                        return 'rgba(46, 125, 50, 0.7)'; // Verde para o Top 10
+                    }
+                    // A lógica para 'menos frequentes' só se aplica se tivermos mais de 20 voluntários
+                    else if (totalVoluntarios > 20 && index >= totalVoluntarios - 10) {
+                        return 'rgba(211, 47, 47, 0.7)'; // Vermelho para os 10 últimos
+                    }
+                    else {
+                        return 'rgba(255, 206, 86, 0.7)'; // Amarelo para os do meio
+                    }
+                });
+                
+                // Renderização do Gráfico de Voluntários (agora com todos e com cores dinâmicas)
                 new Chart(document.getElementById('graficoVoluntarios'), {
                     type: 'bar',
                     data: {
-                        labels: top10Voluntarios.map(item => item[0]),
-                        datasets: [{ label: 'Nº de Presenças', data: top10Voluntarios.map(item => item[1]), backgroundColor: 'rgba(46, 125, 50, 0.7)', borderColor: 'rgba(46, 125, 50, 1)', borderWidth: 1 }]
+                        labels: todosOsVoluntarios.map(item => item[0]), // Nomes
+                        datasets: [{
+                            label: 'Nº de Presenças',
+                            data: todosOsVoluntarios.map(item => item[1]), // Contagem
+                            backgroundColor: coresDasBarras, // Usa nosso array de cores
+                            borderColor: 'rgba(0, 0, 0, 0.2)',
+                            borderWidth: 1
+                        }]
                     },
-                    options: { indexAxis: 'y' }
+                    options: { 
+                        indexAxis: 'y', // Deixa as barras na horizontal
+                        scales: { x: { beginAtZero: true } }
+                    }
                 });
 
+                const atividadesOrdenadas = Object.entries(contagemAtividades).sort(([,a],[,b]) => b-a);
                 new Chart(document.getElementById('graficoAtividades'), {
                     type: 'doughnut',
                     data: {
                         labels: atividadesOrdenadas.map(item => item[0]),
-                        datasets: [{ label: 'Nº de Ocorrências', data: atividadesOrdenadas.map(item => item[1]), backgroundColor: [ 'rgba(255, 99, 132, 0.7)', 'rgba(54, 162, 235, 0.7)', 'rgba(255, 206, 86, 0.7)', 'rgba(75, 192, 192, 0.7)', 'rgba(153, 102, 255, 0.7)', 'rgba(255, 159, 64, 0.7)' ], }]
+                        datasets: [{ 
+                            label: 'Nº de Ocorrências', 
+                            data: atividadesOrdenadas.map(item => item[1]), 
+                            backgroundColor: [ '#4CAF50', '#2196F3', '#FFC107', '#E91E63', '#9C27B0', '#3F51B5', '#009688', '#FF9800', '#795548', '#607D8B' ], 
+                        }]
                     },
                 });
             }
