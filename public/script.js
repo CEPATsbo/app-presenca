@@ -1,6 +1,5 @@
-// VERSÃO 2.6 - CORREÇÃO DO BOTÃO DE ATIVIDADES
+// VERSÃO 2.5 - CORRIGE "LEMBRAR NOME" ENTRE DIAS
 
-// Importa as funções que precisamos do Firebase
 import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
 import { getFirestore, doc, setDoc, serverTimestamp, collection, query, where, getDocs, orderBy } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
 
@@ -43,7 +42,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const statusText = document.getElementById('status-text');
     const atividadeContainer = document.getElementById('atividade-container');
     const toggleAtividadesBtn = document.getElementById('toggle-atividades');
-    const atividadeWrapper = document.getElementById('atividade-wrapper'); // <-- A linha que faltava
+    const atividadeWrapper = document.getElementById('atividade-wrapper');
     const btnSair = document.getElementById('btn-sair');
     const btnVerHistorico = document.getElementById('btn-ver-historico');
     const historicoContainer = document.getElementById('historico-container');
@@ -52,23 +51,21 @@ document.addEventListener('DOMContentLoaded', () => {
     let userInfo = {};
     let monitorInterval;
 
-    // --- FUNÇÕES DO APLICATIVO ---
-
     function getDataDeHojeSP() {
-        const formatador = new Intl.DateTimeFormat('en-CA', { year: 'numeric', month: '2-digit', day: '2-digit', timeZone: 'America/Sao_Paulo' });
+        const formatador = new Intl.DateTimeFormat('en-CA', {
+            year: 'numeric', month: '2-digit', day: '2-digit', timeZone: 'America/Sao_Paulo'
+        });
         return formatador.format(new Date());
     }
 
     async function carregarHistoricoDoVoluntario(nomeDoVoluntario) {
         if (!nomeDoVoluntario || !listaHistorico) return;
         listaHistorico.innerHTML = '<li>Carregando histórico...</li>';
-
         const q = query(
             collection(db, "presencas"), 
             where("nome", "==", nomeDoVoluntario),
             orderBy("data", "desc")
         );
-
         try {
             const querySnapshot = await getDocs(q);
             listaHistorico.innerHTML = ''; 
@@ -118,6 +115,14 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
+    if (toggleAtividadesBtn) {
+        toggleAtividadesBtn.addEventListener('click', () => {
+            atividadeWrapper.classList.toggle('hidden');
+            const seta = toggleAtividadesBtn.innerHTML.includes('▼') ? '▲' : '▼';
+            toggleAtividadesBtn.innerHTML = `Selecione suas atividades (até 3) ${seta}`;
+        });
+    }
+
     function getDistance(lat1, lon1, lat2, lon2) {
         const R = 6371 * 1000;
         const dLat = (lat2 - lat1) * Math.PI / 180;
@@ -149,10 +154,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function checarLocalizacao() {
-        if (!navigator.geolocation) {
-            statusText.textContent = "Geolocalização não é suportada.";
-            return;
-        }
+        if (!navigator.geolocation) return;
         navigator.geolocation.getCurrentPosition((position) => {
             const distancia = getDistance(position.coords.latitude, position.coords.longitude, CASA_ESPIRITA_LAT, CASA_ESPIRITA_LON);
             feedback.textContent = `Você está a ${distancia.toFixed(0)} metros de distância.`;
@@ -174,32 +176,6 @@ document.addEventListener('DOMContentLoaded', () => {
         document.getElementById('display-atividade').textContent = userInfo.atividade;
         checarLocalizacao();
         monitorInterval = setInterval(checarLocalizacao, 600000);
-    }
-
-    function inicializarPagina() {
-        criarCheckboxesDeAtividade();
-        const savedInfoString = localStorage.getItem('userInfo');
-        if (!savedInfoString) return;
-        const savedInfo = JSON.parse(savedInfoString);
-        const dataDeHoje = getDataDeHojeSP();
-        if (savedInfo.loginDate === dataDeHoje) {
-            userInfo = savedInfo;
-            mostrarTelaDeStatus();
-        } else {
-            nomeInput.value = savedInfo.nome;
-        }
-    }
-
-    // --- LÓGICA DOS BOTÕES ---
-
-    if (toggleAtividadesBtn) {
-        toggleAtividadesBtn.addEventListener('click', () => {
-            if (atividadeWrapper) {
-                atividadeWrapper.classList.toggle('hidden');
-                const seta = toggleAtividadesBtn.innerHTML.includes('▼') ? '▲' : '▼';
-                toggleAtividadesBtn.innerHTML = `Selecione suas atividades (até 3) ${seta}`;
-            }
-        });
     }
 
     if (btnRegistrar) {
@@ -236,6 +212,29 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
     
+    // --- FUNÇÃO DE INICIALIZAÇÃO CORRIGIDA ---
+    function inicializarPagina() {
+        criarCheckboxesDeAtividade();
+        const savedInfoString = localStorage.getItem('userInfo');
+        if (!savedInfoString) return;
+
+        const savedInfo = JSON.parse(savedInfoString);
+        const dataDeHoje = getDataDeHojeSP();
+
+        if (savedInfo.loginDate === dataDeHoje) {
+            // Se a data salva é a de hoje, o usuário já se "logou".
+            console.log("Mesmo dia, restaurando sessão completa.");
+            userInfo = savedInfo;
+            mostrarTelaDeStatus();
+        } else {
+            // Se for um novo dia, lembramos do nome e o pré-preenchemos.
+            console.log("Novo dia detectado. Resetando atividades e mantendo o nome.");
+            // --- LINHA ADICIONADA PARA CORRIGIR O BUG ---
+            userInfo = { nome: savedInfo.nome }; // Guarda o nome na memória interna
+            nomeInput.value = savedInfo.nome; // E também no campo de texto visível
+        }
+    }
+
     inicializarPagina();
 
     if ('serviceWorker' in navigator) {
