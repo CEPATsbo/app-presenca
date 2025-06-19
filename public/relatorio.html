@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gerador de Relatórios - Presença Voluntária</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background: linear-gradient(135deg, #0d47a1, #1976d2); /* Um degradê azul para diferenciar da tela principal */
+            background-attachment: fixed;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            margin: 0;
+        }
+        .container {
+            background-color: white;
+            padding: 40px;
+            border-radius: 12px;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.2);
+            text-align: center;
+            width: 100%;
+            max-width: 500px;
+        }
+        h1 {
+            font-size: 2em;
+            color: #0d47a1;
+            margin-top: 0;
+            margin-bottom: 2em;
+        }
+        label {
+            display: block;
+            font-size: 1.1em;
+            color: #333;
+            margin-bottom: 10px;
+            text-align: left;
+        }
+        input[type="date"] {
+            width: 100%;
+            padding: 12px;
+            border: 1px solid #ccc;
+            border-radius: 6px;
+            font-family: inherit;
+            font-size: 1.2em;
+            box-sizing: border-box;
+            margin-bottom: 20px;
+        }
+        button {
+            width: 100%;
+            padding: 15px;
+            background-color: #1565c0;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            font-size: 1.2em;
+            font-weight: bold;
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+        button:hover {
+            background-color: #0d47a1;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Gerador de Relatórios de Presença</h1>
+        <label for="data-relatorio">Escolha a data do relatório:</label>
+        <input type="date" id="data-relatorio">
+        <button id="btn-gerar-relatorio">Gerar Relatório</button>
+    </div>
+
+    <script>
+        // Garante que o script só rode depois que a página carregar
+        document.addEventListener('DOMContentLoaded', () => {
+            const dateInput = document.getElementById('data-relatorio');
+            const generateBtn = document.getElementById('btn-gerar-relatorio');
+
+            // Define a data de hoje como valor padrão no calendário
+            // Pega a data no formato AAAA-MM-DD
+            const hoje = new Date().toISOString().split('T')[0];
+            dateInput.value = hoje;
+
+            if (generateBtn) {
+                generateBtn.addEventListener('click', () => {
+                    const dataSelecionada = dateInput.value;
+
+                    if (!dataSelecionada) {
+                        alert('Por favor, selecione uma data.');
+                        return;
+                    }
+
+                    // Constrói a URL da nossa API e redireciona o navegador para ela
+                    const apiUrl = `/api?data=${dataSelecionada}`;
+                    console.log(`Redirecionando para: ${apiUrl}`);
+
+                    // Abre o relatório em uma nova aba para não perder esta página
+                    window.open(apiUrl, '_blank');
+                });
+            }
+        });
+    </script>
+</body>
+</html>
