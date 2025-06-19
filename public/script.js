@@ -1,7 +1,8 @@
-// VERSÃO 2.5 - Adiciona botão Sair/Resetar
+// VERSÃO 2.6 CORRIGIDA - Histórico de Presença Individual
 
+// Importa as funções que precisamos do Firebase, incluindo as novas para a consulta de histórico
 import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
-import { getFirestore, doc, setDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
+import { getFirestore, doc, setDoc, serverTimestamp, collection, query, where, getDocs, orderBy } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
 
 document.addEventListener('DOMContentLoaded', () => {
 
@@ -21,6 +22,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const app = initializeApp(firebaseConfig);
     const db = getFirestore(app);
 
+    // --- LISTA DE ATIVIDADES COMPLETA ---
     const listaDeAtividades = [
         "Recepção/Acolhimento", "Passe de Harmonização", "Apoio", "Biblioteca", 
         "Entrevistas", "Encaminhamento", "Câmaras de Passe", "Diretoria", 
@@ -29,10 +31,12 @@ document.addEventListener('DOMContentLoaded', () => {
         "Colegiado Mediúnico", "Bazar", "Cantina"
     ];
 
+    // --- CONFIGURAÇÕES DO LOCAL ---
     const CASA_ESPIRITA_LAT = -22.75553; // Coordenadas Reais da Casa
     const CASA_ESPIRITA_LON = -47.36945;
     const RAIO_EM_METROS = 40;
 
+    // --- ELEMENTOS DA PÁGINA ---
     const loginArea = document.getElementById('login-area');
     const statusArea = document.getElementById('status-area');
     const nomeInput = document.getElementById('nome');
@@ -42,11 +46,15 @@ document.addEventListener('DOMContentLoaded', () => {
     const atividadeContainer = document.getElementById('atividade-container');
     const toggleAtividadesBtn = document.getElementById('toggle-atividades');
     const atividadeWrapper = document.getElementById('atividade-wrapper');
-    // --- NOVO ELEMENTO ---
     const btnSair = document.getElementById('btn-sair');
+    const btnVerHistorico = document.getElementById('btn-ver-historico');
+    const historicoContainer = document.getElementById('historico-container');
+    const listaHistorico = document.getElementById('lista-historico');
 
     let userInfo = {};
     let monitorInterval;
+
+    // --- FUNÇÕES DO APLICATIVO ---
 
     function getDataDeHojeSP() {
         const formatador = new Intl.DateTimeFormat('en-CA', {
@@ -55,11 +63,41 @@ document.addEventListener('DOMContentLoaded', () => {
         return formatador.format(new Date());
     }
 
+    async function carregarHistoricoDoVoluntario(nomeDoVoluntario) {
+        if (!nomeDoVoluntario || !listaHistorico) return;
+        listaHistorico.innerHTML = '<li>Carregando histórico...</li>';
+
+        const q = query(
+            collection(db, "presencas"), 
+            where("nome", "==", nomeDoVoluntario),
+            orderBy("data", "desc")
+        );
+
+        try {
+            const querySnapshot = await getDocs(q);
+            listaHistorico.innerHTML = ''; 
+            if (querySnapshot.empty) {
+                listaHistorico.innerHTML = '<li>Nenhuma presença encontrada.</li>';
+                return;
+            }
+            querySnapshot.forEach((doc) => {
+                const dados = doc.data();
+                const [ano, mes, dia] = dados.data.split('-');
+                const dataFormatada = `${dia}/${mes}/${ano}`;
+                const item = document.createElement('li');
+                item.textContent = `Data: ${dataFormatada} - Atividade(s): ${dados.atividade}`;
+                listaHistorico.appendChild(item);
+            });
+        } catch (error) {
+            console.error("Erro ao buscar histórico: ", error);
+            listaHistorico.innerHTML = '<li>Erro ao carregar histórico. Verifique o console (F12).</li>';
+        }
+    }
+
     function handleCheckboxChange() {
         const checkboxesMarcados = document.querySelectorAll('input[name="atividade"]:checked');
-        const totalMarcados = checkboxesMarcados.length;
         document.querySelectorAll('input[name="atividade"]').forEach(checkbox => {
-            checkbox.disabled = totalMarcados >= 3 && !checkbox.checked;
+            checkbox.disabled = checkboxesMarcados.length >= 3 && !checkbox.checked;
         });
     }
 
@@ -74,21 +112,13 @@ document.addEventListener('DOMContentLoaded', () => {
             checkbox.id = atividade.replace(/\s+/g, '-');
             checkbox.name = 'atividade';
             checkbox.value = atividade;
-            checkbox.addEventListener('change', handleCheckboxChange);
+            checkbox.addEventListener('change', handleCheckboxChange); 
             const label = document.createElement('label');
             label.htmlFor = checkbox.id;
             label.textContent = atividade;
             div.appendChild(checkbox);
             div.appendChild(label);
             atividadeContainer.appendChild(div);
-        });
-    }
-
-    if (toggleAtividadesBtn) {
-        toggleAtividadesBtn.addEventListener('click', () => {
-            atividadeWrapper.classList.toggle('hidden');
-            const seta = toggleAtividadesBtn.innerHTML.includes('▼') ? '▲' : '▼';
-            toggleAtividadesBtn.innerHTML = `Selecione suas atividades (até 3) ${seta}`;
         });
     }
 
@@ -112,14 +142,13 @@ document.addEventListener('DOMContentLoaded', () => {
                 timestamp: serverTimestamp(),
                 data: dataFormatada
             });
-            console.log("Presença registrada no Firestore com a data correta:", dataFormatada);
+            console.log("Presença registrada no Firestore:", dataFormatada);
             feedback.textContent = `Presença registrada com sucesso às ${new Date().toLocaleTimeString('pt-BR')}`;
             feedback.style.color = "green";
             if (monitorInterval) clearInterval(monitorInterval);
         } catch (error) {
             console.error("Erro ao registrar presença: ", error);
             feedback.textContent = "Erro ao salvar no banco de dados.";
-            feedback.style.color = "red";
         }
     }
 
@@ -127,40 +156,17 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!navigator.geolocation) return;
         navigator.geolocation.getCurrentPosition((position) => {
             const distancia = getDistance(position.coords.latitude, position.coords.longitude, CASA_ESPIRITA_LAT, CASA_ESPIRITA_LON);
-            console.log(`Distância até o centro: ${distancia.toFixed(2)} metros.`);
             feedback.textContent = `Você está a ${distancia.toFixed(0)} metros de distância.`;
             if (distancia <= RAIO_EM_METROS) {
                 registrarPresenca();
             } else {
                 feedback.textContent = `Ainda fora da área de registro. Tentando novamente em 10 minutos.`;
-                feedback.style.color = "orange";
             }
         }, () => {
-            statusText.textContent = `Não foi possível obter a localização. Verifique as permissões.`;
+            statusText.textContent = `Não foi possível obter a localização.`;
         }, { enableHighAccuracy: true });
     }
     
-    if (btnRegistrar) {
-        btnRegistrar.addEventListener('click', () => {
-            const nome = nomeInput.value;
-            const atividadesSelecionadas = document.querySelectorAll('input[name="atividade"]:checked');
-            if (!nome) return alert("Por favor, preencha seu nome.");
-            if (atividadesSelecionadas.length === 0) return alert("Por favor, selecione pelo menos uma atividade.");
-            
-            const atividadesArray = Array.from(atividadesSelecionadas).map(cb => cb.value);
-            const dataDeHoje = getDataDeHojeSP();
-            
-            userInfo = { 
-                nome, 
-                atividade: atividadesArray.join(', '),
-                loginDate: dataDeHoje 
-            };
-            
-            localStorage.setItem('userInfo', JSON.stringify(userInfo));
-            mostrarTelaDeStatus();
-        });
-    }
-
     function mostrarTelaDeStatus() {
         loginArea.classList.add('hidden');
         statusArea.classList.remove('hidden');
@@ -170,28 +176,12 @@ document.addEventListener('DOMContentLoaded', () => {
         monitorInterval = setInterval(checarLocalizacao, 600000);
     }
 
-    // --- NOVA LÓGICA PARA O BOTÃO SAIR ---
-    if (btnSair) {
-        btnSair.addEventListener('click', (event) => {
-            event.preventDefault(); // Impede o link de pular para o topo da página
-            
-            const confirmacao = confirm('Tem certeza que deseja sair? Suas atividades de hoje serão esquecidas e você voltará para a tela de cadastro.');
-            
-            if (confirmacao) {
-                localStorage.removeItem('userInfo');
-                window.location.reload(); // Recarrega a página para o estado inicial
-            }
-        });
-    }
-
     function inicializarPagina() {
         criarCheckboxesDeAtividade();
         const savedInfoString = localStorage.getItem('userInfo');
         if (!savedInfoString) return;
-
         const savedInfo = JSON.parse(savedInfoString);
         const dataDeHoje = getDataDeHojeSP();
-
         if (savedInfo.loginDate === dataDeHoje) {
             userInfo = savedInfo;
             mostrarTelaDeStatus();
@@ -200,9 +190,42 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    inicializarPagina();
+    // --- LÓGICA DOS BOTÕES ---
 
-    if ('serviceWorker' in navigator) {
-      window.addEventListener('load', () => navigator.serviceWorker.register('/sw.js'));
+    if (btnRegistrar) {
+        btnRegistrar.addEventListener('click', () => {
+            const nome = nomeInput.value;
+            const atividadesSelecionadas = document.querySelectorAll('input[name="atividade"]:checked');
+            if (!nome) return alert("Por favor, preencha seu nome.");
+            if (atividadesSelecionadas.length === 0) return alert("Por favor, selecione pelo menos uma atividade.");
+            
+            const atividadesArray = Array.from(atividadesSelecionadas).map(cb => cb.value);
+            const dataDeHoje = getDataDeHojeSP();
+            userInfo = { nome, atividade: atividadesArray.join(', '), loginDate: dataDeHoje };
+            localStorage.setItem('userInfo', JSON.stringify(userInfo));
+            mostrarTelaDeStatus();
+        });
     }
+
+    if (btnSair) {
+        btnSair.addEventListener('click', (event) => {
+            event.preventDefault();
+            if (confirm('Tem certeza que deseja sair?')) {
+                localStorage.removeItem('userInfo');
+                window.location.reload();
+            }
+        });
+    }
+
+    if (btnVerHistorico) {
+        btnVerHistorico.addEventListener('click', () => {
+            historicoContainer.classList.toggle('hidden');
+            if (!historicoContainer.classList.contains('hidden')) {
+                carregarHistoricoDoVoluntario(userInfo.nome);
+            }
+        });
+    }
+    
+    // Inicia a aplicação
+    inicializarPagina();
 });
