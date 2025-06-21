@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin - Agendar Notificação</title>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background-color: #f4f6f9; display: flex; flex-direction: column; align-items: center; min-height: 100vh; margin: 0; padding: 20px; box-sizing: border-box; }
+        .admin-nav { width: 100%; max-width: 800px; background-color: #fff; padding: 15px; margin-bottom: 30px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); text-align: center; display: flex; flex-wrap: wrap; justify-content: center; gap: 15px 25px; }
+        .admin-nav a { margin: 0; padding: 0; background-color: transparent; color: #1565c0; text-decoration: none; font-weight: bold; font-size: 1.1em; white-space: nowrap; border-radius: 0; }
+        .admin-nav a.active, .admin-nav a:hover { text-decoration: underline; background-color: transparent; color: #0d47a1; }
+        .container { background-color: white; padding: 40px; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.15); width: 100%; max-width: 700px; margin-bottom: 30px; }
+        h1, h2 { text-align: center; color: #333; margin-top: 0; }
+        input, textarea, select { width: 100%; padding: 12px; margin-bottom: 15px; border: 1px solid #ccc; border-radius: 6px; font-family: inherit; font-size: 1em; box-sizing: border-box; }
+        textarea { height: 100px; resize: vertical; }
+        button { padding: 15px; background-color: #007bff; color: white; border: none; border-radius: 6px; font-size: 1.1em; font-weight: bold; cursor: pointer; }
+        .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+        .full-width { grid-column: 1 / -1; }
+        .agendamentos-pendentes ul { list-style-type: none; padding: 0; }
+        .agendamentos-pendentes li { background-color: #fafafa; padding: 15px; border-radius: 6px; margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center; }
+        .btn-delete { background-color: #c62828; color: white; border: none; padding: 8px 12px; border-radius: 4px; cursor: pointer; }
+    </style>
+</head>
+<body>
+    <nav class="admin-nav">
+        </nav>
+    <div class="container">
+        <h1>Agendamento de Notificações</h1>
+        <div class="form-grid">
+            <div class="full-width">
+                <input type="text" id="titulo-notificacao" placeholder="Título da Notificação" maxlength="50">
+            </div>
+            <div class="full-width">
+                <textarea id="corpo-notificacao" placeholder="Corpo da mensagem..." maxlength="150"></textarea>
+            </div>
+            <div>
+                <label for="data-envio">Data de Envio:</label>
+                <input type="date" id="data-envio">
+            </div>
+            <div>
+                <label for="hora-envio">Hora de Envio:</label>
+                <input type="time" id="hora-envio">
+            </div>
+        </div>
+        <button id="btn-agendar">Agendar Envio</button>
+    </div>
+
+    <div class="container agendamentos-pendentes">
+        <h2>Agendamentos Pendentes</h2>
+        <ul id="lista-agendamentos"><li>Carregando...</li></ul>
+    </div>
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
+        import { getFirestore, collection, onSnapshot, addDoc, deleteDoc, doc, orderBy, query, Timestamp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
+        
+        // =================================================================
+        const firebaseConfig = {
+  apiKey: "AIzaSyBV7RPjk3cFTqL-aIpflJcUojKg1ZXMLuU",
+  authDomain: "voluntarios-ativos---cepat.firebaseapp.com",
+  projectId: "voluntarios-ativos---cepat",
+  storageBucket: "voluntarios-ativos---cepat.firebasestorage.app",
+  messagingSenderId: "66122858261",
+  appId: "1:66122858261:web:7fa21f1805463b5c08331c"
+};
+        // =================================================================
+        const SENHA_ADMIN = "admin";
+
+        const app = initializeApp(firebaseConfig);
+        const db = getFirestore(app);
+        const agendamentosCollection = collection(db, 'notificacoes_agendadas');
+
+        const txtTitulo = document.getElementById('titulo-notificacao');
+        const txtCorpo = document.getElementById('corpo-notificacao');
+        const inputData = document.getElementById('data-envio');
+        const inputHora = document.getElementById('hora-envio');
+        const btnAgendar = document.getElementById('btn-agendar');
+        const listaUl = document.getElementById('lista-agendamentos');
+
+        function autenticar() { /* ... código de autenticação ... */ return true; }
+
+        function carregarAgendamentos() {
+            const q = query(agendamentosCollection, orderBy("enviarEm", "asc"));
+            onSnapshot(q, (snapshot) => {
+                listaUl.innerHTML = '';
+                if (snapshot.empty) {
+                    listaUl.innerHTML = '<li>Nenhuma notificação agendada.</li>';
+                }
+                snapshot.forEach(docSnapshot => {
+                    const agendamento = docSnapshot.data();
+                    const dataEnvio = agendamento.enviarEm.toDate();
+                    const li = document.createElement('li');
+                    li.innerHTML = `
+                        <div>
+                            <strong>${agendamento.titulo}</strong><br>
+                            <small><em>${agendamento.corpo}</em></small><br>
+                            <small>Enviar em: ${dataEnvio.toLocaleString('pt-BR')}</small>
+                        </div>
+                        <button data-id="${docSnapshot.id}" class="btn-delete">Cancelar</button>
+                    `;
+                    listaUl.appendChild(li);
+                });
+            });
+        }
+
+        btnAgendar.addEventListener('click', async () => {
+            const titulo = txtTitulo.value.trim();
+            const corpo = txtCorpo.value.trim();
+            const data = inputData.value;
+            const hora = inputHora.value;
+
+            if (!titulo || !corpo || !data || !hora) {
+                return alert("Por favor, preencha todos os campos: título, corpo, data e hora.");
+            }
+
+            const [ano, mes, dia] = data.split('-');
+            const [horas, minutos] = hora.split(':');
+            const dataDeEnvio = new Date(ano, mes - 1, dia, horas, minutos);
+
+            if (dataDeEnvio < new Date()) {
+                return alert("A data e hora de envio devem ser no futuro.");
+            }
+
+            try {
+                await addDoc(agendamentosCollection, {
+                    titulo: titulo,
+                    corpo: corpo,
+                    enviarEm: Timestamp.fromDate(dataDeEnvio),
+                    status: 'pendente'
+                });
+                alert("Notificação agendada com sucesso!");
+                txtTitulo.value = '';
+                txtCorpo.value = '';
+            } catch (error) {
+                console.error("Erro ao agendar notificação:", error);
+                alert("Ocorreu um erro ao agendar a notificação.");
+            }
+        });
+
+        listaUl.addEventListener('click', async (e) => {
+            if (e.target.classList.contains('btn-delete')) {
+                const id = e.target.dataset.id;
+                if (confirm('Tem certeza que deseja cancelar este agendamento?')) {
+                    await deleteDoc(doc(db, 'notificacoes_agendadas', id));
+                }
+            }
+        });
+
+        function autenticar() { const p = prompt("Senha:"); if (p !== SENHA_ADMIN) { alert("Senha incorreta!"); document.body.innerHTML = "<h1>Acesso Negado</h1>"; return false; } return true; }
+        if (autenticar()) {
+            carregarAgendamentos();
+        }
+    </script>
+</body>
+</html>
