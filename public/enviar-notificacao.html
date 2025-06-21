@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin - Enviar Notificação</title>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background-color: #f4f6f9; display: flex; flex-direction: column; align-items: center; min-height: 100vh; margin: 0; padding: 20px; box-sizing: border-box; }
+        .admin-nav { width: 100%; max-width: 800px; background-color: #fff; padding: 15px; margin-bottom: 30px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); text-align: center; display: flex; flex-wrap: wrap; justify-content: center; gap: 15px 25px; }
+        .admin-nav a { margin: 0; padding: 0; background-color: transparent; color: #1565c0; text-decoration: none; font-weight: bold; font-size: 1.1em; white-space: nowrap; border-radius: 0; }
+        .admin-nav a.active, .admin-nav a:hover { text-decoration: underline; background-color: transparent; color: #0d47a1; }
+        .container { background-color: white; padding: 40px; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.15); text-align: center; width: 100%; max-width: 500px; }
+        h1 { color: #333; margin-top: 0; }
+        input, textarea { width: 100%; padding: 12px; margin-bottom: 15px; border: 1px solid #ccc; border-radius: 6px; font-family: inherit; font-size: 1em; box-sizing: border-box; }
+        textarea { height: 100px; resize: vertical; }
+        button { width: 100%; padding: 15px; background-color: #007bff; color: white; border: none; border-radius: 6px; font-size: 1.1em; font-weight: bold; cursor: pointer; transition: background-color 0.2s; }
+        button:hover { background-color: #0056b3; }
+        button:disabled { background-color: #aaa; cursor: not-allowed; }
+        p#feedback { font-weight: bold; min-height: 20px; margin-top: 15px;}
+    </style>
+</head>
+<body>
+    <nav class="admin-nav">
+        <a href="/relatorio.html">Gerar Relatório</a>
+        <a href="/estatisticas.html">Ver Estatísticas</a>
+        <a href="/mural.html">Editar Mural</a>
+        <a href="/atividades.html">Gerenciar Atividades</a>
+        <a href="/enviar-notificacao.html" class="active">Enviar Notificação</a>
+    </nav>
+    <div class="container">
+        <h1>Enviar Notificação Push</h1>
+        <input type="text" id="titulo-notificacao" placeholder="Título da Notificação">
+        <textarea id="corpo-notificacao" placeholder="Corpo da mensagem..."></textarea>
+        <button id="btn-enviar">Enviar para Todos os Voluntários</button>
+        <p id="feedback"></p>
+    </div>
+
+    <script type="module">
+        const SENHA_ADMIN = "admin"; // IMPORTANTE: Mude esta senha!
+        
+        const txtTitulo = document.getElementById('titulo-notificacao');
+        const txtCorpo = document.getElementById('corpo-notificacao');
+        const btnEnviar = document.getElementById('btn-enviar');
+        const feedback = document.getElementById('feedback');
+
+        function autenticar() {
+            const senhaDigitada = prompt("Por favor, digite a senha de administrador:", "");
+            if (senhaDigitada !== SENHA_ADMIN) {
+                alert("Senha incorreta!");
+                document.body.innerHTML = "<h1>Acesso Negado</h1>";
+                return false;
+            }
+            return true;
+        }
+
+        btnEnviar.addEventListener('click', async () => {
+            const titulo = txtTitulo.value.trim();
+            const corpo = txtCorpo.value.trim();
+
+            if (!titulo || !corpo) {
+                alert("Por favor, preencha o título e o corpo da mensagem.");
+                return;
+            }
+
+            if (!confirm("Tem certeza que deseja enviar esta notificação para todos os voluntários inscritos?")) {
+                return;
+            }
+            
+            btnEnviar.disabled = true;
+            feedback.textContent = "Enviando notificações...";
+            feedback.style.color = "#555";
+
+            try {
+                // Chama a nossa nova função de backend
+                const response = await fetch('/api/enviar-notificacao', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ title: titulo, body: corpo })
+                });
+
+                const resultado = await response.json();
+
+                if (response.ok) {
+                    feedback.textContent = `Sucesso! Notificações enviadas para ${resultado.successCount} de ${resultado.totalCount} inscritos.`;
+                    feedback.style.color = "green";
+                } else {
+                    throw new Error(resultado.message || 'Erro desconhecido no servidor.');
+                }
+
+            } catch (error) {
+                console.error("Erro ao enviar notificação:", error);
+                feedback.textContent = `Erro ao enviar: ${error.message}`;
+                feedback.style.color = "red";
+            } finally {
+                btnEnviar.disabled = false;
+            }
+        });
+
+        if (!autenticar()) {
+            // Se a autenticação falhar, não faz mais nada.
+        }
+    </script>
+</body>
+</html>

@@ -1,12 +1,12 @@
-// VERSÃO FINAL - CHECK-OUT AUTOMÁTICO INTEGRADO
+// VERSÃO 3.3 - CORREÇÃO FINAL DE SINTAXE
 
 import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
-import { getFirestore, doc, setDoc, getDoc, serverTimestamp, collection, query, where, getDocs, orderBy } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
+import { getFirestore, doc, setDoc, getDoc, updateDoc, serverTimestamp, collection, query, where, getDocs, orderBy } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
 
 document.addEventListener('DOMContentLoaded', async () => {
 
     // =================================================================
-    //  COLE AQUI O SEU OBJETO 'firebaseConfig' COMPLETO
+    //  1. COLE AQUI O SEU OBJETO 'firebaseConfig' COMPLETO
     // =================================================================
     const firebaseConfig = {
   apiKey: "AIzaSyBV7RPjk3cFTqL-aIpflJcUojKg1ZXMLuU",
@@ -18,6 +18,12 @@ document.addEventListener('DOMContentLoaded', async () => {
 };
     // =================================================================
 
+    // =================================================================
+    //  2. COLE AQUI A SUA VAPID PUBLIC KEY
+    // =================================================================
+    const VAPID_PUBLIC_KEY = 'BGspwtPwnL8JSgNsgr66ezRkY0pjIUDM4KP8qtRPY_B7soEc3d5dGPDUcIPrxB_MSkEhfxMeeTzt8PecbbqDYD4';
+    // =================================================================
+
     const app = initializeApp(firebaseConfig);
     const db = getFirestore(app);
     
@@ -26,137 +32,64 @@ document.addEventListener('DOMContentLoaded', async () => {
     const CASA_ESPIRITA_LON = -47.36945;
     const RAIO_EM_METROS = 40;
     
-    const loginArea = document.getElementById('login-area');
-    const statusArea = document.getElementById('status-area');
-    const nomeInput = document.getElementById('nome');
-    const btnRegistrar = document.getElementById('btn-registrar');
-    const feedback = document.getElementById('feedback');
-    const statusText = document.getElementById('status-text');
-    const atividadeContainer = document.getElementById('atividade-container');
-    const toggleAtividadesBtn = document.getElementById('toggle-atividades');
-    const atividadeWrapper = document.getElementById('atividade-wrapper');
-    const btnSair = document.getElementById('btn-sair');
-    const btnVerHistorico = document.getElementById('btn-ver-historico');
-    const historicoContainer = document.getElementById('historico-container');
-    const listaHistorico = document.getElementById('lista-historico');
-    const muralContainer = document.getElementById('mural-container');
+    const loginArea = document.getElementById('login-area'), statusArea = document.getElementById('status-area'), nomeInput = document.getElementById('nome'), btnRegistrar = document.getElementById('btn-registrar'), feedback = document.getElementById('feedback'), statusText = document.getElementById('status-text'), atividadeContainer = document.getElementById('atividade-container'), toggleAtividadesBtn = document.getElementById('toggle-atividades'), atividadeWrapper = document.getElementById('atividade-wrapper'), btnSair = document.getElementById('btn-sair'), btnVerHistorico = document.getElementById('btn-ver-historico'), historicoContainer = document.getElementById('historico-container'), listaHistorico = document.getElementById('lista-historico'), muralContainer = document.getElementById('mural-container'), btnAtivarNotificacoes = document.getElementById('btn-ativar-notificacoes');
     
     let userInfo = {};
     let monitorInterval;
-    let statusAtualVoluntario = 'ausente'; // Variável para controlar o estado (presente ou ausente)
+    let statusAtualVoluntario = 'ausente';
 
     function getDataDeHojeSP() {
         const formatador = new Intl.DateTimeFormat('en-CA', { year: 'numeric', month: '2-digit', day: '2-digit', timeZone: 'America/Sao_Paulo' });
         return formatador.format(new Date());
     }
 
-    async function atualizarPresenca(novoStatus) {
-        if (!userInfo.nome || !userInfo.atividade) return;
-        const dataFormatada = getDataDeHojeSP();
-        const idDocumento = `${dataFormatada}_${userInfo.nome.replace(/\s+/g, '_')}`;
-        const docRef = doc(db, "presencas", idDocumento);
-
-        try {
-            // Usamos setDoc com merge:true para criar ou atualizar o documento
-            await setDoc(docRef, {
-                nome: userInfo.nome,
-                atividade: userInfo.atividade,
-                timestamp: serverTimestamp(),
-                data: dataFormatada,
-                status: novoStatus // O novo campo de status
-            }, { merge: true });
-
-            statusAtualVoluntario = novoStatus; // Atualiza nosso controle local
-            console.log(`Status do voluntário atualizado para: ${novoStatus}`);
-
-            if (novoStatus === 'presente') {
-                feedback.textContent = `Presença confirmada. Monitoramento contínuo ativo.`;
-                feedback.style.color = "green";
-            } else {
-                feedback.textContent = `Saída registrada. O monitoramento continua ativo.`;
-                feedback.style.color = "#1565c0"; // Um azul para diferenciar
-            }
-        } catch (error) {
-            console.error("Erro ao atualizar presença: ", error);
-            feedback.textContent = "Erro ao salvar no banco de dados.";
-            feedback.style.color = "red";
-        }
+    function urlBase64ToUint8Array(base64String) {
+        const padding = '='.repeat((4 - base64String.length % 4) % 4);
+        const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
+        const rawData = window.atob(base64);
+        const outputArray = new Uint8Array(rawData.length);
+        for (let i = 0; i < rawData.length; ++i) { outputArray[i] = rawData.charCodeAt(i); }
+        return outputArray;
     }
 
-    function checarLocalizacao() {
-        if (!navigator.geolocation) {
-            statusText.textContent = "Geolocalização não suportada.";
-            return;
-        }
-        navigator.geolocation.getCurrentPosition((position) => {
-            const distancia = getDistance(position.coords.latitude, position.coords.longitude, CASA_ESPIRITA_LAT, CASA_ESPIRITA_LON);
-            feedback.textContent = `Você está a ${distancia.toFixed(0)} metros de distância.`;
-
-            // Lógica de Check-in e Check-out
-            if (distancia <= RAIO_EM_METROS) { // Se está DENTRO do raio
-                if (statusAtualVoluntario !== 'presente') {
-                    console.log("Detectado dentro da área. Registrando presença...");
-                    atualizarPresenca('presente');
-                }
-            } else { // Se está FORA do raio
-                if (statusAtualVoluntario === 'presente') {
-                    console.log("Detectado fora da área. Registrando saída...");
-                    atualizarPresenca('ausente');
-                }
-            }
-        }, () => {
-            statusText.textContent = `Não foi possível obter a localização. Verifique as permissões do navegador.`;
-        }, { enableHighAccuracy: true });
-    }
-
-    function mostrarTelaDeStatus() {
-        loginArea.classList.add('hidden');
-        statusArea.classList.remove('hidden');
-        document.getElementById('display-nome').textContent = userInfo.nome;
-        document.getElementById('display-atividade').textContent = userInfo.atividade;
+    async function inscreverParaNotificacoes() {
+        if (!('serviceWorker' in navigator) || !('PushManager' in window)) { return alert('Seu navegador não suporta notificações push.'); }
+        if (VAPID_PUBLIC_KEY.includes('COLE_SUA_VAPID_PUBLIC_KEY_AQUI')) { return alert('Chave de notificação não configurada no aplicativo.'); }
         
-        // Limpa qualquer monitoramento antigo para evitar duplicação
-        if (monitorInterval) clearInterval(monitorInterval);
-        
-        // Inicia a verificação e a repete a cada 10 minutos
-        checarLocalizacao(); // Verifica imediatamente
-        monitorInterval = setInterval(checarLocalizacao, 600000); // E depois a cada 10 minutos
-    }
-
-    // O restante das funções (inicializarPagina, carregarMural, criarCheckboxes, etc.)
-    // permanece o mesmo da nossa última versão funcional. Para garantir, todo o código está abaixo.
-
-    async function buscarAtividadesDoFirestore() { /* ...código não muda... */ }
-    async function carregarHistoricoDoVoluntario(nome) { /* ...código não muda... */ }
-    function handleCheckboxChange() { /* ...código não muda... */ }
-    function criarCheckboxesDeAtividade() { /* ...código não muda... */ }
-    if (toggleAtividadesBtn) { /* ...código não muda... */ }
-    function getDistance(lat1, lon1, lat2, lon2) { /* ...código não muda... */ }
-    if (btnRegistrar) { /* ...código não muda... */ }
-    if (btnSair) { /* ...código não muda... */ }
-    if (btnVerHistorico) { /* ...código não muda... */ }
-    async function carregarMural() { /* ...código não muda... */ }
-
-    // --- Colando as funções completas para garantir ---
-    async function buscarAtividadesDoFirestore() {
         try {
-            const q = query(collection(db, "atividades"), where("ativo", "==", true), orderBy("nome"));
-            const querySnapshot = await getDocs(q);
-            listaDeAtividades = querySnapshot.docs.map(doc => doc.data().nome);
-            criarCheckboxesDeAtividade();
+            const registration = await navigator.serviceWorker.ready;
+            const existingSubscription = await registration.pushManager.getSubscription();
+            if(existingSubscription) { return alert('As notificações já estão ativas para este aparelho.'); }
+
+            const permission = await Notification.requestPermission();
+            if (permission !== 'granted') { return alert('Permissão para notificações não concedida.'); }
+
+            const subscription = await registration.pushManager.subscribe({
+                userVisibleOnly: true,
+                applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY)
+            });
+
+            const idInscricao = btoa(subscription.endpoint).replace(/=/g, ''); 
+            const inscricaoRef = doc(db, "inscricoes", idInscricao);
+            await setDoc(inscricaoRef, {
+                ...JSON.parse(JSON.stringify(subscription)),
+                nomeVoluntario: userInfo.nome || 'Não identificado',
+                criadoEm: serverTimestamp()
+            });
+            alert('Tudo pronto! Você receberá as notificações da Casa.');
         } catch (error) {
-            console.error("Erro ao buscar atividades: ", error);
-            if(atividadeContainer) atividadeContainer.innerHTML = "<p style='color:red;'>Não foi possível carregar as atividades.</p>";
+            console.error('Erro ao se inscrever para notificações:', error);
+            alert('Ocorreu um erro ao ativar as notificações.');
         }
     }
-    
+
     async function carregarHistoricoDoVoluntario(nomeDoVoluntario) {
         if (!nomeDoVoluntario || !listaHistorico) return;
         listaHistorico.innerHTML = '<li>Carregando...</li>';
         const q = query(collection(db, "presencas"), where("nome", "==", nomeDoVoluntario), orderBy("data", "desc"));
         try {
             const querySnapshot = await getDocs(q);
-            listaHistorico.innerHTML = '';
+            listaHistorico.innerHTML = ''; 
             if (querySnapshot.empty) {
                 listaHistorico.innerHTML = '<li>Nenhuma presença encontrada.</li>';
                 return;
@@ -171,7 +104,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             });
         } catch (error) {
             console.error("Erro ao buscar histórico: ", error);
-            listaHistorico.innerHTML = '<li>Erro ao carregar histórico. Verifique o console (F12).</li>';
+            listaHistorico.innerHTML = '<li>Erro ao carregar histórico. (Pode ser necessário criar um índice no Firebase).</li>';
         }
     }
 
@@ -181,7 +114,19 @@ document.addEventListener('DOMContentLoaded', async () => {
             checkbox.disabled = checkboxesMarcados.length >= 3 && !checkbox.checked;
         });
     }
-    
+
+    async function buscarAtividadesDoFirestore() {
+        try {
+            const q = query(collection(db, "atividades"), where("ativo", "==", true), orderBy("nome"));
+            const querySnapshot = await getDocs(q);
+            listaDeAtividades = querySnapshot.docs.map(doc => doc.data().nome);
+            criarCheckboxesDeAtividade();
+        } catch (error) {
+            console.error("Erro ao buscar atividades: ", error);
+            if(atividadeContainer) atividadeContainer.innerHTML = "<p style='color:red;'>Não foi possível carregar as atividades.</p>";
+        }
+    }
+
     function criarCheckboxesDeAtividade() {
         if (!atividadeContainer) return;
         atividadeContainer.innerHTML = '';
@@ -193,7 +138,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             checkbox.id = atividade.replace(/\s+/g, '-');
             checkbox.name = 'atividade';
             checkbox.value = atividade;
-            checkbox.addEventListener('change', handleCheckboxChange);
+            checkbox.addEventListener('change', handleCheckboxChange); 
             const label = document.createElement('label');
             label.htmlFor = checkbox.id;
             label.textContent = atividade;
@@ -203,14 +148,45 @@ document.addEventListener('DOMContentLoaded', async () => {
         });
     }
 
-    if (toggleAtividadesBtn) {
-        toggleAtividadesBtn.addEventListener('click', () => {
-            atividadeWrapper.classList.toggle('hidden');
-            const seta = toggleAtividadesBtn.innerHTML.includes('▼') ? '▲' : '▼';
-            toggleAtividadesBtn.innerHTML = `Selecione suas atividades (até 3) ${seta}`;
-        });
+    async function atualizarPresenca(novoStatus) {
+        if (!userInfo.nome || !userInfo.atividade) return;
+        const dataFormatada = getDataDeHojeSP();
+        const idDocumento = `${dataFormatada}_${userInfo.nome.replace(/\s+/g, '_')}`;
+        const docRef = doc(db, "presencas", idDocumento);
+        try {
+            const docSnap = await getDoc(docRef);
+            if (!docSnap.exists() && novoStatus === 'presente') {
+                await setDoc(docRef, { nome: userInfo.nome, atividade: userInfo.atividade, data: dataFormatada, status: 'presente', primeiroCheckin: serverTimestamp(), ultimaAtualizacao: serverTimestamp() });
+            } else {
+                await updateDoc(docRef, { status: novoStatus, ultimaAtualizacao: serverTimestamp() });
+            }
+            statusAtualVoluntario = novoStatus;
+            if (novoStatus === 'presente') {
+                feedback.textContent = `Presença confirmada. Monitoramento contínuo ativo.`;
+                feedback.style.color = "green";
+            } else {
+                feedback.textContent = `Saída registrada. O monitoramento continua ativo.`;
+                feedback.style.color = "#1565c0";
+            }
+        } catch (error) {
+            console.error("Erro ao atualizar presença: ", error);
+            feedback.textContent = "Erro ao salvar no banco de dados.";
+        }
     }
 
+    function checarLocalizacao() {
+        if (!navigator.geolocation) { statusText.textContent = "Geolocalização não suportada."; return; }
+        navigator.geolocation.getCurrentPosition((position) => {
+            const distancia = getDistance(position.coords.latitude, position.coords.longitude, CASA_ESPIRITA_LAT, CASA_ESPIRITA_LON);
+            feedback.textContent = `Você está a ${distancia.toFixed(0)} metros de distância.`;
+            if (distancia <= RAIO_EM_METROS) {
+                if (statusAtualVoluntario !== 'presente') { atualizarPresenca('presente'); }
+            } else {
+                if (statusAtualVoluntario === 'presente') { atualizarPresenca('ausente'); }
+            }
+        }, () => { statusText.textContent = `Não foi possível obter a localização.`; }, { enableHighAccuracy: true });
+    }
+    
     function getDistance(lat1, lon1, lat2, lon2) {
         const R = 6371 * 1000;
         const dLat = (lat2 - lat1) * Math.PI / 180;
@@ -219,45 +195,15 @@ document.addEventListener('DOMContentLoaded', async () => {
         const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
         return R * c;
     }
-    
-    if (btnRegistrar) {
-        btnRegistrar.addEventListener('click', () => {
-            const nome = nomeInput.value;
-            const atividadesSelecionadas = document.querySelectorAll('input[name="atividade"]:checked');
-            if (!nome) return alert("Por favor, preencha seu nome.");
-            if (atividadesSelecionadas.length === 0) return alert("Por favor, selecione pelo menos uma atividade.");
-            const atividadesArray = Array.from(atividadesSelecionadas).map(cb => cb.value);
-            const dataDeHoje = getDataDeHojeSP();
-            userInfo = { nome, atividade: atividadesArray.join(', '), loginDate: dataDeHoje };
-            localStorage.setItem('userInfo', JSON.stringify(userInfo));
-            mostrarTelaDeStatus();
-        });
-    }
 
-    if (btnSair) {
-        btnSair.addEventListener('click', (event) => {
-            event.preventDefault();
-            if (confirm('Tem certeza que deseja sair? O monitoramento será interrompido.')) {
-                if (statusAtualVoluntario === 'presente') {
-                    atualizarPresenca('ausente').then(() => {
-                        localStorage.removeItem('userInfo');
-                        window.location.reload();
-                    });
-                } else {
-                    localStorage.removeItem('userInfo');
-                    window.location.reload();
-                }
-            }
-        });
-    }
-
-    if (btnVerHistorico) {
-        btnVerHistorico.addEventListener('click', () => {
-            historicoContainer.classList.toggle('hidden');
-            if (!historicoContainer.classList.contains('hidden') && userInfo.nome) {
-                carregarHistoricoDoVoluntario(userInfo.nome);
-            }
-        });
+    function mostrarTelaDeStatus() {
+        loginArea.classList.add('hidden');
+        statusArea.classList.remove('hidden');
+        document.getElementById('display-nome').textContent = userInfo.nome;
+        document.getElementById('display-atividade').textContent = userInfo.atividade;
+        if (monitorInterval) clearInterval(monitorInterval);
+        checarLocalizacao();
+        monitorInterval = setInterval(checarLocalizacao, 600000);
     }
     
     async function carregarMural() {
@@ -285,6 +231,12 @@ document.addEventListener('DOMContentLoaded', async () => {
         const dataDeHoje = getDataDeHojeSP();
         if (savedInfo.loginDate === dataDeHoje) {
             userInfo = savedInfo;
+            const idDocumento = `${dataDeHoje}_${userInfo.nome.replace(/\s+/g, '_')}`;
+            const docRef = doc(db, "presencas", idDocumento);
+            const docSnap = await getDoc(docRef);
+            if(docSnap.exists()){
+                statusAtualVoluntario = docSnap.data().status || 'ausente';
+            }
             mostrarTelaDeStatus();
         } else {
             userInfo = { nome: savedInfo.nome };
@@ -292,9 +244,36 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
     }
 
-    inicializarPagina();
-
-    if ('serviceWorker' in navigator) {
-      window.addEventListener('load', () => navigator.serviceWorker.register('/sw.js'));
+    // --- LIGAÇÃO DOS EVENTOS (BOTÕES) ---
+    if (toggleAtividadesBtn) { toggleAtividadesBtn.addEventListener('click', () => { atividadeWrapper.classList.toggle('hidden'); const seta = toggleAtividadesBtn.innerHTML.includes('▼') ? '▲' : '▼'; toggleAtividadesBtn.innerHTML = `Selecione suas atividades (até 3) ${seta}`; }); }
+    
+    if (btnRegistrar) {
+        btnRegistrar.addEventListener('click', () => {
+            const nome = nomeInput.value;
+            const atividadesSelecionadas = document.querySelectorAll('input[name="atividade"]:checked');
+            if (!nome) return alert("Por favor, preencha seu nome.");
+            if (atividadesSelecionadas.length === 0) return alert("Por favor, selecione pelo menos uma atividade.");
+            
+            const atividadesArray = Array.from(atividadesSelecionadas).map(cb => cb.value);
+            const dataDeHoje = getDataDeHojeSP();
+            
+            // --- AQUI ESTÁ A LINHA CORRIGIDA ---
+            userInfo = { 
+                nome: nome, 
+                atividade: atividadesArray.join(', '), 
+                loginDate: dataDeHoje 
+            };
+            
+            localStorage.setItem('userInfo', JSON.stringify(userInfo));
+            mostrarTelaDeStatus();
+        });
     }
+
+    if (btnSair) { btnSair.addEventListener('click', async (event) => { event.preventDefault(); if (confirm('Tem certeza que deseja sair?')) { if (statusAtualVoluntario === 'presente') { await atualizarPresenca('ausente'); } localStorage.removeItem('userInfo'); window.location.reload(); } }); }
+    if (btnVerHistorico) { btnVerHistorico.addEventListener('click', () => { historicoContainer.classList.toggle('hidden'); if (!historicoContainer.classList.contains('hidden') && userInfo.nome) { carregarHistoricoDoVoluntario(userInfo.nome); } }); }
+    if (btnAtivarNotificacoes) { btnAtivarNotificacoes.addEventListener('click', inscreverParaNotificacoes); }
+    if ('serviceWorker' in navigator) { window.addEventListener('load', () => navigator.serviceWorker.register('/sw.js')); }
+
+    // --- INICIA A APLICAÇÃO ---
+    inicializarPagina();
 });
