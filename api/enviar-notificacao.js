@@ -2,23 +2,17 @@ import 'dotenv/config';
 import admin from 'firebase-admin';
 import webpush from 'web-push';
 
-// Configura as chaves VAPID (assinatura da Casa Espírita)
 webpush.setVapidDetails(
-  'mailto:cepaulodetarso.sbo@gmail.com', // IMPORTANTE: Coloque um e-mail seu aqui
+  'mailto:cepaulodetarso.sbo@gmail.com',
   process.env.VAPID_PUBLIC_KEY,
   process.env.VAPID_PRIVATE_KEY
 );
 
-// Configura o Firebase Admin
 if (!admin.apps.length) {
   try {
     const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT_JSON);
-    admin.initializeApp({
-      credential: admin.credential.cert(serviceAccount)
-    });
-  } catch (error) {
-    console.error("ERRO FATAL ao inicializar Firebase Admin:", error);
-  }
+    admin.initializeApp({ credential: admin.credential.cert(serviceAccount) });
+  } catch (error) { console.error("ERRO FATAL ao inicializar Firebase Admin:", error); }
 }
 const db = admin.firestore();
 
@@ -29,36 +23,40 @@ export default async function handler(request, response) {
     try {
         const { title, body } = request.body;
         if (!title || !body) {
-            return response.status(400).json({ message: 'Título e corpo da mensagem são obrigatórios.' });
+            return response.status(400).json({ message: 'Título e corpo são obrigatórios.' });
         }
-        console.log(`Iniciando envio da notificação: Título - ${title}`);
         const inscricoesSnapshot = await db.collection('inscricoes').get();
         if (inscricoesSnapshot.empty) {
-            return response.status(200).json({ message: 'Nenhum voluntário inscrito para receber notificações.', successCount: 0, totalCount: 0 });
+            return response.status(200).json({ message: 'Nenhum voluntário inscrito.', successCount: 0, totalCount: 0 });
         }
-        const inscricoes = [];
-        inscricoesSnapshot.forEach(doc => {
-            inscricoes.push(doc.data());
-        });
-        console.log(`Encontradas ${inscricoes.length} inscrições para notificar.`);
+        
         const payload = JSON.stringify({ title, body });
         let successCount = 0;
         let failureCount = 0;
-        const sendPromises = inscricoes.map(inscricao => 
-            webpush.sendNotification(inscricao, payload)
-                .then(() => successCount++)
+        
+        const sendPromises = inscricoesSnapshot.docs.map(doc => {
+            const inscricao = doc.data();
+            return webpush.sendNotification(inscricao, payload)
+                .then(() => { successCount++; })
                 .catch(error => {
                     failureCount++;
-                    console.error(`Erro ao enviar para endpoint. Status: ${error.statusCode}.`);
-                })
-        );
+                    console.error(`Erro ao enviar. Status: ${error.statusCode}.`);
+                    // --- LÓGICA DE LIMPEZA ---
+                    // Se a inscrição expirou (410), apaga ela do banco de dados.
+                    if (error.statusCode === 410) {
+                        console.log("Inscrição expirada encontrada. Apagando do banco de dados...");
+                        return doc.ref.delete();
+                    }
+                });
+        });
+        
         await Promise.all(sendPromises);
-        console.log(`Envio concluído. Sucessos: ${successCount}, Falhas: ${failureCount}`);
+
         response.status(200).json({ 
             message: 'Processo de envio concluído.', 
             successCount, 
             failureCount,
-            totalCount: inscricoes.length
+            totalCount: inscricoesSnapshot.size
         });
     } catch (error) {
         console.error("Erro geral na função de envio:", error);
