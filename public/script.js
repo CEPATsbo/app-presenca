@@ -21,7 +21,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     // =================================================================
     //  2. COLE AQUI A SUA VAPID PUBLIC KEY GERADA
     // =================================================================
-    const VAPID_PUBLIC_KEY = 'BGspwtPwnL8JSgNsgr66ezRkY0pjIUDM4KP8qtRPY_B7soEc3d5dGPDUcIPrxB_MSkEhfxMeeTzt8PecbbqDYD4';
+    const VAPID_PUBLIC_KEY = 'BMpfTCErYrAMkosCBVdmAg3-gAfv82Q6TTIg2amEmIST0_SipaUpq7AxDZ1VhiGfxilUzugQxrK92Buu6d9FM2Y';
     // =================================================================
 
     // --- INICIALIZAÇÃO E CONSTANTES GLOBAIS ---
