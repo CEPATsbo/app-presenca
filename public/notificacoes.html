@@ -19,12 +19,16 @@
         button:disabled { background-color: #aaa; cursor: not-allowed; }
         p#feedback { font-weight: bold; min-height: 20px; margin-top: 15px; text-align: center; }
         .hidden { display: none; }
-        .radio-group { display: flex; justify-content: center; gap: 30px; margin-bottom: 20px; font-size: 1.1em; }
+        .radio-group { display: flex; flex-direction: column; align-items: flex-start; gap: 10px; margin-bottom: 20px; font-size: 1.1em; border-bottom: 1px solid #eee; padding-bottom: 20px; }
         .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
         .full-width { grid-column: 1 / -1; }
+        #campos-recorrente .weekdays { display: flex; justify-content: space-between; margin-bottom: 15px; }
+        #campos-recorrente .weekdays label { display: flex; flex-direction: column; align-items: center; cursor: pointer; }
+        #campos-recorrente input[type="radio"] { width: auto; }
         .agendamentos-pendentes ul { list-style-type: none; padding: 0; }
-        .agendamentos-pendentes li { background-color: #fafafa; padding: 15px; border-radius: 6px; margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center; }
-        .btn-delete { background-color: #c62828; color: white; border: none; padding: 8px 12px; border-radius: 4px; cursor: pointer; }
+        .agendamentos-pendentes li { background-color: #fafafa; padding: 15px; border-radius: 6px; margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center; gap: 15px; }
+        .agendamentos-pendentes li > div { flex-grow: 1; }
+        .btn-delete { background-color: #c62828; color: white; border: none; padding: 8px 12px; border-radius: 4px; cursor: pointer; flex-shrink: 0;}
     </style>
 </head>
 <body>
@@ -36,10 +40,11 @@
         <a href="/notificacoes.html" class="active">Notificações</a>
     </nav>
     <div class="container">
-        <h1>Enviar Notificações</h1>
+        <h1>Enviar & Agendar Notificações</h1>
         <div class="radio-group">
             <label><input type="radio" name="tipoEnvio" value="agora" checked> Enviar Imediatamente</label>
-            <label><input type="radio" name="tipoEnvio" value="agendar"> Agendar para Depois</label>
+            <label><input type="radio" name="tipoEnvio" value="unico"> Agendar Envio Único</label>
+            <label><input type="radio" name="tipoEnvio" value="recorrente"> Criar Agendamento Recorrente</label>
         </div>
         <div class="full-width">
             <input type="text" id="titulo-notificacao" placeholder="Título da Notificação" maxlength="50">
@@ -47,32 +52,34 @@
         <div class="full-width">
             <textarea id="corpo-notificacao" placeholder="Corpo da mensagem..." maxlength="150"></textarea>
         </div>
-        <div id="campos-agendamento" class="form-grid hidden">
-            <div>
-                <label for="data-envio">Data de Envio:</label>
-                <input type="date" id="data-envio">
-            </div>
-            <div>
-                <label for="hora-envio">Hora de Envio:</label>
-                <input type="time" id="hora-envio">
+        <div id="campos-agendamento-unico" class="form-grid hidden">
+            <div><label for="data-envio">Data de Envio:</label><input type="date" id="data-envio"></div>
+            <div><label for="hora-envio-unico">Hora de Envio:</label><input type="time" id="hora-envio-unico"></div>
+        </div>
+        <div id="campos-recorrente" class="full-width hidden">
+            <div><label for="hora-envio-recorrente">Hora de Envio (Toda Semana):</label><input type="time" id="hora-envio-recorrente"></div>
+            <div class="weekdays">
+                <label>Dom<input type="radio" name="diaDaSemana" value="0"></label>
+                <label>Seg<input type="radio" name="diaDaSemana" value="1"></label>
+                <label>Ter<input type="radio" name="diaDaSemana" value="2"></label>
+                <label>Qua<input type="radio" name="diaDaSemana" value="3"></label>
+                <label>Qui<input type="radio" name="diaDaSemana" value="4"></label>
+                <label>Sex<input type="radio" name="diaDaSemana" value="5"></label>
+                <label>Sáb<input type="radio" name="diaDaSemana" value="6"></label>
             </div>
         </div>
         <button id="btn-acao-principal">Enviar Agora</button>
         <p id="feedback"></p>
     </div>
-
     <div class="container agendamentos-pendentes">
-        <h2>Agendamentos Pendentes</h2>
+        <h2>Agendamentos Ativos</h2>
         <ul id="lista-agendamentos"><li>Carregando...</li></ul>
     </div>
 
     <script type="module">
-        // AQUI ESTÁ A CORREÇÃO: Adicionamos 'where' à lista de importação
         import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
         import { getFirestore, collection, onSnapshot, addDoc, deleteDoc, doc, orderBy, query, where, Timestamp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
         
-        // =================================================================
-        //  COLE AQUI O SEU OBJETO 'firebaseConfig' COMPLETO
         // =================================================================
         const firebaseConfig = {
   apiKey: "AIzaSyBV7RPjk3cFTqL-aIpflJcUojKg1ZXMLuU",
@@ -83,106 +90,134 @@
   appId: "1:66122858261:web:7fa21f1805463b5c08331c"
 };
         // =================================================================
-        
         const SENHA_ADMIN = "admin";
 
         const app = initializeApp(firebaseConfig);
         const db = getFirestore(app);
         const agendamentosCollection = collection(db, 'notificacoes_agendadas');
         
-        const txtTitulo = document.getElementById('titulo-notificacao'), txtCorpo = document.getElementById('corpo-notificacao'), inputData = document.getElementById('data-envio'), inputHora = document.getElementById('hora-envio'), btnAcaoPrincipal = document.getElementById('btn-acao-principal'), listaUl = document.getElementById('lista-agendamentos'), feedback = document.getElementById('feedback'), radiosTipoEnvio = document.querySelectorAll('input[name="tipoEnvio"]'), camposAgendamento = document.getElementById('campos-agendamento');
-
+        const ui = {
+            titulo: document.getElementById('titulo-notificacao'),
+            corpo: document.getElementById('corpo-notificacao'),
+            dataUnico: document.getElementById('data-envio'),
+            horaUnico: document.getElementById('hora-envio-unico'),
+            horaRecorrente: document.getElementById('hora-envio-recorrente'),
+            btnAcao: document.getElementById('btn-acao-principal'),
+            listaUl: document.getElementById('lista-agendamentos'),
+            feedback: document.getElementById('feedback'),
+            radiosTipoEnvio: document.querySelectorAll('input[name="tipoEnvio"]'),
+            camposUnico: document.getElementById('campos-agendamento-unico'),
+            camposRecorrente: document.getElementById('campos-recorrente')
+        };
+        
         function autenticar() {
-            const senhaDigitada = prompt("Por favor, digite a senha de administrador:", "");
-            if (senhaDigitada !== SENHA_ADMIN) {
-                alert("Senha incorreta!");
-                document.body.innerHTML = "<h1>Acesso Negado</h1>";
-                return false;
+            const senhaDigitada = sessionStorage.getItem('senhaAdminCePAT');
+            if (senhaDigitada === SENHA_ADMIN) return true;
+            const novaSenha = prompt("Por favor, digite a senha de administrador:", "");
+            if (novaSenha === SENHA_ADMIN) {
+                sessionStorage.setItem('senhaAdminCePAT', novaSenha);
+                return true;
             }
-            return true;
+            alert("Senha incorreta!");
+            document.body.innerHTML = "<h1>Acesso Negado</h1>";
+            return false;
         }
 
         function carregarAgendamentos() {
-            const q = query(agendamentosCollection, where("status", "==", "pendente"), orderBy("enviarEm", "asc"));
+            const q = query(agendamentosCollection, orderBy("criadoEm", "desc"));
             onSnapshot(q, (snapshot) => {
-                listaUl.innerHTML = '';
-                if (snapshot.empty) {
-                    listaUl.innerHTML = '<li>Nenhuma notificação agendada.</li>';
-                }
+                ui.listaUl.innerHTML = '';
+                if (snapshot.empty) { ui.listaUl.innerHTML = '<li>Nenhum agendamento ativo.</li>'; return; }
                 snapshot.forEach(docSnapshot => {
                     const agendamento = docSnapshot.data();
-                    const dataEnvio = agendamento.enviarEm.toDate();
                     const li = document.createElement('li');
-                    li.innerHTML = `<div><strong>${agendamento.titulo}</strong><br><small><em>${agendamento.corpo}</em></small><br><small>Enviar em: ${dataEnvio.toLocaleString('pt-BR')}</small></div><button data-id="${docSnapshot.id}" class="btn-delete">Cancelar</button>`;
-                    listaUl.appendChild(li);
+                    let textoAgendamento = '';
+                    if (agendamento.tipo === 'recorrente') {
+                        const dias = ['Domingo', 'Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado'];
+                        textoAgendamento = `<b>Recorrente:</b> Toda ${dias[agendamento.diaDaSemana]} às ${agendamento.hora}`;
+                    } else if (agendamento.status === 'pendente') {
+                        const dataEnvio = agendamento.enviarEm.toDate();
+                        textoAgendamento = `<b>Envio Único:</b> ${dataEnvio.toLocaleString('pt-BR', {dateStyle: 'short', timeStyle: 'short'})}`;
+                    } else {
+                        return; // Não mostra os já enviados
+                    }
+                    li.innerHTML = `<div><strong>${agendamento.titulo}</strong><br><small>${textoAgendamento}</small></div><button data-id="${docSnapshot.id}" class="btn-delete">Excluir</button>`;
+                    ui.listaUl.appendChild(li);
                 });
-            }, (error) => {
-                console.error("Erro ao carregar agendamentos:", error);
-                listaUl.innerHTML = '<li>Erro ao carregar. Pode ser necessário criar um índice no Firebase (verifique o console F12).</li>';
             });
         }
         
-        async function enviarNotificacaoAgora() {
-            const titulo = txtTitulo.value.trim();
-            const corpo = txtCorpo.value.trim();
-            if (!titulo || !corpo) return alert("Por favor, preencha o título e o corpo da mensagem.");
-            if (!confirm("Tem certeza que deseja enviar esta notificação para todos os voluntários inscritos AGORA?")) return;
+        async function enviarAgora() {
+            const titulo = ui.titulo.value.trim();
+            const corpo = ui.corpo.value.trim();
+            if (!titulo || !corpo) return alert("Preencha título e corpo da mensagem.");
+            if (!confirm("Enviar esta notificação para todos agora?")) return;
             
-            btnAcaoPrincipal.disabled = true;
-            feedback.textContent = "Enviando notificações...";
-            feedback.style.color = "#555";
+            ui.btnAcao.disabled = true;
+            ui.feedback.textContent = "Enviando...";
             try {
                 const response = await fetch('/api/enviar-notificacao', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ title: titulo, body: corpo }) });
                 const resultado = await response.json();
-                if (response.ok) {
-                    feedback.textContent = `Sucesso! Notificações enviadas para ${resultado.successCount} de ${resultado.totalCount} inscritos.`;
-                    feedback.style.color = "green";
-                } else { throw new Error(resultado.message || 'Erro desconhecido no servidor.'); }
+                if (!response.ok) throw new Error(resultado.message || 'Erro no servidor.');
+                ui.feedback.textContent = `Sucesso! Enviado para ${resultado.successCount} de ${resultado.totalCount} inscritos.`;
+                ui.feedback.style.color = "green";
             } catch (error) {
-                console.error("Erro ao enviar notificação:", error);
-                feedback.textContent = `Erro ao enviar: ${error.message}`;
-                feedback.style.color = "red";
+                ui.feedback.textContent = `Erro: ${error.message}`;
+                ui.feedback.style.color = "red";
             } finally {
-                btnAcaoPrincipal.disabled = false;
+                ui.btnAcao.disabled = false;
             }
         }
 
-        async function agendarNotificacao() {
-            const titulo = txtTitulo.value.trim(), corpo = txtCorpo.value.trim(), data = inputData.value, hora = inputHora.value;
-            if (!titulo || !corpo || !data || !hora) return alert("Por favor, preencha todos os campos: título, corpo, data e hora.");
-            
+        async function agendarUnico() {
+            const titulo = ui.titulo.value.trim(), corpo = ui.corpo.value.trim(), data = ui.dataUnico.value, hora = ui.horaUnico.value;
+            if (!titulo || !corpo || !data || !hora) return alert("Preencha todos os campos para agendamento.");
             const dataDeEnvio = new Date(`${data}T${hora}`);
-            if (dataDeEnvio < new Date()) return alert("A data e hora de envio devem ser no futuro.");
-
+            if (dataDeEnvio < new Date()) return alert("A data e hora devem ser no futuro.");
             try {
-                await addDoc(agendamentosCollection, { titulo, corpo, enviarEm: Timestamp.fromDate(dataDeEnvio), status: 'pendente' });
-                alert("Notificação agendada com sucesso!");
-                txtTitulo.value = ''; txtCorpo.value = '';
-            } catch (error) {
-                console.error("Erro ao agendar notificação:", error);
-                alert("Ocorreu um erro ao agendar a notificação.");
-            }
+                await addDoc(agendamentosCollection, { titulo, corpo, enviarEm: Timestamp.fromDate(dataDeEnvio), status: 'pendente', tipo: 'unico', criadoEm: Timestamp.now() });
+                alert("Envio único agendado com sucesso!");
+                ui.titulo.value = ''; ui.corpo.value = '';
+            } catch (e) { alert("Erro ao agendar."); console.error(e); }
+        }
+
+        async function salvarRecorrente() {
+            const titulo = ui.titulo.value.trim(), corpo = ui.corpo.value.trim(), hora = ui.horaRecorrente.value, diaEl = document.querySelector('input[name="diaDaSemana"]:checked');
+            if (!titulo || !corpo || !hora || !diaEl) return alert("Preencha título, corpo, hora e dia da semana.");
+            try {
+                await addDoc(agendamentosCollection, { titulo, corpo, hora, tipo: 'recorrente', diaDaSemana: parseInt(diaEl.value), criadoEm: Timestamp.now() });
+                alert("Agendamento recorrente salvo com sucesso!");
+                ui.titulo.value = ''; ui.corpo.value = '';
+            } catch (e) { alert("Erro ao salvar."); console.error(e); }
         }
         
-        radiosTipoEnvio.forEach(radio => radio.addEventListener('change', () => {
-            camposAgendamento.classList.toggle('hidden', radio.value === 'agora');
-            btnAcaoPrincipal.textContent = radio.value === 'agora' ? 'Enviar Agora' : 'Agendar Envio';
-        }));
-        
-        btnAcaoPrincipal.addEventListener('click', async () => {
-            document.querySelector('input[name="tipoEnvio"]:checked').value === 'agora' ? await enviarNotificacaoAgora() : await agendarNotificacao();
+        function atualizarUI() {
+            const tipo = document.querySelector('input[name="tipoEnvio"]:checked').value;
+            ui.camposUnico.classList.toggle('hidden', tipo !== 'unico');
+            ui.camposRecorrente.classList.toggle('hidden', tipo !== 'recorrente');
+            if (tipo === 'agora') ui.btnAcao.textContent = 'Enviar Agora';
+            if (tipo === 'unico') ui.btnAcao.textContent = 'Agendar Envio Único';
+            if (tipo === 'recorrente') ui.btnAcao.textContent = 'Salvar Agendamento Recorrente';
+        }
+
+        ui.radiosTipoEnvio.forEach(radio => radio.addEventListener('change', atualizarUI));
+        ui.btnAcao.addEventListener('click', () => {
+            const tipo = document.querySelector('input[name="tipoEnvio"]:checked').value;
+            if (tipo === 'agora') enviarAgora();
+            if (tipo === 'unico') agendarUnico();
+            if (tipo === 'recorrente') salvarRecorrente();
         });
 
-        listaUl.addEventListener('click', async (e) => {
+        ui.listaUl.addEventListener('click', async (e) => {
             if (e.target.classList.contains('btn-delete')) {
-                const id = e.target.dataset.id;
-                if (confirm('Tem certeza que deseja cancelar este agendamento?')) {
-                    await deleteDoc(doc(db, 'notificacoes_agendadas', id));
+                if (confirm('Tem certeza que deseja excluir este agendamento?')) {
+                    await deleteDoc(doc(db, 'notificacoes_agendadas', e.target.dataset.id));
                 }
             }
         });
 
         if (autenticar()) { 
+            atualizarUI();
             carregarAgendamentos();
         }
     </script>
