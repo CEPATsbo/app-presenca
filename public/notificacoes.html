@@ -36,7 +36,7 @@
         <a href="/notificacoes.html" class="active">Notificações</a>
     </nav>
     <div class="container">
-        <h1>Notificações Push</h1>
+        <h1>Enviar Notificações</h1>
         <div class="radio-group">
             <label><input type="radio" name="tipoEnvio" value="agora" checked> Enviar Imediatamente</label>
             <label><input type="radio" name="tipoEnvio" value="agendar"> Agendar para Depois</label>
@@ -67,8 +67,9 @@
     </div>
 
     <script type="module">
+        // AQUI ESTÁ A CORREÇÃO: Adicionamos 'where' à lista de importação
         import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
-        import { getFirestore, collection, onSnapshot, addDoc, deleteDoc, doc, orderBy, query, Timestamp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
+        import { getFirestore, collection, onSnapshot, addDoc, deleteDoc, doc, orderBy, query, where, Timestamp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
         
         // =================================================================
         //  COLE AQUI O SEU OBJETO 'firebaseConfig' COMPLETO
@@ -115,6 +116,9 @@
                     li.innerHTML = `<div><strong>${agendamento.titulo}</strong><br><small><em>${agendamento.corpo}</em></small><br><small>Enviar em: ${dataEnvio.toLocaleString('pt-BR')}</small></div><button data-id="${docSnapshot.id}" class="btn-delete">Cancelar</button>`;
                     listaUl.appendChild(li);
                 });
+            }, (error) => {
+                console.error("Erro ao carregar agendamentos:", error);
+                listaUl.innerHTML = '<li>Erro ao carregar. Pode ser necessário criar um índice no Firebase (verifique o console F12).</li>';
             });
         }
         
@@ -160,7 +164,6 @@
             }
         }
         
-        // --- Lógica dos Eventos ---
         radiosTipoEnvio.forEach(radio => radio.addEventListener('change', () => {
             camposAgendamento.classList.toggle('hidden', radio.value === 'agora');
             btnAcaoPrincipal.textContent = radio.value === 'agora' ? 'Enviar Agora' : 'Agendar Envio';
@@ -179,7 +182,9 @@
             }
         });
 
-        if (autenticar()) { carregarAgendamentos(); }
+        if (autenticar()) { 
+            carregarAgendamentos();
+        }
     </script>
 </body>
 </html>
