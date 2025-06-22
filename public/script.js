@@ -1,4 +1,4 @@
-// VERSÃO 3.3 - CORREÇÃO FINAL DE SINTAXE
+// VERSÃO FINAL COMPLETA E INTEGRADA - 21/06/2025
 
 import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
 import { getFirestore, doc, setDoc, getDoc, updateDoc, serverTimestamp, collection, query, where, getDocs, orderBy } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
@@ -19,11 +19,12 @@ document.addEventListener('DOMContentLoaded', async () => {
     // =================================================================
 
     // =================================================================
-    //  2. COLE AQUI A SUA VAPID PUBLIC KEY
+    //  2. COLE AQUI A SUA VAPID PUBLIC KEY GERADA
     // =================================================================
     const VAPID_PUBLIC_KEY = 'BGspwtPwnL8JSgNsgr66ezRkY0pjIUDM4KP8qtRPY_B7soEc3d5dGPDUcIPrxB_MSkEhfxMeeTzt8PecbbqDYD4';
     // =================================================================
 
+    // --- INICIALIZAÇÃO E CONSTANTES GLOBAIS ---
     const app = initializeApp(firebaseConfig);
     const db = getFirestore(app);
     
@@ -37,6 +38,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     let userInfo = {};
     let monitorInterval;
     let statusAtualVoluntario = 'ausente';
+
+    // --- DEFINIÇÃO DE TODAS AS FUNÇÕES ---
 
     function getDataDeHojeSP() {
         const formatador = new Intl.DateTimeFormat('en-CA', { year: 'numeric', month: '2-digit', day: '2-digit', timeZone: 'America/Sao_Paulo' });
@@ -82,7 +85,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             alert('Ocorreu um erro ao ativar as notificações.');
         }
     }
-
+    
     async function carregarHistoricoDoVoluntario(nomeDoVoluntario) {
         if (!nomeDoVoluntario || !listaHistorico) return;
         listaHistorico.innerHTML = '<li>Carregando...</li>';
@@ -147,7 +150,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             atividadeContainer.appendChild(div);
         });
     }
-
+    
     async function atualizarPresenca(novoStatus) {
         if (!userInfo.nome || !userInfo.atividade) return;
         const dataFormatada = getDataDeHojeSP();
@@ -243,7 +246,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             nomeInput.value = savedInfo.nome;
         }
     }
-
+    
     // --- LIGAÇÃO DOS EVENTOS (BOTÕES) ---
     if (toggleAtividadesBtn) { toggleAtividadesBtn.addEventListener('click', () => { atividadeWrapper.classList.toggle('hidden'); const seta = toggleAtividadesBtn.innerHTML.includes('▼') ? '▲' : '▼'; toggleAtividadesBtn.innerHTML = `Selecione suas atividades (até 3) ${seta}`; }); }
     
@@ -253,26 +256,59 @@ document.addEventListener('DOMContentLoaded', async () => {
             const atividadesSelecionadas = document.querySelectorAll('input[name="atividade"]:checked');
             if (!nome) return alert("Por favor, preencha seu nome.");
             if (atividadesSelecionadas.length === 0) return alert("Por favor, selecione pelo menos uma atividade.");
-            
             const atividadesArray = Array.from(atividadesSelecionadas).map(cb => cb.value);
             const dataDeHoje = getDataDeHojeSP();
-            
-            // --- AQUI ESTÁ A LINHA CORRIGIDA ---
-            userInfo = { 
-                nome: nome, 
-                atividade: atividadesArray.join(', '), 
-                loginDate: dataDeHoje 
-            };
-            
+            userInfo = { nome, atividade: atividadesArray.join(', '), loginDate: dataDeHoje };
             localStorage.setItem('userInfo', JSON.stringify(userInfo));
             mostrarTelaDeStatus();
         });
     }
 
-    if (btnSair) { btnSair.addEventListener('click', async (event) => { event.preventDefault(); if (confirm('Tem certeza que deseja sair?')) { if (statusAtualVoluntario === 'presente') { await atualizarPresenca('ausente'); } localStorage.removeItem('userInfo'); window.location.reload(); } }); }
-    if (btnVerHistorico) { btnVerHistorico.addEventListener('click', () => { historicoContainer.classList.toggle('hidden'); if (!historicoContainer.classList.contains('hidden') && userInfo.nome) { carregarHistoricoDoVoluntario(userInfo.nome); } }); }
-    if (btnAtivarNotificacoes) { btnAtivarNotificacoes.addEventListener('click', inscreverParaNotificacoes); }
-    if ('serviceWorker' in navigator) { window.addEventListener('load', () => navigator.serviceWorker.register('/sw.js')); }
+    if (btnSair) {
+        btnSair.addEventListener('click', async (event) => {
+            event.preventDefault();
+            if (confirm('Tem certeza que deseja sair? Sua inscrição de notificações também será cancelada.')) {
+                try {
+                    if (monitorInterval) clearInterval(monitorInterval);
+                    if (statusAtualVoluntario === 'presente') {
+                        await atualizarPresenca('ausente');
+                    }
+                    if ('serviceWorker' in navigator) {
+                        const registration = await navigator.serviceWorker.ready;
+                        const subscription = await registration.pushManager.getSubscription();
+                        if (subscription) {
+                            await subscription.unsubscribe();
+                            console.log('Inscrição de notificação cancelada.');
+                        }
+                    }
+                    localStorage.removeItem('userInfo');
+                    window.location.reload();
+                } catch (error) {
+                    console.error('Erro ao sair:', error);
+                    alert('Ocorreu um erro ao sair. Limpando dados locais mesmo assim.');
+                    localStorage.removeItem('userInfo');
+                    window.location.reload();
+                }
+            }
+        });
+    }
+
+    if (btnVerHistorico) {
+        btnVerHistorico.addEventListener('click', () => {
+            historicoContainer.classList.toggle('hidden');
+            if (!historicoContainer.classList.contains('hidden') && userInfo.nome) {
+                carregarHistoricoDoVoluntario(userInfo.nome);
+            }
+        });
+    }
+
+    if (btnAtivarNotificacoes) {
+        btnAtivarNotificacoes.addEventListener('click', inscreverParaNotificacoes);
+    }
+    
+    if ('serviceWorker' in navigator) {
+        window.addEventListener('load', () => navigator.serviceWorker.register('/sw.js'));
+    }
 
     // --- INICIA A APLICAÇÃO ---
     inicializarPagina();
