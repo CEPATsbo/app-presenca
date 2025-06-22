@@ -1,9 +1,9 @@
-// VERSÃO 2.3 - Relatório em formato Tabela HTML
+// VERSÃO FINAL - Relatório em Tabela com Horários de Check-in/out
 
 require('dotenv').config();
 const admin = require('firebase-admin');
 
-// Configura o Firebase Admin
+// Configura o Firebase Admin (apenas se ainda não foi inicializado)
 if (!admin.apps.length) {
   try {
     const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT_JSON);
@@ -17,116 +17,99 @@ if (!admin.apps.length) {
 const db = admin.firestore();
 
 function getDataDeHojeSP() {
-    const formatador = new Intl.DateTimeFormat('en-CA', {
-        year: 'numeric', month: '2-digit', day: '2-digit', timeZone: 'America/Sao_Paulo'
-    });
+    const formatador = new Intl.DateTimeFormat('en-CA', { year: 'numeric', month: '2-digit', day: '2-digit', timeZone: 'America/Sao_Paulo' });
     return formatador.format(new Date());
 }
 
-export default async function handler(request, response) {
+// Esta é a função que a Vercel vai executar quando o link /api for acessado
+module.exports = async (request, response) => {
   try {
-    let dataParaConsulta;
-    if (request.query.data) {
-      const formatoValido = /^\d{4}-\d{2}-\d{2}$/.test(request.query.data);
-      if (formatoValido) {
-        dataParaConsulta = request.query.data;
-      } else {
-        return response.status(400).send("Formato de data inválido. Use AAAA-MM-DD.");
-      }
-    } else {
-      dataParaConsulta = getDataDeHojeSP();
+    let dataParaConsulta = request.query.data || getDataDeHojeSP();
+    
+    // Validação simples do formato de data
+    const formatoValido = /^\d{4}-\d{2}-\d{2}$/.test(dataParaConsulta);
+    if (!formatoValido) {
+      return response.status(400).send("Formato de data inválido. Use AAAA-MM-DD.");
     }
 
     const dataParaExibicao = new Date(dataParaConsulta + 'T12:00:00Z').toLocaleDateString('pt-BR', {timeZone: 'UTC'});
-    console.log(`Buscando registros para o relatório de ${dataParaConsulta}`);
 
     const snapshot = await db.collection('presencas').where('data', '==', dataParaConsulta).get();
     
-    // --- LÓGICA ATUALIZADA PARA GERAR HTML ---
+    // Define o cabeçalho da resposta como HTML
+    response.setHeader('Content-Type', 'text/html; charset=utf-8');
 
     let corpoHtml;
+
     if (snapshot.empty) {
-      console.log(`Nenhum registro encontrado para ${dataParaConsulta}.`);
-      corpoHtml = `<h1>Relatório de Presença - ${dataParaExibicao}</h1><p>Nenhum voluntário presente registrado neste dia.</p>`;
+        corpoHtml = `<h1>Relatório de Presença - ${dataParaExibicao}</h1><p>Nenhum voluntário presente registrado neste dia.</p>`;
     } else {
-      const presentes = [];
-      snapshot.forEach(doc => {
-        presentes.push(doc.data());
-      });
-      console.log(`Encontrados ${presentes.length} registros.`);
+        const presentes = snapshot.docs.map(doc => doc.data());
+        presentes.sort((a, b) => a.nome.localeCompare(b.nome));
 
-      // Agrupa voluntários por atividade (lógica similar à da TV)
-      const porAtividade = presentes.reduce((acc, pessoa) => {
-          const atividadesIndividuais = pessoa.atividade.split(', ');
-          atividadesIndividuais.forEach(atividade => {
-              if (!acc[atividade]) {
-                  acc[atividade] = [];
-              }
-              if (!acc[atividade].includes(pessoa.nome)) {
-                  acc[atividade].push(pessoa.nome);
-              }
-          });
-          return acc;
-      }, {});
-      
-      // Monta o corpo da tabela em HTML
-      let corpoTabela = '';
-      const atividadesOrdenadas = Object.keys(porAtividade).sort();
+        let corpoTabela = '';
+        presentes.forEach(p => {
+            const options = { timeZone: 'America/Sao_Paulo', hour: '2-digit', minute: '2-digit' };
+            
+            // Formata o horário de check-in a partir do campo 'primeiroCheckin'
+            const horarioCheckin = p.primeiroCheckin 
+                ? p.primeiroCheckin.toDate().toLocaleTimeString('pt-BR', options) 
+                : 'N/A';
+            
+            // O check-out só é válido se o último status for 'ausente'
+            const horarioCheckout = (p.status === 'ausente' && p.ultimaAtualizacao) 
+                ? p.ultimaAtualizacao.toDate().toLocaleTimeString('pt-BR', options) 
+                : '---';
 
-      for (const atividade of atividadesOrdenadas) {
-        corpoTabela += `<tr><th colspan="2" class="atividade-header">${atividade}</th></tr>`;
-        porAtividade[atividade].sort().forEach(nome => {
-          corpoTabela += `<tr><td class="nome-voluntario">${nome}</td></tr>`;
-        });
-      }
-      
-      corpoHtml = `
-        <h1>Relatório de Presença - ${dataParaExibicao}</h1>
-        <h2>Total de ${presentes.length} voluntários únicos.</h2>
-        <table>
-            <thead>
+            corpoTabela += `
                 <tr>
-                    <th>Voluntários por Atividade</th>
+                    <td>${p.nome}</td>
+                    <td>${p.atividade}</td>
+                    <td>${horarioCheckin}</td>
+                    <td>${horarioCheckout}</td>
                 </tr>
-            </thead>
-            <tbody>
-                ${corpoTabela}
-            </tbody>
-        </table>
-      `;
+            `;
+        });
+        
+        corpoHtml = `
+          <h1>Relatório de Presença - ${dataParaExibicao}</h1>
+          <h2>Total de ${presentes.length} voluntários únicos.</h2>
+          <table>
+              <thead>
+                  <tr>
+                      <th>Voluntário</th>
+                      <th>Atividade(s)</th>
+                      <th>Check-in</th>
+                      <th>Check-out</th>
+                  </tr>
+              </thead>
+              <tbody>
+                  ${corpoTabela}
+              </tbody>
+          </table>
+        `;
     }
 
-    // Cria a página HTML completa com estilos
+    // Monta a página HTML final com estilos
     const htmlRelatorio = `
       <!DOCTYPE html>
-      <html lang="pt-br">
-      <head>
-        <meta charset="UTF-8">
-        <title>Relatório de Presença - ${dataParaExibicao}</title>
+      <html lang="pt-br"><head><title>Relatório de Presença - ${dataParaExibicao}</title>
         <style>
           body { font-family: sans-serif; margin: 2em; color: #333; }
-          table { width: 100%; border-collapse: collapse; }
-          th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
-          thead th { background-color: #4CAF50; color: white; font-size: 1.2em; }
-          th.atividade-header { background-color: #f2f2f2; font-size: 1.1em; font-weight: bold; }
-          td.nome-voluntario { padding-left: 20px; }
-          h1, h2 { font-weight: 300; }
-          @media print {
-            body { margin: 0.5em; }
-            button { display: none; }
-          }
-          button { padding: 10px 15px; margin-bottom: 20px; cursor: pointer; }
+          table { width: 100%; border-collapse: collapse; margin-top: 20px;}
+          th, td { border: 1px solid #ddd; padding: 12px; text-align: left; }
+          thead th { background-color: #2e7d32; color: white; font-size: 1.1em; }
+          h1, h2 { font-weight: 300; text-align: center; }
+          h2 { font-size: 1.2em; color: #555; }
+          @media print { button { display: none; } }
+          button { display: block; margin: 0 auto 20px auto; padding: 10px 20px; cursor: pointer; font-size: 1em; }
         </style>
-      </head>
-      <body>
+      </head><body>
         <button onclick="window.print()">Imprimir / Salvar como PDF</button>
         ${corpoHtml}
-      </body>
-      </html>
+      </body></html>
     `;
-
-    // Define o cabeçalho como HTML e envia a resposta
-    response.setHeader('Content-Type', 'text/html; charset=utf-8');
+    
     response.status(200).send(htmlRelatorio);
 
   } catch (error) {
