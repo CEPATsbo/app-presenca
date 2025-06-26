@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin - Gerenciar Voluntários</title>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background-color: #f4f6f9; display: flex; flex-direction: column; align-items: center; min-height: 100vh; margin: 0; padding: 20px; box-sizing: border-box; }
+        .admin-nav { width: 100%; max-width: 900px; background-color: #fff; padding: 15px; margin-bottom: 30px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); text-align: center; display: flex; flex-wrap: wrap; justify-content: center; gap: 15px 25px; }
+        .admin-nav a { margin: 0; padding: 0; background-color: transparent; color: #1565c0; text-decoration: none; font-weight: bold; font-size: 1.1em; white-space: nowrap; }
+        .admin-nav a.active, .admin-nav a:hover { text-decoration: underline; background-color: transparent; color: #0d47a1; }
+        .container { background-color: white; padding: 40px; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.15); width: 100%; max-width: 900px; margin-bottom: 30px; }
+        h1, h2 { text-align: center; color: #333; margin-top: 0; }
+        p { color: #666; text-align: center; margin-top: -15px; margin-bottom: 30px; }
+        .form-container { border-bottom: 1px solid #ddd; padding-bottom: 30px; margin-bottom: 30px; }
+        .form-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 20px; }
+        .form-item { display: flex; flex-direction: column; }
+        .form-item label { margin-bottom: 5px; font-weight: bold; color: #555; }
+        .form-item input { padding: 10px; border-radius: 6px; border: 1px solid #ccc; font-size: 1em; }
+        .add-button { grid-column: 1 / -1; padding: 12px; background-color: #2e7d32; color: white; border: none; border-radius: 6px; font-size: 1.1em; font-weight: bold; cursor: pointer; margin-top: 10px; }
+        #lista-voluntarios { list-style-type: none; padding: 0; margin: 20px 0; }
+        .item-voluntario { display: flex; justify-content: space-between; align-items: center; padding: 12px; border-bottom: 1px solid #eee; gap: 15px; border-left-width: 8px; border-left-style: solid; transition: border-left-color 0.3s; }
+        .status-ativo { border-left-color: #4CAF50; }
+        .status-inativo { border-left-color: #FF9800; }
+        .voluntario-info { flex-grow: 1; }
+        .voluntario-info strong { font-size: 1.2em; display: block; margin-bottom: 4px;}
+        .voluntario-info small { color: #777; }
+        .actions { display: flex; gap: 10px; flex-shrink: 0; }
+        .actions button { padding: 8px 12px; border-radius: 4px; cursor: pointer; border: 1px solid #ccc; font-size: 0.9em; }
+        .btn-toggle { background-color: #ffb300; }
+        .btn-delete { background-color: #c62828; color: white; border-color: #c62828; }
+    </style>
+</head>
+<body>
+    <nav class="admin-nav">
+        </nav>
+    <div class="container form-container">
+        <h1>Adicionar Novo Voluntário</h1>
+        <div class="form-grid">
+            <div class="form-item"><label for="nome">Nome Completo:</label><input type="text" id="nome" required></div>
+            <div class="form-item"><label for="endereco">Endereço:</label><input type="text" id="endereco"></div>
+            <div class="form-item"><label for="telefone">Telefone:</label><input type="tel" id="telefone"></div>
+            <div class="form-item"><label for="aniversario">Aniversário (DD/MM):</label><input type="text" id="aniversario" placeholder="Ex: 25/12"></div>
+        </div>
+        <button id="btn-adicionar" class="add-button">Adicionar Voluntário</button>
+    </div>
+    <div class="container lista-container">
+        <h2>Lista de Voluntários Cadastrados</h2>
+        <ul id="lista-voluntarios"><li>Carregando...</li></ul>
+    </div>
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
+        import { getFirestore, collection, onSnapshot, addDoc, deleteDoc, doc, orderBy, query, serverTimestamp, updateDoc } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
+        
+        const firebaseConfig = {
+  apiKey: "AIzaSyBV7RPjk3cFTqL-aIpflJcUojKg1ZXMLuU",
+  authDomain: "voluntarios-ativos---cepat.firebaseapp.com",
+  projectId: "voluntarios-ativos---cepat",
+  storageBucket: "voluntarios-ativos---cepat.firebasestorage.app",
+  messagingSenderId: "66122858261",
+  appId: "1:66122858261:web:7fa21f1805463b5c08331c"
+};
+        const SENHA_ADMIN = "admin";
+        const app = initializeApp(firebaseConfig);
+        const db = getFirestore(app);
+        const voluntariosCollection = collection(db, 'voluntarios');
+        
+        const ui = {
+            nome: document.getElementById('nome'),
+            endereco: document.getElementById('endereco'),
+            telefone: document.getElementById('telefone'),
+            // MUDANÇA AQUI: Pegando o novo campo de aniversário
+            aniversario: document.getElementById('aniversario'),
+            btnAdd: document.getElementById('btn-adicionar'),
+            listaUl: document.getElementById('lista-voluntarios')
+        };
+
+        function autenticar() {
+            const senhaDigitada = sessionStorage.getItem('senhaAdminCePAT');
+            if (senhaDigitada === SENHA_ADMIN) return true;
+            const novaSenha = prompt("Por favor, digite a senha de administrador:", "");
+            if (novaSenha === SENHA_ADMIN) {
+                sessionStorage.setItem('senhaAdminCePAT', novaSenha);
+                return true;
+            }
+            alert("Senha incorreta!"); document.body.innerHTML = "<h1>Acesso Negado</h1>"; return false;
+        }
+
+        function carregarVoluntarios() {
+            const q = query(voluntariosCollection, orderBy("nome"));
+            onSnapshot(q, (snapshot) => {
+                ui.listaUl.innerHTML = '';
+                if (snapshot.empty) {
+                    ui.listaUl.innerHTML = '<li>Nenhum voluntário cadastrado.</li>';
+                }
+                snapshot.forEach(docSnapshot => {
+                    const v = docSnapshot.data();
+                    const id = docSnapshot.id;
+                    const statusClasse = v.statusVoluntario === 'inativo' ? 'status-inativo' : 'status-ativo';
+                    const li = document.createElement('li');
+                    li.className = `item-voluntario ${statusClasse}`;
+                    li.innerHTML = `
+                        <div class="voluntario-info">
+                            <strong>${v.nome}</strong>
+                            <small>${v.endereco || 'Endereço não informado'} | ${v.telefone || 'Telefone não informado'} | Aniversário: ${v.aniversario || 'N/A'}</small>
+                        </div>
+                        <div class="actions">
+                            <button data-id="${id}" data-status="${v.statusVoluntario || 'ativo'}" class="btn-toggle">Tornar ${v.statusVoluntario === 'ativo' ? 'Inativo' : 'Ativo'}</button>
+                            <button data-id="${id}" class="btn-delete">Apagar</button>
+                        </div>
+                    `;
+                    ui.listaUl.appendChild(li);
+                });
+            });
+        }
+
+        ui.btnAdd.addEventListener('click', async () => {
+            const nome = ui.nome.value.trim();
+            if (!nome) return alert("O campo 'Nome Completo' é obrigatório.");
+            try {
+                await addDoc(voluntariosCollection, {
+                    nome: nome,
+                    endereco: ui.endereco.value.trim(),
+                    telefone: ui.telefone.value.trim(),
+                    // MUDANÇA AQUI: Salvando o novo campo de aniversário
+                    aniversario: ui.aniversario.value.trim(),
+                    statusVoluntario: 'ativo',
+                    ultimaPresenca: null,
+                    criadoEm: serverTimestamp()
+                });
+                // Limpa todos os campos do formulário
+                ui.nome.value = ''; ui.endereco.value = ''; ui.telefone.value = ''; ui.aniversario.value = '';
+            } catch (error) {
+                console.error("Erro ao adicionar voluntário:", error);
+                alert("Ocorreu um erro ao adicionar.");
+            }
+        });
+
+        ui.listaUl.addEventListener('click', async (e) => {
+            const id = e.target.dataset.id;
+            if (!id) return;
+            const docRef = doc(db, 'voluntarios', id);
+
+            if (e.target.classList.contains('btn-delete')) {
+                if (confirm(`Tem certeza que deseja apagar este voluntário da lista mestra? Esta ação não pode ser desfeita.`)) {
+                    await deleteDoc(docRef);
+                }
+            }
+
+            if (e.target.classList.contains('btn-toggle')) {
+                const statusAtual = e.target.dataset.status;
+                const novoStatus = statusAtual === 'ativo' ? 'inativo' : 'ativo';
+                await updateDoc(docRef, { statusVoluntario: novoStatus });
+            }
+        });
+
+        if (autenticar()) {
+            carregarVoluntarios();
+        }
+    </script>
+</body>
+</html>
