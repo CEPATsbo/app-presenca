@@ -27,8 +27,16 @@
         .voluntario-info small { color: #777; }
         .actions { display: flex; gap: 10px; flex-shrink: 0; }
         .actions button { padding: 8px 12px; border-radius: 4px; cursor: pointer; border: 1px solid #ccc; font-size: 0.9em; }
+        .btn-edit { background-color: #1976d2; color: white; border-color: #1976d2;}
         .btn-toggle { background-color: #ffb300; }
         .btn-delete { background-color: #c62828; color: white; border-color: #c62828; }
+        
+        /* Estilos para o Modal de Edição */
+        .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.6); display: none; justify-content: center; align-items: center; z-index: 1000; }
+        .modal-content { background-color: white; padding: 30px; border-radius: 10px; width: 90%; max-width: 600px; }
+        .modal-content h2 { margin-top: 0; }
+        .modal-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 20px; }
+        .modal-actions button { padding: 10px 20px; }
     </style>
 </head>
 <body>
@@ -39,7 +47,7 @@
         <div class="form-grid">
             <div class="form-item"><label for="nome">Nome Completo:</label><input type="text" id="nome" required></div>
             <div class="form-item"><label for="endereco">Endereço:</label><input type="text" id="endereco"></div>
-            <div class="form-item"><label for="telefone">Telefone:</label><input type="tel" id="telefone"></div>
+            <div class="form-item"><label for="telefone">Telefone:</label><input type="tel" id="telefone" maxlength="15"></div>
             <div class="form-item"><label for="aniversario">Aniversário (DD/MM):</label><input type="text" id="aniversario" placeholder="Ex: 25/12"></div>
         </div>
         <button id="btn-adicionar" class="add-button">Adicionar Voluntário</button>
@@ -49,9 +57,25 @@
         <ul id="lista-voluntarios"><li>Carregando...</li></ul>
     </div>
 
+    <div id="edit-modal" class="modal-overlay">
+        <div class="modal-content">
+            <h2>Editar Voluntário</h2>
+            <div class="form-grid">
+                <div class="form-item"><label for="edit-nome">Nome Completo:</label><input type="text" id="edit-nome" required></div>
+                <div class="form-item"><label for="edit-endereco">Endereço:</label><input type="text" id="edit-endereco"></div>
+                <div class="form-item"><label for="edit-telefone">Telefone:</label><input type="tel" id="edit-telefone" maxlength="15"></div>
+                <div class="form-item"><label for="edit-aniversario">Aniversário (DD/MM):</label><input type="text" id="edit-aniversario"></div>
+            </div>
+            <div class="modal-actions">
+                <button id="btn-cancelar-edicao" class="btn-delete">Cancelar</button>
+                <button id="btn-salvar-edicao" class="add-button">Salvar Alterações</button>
+            </div>
+        </div>
+    </div>
+
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
-        import { getFirestore, collection, onSnapshot, addDoc, deleteDoc, doc, orderBy, query, serverTimestamp, updateDoc } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
+        import { getFirestore, collection, onSnapshot, addDoc, deleteDoc, doc, getDoc, orderBy, query, serverTimestamp, updateDoc } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
         
         const firebaseConfig = {
   apiKey: "AIzaSyBV7RPjk3cFTqL-aIpflJcUojKg1ZXMLuU",
@@ -70,11 +94,19 @@
             nome: document.getElementById('nome'),
             endereco: document.getElementById('endereco'),
             telefone: document.getElementById('telefone'),
-            // MUDANÇA AQUI: Pegando o novo campo de aniversário
             aniversario: document.getElementById('aniversario'),
             btnAdd: document.getElementById('btn-adicionar'),
-            listaUl: document.getElementById('lista-voluntarios')
+            listaUl: document.getElementById('lista-voluntarios'),
+            editModal: document.getElementById('edit-modal'),
+            editNome: document.getElementById('edit-nome'),
+            editEndereco: document.getElementById('edit-endereco'),
+            editTelefone: document.getElementById('edit-telefone'),
+            editAniversario: document.getElementById('edit-aniversario'),
+            btnSalvar: document.getElementById('btn-salvar-edicao'),
+            btnCancelar: document.getElementById('btn-cancelar-edicao'),
         };
+
+        let currentEditingId = null;
 
         function autenticar() {
             const senhaDigitada = sessionStorage.getItem('senhaAdminCePAT');
@@ -91,9 +123,7 @@
             const q = query(voluntariosCollection, orderBy("nome"));
             onSnapshot(q, (snapshot) => {
                 ui.listaUl.innerHTML = '';
-                if (snapshot.empty) {
-                    ui.listaUl.innerHTML = '<li>Nenhum voluntário cadastrado.</li>';
-                }
+                if (snapshot.empty) { ui.listaUl.innerHTML = '<li>Nenhum voluntário cadastrado.</li>'; }
                 snapshot.forEach(docSnapshot => {
                     const v = docSnapshot.data();
                     const id = docSnapshot.id;
@@ -106,6 +136,7 @@
                             <small>${v.endereco || 'Endereço não informado'} | ${v.telefone || 'Telefone não informado'} | Aniversário: ${v.aniversario || 'N/A'}</small>
                         </div>
                         <div class="actions">
+                            <button data-id="${id}" class="btn-edit">Editar</button>
                             <button data-id="${id}" data-status="${v.statusVoluntario || 'ativo'}" class="btn-toggle">Tornar ${v.statusVoluntario === 'ativo' ? 'Inativo' : 'Ativo'}</button>
                             <button data-id="${id}" class="btn-delete">Apagar</button>
                         </div>
@@ -115,6 +146,20 @@
             });
         }
 
+        const handlePhone = (event) => {
+            let input = event.target;
+            input.value = phoneMask(input.value);
+        }
+        const phoneMask = (value) => {
+            if (!value) return "";
+            value = value.replace(/\D/g,'');
+            value = value.replace(/(\d{2})(\d)/,"($1) $2");
+            value = value.replace(/(\d)(\d{4})$/,"$1-$2");
+            return value;
+        }
+        ui.telefone.addEventListener('input', handlePhone);
+        ui.editTelefone.addEventListener('input', handlePhone);
+
         ui.btnAdd.addEventListener('click', async () => {
             const nome = ui.nome.value.trim();
             if (!nome) return alert("O campo 'Nome Completo' é obrigatório.");
@@ -123,18 +168,13 @@
                     nome: nome,
                     endereco: ui.endereco.value.trim(),
                     telefone: ui.telefone.value.trim(),
-                    // MUDANÇA AQUI: Salvando o novo campo de aniversário
                     aniversario: ui.aniversario.value.trim(),
                     statusVoluntario: 'ativo',
                     ultimaPresenca: null,
                     criadoEm: serverTimestamp()
                 });
-                // Limpa todos os campos do formulário
                 ui.nome.value = ''; ui.endereco.value = ''; ui.telefone.value = ''; ui.aniversario.value = '';
-            } catch (error) {
-                console.error("Erro ao adicionar voluntário:", error);
-                alert("Ocorreu um erro ao adicionar.");
-            }
+            } catch (error) { console.error("Erro ao adicionar voluntário:", error); alert("Ocorreu um erro ao adicionar."); }
         });
 
         ui.listaUl.addEventListener('click', async (e) => {
@@ -146,13 +186,42 @@
                 if (confirm(`Tem certeza que deseja apagar este voluntário da lista mestra? Esta ação não pode ser desfeita.`)) {
                     await deleteDoc(docRef);
                 }
-            }
-
-            if (e.target.classList.contains('btn-toggle')) {
+            } else if (e.target.classList.contains('btn-toggle')) {
                 const statusAtual = e.target.dataset.status;
                 const novoStatus = statusAtual === 'ativo' ? 'inativo' : 'ativo';
                 await updateDoc(docRef, { statusVoluntario: novoStatus });
+            } else if (e.target.classList.contains('btn-edit')) {
+                const docSnap = await getDoc(docRef);
+                if (docSnap.exists()) {
+                    const data = docSnap.data();
+                    currentEditingId = id;
+                    ui.editNome.value = data.nome || '';
+                    ui.editEndereco.value = data.endereco || '';
+                    ui.editTelefone.value = data.telefone || '';
+                    ui.editAniversario.value = data.aniversario || '';
+                    ui.editModal.style.display = 'flex';
+                }
             }
+        });
+
+        ui.btnSalvar.addEventListener('click', async () => {
+            if (!currentEditingId) return;
+            const docRef = doc(db, 'voluntarios', currentEditingId);
+            try {
+                await updateDoc(docRef, {
+                    nome: ui.editNome.value.trim(),
+                    endereco: ui.editEndereco.value.trim(),
+                    telefone: ui.editTelefone.value.trim(),
+                    aniversario: ui.editAniversario.value.trim()
+                });
+                ui.editModal.style.display = 'none';
+                currentEditingId = null;
+            } catch (error) { console.error("Erro ao salvar alterações:", error); alert("Ocorreu um erro ao salvar."); }
+        });
+
+        ui.btnCancelar.addEventListener('click', () => {
+            ui.editModal.style.display = 'none';
+            currentEditingId = null;
         });
 
         if (autenticar()) {
