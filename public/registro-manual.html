@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin - Registro Manual de Presença</title>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background-color: #f4f6f9; display: flex; flex-direction: column; align-items: center; min-height: 100vh; margin: 0; padding: 20px; box-sizing: border-box; }
+        .admin-nav { width: 100%; max-width: 900px; background-color: #fff; padding: 15px; margin-bottom: 30px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); text-align: center; display: flex; flex-wrap: wrap; justify-content: center; gap: 15px 25px; }
+        .admin-nav a { margin: 0; padding: 0; background-color: transparent; color: #1565c0; text-decoration: none; font-weight: bold; font-size: 1.1em; white-space: nowrap; }
+        .admin-nav a.active, .admin-nav a:hover { text-decoration: underline; background-color: transparent; color: #0d47a1; }
+        .container { background-color: white; padding: 40px; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.15); width: 100%; max-width: 900px; }
+        h1, p { text-align: center; }
+        h1 { color: #333; margin-top: 0; }
+        p { color: #666; margin-top: -15px; margin-bottom: 30px; }
+        #lista-nao-registrados { list-style-type: none; padding: 0; margin: 20px 0; }
+        .item-registro { display: flex; justify-content: space-between; align-items: center; padding: 12px; border-bottom: 1px solid #eee; gap: 15px; }
+        .item-registro:last-child { border-bottom: none; }
+        .voluntario-nome { font-size: 1.2em; font-weight: 500; flex-grow: 1; }
+        .item-registro select { padding: 8px; border-radius: 6px; border: 1px solid #ccc; margin-right: 10px; }
+        .btn-registrar { background-color: #2e7d32; color: white; border: none; padding: 8px 15px; border-radius: 4px; cursor: pointer; font-weight: bold; }
+    </style>
+</head>
+<body>
+    <nav class="admin-nav">
+        <a href="/gerenciar-voluntarios.html">Gerenciar Voluntários</a>
+        <a href="/registro-manual.html" class="active">Registro Manual</a>
+        <a href="/relatorio.html">Gerar Relatório</a>
+        <a href="/estatisticas.html">Ver Estatísticas</a>
+        <a href="/mural.html">Editar Mural</a>
+        <a href="/atividades.html">Gerenciar Atividades</a>
+        <a href="/notificacoes.html">Notificações</a>
+        <a href="/tv.html" target="_blank" title="Abrir painel em uma nova aba">Ver Painel da TV ↗</a>
+    </nav>
+    <div class="container">
+        <h1>Registro Manual de Presença</h1>
+        <p>Esta lista mostra apenas os voluntários ATIVOS que ainda NÃO registraram presença hoje.</p>
+        <ul id="lista-nao-registrados">
+            <li>Carregando...</li>
+        </ul>
+    </div>
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
+        import { getFirestore, collection, onSnapshot, doc, getDocs, setDoc, serverTimestamp, query, where, orderBy, updateDoc } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
+
+        const firebaseConfig = {
+  apiKey: "AIzaSyBV7RPjk3cFTqL-aIpflJcUojKg1ZXMLuU",
+  authDomain: "voluntarios-ativos---cepat.firebaseapp.com",
+  projectId: "voluntarios-ativos---cepat",
+  storageBucket: "voluntarios-ativos---cepat.firebasestorage.app",
+  messagingSenderId: "66122858261",
+  appId: "1:66122858261:web:7fa21f1805463b5c08331c"
+};
+        const SENHA_ADMIN = "admin";
+
+        const app = initializeApp(firebaseConfig);
+        const db = getFirestore(app);
+        
+        const listaUl = document.getElementById('lista-nao-registrados');
+        let listaDeAtividades = [];
+
+        function autenticar() {
+            const senha = sessionStorage.getItem('senhaAdminCePAT') || prompt("Por favor, digite a senha de administrador:", "");
+            if (senha === SENHA_ADMIN) {
+                sessionStorage.setItem('senhaAdminCePAT', senha);
+                return true;
+            }
+            alert("Senha incorreta!"); document.body.innerHTML = "<h1>Acesso Negado</h1>"; return false;
+        }
+
+        function getDataDeHojeSP() {
+            const formatador = new Intl.DateTimeFormat('en-CA', { year: 'numeric', month: '2-digit', day: '2-digit', timeZone: 'America/Sao_Paulo' });
+            return formatador.format(new Date());
+        }
+
+        async function carregarDados() {
+            const atividadesQuery = query(collection(db, "atividades"), where("ativo", "==", true), orderBy("nome"));
+            const atividadesSnapshot = await getDocs(atividadesQuery);
+            listaDeAtividades = atividadesSnapshot.docs.map(doc => doc.data().nome);
+
+            const voluntariosQuery = query(collection(db, 'voluntarios'), where("statusVoluntario", "==", "ativo"), orderBy("nome"));
+            onSnapshot(voluntariosQuery, (voluntariosSnapshot) => {
+                const presencasQuery = query(collection(db, 'presencas'), where("data", "==", getDataDeHojeSP()));
+                onSnapshot(presencasQuery, (presencasSnapshot) => {
+                    const todosOsVoluntariosAtivos = voluntariosSnapshot.docs.map(doc => ({ id: doc.id, nome: doc.data().nome }));
+                    const presentesHoje = presencasSnapshot.docs.map(doc => doc.data().nome);
+                    
+                    const naoRegistrados = todosOsVoluntariosAtivos.filter(v => !presentesHoje.includes(v.nome));
+                    renderizarLista(naoRegistrados);
+                });
+            });
+        }
+
+        function renderizarLista(voluntarios) {
+            listaUl.innerHTML = '';
+            if (voluntarios.length === 0) {
+                listaUl.innerHTML = '<li>Todos os voluntários ativos já registraram presença hoje!</li>';
+                return;
+            }
+            voluntarios.forEach(voluntario => {
+                const li = document.createElement('li');
+                li.className = 'item-registro';
+
+                const selectHTML = `<select class="atividade-select">${listaDeAtividades.map(a => `<option value="${a}">${a}</option>`).join('')}</select>`;
+                
+                li.innerHTML = `
+                    <span class="voluntario-nome">${voluntario.nome}</span>
+                    <div>
+                        ${selectHTML}
+                        <button data-nome="${voluntario.nome}" data-id="${voluntario.id}" class="btn-registrar">Registrar</button>
+                    </div>
+                `;
+                listaUl.appendChild(li);
+            });
+        }
+
+        listaUl.addEventListener('click', async (e) => {
+            if (e.target.classList.contains('btn-registrar')) {
+                const nome = e.target.dataset.nome;
+                const voluntarioId = e.target.dataset.id;
+                const select = e.target.previousElementSibling;
+                const atividade = select.value;
+
+                if (!nome || !atividade) { return alert("Erro ao selecionar voluntário ou atividade."); }
+                
+                if (confirm(`Confirmar presença de ${nome} na atividade "${atividade}"?`)) {
+                    const dataFormatada = getDataDeHojeSP();
+                    const idDocumento = `${dataFormatada}_${nome.replace(/\s+/g, '_')}`;
+                    const docRefPresenca = doc(db, "presencas", idDocumento);
+                    
+                    try {
+                        await setDoc(docRefPresenca, {
+                            nome: nome,
+                            atividade: atividade,
+                            data: dataFormatada,
+                            status: 'presente',
+                            primeiroCheckin: serverTimestamp(),
+                            ultimaAtualizacao: serverTimestamp(),
+                            registro: 'manual'
+                        }, { merge: true });
+
+                        const docRefVoluntario = doc(db, "voluntarios", voluntarioId);
+                        await updateDoc(docRefVoluntario, {
+                            ultimaPresenca: dataFormatada,
+                            statusVoluntario: 'ativo'
+                        });
+
+                        alert(`${nome} registrado com sucesso!`);
+                    } catch (error) {
+                        console.error("Erro ao registrar presença manual:", error);
+                        alert("Ocorreu um erro ao registrar a presença.");
+                    }
+                }
+            }
+        });
+
+        if (autenticar()) {
+            carregarDados();
+        }
+    </script>
+</body>
+</html>
