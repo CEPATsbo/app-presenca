@@ -27,7 +27,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     const app = initializeApp(firebaseConfig);
     const db = getFirestore(app);
     
-    const CASA_ESPIRITA_LAT = -22.75553, CASA_ESPIRITA_LON = -47.36945, RAIO_EM_METROS = 40;
+    const CASA_ESPIRITA_LAT = -22.754576, CASA_ESPIRITA_LON = -47.402184, RAIO_EM_METROS = 40;
     
     const loginArea = document.getElementById('login-area'), statusArea = document.getElementById('status-area'), nomeInput = document.getElementById('nome'), btnRegistrar = document.getElementById('btn-registrar'), feedback = document.getElementById('feedback'), statusText = document.getElementById('status-text'), atividadeContainer = document.getElementById('atividade-container'), toggleAtividadesBtn = document.getElementById('toggle-atividades'), atividadeWrapper = document.getElementById('atividade-wrapper'), btnSair = document.getElementById('btn-sair'), btnVerHistorico = document.getElementById('btn-ver-historico'), historicoContainer = document.getElementById('historico-container'), listaHistorico = document.getElementById('lista-historico'), muralContainer = document.getElementById('mural-container'), btnAtivarNotificacoes = document.getElementById('btn-ativar-notificacoes');
     
