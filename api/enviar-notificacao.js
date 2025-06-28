@@ -10,7 +10,8 @@ webpush.setVapidDetails(
 
 if (!admin.apps.length) {
   try {
-    const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT_JSON);
+    const serviceAccountString = Buffer.from(process.env.FIREBASE_SERVICE_ACCOUNT_JSON, 'base64').toString('utf-8');
+    const serviceAccount = JSON.parse(serviceAccountString);
     admin.initializeApp({ credential: admin.credential.cert(serviceAccount) });
   } catch (error) { console.error("ERRO FATAL:", error); }
 }
