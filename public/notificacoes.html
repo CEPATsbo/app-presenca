@@ -26,9 +26,6 @@
         .radio-group input[type="radio"] { width: auto; margin: 0 15px 0 0; transform: scale(1.2); }
         .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
         .full-width { grid-column: 1 / -1; }
-        #campos-recorrente .weekdays { display: flex; justify-content: space-around; margin-bottom: 15px; font-size: 0.9em;}
-        #campos-recorrente .weekdays label { display: flex; flex-direction: column; align-items: center; cursor: pointer; }
-        #campos-recorrente input[type="radio"] { width: auto; margin-bottom: 5px; }
         .agendamentos-pendentes ul { list-style-type: none; padding: 0; }
         .agendamentos-pendentes li { background-color: #fafafa; padding: 15px; border-radius: 6px; margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center; gap: 15px; }
         .btn-delete { background-color: #c62828; color: white; border: none; padding: 8px 12px; border-radius: 4px; cursor: pointer; }
@@ -87,7 +84,6 @@
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
         import { getFirestore, collection, onSnapshot, addDoc, deleteDoc, doc, orderBy, query, where, Timestamp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
-        import { getFunctions, httpsCallable } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-functions.js";
         
         const firebaseConfig = {
   apiKey: "AIzaSyBV7RPjk3cFTqL-aIpflJcUojKg1ZXMLuU",
@@ -101,7 +97,6 @@
         
         const app = initializeApp(firebaseConfig);
         const db = getFirestore(app);
-        const functions = getFunctions(app, 'southamerica-east1');
         const agendamentosCollection = collection(db, 'notificacoes_agendadas');
         
         const ui = {
@@ -143,23 +138,39 @@
                     ui.listaUl.appendChild(li);
                 });
                 if (!hasPendente) ui.listaUl.innerHTML = '<li>Nenhum agendamento ativo.</li>';
-            }, (error) => { console.error("Erro ao carregar agendamentos:", error); ui.listaUl.innerHTML = '<li>Erro ao carregar.</li>'; });
+            }, (error) => { console.error("Erro ao carregar agendamentos:", error); ui.listaUl.innerHTML = '<li>Erro ao carregar agendamentos.</li>'; });
         }
         
         async function enviarNotificacaoAgora() {
             const titulo = ui.titulo.value.trim(), corpo = ui.corpo.value.trim();
             if (!titulo || !corpo) return alert("Preencha título e corpo da mensagem.");
             if (!confirm("Enviar esta notificação para todos agora?")) return;
+            
             ui.btnAcao.disabled = true;
             ui.feedback.textContent = "Conectando com o robô de envio...";
+            ui.feedback.style.color = "#555";
+
             try {
-                const enviarNotificacao = httpsCallable(functions, 'enviarNotificacaoImediata');
-                const resultado = await enviarNotificacao({ title: titulo, body: corpo });
-                const dados = resultado.data;
-                ui.feedback.textContent = `Sucesso! Enviado para ${dados.successCount} de ${dados.totalCount} inscritos.`;
+                // A URL da sua função no Google Cloud
+                const functionUrl = "https://southamerica-east1-voluntarios-ativos---cepat.cloudfunctions.net/enviarNotificacaoImediata";
+
+                const response = await fetch(functionUrl, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ titulo, corpo }) // Enviamos o corpo direto
+                });
+
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(errorData.error || `Erro do servidor: ${response.status}`);
+                }
+                
+                const resultado = await response.json();
+                ui.feedback.textContent = `Sucesso! Enviado para ${resultado.successCount} de ${resultado.totalCount} inscritos.`;
                 ui.feedback.style.color = "green";
+
             } catch (error) {
-                console.error("Erro ao chamar a cloud function:", error);
+                console.error("Erro ao enviar notificação via fetch:", error);
                 ui.feedback.textContent = `Erro: ${error.message}`;
                 ui.feedback.style.color = "red";
             } finally {
@@ -180,28 +191,13 @@
         }
 
         async function salvarRecorrente() {
-            console.log("Função salvarRecorrente iniciada."); // Log de diagnóstico
             const titulo = ui.titulo.value.trim(), corpo = ui.corpo.value.trim(), hora = ui.horaRecorrente.value, diaEl = document.querySelector('input[name="diaDaSemana"]:checked');
-            if (!titulo || !corpo || !hora || !diaEl) {
-                return alert("Preencha título, corpo, hora e dia da semana para agendamento recorrente.");
-            }
+            if (!titulo || !corpo || !hora || !diaEl) return alert("Preencha título, corpo, hora e dia da semana.");
             try {
-                console.log("Tentando adicionar documento recorrente ao Firestore...");
-                await addDoc(agendamentosCollection, { 
-                    titulo: titulo, 
-                    corpo: corpo, 
-                    hora: hora, 
-                    tipo: 'recorrente', 
-                    diaDaSemana: parseInt(diaEl.value), 
-                    criadoEm: Timestamp.now() 
-                });
-                console.log("Documento recorrente adicionado com sucesso!");
+                await addDoc(agendamentosCollection, { titulo, corpo, hora, tipo: 'recorrente', diaDaSemana: parseInt(diaEl.value), criadoEm: Timestamp.now() });
                 alert("Agendamento recorrente salvo com sucesso!");
                 ui.titulo.value = ''; ui.corpo.value = '';
-            } catch (e) { 
-                alert("Erro ao salvar o agendamento recorrente."); 
-                console.error("Erro detalhado ao salvar recorrente:", e); 
-            }
+            } catch (e) { alert("Erro ao salvar."); console.error(e); }
         }
         
         function atualizarUI() {
@@ -214,18 +210,11 @@
         }
 
         ui.radiosTipoEnvio.forEach(radio => radio.addEventListener('change', atualizarUI));
-        
-        // --- EVENT LISTENER CORRIGIDO ---
         ui.btnAcao.addEventListener('click', () => {
             const tipo = document.querySelector('input[name="tipoEnvio"]:checked').value;
-            console.log(`Botão clicado. Tipo de envio selecionado: ${tipo}`); // Log de diagnóstico
-            if (tipo === 'agora') {
-                enviarNotificacaoAgora();
-            } else if (tipo === 'unico') {
-                agendarUnico();
-            } else if (tipo === 'recorrente') {
-                salvarRecorrente();
-            }
+            if (tipo === 'agora') enviarNotificacaoAgora();
+            if (tipo === 'unico') agendarUnico();
+            if (tipo === 'recorrente') salvarRecorrente();
         });
 
         ui.listaUl.addEventListener('click', async (e) => {
