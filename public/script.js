@@ -1,12 +1,11 @@
-// VERSÃO DE DIAGNÓSTICO - COM LOGS PARA O BOTÃO REGISTRAR
+// VERSÃO FINAL - DETETIVE DE NOMES COM LÓGICA CORRIGIDA
 
 import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
 import { getFirestore, doc, getDoc, setDoc, updateDoc, serverTimestamp, collection, query, where, getDocs, orderBy, addDoc } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
 import Fuse from 'https://cdn.jsdelivr.net/npm/fuse.js@7.0.0/dist/fuse.mjs';
 
 document.addEventListener('DOMContentLoaded', async () => {
-    console.log("[LOG] Script iniciado, DOM carregado.");
-
+    
     // =================================================================
     const firebaseConfig = {
   apiKey: "AIzaSyBV7RPjk3cFTqL-aIpflJcUojKg1ZXMLuU",
@@ -26,8 +25,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     
     const loginArea = document.getElementById('login-area'), statusArea = document.getElementById('status-area'), nomeInput = document.getElementById('nome'), btnRegistrar = document.getElementById('btn-registrar'), feedback = document.getElementById('feedback'), statusText = document.getElementById('status-text'), atividadeContainer = document.getElementById('atividade-container'), toggleAtividadesBtn = document.getElementById('toggle-atividades'), atividadeWrapper = document.getElementById('atividade-wrapper'), btnSair = document.getElementById('btn-sair'), btnVerHistorico = document.getElementById('btn-ver-historico'), historicoContainer = document.getElementById('historico-container'), listaHistorico = document.getElementById('lista-historico'), muralContainer = document.getElementById('mural-container'), btnAtivarNotificacoes = document.getElementById('btn-ativar-notificacoes');
     
-    console.log("[LOG] Elemento do botão 'Registrar' encontrado:", btnRegistrar);
-
     let listaDeAtividades = [];
     let userInfo = {};
     let monitorInterval;
@@ -63,7 +60,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
     
     async function inicializarPagina() {
-        console.log("[LOG] Iniciando a página...");
         await Promise.all([carregarMural(), buscarAtividadesDoFirestore()]);
         const savedInfoString = localStorage.getItem('userInfo');
         if (savedInfoString) {
@@ -79,7 +75,6 @@ document.addEventListener('DOMContentLoaded', async () => {
                 nomeInput.value = savedInfo.nome;
             }
         }
-        console.log("[LOG] Página inicializada.");
     }
     
     if (toggleAtividadesBtn) { toggleAtividadesBtn.addEventListener('click', () => { atividadeWrapper.classList.toggle('hidden'); const s = toggleAtividadesBtn.innerHTML.includes('▼') ? '▲' : '▼'; toggleAtividadesBtn.innerHTML = `Selecione suas atividades (até 3) ${s}`; }); }
@@ -89,9 +84,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     if ('serviceWorker' in navigator) { window.addEventListener('load', () => navigator.serviceWorker.register('/sw.js')); }
 
     if (btnRegistrar) {
-        console.log("[LOG] Anexando evento de clique ao botão Registrar...");
         btnRegistrar.addEventListener('click', async () => {
-            console.log("[LOG] Botão Registrar foi CLICADO!");
             const nomeDigitado = nomeInput.value.trim();
             const atividadesSelecionadas = document.querySelectorAll('input[name="atividade"]:checked');
             if (!nomeDigitado || nomeDigitado.split(' ').length < 2) { return alert("Por favor, digite seu nome completo (nome e sobrenome)."); }
@@ -99,25 +92,27 @@ document.addEventListener('DOMContentLoaded', async () => {
             btnRegistrar.disabled = true;
             feedback.textContent = "Verificando cadastro...";
             try {
-                console.log("[LOG] Buscando lista de voluntários para comparação...");
                 const voluntariosSnapshot = await getDocs(query(collection(db, "voluntarios")));
                 const listaDeVoluntarios = voluntariosSnapshot.docs.map(d => ({ id: d.id, ...d.data() }));
-                console.log(`[LOG] ${listaDeVoluntarios.length} voluntários encontrados.`);
+                
                 const fuse = new Fuse(listaDeVoluntarios, { keys: ['nome'], includeScore: true, threshold: 0.45, distance: 100 });
                 const resultados = fuse.search(nomeDigitado);
+                
                 let voluntarioParaRegistrar = { id: null, nome: nomeDigitado };
+
                 if (resultados.length > 0) {
                     const melhorResultado = resultados[0].item;
-                    console.log(`[LOG] Detetive encontrou: "${melhorResultado.nome}" com pontuação ${resultados[0].score}`);
-                    if (nomeDigitado.toLowerCase() === melhorResultado.nome.toLowerCase()) {
-                        voluntarioParaRegistrar = melhorResultado;
-                    } else {
+                    if (nomeDigitado.toLowerCase() !== melhorResultado.nome.toLowerCase()) {
                         if (confirm(`Encontramos um nome parecido: "${melhorResultado.nome}".\n\nÉ você?`)) {
                             voluntarioParaRegistrar = melhorResultado;
                         }
+                    } else {
+                        voluntarioParaRegistrar = melhorResultado;
                     }
                 }
+                
                 await registrarVoluntario(voluntarioParaRegistrar, atividadesSelecionadas);
+
             } catch (error) {
                 console.error("ERRO CRÍTICO no registro:", error);
                 alert("Ocorreu um erro crítico. Tente novamente.");
@@ -126,9 +121,6 @@ document.addEventListener('DOMContentLoaded', async () => {
                 feedback.textContent = "";
             }
         });
-        console.log("[LOG] Evento de clique ANEXADO com sucesso.");
-    } else {
-        console.error("[ERRO] O botão 'btn-registrar' não foi encontrado na página.");
     }
     
     inicializarPagina();
