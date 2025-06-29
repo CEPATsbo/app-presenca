@@ -138,7 +138,7 @@
                     ui.listaUl.appendChild(li);
                 });
                 if (!hasPendente) ui.listaUl.innerHTML = '<li>Nenhum agendamento ativo.</li>';
-            }, (error) => { console.error("Erro ao carregar agendamentos:", error); ui.listaUl.innerHTML = '<li>Erro ao carregar agendamentos.</li>'; });
+            }, (error) => { console.error("Erro ao carregar agendamentos:", error); ui.listaUl.innerHTML = '<li>Erro ao carregar.</li>'; });
         }
         
         async function enviarNotificacaoAgora() {
@@ -148,24 +148,20 @@
             
             ui.btnAcao.disabled = true;
             ui.feedback.textContent = "Conectando com o robô de envio...";
-            ui.feedback.style.color = "#555";
-
+            
             try {
-                // A URL da sua função no Google Cloud
                 const functionUrl = "https://southamerica-east1-voluntarios-ativos---cepat.cloudfunctions.net/enviarNotificacaoImediata";
-
                 const response = await fetch(functionUrl, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ titulo, corpo }) // Enviamos o corpo direto
+                    body: JSON.stringify({ titulo, corpo })
                 });
 
+                const resultado = await response.json();
                 if (!response.ok) {
-                    const errorData = await response.json();
-                    throw new Error(errorData.error || `Erro do servidor: ${response.status}`);
+                    throw new Error(resultado.error || `Erro do servidor: ${response.status}`);
                 }
                 
-                const resultado = await response.json();
                 ui.feedback.textContent = `Sucesso! Enviado para ${resultado.successCount} de ${resultado.totalCount} inscritos.`;
                 ui.feedback.style.color = "green";
 
