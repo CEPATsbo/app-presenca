@@ -180,13 +180,28 @@
         }
 
         async function salvarRecorrente() {
+            console.log("Função salvarRecorrente iniciada."); // Log de diagnóstico
             const titulo = ui.titulo.value.trim(), corpo = ui.corpo.value.trim(), hora = ui.horaRecorrente.value, diaEl = document.querySelector('input[name="diaDaSemana"]:checked');
-            if (!titulo || !corpo || !hora || !diaEl) return alert("Preencha título, corpo, hora e dia da semana.");
+            if (!titulo || !corpo || !hora || !diaEl) {
+                return alert("Preencha título, corpo, hora e dia da semana para agendamento recorrente.");
+            }
             try {
-                await addDoc(agendamentosCollection, { titulo, corpo, hora, tipo: 'recorrente', diaDaSemana: parseInt(diaEl.value), criadoEm: Timestamp.now() });
+                console.log("Tentando adicionar documento recorrente ao Firestore...");
+                await addDoc(agendamentosCollection, { 
+                    titulo: titulo, 
+                    corpo: corpo, 
+                    hora: hora, 
+                    tipo: 'recorrente', 
+                    diaDaSemana: parseInt(diaEl.value), 
+                    criadoEm: Timestamp.now() 
+                });
+                console.log("Documento recorrente adicionado com sucesso!");
                 alert("Agendamento recorrente salvo com sucesso!");
                 ui.titulo.value = ''; ui.corpo.value = '';
-            } catch (e) { alert("Erro ao salvar."); console.error(e); }
+            } catch (e) { 
+                alert("Erro ao salvar o agendamento recorrente."); 
+                console.error("Erro detalhado ao salvar recorrente:", e); 
+            }
         }
         
         function atualizarUI() {
@@ -199,11 +214,18 @@
         }
 
         ui.radiosTipoEnvio.forEach(radio => radio.addEventListener('change', atualizarUI));
+        
+        // --- EVENT LISTENER CORRIGIDO ---
         ui.btnAcao.addEventListener('click', () => {
             const tipo = document.querySelector('input[name="tipoEnvio"]:checked').value;
-            if (tipo === 'agora') enviarAgora();
-            if (tipo === 'unico') agendarUnico();
-            if (tipo === 'recorrente') salvarRecorrente();
+            console.log(`Botão clicado. Tipo de envio selecionado: ${tipo}`); // Log de diagnóstico
+            if (tipo === 'agora') {
+                enviarNotificacaoAgora();
+            } else if (tipo === 'unico') {
+                agendarUnico();
+            } else if (tipo === 'recorrente') {
+                salvarRecorrente();
+            }
         });
 
         ui.listaUl.addEventListener('click', async (e) => {
