@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Estatísticas - Presença Voluntária</title>
+    <script type="module" src="/auth-guard.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
         body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background-color: #f4f6f9; color: #333; margin: 0; padding: 20px; }
@@ -16,8 +17,7 @@
         .filtros-container { display: flex; justify-content: center; align-items: flex-end; gap: 20px; margin-bottom: 20px; flex-wrap: wrap; background-color: #fff; padding: 20px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
         .filtro-item { display: flex; flex-direction: column; }
         .filtro-item label { font-size: 0.9em; color: #555; margin-bottom: 5px; text-align: left; }
-        .filtro-item input, .filtro-item select, .filtro-item button { padding: 10px; border-radius: 6px; border: 1px solid #ccc; font-size: 1em; }
-        .filtro-item button { background-color: #1565c0; color: white; cursor: pointer; border: none; font-weight: bold; }
+        .filtro-item input, .filtro-item select { padding: 10px; border-radius: 6px; border: 1px solid #ccc; font-size: 1em; }
         .grid-container { display: grid; grid-template-columns: 2fr 1fr; gap: 40px; align-items: flex-start; }
         .chart-card { background-color: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
         .chart-card.sticky { position: -webkit-sticky; position: sticky; top: 20px; }
@@ -76,6 +76,7 @@
         const db = getFirestore(app);
 
         let todosOsDados = [];
+        let todasAsAtividades = new Map();
         let graficoFrequencia, graficoAtividades;
         let voluntariosOrdenadosGlobal = [];
         let atividadeDestaqueFixo = null;
@@ -91,13 +92,12 @@
         
         const COR_PADRAO_BARRAS = 'rgba(17, 122, 101, 0.4)';
         const COR_DESTAQUE_FADE = 'rgba(200, 200, 200, 0.3)';
-        const CORES_GRAFICO_PIZZA = ['#4CAF50', '#2196F3', '#FFC107', '#E91E63', '#9C27B0', '#3F51B5', '#009688', '#FF9800', '#795548', '#607D8B'];
+        const COR_PADRAO_ATIVIDADE = '#a9a9a9';
         
         function destacarBarras(atividade, corDestaque) {
-            if (!graficoFrequencia || !voluntariosOrdenadosGlobal) return;
-            const dadosFiltradosPorData = todosOsDados.filter(d => (d.data >= ui.dataInicio.value) && (d.data <= ui.dataFim.value));
+            if (!graficoFrequencia || !voluntariosOrdenadosGlobal.length) return;
             const novasCores = voluntariosOrdenadosGlobal.map(([nome]) => {
-                const participouDaAtividade = dadosFiltradosPorData.some(p => p.nome === nome && p.atividade.includes(atividade));
+                const participouDaAtividade = todosOsDados.some(p => p.nome === nome && p.atividade.includes(atividade));
                 return participouDaAtividade ? corDestaque : COR_DESTAQUE_FADE;
             });
             graficoFrequencia.data.datasets[0].backgroundColor = novasCores;
@@ -107,15 +107,12 @@
         function restaurarCoresBarras() {
             if (!graficoFrequencia) return;
             if (atividadeDestaqueFixo && graficoAtividades) {
-                const itemIndex = graficoAtividades.data.labels.indexOf(atividadeDestaqueFixo);
-                if (itemIndex > -1) {
-                    const corDestaque = graficoAtividades.data.datasets[0].backgroundColor[itemIndex % CORES_GRAFICO_PIZZA.length];
-                    destacarBarras(atividadeDestaqueFixo, corDestaque);
-                    return;
-                }
+                const corDestaque = todasAsAtividades.get(atividadeDestaqueFixo) || COR_PADRAO_ATIVIDADE;
+                destacarBarras(atividadeDestaqueFixo, corDestaque);
+            } else {
+                graficoFrequencia.data.datasets[0].backgroundColor = COR_PADRAO_BARRAS;
+                graficoFrequencia.update('none');
             }
-            graficoFrequencia.data.datasets[0].backgroundColor = COR_PADRAO_BARRAS;
-            graficoFrequencia.update('none');
         }
 
         const handleLegendClick = (evt, item, legend) => {
@@ -126,17 +123,15 @@
 
         const handleLegendHover = (evt, item, legend) => {
             if (atividadeDestaqueFixo) return;
-            const chart = legend.chart;
-            if (chart.getElementsAtEventForMode(evt, 'nearest', { intersect: true }, true).length > 0) return;
-            const atividadeHover = chart.data.labels[item.index];
-            const corDestaque = chart.data.datasets[0].backgroundColor[item.index % CORES_GRAFICO_PIZZA.length];
+            const atividadeHover = legend.chart.data.labels[item.index];
+            const corDestaque = todasAsAtividades.get(atividadeHover) || COR_PADRAO_ATIVIDADE;
             destacarBarras(atividadeHover, corDestaque);
         };
         
-        function renderizarGraficos(dados) {
+        function gerarGraficos(dados) {
             if (graficoFrequencia) graficoFrequencia.destroy();
             if (graficoAtividades) graficoAtividades.destroy();
-
+            
             const contagemVoluntarios = {};
             dados.forEach(d => { contagemVoluntarios[d.nome] = (contagemVoluntarios[d.nome] || 0) + 1; });
             voluntariosOrdenadosGlobal = Object.entries(contagemVoluntarios).sort(([,a],[,b]) => b-a);
@@ -147,11 +142,15 @@
             
             const contagemAtividades = {};
             dados.forEach(dado => { dado.atividade.split(', ').forEach(a => { contagemAtividades[a] = (contagemAtividades[a] || 0) + 1; }); });
-            const atividadesOrdenadas = Object.entries(contagemAtividades).sort(([,a],[,b]) => b-a);
+            const atividadesOrdenadas = Object.entries(contagemAtividades).sort(([a], [b]) => a.localeCompare(b));
+            
+            const labelsPizza = atividadesOrdenadas.map(item => item[0]);
+            const dadosPizza = atividadesOrdenadas.map(item => item[1]);
+            const coresPizza = labelsPizza.map(label => todasAsAtividades.get(label) || COR_PADRAO_ATIVIDADE);
 
             graficoAtividades = new Chart(document.getElementById('grafico-atividades'), {
                 type: 'doughnut',
-                data: { labels: atividadesOrdenadas.map(item => item[0]), datasets: [{ data: atividadesOrdenadas.map(item => item[1]), backgroundColor: CORES_GRAFICO_PIZZA }] },
+                data: { labels: labelsPizza, datasets: [{ data: dadosPizza, backgroundColor: coresPizza, hoverOffset: 4 }] },
                 options: { plugins: { legend: { position: 'bottom', onClick: handleLegendClick, onHover: handleLegendHover, onLeave: restaurarCoresBarras } } }
             });
         }
@@ -163,24 +162,25 @@
             const ate = new Date(ui.dataFim.value + 'T00:00:00').toLocaleDateString('pt-BR');
             const atividadeSelecionada = ui.filtroAtividade.value;
             
-            ui.descricaoFiltros.textContent = `Exibindo dados de ${de} a ${ate}. Atividade: ${atividadeSelecionada === 'todas' ? 'Todas' : `"${atividadeSelecionada}"`}.`;
-            
-            let dadosParaGraficoPizza = [...dadosFiltrados];
+            ui.descricaoFiltros.textContent = `Exibindo dados de ${de} a ${ate}.`;
 
             if (atividadeSelecionada !== 'todas') {
                 dadosFiltrados = dadosFiltrados.filter(dado => dado.atividade.includes(atividadeSelecionada));
+                 ui.descricaoFiltros.textContent += ` Atividade: "${atividadeSelecionada}".`;
             }
             
             if (dadosFiltrados.length === 0) {
                  ui.chartsGrid.style.display = 'none';
                  ui.loadingMessage.style.display = 'block';
                  ui.loadingMessage.textContent = "Nenhum dado encontrado para os filtros selecionados.";
+                 if (graficoFrequencia) graficoFrequencia.destroy();
+                 if (graficoAtividades) graficoAtividades.destroy();
                  return;
             }
             
             ui.chartsGrid.style.display = 'grid';
             ui.loadingMessage.style.display = 'none';
-            renderizarGraficos(dadosFiltrados);
+            gerarGraficos(dadosFiltrados);
         }
 
         async function inicializar() {
@@ -194,17 +194,18 @@
                 todosOsDados = presencasSnapshot.docs.map(doc => doc.data());
                 
                 atividadesSnapshot.forEach(doc => {
-                    const nomeAtividade = doc.data().nome;
+                    const atividade = doc.data();
+                    todasAsAtividades.set(atividade.nome, atividade.cor);
                     const option = document.createElement('option');
-                    option.value = nomeAtividade;
-                    option.textContent = nomeAtividade;
+                    option.value = atividade.nome;
+                    option.textContent = atividade.nome;
                     ui.filtroAtividade.appendChild(option);
                 });
 
                 const hoje = new Date();
-                ui.dataFim.value = hoje.toISOString().split('T')[0];
                 const umMesAtras = new Date();
                 umMesAtras.setMonth(hoje.getMonth() - 1);
+                ui.dataFim.value = hoje.toISOString().split('T')[0];
                 ui.dataInicio.value = umMesAtras.toISOString().split('T')[0];
                 
                 aplicarFiltros();
