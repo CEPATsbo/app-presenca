@@ -62,10 +62,21 @@
         <h2 id="titulo-lista">Lista de Voluntários Cadastrados</h2>
         <ul id="lista-voluntarios"><li>Carregando...</li></ul>
     </div>
-
     <div id="edit-modal" class="modal-overlay">
+        <div class="modal-content">
+            <h2>Editar Voluntário</h2>
+            <div class="form-grid">
+                <div class="form-item"><label for="edit-nome">Nome Completo:</label><input type="text" id="edit-nome" required></div>
+                <div class="form-item"><label for="edit-endereco">Endereço:</label><input type="text" id="edit-endereco"></div>
+                <div class="form-item"><label for="edit-telefone">Telefone:</label><input type="tel" id="edit-telefone" maxlength="15"></div>
+                <div class="form-item"><label for="edit-aniversario">Aniversário (DD/MM):</label><input type="text" id="edit-aniversario"></div>
+            </div>
+            <div class="modal-actions">
+                <button id="btn-cancelar-edicao" class="btn-delete">Cancelar</button>
+                <button id="btn-salvar-edicao" class="add-button">Salvar Alterações</button>
+            </div>
         </div>
-
+    </div>
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
         import { getFirestore, collection, onSnapshot, addDoc, deleteDoc, doc, getDoc, orderBy, query, serverTimestamp, updateDoc } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
@@ -90,7 +101,6 @@
             aniversario: document.getElementById('aniversario'),
             btnAdd: document.getElementById('btn-adicionar'),
             listaUl: document.getElementById('lista-voluntarios'),
-            // MUDANÇA 2: Pegamos o elemento do título da lista
             tituloLista: document.getElementById('titulo-lista'),
             editModal: document.getElementById('edit-modal'),
             editNome: document.getElementById('edit-nome'),
@@ -100,7 +110,6 @@
             btnSalvar: document.getElementById('btn-salvar-edicao'),
             btnCancelar: document.getElementById('btn-cancelar-edicao'),
         };
-
         let currentEditingId = null;
 
         function autenticar() {
@@ -117,9 +126,7 @@
         function carregarVoluntarios() {
             const q = query(voluntariosCollection, orderBy("nome"));
             onSnapshot(q, (snapshot) => {
-                // MUDANÇA 3: Atualiza o texto do título com o total
                 ui.tituloLista.textContent = `Lista de Voluntários Cadastrados (TOTAL = ${snapshot.size})`;
-
                 ui.listaUl.innerHTML = '';
                 if (snapshot.empty) { ui.listaUl.innerHTML = '<li>Nenhum voluntário cadastrado.</li>'; }
                 snapshot.forEach(docSnapshot => {
@@ -179,7 +186,6 @@
             const id = e.target.dataset.id;
             if (!id) return;
             const docRef = doc(db, 'voluntarios', id);
-
             if (e.target.classList.contains('btn-delete')) {
                 if (confirm(`Tem certeza que deseja apagar o cadastro de ${e.target.parentElement.previousElementSibling.firstElementChild.textContent}? Esta ação não pode ser desfeita.`)) {
                     await deleteDoc(docRef);
