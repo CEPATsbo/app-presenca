@@ -4,46 +4,27 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Admin - Gerenciar Atividades</title>
+    <script type="module" src="/auth-guard.js"></script>
     <style>
-    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background-color: #f4f6f9; display: flex; flex-direction: column; align-items: center; min-height: 100vh; margin: 0; padding: 20px; box-sizing: border-box; }
-    
-    /* --- CÓDIGO ATUALIZADO DO MENU --- */
-    .admin-nav {
-        width: 100%;
-        max-width: 800px;
-        background-color: #fff;
-        padding: 15px;
-        margin-bottom: 30px;
-        border-radius: 8px;
-        box-shadow: 0 2px 5px rgba(0,0,0,0.1);
-        text-align: center;
-        display: flex;
-        flex-wrap: wrap; 
-        justify-content: center;
-        gap: 15px 25px; 
-    }
-    .admin-nav a { margin: 0; padding: 0; background-color: transparent; color: #1565c0; text-decoration: none; font-weight: bold; font-size: 1.1em; white-space: nowrap; border-radius: 0; }
-    .admin-nav a.active, .admin-nav a:hover { text-decoration: underline; background-color: transparent; color: #0d47a1; }
-    /* --- FIM DO CÓDIGO DO MENU --- */
-
-    .container { background-color: white; padding: 40px; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.15); width: 100%; max-width: 700px; }
-    h1, p { text-align: center; }
-    h1 { color: #333; margin-top: 0; }
-    p { color: #666; margin-top: -15px; margin-bottom: 30px; }
-    #lista-atividades { list-style-type: none; padding: 0; margin: 20px 0; }
-    .item-atividade { display: flex; justify-content: space-between; align-items: center; padding: 12px; border-bottom: 1px solid #eee; gap: 15px; }
-    .item-atividade:last-child { border-bottom: none; }
-    .atividade-info { display: flex; align-items: center; gap: 15px; font-size: 1.1em; flex-grow: 1; }
-    
-    /* --- BOTÃO APAGAR EM VERMELHO --- */
-    .btn-delete { background-color: #d32f2f; color: white; border: none; padding: 8px 12px; border-radius: 4px; cursor: pointer; flex-shrink: 0;}
-    .btn-delete:hover { background-color: #b71c1c; }
-
-    .add-form { display: flex; gap: 10px; margin-top: 30px; border-top: 1px solid #eee; padding-top: 20px; }
-    .add-form input { flex-grow: 1; padding: 12px; border: 1px solid #ccc; border-radius: 6px; font-size: 1em; }
-    .add-form button { background-color: #2e7d32; color: white; border: none; padding: 12px 20px; border-radius: 6px; font-weight: bold; cursor: pointer; }
-    input[type="checkbox"].toggle-ativo { width: 20px; height: 20px; cursor: pointer; flex-shrink: 0; }
-</style>
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background-color: #f4f6f9; display: flex; flex-direction: column; align-items: center; min-height: 100vh; margin: 0; padding: 20px; box-sizing: border-box; }
+        .admin-nav { width: 100%; max-width: 800px; background-color: #fff; padding: 15px; margin-bottom: 30px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); text-align: center; display: flex; flex-wrap: wrap; justify-content: center; gap: 15px 25px; }
+        .admin-nav a { margin: 0; padding: 0; background-color: transparent; color: #1565c0; text-decoration: none; font-weight: bold; font-size: 1.1em; white-space: nowrap; }
+        .admin-nav a.active, .admin-nav a:hover { text-decoration: underline; background-color: transparent; color: #0d47a1; }
+        .container { background-color: white; padding: 40px; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.15); width: 100%; max-width: 700px; }
+        h1, p { text-align: center; }
+        h1 { color: #333; margin-top: 0; }
+        p { color: #666; margin-top: -15px; margin-bottom: 30px; }
+        #lista-atividades { list-style-type: none; padding: 0; margin: 20px 0; }
+        .item-atividade { display: flex; justify-content: space-between; align-items: center; padding: 12px; border-bottom: 1px solid #eee; gap: 15px; }
+        .item-atividade:last-child { border-bottom: none; }
+        .atividade-info { display: flex; align-items: center; gap: 15px; font-size: 1.1em; flex-grow: 1; }
+        .btn-delete { background-color: #d32f2f; color: white; border: none; padding: 8px 12px; border-radius: 4px; cursor: pointer; flex-shrink: 0;}
+        .btn-delete:hover { background-color: #b71c1c; }
+        .add-form { display: flex; gap: 10px; margin-top: 30px; border-top: 1px solid #eee; padding-top: 20px; }
+        .add-form input { flex-grow: 1; padding: 12px; border: 1px solid #ccc; border-radius: 6px; font-size: 1em; }
+        .add-form button { background-color: #2e7d32; color: white; border: none; padding: 12px 20px; border-radius: 6px; font-weight: bold; cursor: pointer; }
+        input[type="checkbox"].toggle-ativo { width: 20px; height: 20px; cursor: pointer; flex-shrink: 0; }
+    </style>
 </head>
 <body>
     <nav class="admin-nav">
@@ -71,8 +52,6 @@
         import { getFirestore, collection, onSnapshot, addDoc, deleteDoc, doc, orderBy, query, updateDoc } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
 
         // =================================================================
-        //  COLE AQUI O SEU OBJETO 'firebaseConfig' COMPLETO
-        // =================================================================
         const firebaseConfig = {
   apiKey: "AIzaSyBV7RPjk3cFTqL-aIpflJcUojKg1ZXMLuU",
   authDomain: "voluntarios-ativos---cepat.firebaseapp.com",
@@ -83,8 +62,7 @@
 };
         // =================================================================
         
-        const SENHA_ADMIN = "admin"; // IMPORTANTE: Mude esta senha!
-
+        // 2. REMOVEMOS A SENHA DAQUI
         const app = initializeApp(firebaseConfig);
         const db = getFirestore(app);
         const atividadesCollection = collection(db, 'atividades');
@@ -93,22 +71,12 @@
         const novaAtividadeInput = document.getElementById('nova-atividade-nome');
         const btnAdicionar = document.getElementById('btn-adicionar');
 
-        function autenticar() {
-            const senhaDigitada = prompt("Por favor, digite a senha de administrador:", "");
-            if (senhaDigitada !== SENHA_ADMIN) {
-                alert("Senha incorreta!");
-                document.body.innerHTML = "<h1>Acesso Negado</h1>";
-                return false;
-            }
-            return true;
-        }
-
         function carregarAtividades() {
             const q = query(atividadesCollection, orderBy("nome"));
             onSnapshot(q, (snapshot) => {
                 listaUl.innerHTML = '';
                 if (snapshot.empty) {
-                    listaUl.innerHTML = '<li>Nenhuma atividade cadastrada ainda. Use o formulário abaixo para adicionar a primeira.</li>';
+                    listaUl.innerHTML = '<li>Nenhuma atividade cadastrada ainda.</li>';
                 }
                 snapshot.forEach(docSnapshot => {
                     const atividade = docSnapshot.data();
@@ -145,7 +113,7 @@
             if (!id) return;
 
             if (e.target.classList.contains('btn-delete')) {
-                if (confirm('Tem certeza que deseja apagar esta atividade PERMANENTEMENTE? Esta ação não pode ser desfeita.')) {
+                if (confirm('Tem certeza que deseja apagar esta atividade PERMANENTEMENTE?')) {
                     try {
                         await deleteDoc(doc(db, 'atividades', id));
                     } catch (error) {
@@ -153,9 +121,8 @@
                          alert("Ocorreu um erro ao apagar a atividade.");
                     }
                 }
-            }
-
-            if (e.target.classList.contains('toggle-ativo')) {
+            } else if (e.target.classList.contains('toggle-ativo')) {
+                // Adicionamos o 'else if' para garantir que o evento não seja de apagar
                 const novoStatus = e.target.checked;
                 const docRef = doc(db, 'atividades', id);
                 try {
@@ -166,10 +133,9 @@
                 }
             }
         });
-
-        if (autenticar()) {
-            carregarAtividades();
-        }
+        
+        // 3. REMOVEMOS O 'IF (AUTENTICAR())' DAQUI, POIS O PORTEIRO JÁ CUIDA DISSO
+        carregarAtividades();
     </script>
 </body>
 </html>
