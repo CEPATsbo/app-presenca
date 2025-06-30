@@ -4,52 +4,19 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Gerador de Relatórios - Presença Voluntária</title>
+    <script type="module" src="/auth-guard.js"></script>
     <style>
-    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background-color: #f4f6f9; display: flex; flex-direction: column; align-items: center; min-height: 100vh; margin: 0; padding: 20px; box-sizing: border-box; }
-    
-    /* --- CÓDIGO ATUALIZADO DO MENU --- */
-    .admin-nav {
-        width: 100%;
-        max-width: 800px;
-        background-color: #fff;
-        padding: 15px;
-        margin-bottom: 30px;
-        border-radius: 8px;
-        box-shadow: 0 2px 5px rgba(0,0,0,0.1);
-        text-align: center;
-        display: flex;
-        flex-wrap: wrap; 
-        justify-content: center;
-        gap: 15px 25px; 
-    }
-    .admin-nav a {
-        margin: 0;
-        padding: 0;
-        background-color: transparent;
-        color: #1565c0;
-        text-decoration: none;
-        font-weight: bold;
-        font-size: 1.1em;
-        white-space: nowrap; 
-        border-radius: 0;
-    }
-    .admin-nav a.active, 
-    .admin-nav a:hover {
-        text-decoration: underline; 
-        background-color: transparent;
-        color: #0d47a1;
-    }
-    /* --- FIM DO CÓDIGO DO MENU --- */
-
-    .container { background-color: white; padding: 40px; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.15); text-align: center; width: 100%; max-width: 500px; }
-    h1 { font-size: 2em; color: #0d47a1; margin-top: 0; margin-bottom: 1.5em; }
-    label { display: block; font-size: 1.1em; color: #333; margin-bottom: 10px; text-align: left; }
-    input[type="date"], textarea { width: 100%; padding: 12px; border: 1px solid #ccc; border-radius: 6px; font-family: inherit; font-size: 1.2em; box-sizing: border-box; margin-bottom: 20px; }
-    textarea { height: 150px; resize: vertical; font-size: 1em; }
-    button { width: 100%; padding: 15px; background-color: #1565c0; color: white; border: none; border-radius: 6px; font-size: 1.2em; font-weight: bold; cursor: pointer; transition: background-color 0.2s; }
-    button:hover { background-color: #0d47a1; }
-    p#feedback { font-weight: bold; min-height: 20px; margin-top: 15px;}
-</style>
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background-color: #f4f6f9; display: flex; flex-direction: column; align-items: center; min-height: 100vh; margin: 0; padding: 20px; box-sizing: border-box; }
+        .admin-nav { width: 100%; max-width: 900px; background-color: #fff; padding: 15px; margin-bottom: 30px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); text-align: center; display: flex; flex-wrap: wrap; justify-content: center; gap: 15px 25px; }
+        .admin-nav a { margin: 0; padding: 0; background-color: transparent; color: #1565c0; text-decoration: none; font-weight: bold; font-size: 1.1em; white-space: nowrap; }
+        .admin-nav a.active, .admin-nav a:hover { text-decoration: underline; background-color: transparent; color: #0d47a1; }
+        .container { background-color: white; padding: 40px; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.15); text-align: center; width: 100%; max-width: 500px; }
+        h1 { font-size: 2em; color: #0d47a1; margin-top: 0; margin-bottom: 1.5em; }
+        label { display: block; font-size: 1.1em; color: #333; margin-bottom: 10px; text-align: left; }
+        input[type="date"] { width: 100%; padding: 12px; border: 1px solid #ccc; border-radius: 6px; font-family: inherit; font-size: 1.2em; box-sizing: border-box; margin-bottom: 20px; }
+        button { width: 100%; padding: 15px; background-color: #1565c0; color: white; border: none; border-radius: 6px; font-size: 1.2em; font-weight: bold; cursor: pointer; transition: background-color 0.2s; }
+        button:hover { background-color: #0d47a1; }
+    </style>
 </head>
 <body>
     <nav class="admin-nav">
@@ -62,7 +29,6 @@
     <a href="/registro-manual.html">Registro Manual</a>
     <a href="/tv.html" target="_blank" title="Abrir painel em uma nova aba">Ver Painel da TV ↗</a>
 </nav>
-
     <div class="container">
         <h1>Gerador de Relatórios de Presença</h1>
         <label for="data-relatorio">Escolha a data do relatório:</label>
@@ -72,10 +38,13 @@
 
     <script>
         document.addEventListener('DOMContentLoaded', () => {
+            // REMOVEMOS TODA A LÓGICA DE SENHA DAQUI
             const dateInput = document.getElementById('data-relatorio');
             const generateBtn = document.getElementById('btn-gerar-relatorio');
-            const hoje = new Date().toISOString().split('T')[0];
-            dateInput.value = hoje;
+            
+            // Define a data de hoje como padrão
+            dateInput.value = new Date().toISOString().split('T')[0];
+            
             if (generateBtn) {
                 generateBtn.addEventListener('click', () => {
                     const dataSelecionada = dateInput.value;
