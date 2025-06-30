@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Admin - Registro Manual de Presença</title>
+    <script type="module" src="/auth-guard.js"></script>
     <style>
         body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background-color: #f4f6f9; display: flex; flex-direction: column; align-items: center; min-height: 100vh; margin: 0; padding: 20px; box-sizing: border-box; }
         .admin-nav { width: 100%; max-width: 900px; background-color: #fff; padding: 15px; margin-bottom: 30px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); text-align: center; display: flex; flex-wrap: wrap; justify-content: center; gap: 15px 25px; }
@@ -17,8 +18,9 @@
         .item-registro { display: flex; justify-content: space-between; align-items: center; padding: 12px; border-bottom: 1px solid #eee; gap: 15px; }
         .item-registro:last-child { border-bottom: none; }
         .voluntario-nome { font-size: 1.2em; font-weight: 500; flex-grow: 1; }
-        .item-registro select { padding: 8px; border-radius: 6px; border: 1px solid #ccc; margin-right: 10px; }
+        .item-registro select { padding: 8px; border-radius: 6px; border: 1px solid #ccc; margin-right: 10px; max-width: 200px; }
         .btn-registrar { background-color: #2e7d32; color: white; border: none; padding: 8px 15px; border-radius: 4px; cursor: pointer; font-weight: bold; }
+        .btn-registrar:disabled { background-color: #aaa; }
     </style>
 </head>
 <body>
@@ -44,6 +46,7 @@
         import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
         import { getFirestore, collection, onSnapshot, doc, getDocs, setDoc, serverTimestamp, query, where, orderBy, updateDoc } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
 
+        // =================================================================
         const firebaseConfig = {
   apiKey: "AIzaSyBV7RPjk3cFTqL-aIpflJcUojKg1ZXMLuU",
   authDomain: "voluntarios-ativos---cepat.firebaseapp.com",
@@ -52,22 +55,14 @@
   messagingSenderId: "66122858261",
   appId: "1:66122858261:web:7fa21f1805463b5c08331c"
 };
-        const SENHA_ADMIN = "admin";
-
+        // =================================================================
+        
+        // 2. REMOVEMOS A SENHA DAQUI
         const app = initializeApp(firebaseConfig);
         const db = getFirestore(app);
         
         const listaUl = document.getElementById('lista-nao-registrados');
         let listaDeAtividades = [];
-
-        function autenticar() {
-            const senha = sessionStorage.getItem('senhaAdminCePAT') || prompt("Por favor, digite a senha de administrador:", "");
-            if (senha === SENHA_ADMIN) {
-                sessionStorage.setItem('senhaAdminCePAT', senha);
-                return true;
-            }
-            alert("Senha incorreta!"); document.body.innerHTML = "<h1>Acesso Negado</h1>"; return false;
-        }
 
         function getDataDeHojeSP() {
             const formatador = new Intl.DateTimeFormat('en-CA', { year: 'numeric', month: '2-digit', day: '2-digit', timeZone: 'America/Sao_Paulo' });
@@ -75,48 +70,45 @@
         }
 
         async function carregarDados() {
-            const atividadesQuery = query(collection(db, "atividades"), where("ativo", "==", true), orderBy("nome"));
-            const atividadesSnapshot = await getDocs(atividadesQuery);
-            listaDeAtividades = atividadesSnapshot.docs.map(doc => doc.data().nome);
+            try {
+                const atividadesQuery = query(collection(db, "atividades"), where("ativo", "==", true), orderBy("nome"));
+                const atividadesSnapshot = await getDocs(atividadesQuery);
+                listaDeAtividades = atividadesSnapshot.docs.map(doc => doc.data().nome);
 
-            const voluntariosQuery = query(collection(db, 'voluntarios'), where("statusVoluntario", "==", "ativo"), orderBy("nome"));
-            onSnapshot(voluntariosQuery, (voluntariosSnapshot) => {
-                const presencasQuery = query(collection(db, 'presencas'), where("data", "==", getDataDeHojeSP()));
-                onSnapshot(presencasQuery, (presencasSnapshot) => {
-                    const todosOsVoluntariosAtivos = voluntariosSnapshot.docs.map(doc => ({ id: doc.id, nome: doc.data().nome }));
-                    const presentesHoje = presencasSnapshot.docs.map(doc => doc.data().nome);
-                    
-                    const naoRegistrados = todosOsVoluntariosAtivos.filter(v => !presentesHoje.includes(v.nome));
-                    renderizarLista(naoRegistrados);
+                const voluntariosQuery = query(collection(db, 'voluntarios'), where("statusVoluntario", "==", "ativo"), orderBy("nome"));
+                onSnapshot(voluntariosQuery, (voluntariosSnapshot) => {
+                    const presencasQuery = query(collection(db, 'presencas'), where("data", "==", getDataDeHojeSP()));
+                    onSnapshot(presencasQuery, (presencasSnapshot) => {
+                        const todosOsVoluntariosAtivos = voluntariosSnapshot.docs.map(doc => ({ id: doc.id, nome: doc.data().nome }));
+                        const presentesHoje = presencasSnapshot.docs.map(doc => doc.data().nome);
+                        const naoRegistrados = todosOsVoluntariosAtivos.filter(v => !presentesHoje.includes(v.nome));
+                        renderizarLista(naoRegistrados);
+                    });
                 });
-            });
+            } catch (error) {
+                console.error("Erro ao carregar dados iniciais:", error);
+                listaUl.innerHTML = '<li>Ocorreu um erro ao carregar os dados. Verifique o console.</li>';
+            }
         }
 
         function renderizarLista(voluntarios) {
             listaUl.innerHTML = '';
             if (voluntarios.length === 0) {
-                listaUl.innerHTML = '<li>Todos os voluntários ativos já registraram presença hoje!</li>';
+                listaUl.innerHTML = '<li>Todos os voluntários ativos já registraram presença hoje! 🎉</li>';
                 return;
             }
             voluntarios.forEach(voluntario => {
                 const li = document.createElement('li');
                 li.className = 'item-registro';
-
                 const selectHTML = `<select class="atividade-select">${listaDeAtividades.map(a => `<option value="${a}">${a}</option>`).join('')}</select>`;
-                
-                li.innerHTML = `
-                    <span class="voluntario-nome">${voluntario.nome}</span>
-                    <div>
-                        ${selectHTML}
-                        <button data-nome="${voluntario.nome}" data-id="${voluntario.id}" class="btn-registrar">Registrar</button>
-                    </div>
-                `;
+                li.innerHTML = `<span class="voluntario-nome">${voluntario.nome}</span><div>${selectHTML}<button data-nome="${voluntario.nome}" data-id="${voluntario.id}" class="btn-registrar">Registrar</button></div>`;
                 listaUl.appendChild(li);
             });
         }
 
         listaUl.addEventListener('click', async (e) => {
             if (e.target.classList.contains('btn-registrar')) {
+                e.target.disabled = true;
                 const nome = e.target.dataset.nome;
                 const voluntarioId = e.target.dataset.id;
                 const select = e.target.previousElementSibling;
@@ -126,8 +118,8 @@
                 
                 if (confirm(`Confirmar presença de ${nome} na atividade "${atividade}"?`)) {
                     const dataFormatada = getDataDeHojeSP();
-                    const idDocumento = `${dataFormatada}_${nome.replace(/\s+/g, '_')}`;
-                    const docRefPresenca = doc(db, "presencas", idDocumento);
+                    const idDocumentoPresenca = `${dataFormatada}_${nome.replace(/\s+/g, '_')}`;
+                    const docRefPresenca = doc(db, "presencas", idDocumentoPresenca);
                     
                     try {
                         await setDoc(docRefPresenca, {
@@ -150,14 +142,16 @@
                     } catch (error) {
                         console.error("Erro ao registrar presença manual:", error);
                         alert("Ocorreu um erro ao registrar a presença.");
+                        e.target.disabled = false;
                     }
+                } else {
+                    e.target.disabled = false;
                 }
             }
         });
 
-        if (autenticar()) {
-            carregarDados();
-        }
+        // 3. AGORA CHAMAMOS A FUNÇÃO DIRETAMENTE
+        carregarDados();
     </script>
 </body>
 </html>
