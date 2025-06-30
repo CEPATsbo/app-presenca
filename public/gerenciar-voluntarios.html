@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Admin - Gerenciar Voluntários</title>
+    <script type="module" src="/auth-guard.js"></script>
     <style>
         body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background-color: #f4f6f9; display: flex; flex-direction: column; align-items: center; min-height: 100vh; margin: 0; padding: 20px; box-sizing: border-box; }
         .admin-nav { width: 100%; max-width: 900px; background-color: #fff; padding: 15px; margin-bottom: 30px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); text-align: center; display: flex; flex-wrap: wrap; justify-content: center; gap: 15px 25px; }
@@ -94,8 +95,7 @@
   messagingSenderId: "66122858261",
   appId: "1:66122858261:web:7fa21f1805463b5c08331c"
 };
-        const SENHA_ADMIN = "admin";
-
+        
         const app = initializeApp(firebaseConfig);
         const db = getFirestore(app);
         const voluntariosCollection = collection(db, 'voluntarios');
@@ -118,33 +118,22 @@
         };
         let currentEditingId = null;
 
-        function autenticar() {
-            const senha = sessionStorage.getItem('senhaAdminCePAT') || prompt("Senha de administrador:");
-            if (senha === SENHA_ADMIN) {
-                sessionStorage.setItem('senhaAdminCePAT', senha);
-                return true;
-            }
-            alert("Senha incorreta!"); document.body.innerHTML = "<h1>Acesso Negado</h1>"; return false;
-        }
-
         function carregarVoluntarios() {
             const anoVigente = new Date().getFullYear();
             const q = query(voluntariosCollection, orderBy("nome"));
             onSnapshot(q, (snapshot) => {
                 ui.tituloLista.textContent = `Lista de Voluntários Cadastrados (TOTAL = ${snapshot.size})`;
                 ui.listaUl.innerHTML = '';
-                if (snapshot.empty) { ui.listaUl.innerHTML = '<li>Nenhum voluntário cadastrado.</li>'; return; }
+                if (snapshot.empty) { ui.listaUl.innerHTML = '<li>Nenhum voluntário cadastrado.</li>'; }
                 snapshot.forEach(docSnapshot => {
                     const v = docSnapshot.data();
                     const id = docSnapshot.id;
-                    
                     let statusClasse = 'status-pendente';
                     if (v.statusVoluntario === 'inativo') {
                         statusClasse = 'status-inativo';
                     } else if (v.tasvAssinadoAno === anoVigente) {
                         statusClasse = 'status-ativo';
                     }
-                    
                     const li = document.createElement('li');
                     li.className = `item-voluntario ${statusClasse}`;
                     li.innerHTML = `
@@ -172,36 +161,45 @@
         const handlePhone = (event) => {
             let input = event.target;
             input.value = phoneMask(input.value);
-        }
+        };
         const phoneMask = (value) => {
             if (!value) return "";
             value = value.replace(/\D/g,'');
             value = value.replace(/(\d{2})(\d)/,"($1) $2");
             value = value.replace(/(\d)(\d{4})$/,"$1-$2");
             return value;
-        }
-
-        ui.btnAdd.addEventListener('click', async () => {
-            const nome = ui.nome.value.trim();
-            if (!nome) return alert("O campo 'Nome Completo' é obrigatório.");
-            try {
-                await addDoc(voluntariosCollection, {
-                    nome: nome,
-                    endereco: ui.endereco.value.trim(),
-                    telefone: ui.telefone.value.trim(),
-                    aniversario: ui.aniversario.value.trim(),
-                    statusVoluntario: 'ativo',
-                    ultimaPresenca: null,
-                    tasvAssinadoAno: null,
-                    criadoEm: serverTimestamp()
-                });
-                ui.nome.value = ''; ui.endereco.value = ''; ui.telefone.value = ''; ui.aniversario.value = '';
-            } catch (error) { console.error("Erro ao adicionar voluntário:", error); alert("Ocorreu um erro ao adicionar."); }
-        });
+        };
 
         function setupEventListeners() {
             ui.telefone.addEventListener('input', handlePhone);
             ui.editTelefone.addEventListener('input', handlePhone);
+
+            ui.btnAdd.addEventListener('click', async () => {
+                const nome = ui.nome.value.trim();
+                if (!nome) return alert("O campo 'Nome Completo' é obrigatório.");
+                try {
+                    await addDoc(voluntariosCollection, {
+                        nome: nome,
+                        endereco: ui.endereco.value.trim(),
+                        telefone: ui.telefone.value.trim(),
+                        aniversario: ui.aniversario.value.trim(),
+                        statusVoluntario: 'ativo',
+                        ultimaPresenca: null,
+                        tasvAssinadoAno: null,
+                        criadoEm: serverTimestamp()
+                    });
+                    ui.nome.value = ''; ui.endereco.value = ''; ui.telefone.value = ''; ui.aniversario.value = '';
+                } catch (error) { console.error("Erro ao adicionar voluntário:", error); alert("Ocorreu um erro ao adicionar."); }
+            });
+
+            ui.listaUl.addEventListener('change', async (e) => {
+                 if (e.target.classList.contains('tasv-checkbox')) {
+                    const id = e.target.dataset.id;
+                    const anoVigente = new Date().getFullYear();
+                    const novoValorTasv = e.target.checked ? anoVigente : null;
+                    await updateDoc(doc(db, 'voluntarios', id), { tasvAssinadoAno: novoValorTasv });
+                }
+            });
 
             ui.listaUl.addEventListener('click', async (e) => {
                 const id = e.target.dataset.id;
@@ -223,15 +221,6 @@
                         ui.editAniversario.value = data.aniversario || '';
                         ui.editModal.style.display = 'flex';
                     }
-                }
-            });
-
-            ui.tabelaBody.addEventListener('change', async (e) => {
-                 if (e.target.classList.contains('tasv-checkbox')) {
-                    const id = e.target.dataset.id;
-                    const anoVigente = new Date().getFullYear();
-                    const novoValorTasv = e.target.checked ? anoVigente : null;
-                    await updateDoc(doc(db, 'voluntarios', id), { tasvAssinadoAno: novoValorTasv });
                 }
             });
             
@@ -256,10 +245,8 @@
             });
         }
 
-        if (autenticar()) {
-            carregarVoluntarios();
-            setupEventListeners();
-        }
+        carregarVoluntarios();
+        setupEventListeners();
     </script>
 </body>
 </html>
