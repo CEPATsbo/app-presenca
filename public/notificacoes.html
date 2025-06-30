@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Admin - Notificações</title>
+    <script type="module" src="/auth-guard.js"></script>
     <style>
         body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background-color: #f4f6f9; display: flex; flex-direction: column; align-items: center; min-height: 100vh; margin: 0; padding: 20px; box-sizing: border-box; }
         .admin-nav { width: 100%; max-width: 800px; background-color: #fff; padding: 15px; margin-bottom: 30px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); text-align: center; display: flex; flex-wrap: wrap; justify-content: center; gap: 15px 25px; }
@@ -26,6 +27,9 @@
         .radio-group input[type="radio"] { width: auto; margin: 0 15px 0 0; transform: scale(1.2); }
         .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
         .full-width { grid-column: 1 / -1; }
+        #campos-recorrente .weekdays { display: flex; justify-content: space-around; margin-bottom: 15px; font-size: 0.9em;}
+        #campos-recorrente .weekdays label { display: flex; flex-direction: column; align-items: center; cursor: pointer; }
+        #campos-recorrente input[type="radio"] { width: auto; margin-bottom: 5px; }
         .agendamentos-pendentes ul { list-style-type: none; padding: 0; }
         .agendamentos-pendentes li { background-color: #fafafa; padding: 15px; border-radius: 6px; margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center; gap: 15px; }
         .btn-delete { background-color: #c62828; color: white; border: none; padding: 8px 12px; border-radius: 4px; cursor: pointer; }
@@ -49,12 +53,8 @@
             <label><input type="radio" name="tipoEnvio" value="unico"> Agendar Envio Único</label>
             <label><input type="radio" name="tipoEnvio" value="recorrente"> Criar Agendamento Recorrente</label>
         </div>
-        <div class="full-width">
-            <input type="text" id="titulo-notificacao" placeholder="Título da Notificação" maxlength="50">
-        </div>
-        <div class="full-width">
-            <textarea id="corpo-notificacao" placeholder="Corpo da mensagem..." maxlength="150"></textarea>
-        </div>
+        <div class="full-width"><input type="text" id="titulo-notificacao" placeholder="Título da Notificação" maxlength="50"></div>
+        <div class="full-width"><textarea id="corpo-notificacao" placeholder="Corpo da mensagem..." maxlength="150"></textarea></div>
         <div id="campos-agendamento-unico" class="form-grid hidden">
             <p class="full-width">Enviar uma única vez em:</p>
             <div><label for="data-envio">Data de Envio:</label><input type="date" id="data-envio"></div>
@@ -93,7 +93,6 @@
   messagingSenderId: "66122858261",
   appId: "1:66122858261:web:7fa21f1805463b5c08331c"
 };
-        const SENHA_ADMIN = "admin";
         
         const app = initializeApp(firebaseConfig);
         const db = getFirestore(app);
@@ -113,8 +112,6 @@
             camposRecorrente: document.getElementById('campos-recorrente')
         };
         
-        function autenticar() { const p = sessionStorage.getItem('senhaAdminCePAT') || prompt("Senha:"); if (p === SENHA_ADMIN) { sessionStorage.setItem('senhaAdminCePAT', p); return true; } alert("Senha incorreta!"); document.body.innerHTML = "<h1>Acesso Negado</h1>"; return false; }
-
         function carregarAgendamentos() {
             const q = query(agendamentosCollection, orderBy("criadoEm", "desc"));
             onSnapshot(q, (snapshot) => {
@@ -145,26 +142,18 @@
             const titulo = ui.titulo.value.trim(), corpo = ui.corpo.value.trim();
             if (!titulo || !corpo) return alert("Preencha título e corpo da mensagem.");
             if (!confirm("Enviar esta notificação para todos agora?")) return;
-            
             ui.btnAcao.disabled = true;
             ui.feedback.textContent = "Conectando com o robô de envio...";
-            
             try {
                 const functionUrl = "https://southamerica-east1-voluntarios-ativos---cepat.cloudfunctions.net/enviarNotificacaoImediata";
                 const response = await fetch(functionUrl, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
+                    method: 'POST', headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ titulo, corpo })
                 });
-
                 const resultado = await response.json();
-                if (!response.ok) {
-                    throw new Error(resultado.error || `Erro do servidor: ${response.status}`);
-                }
-                
+                if (!response.ok) throw new Error(resultado.error || `Erro do servidor: ${response.status}`);
                 ui.feedback.textContent = `Sucesso! Enviado para ${resultado.successCount} de ${resultado.totalCount} inscritos.`;
                 ui.feedback.style.color = "green";
-
             } catch (error) {
                 console.error("Erro ao enviar notificação via fetch:", error);
                 ui.feedback.textContent = `Erro: ${error.message}`;
@@ -176,7 +165,7 @@
 
         async function agendarUnico() {
             const titulo = ui.titulo.value.trim(), corpo = ui.corpo.value.trim(), data = ui.dataUnico.value, hora = ui.horaUnico.value;
-            if (!titulo || !corpo || !data || !hora) return alert("Preencha todos os campos para agendamento.");
+            if (!titulo || !corpo || !data || !hora) return alert("Preencha todos os campos.");
             const dataDeEnvio = new Date(`${data}T${hora}`);
             if (dataDeEnvio < new Date()) return alert("A data e hora devem ser no futuro.");
             try {
@@ -188,7 +177,7 @@
 
         async function salvarRecorrente() {
             const titulo = ui.titulo.value.trim(), corpo = ui.corpo.value.trim(), hora = ui.horaRecorrente.value, diaEl = document.querySelector('input[name="diaDaSemana"]:checked');
-            if (!titulo || !corpo || !hora || !diaEl) return alert("Preencha título, corpo, hora e dia da semana.");
+            if (!titulo || !corpo || !hora || !diaEl) return alert("Preencha todos os campos.");
             try {
                 await addDoc(agendamentosCollection, { titulo, corpo, hora, tipo: 'recorrente', diaDaSemana: parseInt(diaEl.value), criadoEm: Timestamp.now() });
                 alert("Agendamento recorrente salvo com sucesso!");
@@ -215,17 +204,14 @@
 
         ui.listaUl.addEventListener('click', async (e) => {
             if (e.target.classList.contains('btn-delete')) {
-                const id = e.target.dataset.id;
                 if (confirm('Tem certeza que deseja excluir este agendamento?')) {
-                    await deleteDoc(doc(db, 'notificacoes_agendadas', id));
+                    await deleteDoc(doc(db, 'notificacoes_agendadas', e.target.dataset.id));
                 }
             }
         });
 
-        if (autenticar()) { 
-            atualizarUI();
-            carregarAgendamentos();
-        }
+        atualizarUI();
+        carregarAgendamentos();
     </script>
 </body>
 </html>
