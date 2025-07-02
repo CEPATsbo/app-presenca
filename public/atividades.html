@@ -7,7 +7,7 @@
     <script type="module" src="/auth-guard.js"></script>
     <style>
         body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background-color: #f4f6f9; display: flex; flex-direction: column; align-items: center; min-height: 100vh; margin: 0; padding: 20px; box-sizing: border-box; }
-        .admin-nav { width: 100%; max-width: 800px; background-color: #fff; padding: 15px; margin-bottom: 30px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); text-align: center; display: flex; flex-wrap: wrap; justify-content: center; gap: 15px 25px; }
+        .admin-nav { width: 100%; max-width: 900px; background-color: #fff; padding: 15px; margin-bottom: 30px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); text-align: center; display: flex; flex-wrap: wrap; justify-content: center; gap: 15px 25px; }
         .admin-nav a { margin: 0; padding: 0; background-color: transparent; color: #1565c0; text-decoration: none; font-weight: bold; font-size: 1.1em; white-space: nowrap; }
         .admin-nav a.active, .admin-nav a:hover { text-decoration: underline; background-color: transparent; color: #0d47a1; }
         .container { background-color: white; padding: 40px; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.15); width: 100%; max-width: 700px; }
@@ -18,6 +18,7 @@
         .item-atividade { display: flex; justify-content: space-between; align-items: center; padding: 12px; border-bottom: 1px solid #eee; gap: 15px; }
         .item-atividade:last-child { border-bottom: none; }
         .atividade-info { display: flex; align-items: center; gap: 15px; font-size: 1.1em; flex-grow: 1; }
+        .atividade-info input[type="color"] { border: 1px solid #ccc; width: 35px; height: 35px; cursor: pointer; background-color: transparent; padding: 2px; border-radius: 4px; }
         .btn-delete { background-color: #d32f2f; color: white; border: none; padding: 8px 12px; border-radius: 4px; cursor: pointer; flex-shrink: 0;}
         .btn-delete:hover { background-color: #b71c1c; }
         .add-form { display: flex; gap: 10px; margin-top: 30px; border-top: 1px solid #eee; padding-top: 20px; }
@@ -41,7 +42,7 @@
 </nav>
     <div class="container">
         <h1>Gerenciar Atividades</h1>
-        <p>Habilite (caixa marcada) ou desabilite atividades, apague ou crie novas.</p>
+        <p>Habilite, defina uma cor, apague ou crie novas atividades.</p>
         <ul id="lista-atividades"><li>Carregando atividades...</li></ul>
         <div class="add-form">
             <input type="text" id="nova-atividade-nome" placeholder="Nome da nova atividade">
@@ -51,9 +52,9 @@
 
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
-        import { getFirestore, collection, onSnapshot, addDoc, deleteDoc, doc, orderBy, query, updateDoc } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
+        import { getFirestore, collection, onSnapshot, addDoc, deleteDoc, doc, orderBy, query, updateDoc, serverTimestamp, getDoc } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
+        import { getAuth } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-auth.js";
 
-        // =================================================================
         const firebaseConfig = {
   apiKey: "AIzaSyBV7RPjk3cFTqL-aIpflJcUojKg1ZXMLuU",
   authDomain: "voluntarios-ativos---cepat.firebaseapp.com",
@@ -62,12 +63,12 @@
   messagingSenderId: "66122858261",
   appId: "1:66122858261:web:7fa21f1805463b5c08331c"
 };
-        // =================================================================
         
-        // 2. REMOVEMOS A SENHA DAQUI
         const app = initializeApp(firebaseConfig);
         const db = getFirestore(app);
+        const auth = getAuth(app);
         const atividadesCollection = collection(db, 'atividades');
+        const logAuditoriaCollection = collection(db, 'log_auditoria');
 
         const listaUl = document.getElementById('lista-atividades');
         const novaAtividadeInput = document.getElementById('nova-atividade-nome');
@@ -87,7 +88,8 @@
                     li.className = 'item-atividade';
                     li.innerHTML = `
                         <div class="atividade-info">
-                            <input type="checkbox" data-id="${id}" class="toggle-ativo" title="Habilitar/Desabilitar atividade" ${atividade.ativo ? 'checked' : ''}>
+                            <input type="checkbox" data-id="${id}" class="toggle-ativo" title="Habilitar/Desabilitar" ${atividade.ativo ? 'checked' : ''}>
+                            <input type="color" data-id="${id}" class="seletor-cor" title="Definir cor da atividade" value="${atividade.cor || '#cccccc'}">
                             <span>${atividade.nome}</span>
                         </div>
                         <button data-id="${id}" class="btn-delete" title="Apagar atividade permanentemente">Apagar</button>
@@ -99,9 +101,17 @@
 
         btnAdicionar.addEventListener('click', async () => {
             const nome = novaAtividadeInput.value.trim();
-            if (nome) {
+            const user = auth.currentUser;
+            if (nome && user) {
                 try {
-                    await addDoc(atividadesCollection, { nome: nome, ativo: true });
+                    const novaAtividade = { nome: nome, ativo: true, cor: '#808080' };
+                    await addDoc(atividadesCollection, novaAtividade);
+                    await addDoc(logAuditoriaCollection, {
+                        acao: "CRIOU_ATIVIDADE",
+                        autor: { uid: user.uid, nome: user.displayName || user.email },
+                        timestamp: serverTimestamp(),
+                        detalhes: novaAtividade
+                    });
                     novaAtividadeInput.value = '';
                 } catch (error) {
                     console.error("Erro ao adicionar atividade: ", error);
@@ -109,34 +119,50 @@
                 }
             }
         });
-
-        listaUl.addEventListener('click', async (e) => {
+        
+        listaUl.addEventListener('input', async (e) => {
             const id = e.target.dataset.id;
             if (!id) return;
+            const docRef = doc(db, 'atividades', id);
+            if (e.target.classList.contains('toggle-ativo')) {
+                await updateDoc(docRef, { ativo: e.target.checked });
+            } else if (e.target.classList.contains('seletor-cor')) {
+                await updateDoc(docRef, { cor: e.target.value });
+            }
+        });
 
+        listaUl.addEventListener('click', async (e) => {
             if (e.target.classList.contains('btn-delete')) {
+                const id = e.target.dataset.id;
+                const user = auth.currentUser;
                 if (confirm('Tem certeza que deseja apagar esta atividade PERMANENTEMENTE?')) {
                     try {
-                        await deleteDoc(doc(db, 'atividades', id));
+                        // --- NOVA LÓGICA DE AUDITORIA ---
+                        // 1. Pega os dados da atividade ANTES de apagar
+                        const docRef = doc(db, 'atividades', id);
+                        const docSnap = await getDoc(docRef);
+                        const atividadeApagada = docSnap.data();
+
+                        // 2. Apaga a atividade
+                        await deleteDoc(docRef);
+                        
+                        // 3. Registra a ação no "livro de ocorrências"
+                        if (user && atividadeApagada) {
+                            await addDoc(logAuditoriaCollection, {
+                                acao: "APAGOU_ATIVIDADE",
+                                autor: { uid: user.uid, nome: user.displayName || user.email },
+                                timestamp: serverTimestamp(),
+                                detalhes: atividadeApagada
+                            });
+                        }
                     } catch (error) {
                          console.error("Erro ao apagar atividade: ", error);
                          alert("Ocorreu um erro ao apagar a atividade.");
                     }
                 }
-            } else if (e.target.classList.contains('toggle-ativo')) {
-                // Adicionamos o 'else if' para garantir que o evento não seja de apagar
-                const novoStatus = e.target.checked;
-                const docRef = doc(db, 'atividades', id);
-                try {
-                    await updateDoc(docRef, { ativo: novoStatus });
-                } catch (error) {
-                    console.error("Erro ao atualizar status da atividade: ", error);
-                    alert("Ocorreu um erro ao atualizar o status.");
-                }
             }
         });
         
-        // 3. REMOVEMOS O 'IF (AUTENTICAR())' DAQUI, POIS O PORTEIRO JÁ CUIDA DISSO
         carregarAtividades();
     </script>
     <script type="module" src="/logout.js"></script>
