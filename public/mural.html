@@ -40,7 +40,8 @@
 
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
-        import { getFirestore, doc, setDoc, getDoc } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
+        import { getFirestore, doc, setDoc, getDoc, collection, addDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
+        import { getAuth } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-auth.js";
 
         // =================================================================
         const firebaseConfig = {
@@ -53,9 +54,10 @@
 };
         // =================================================================
         
-        // 2. REMOVEMOS A SENHA DAQUI
         const app = initializeApp(firebaseConfig);
         const db = getFirestore(app);
+        const auth = getAuth(app); // Pega a instância da autenticação
+        const logAuditoriaCollection = collection(db, 'log_auditoria');
 
         const txtMural = document.getElementById('texto-mural');
         const btnSalvar = document.getElementById('btn-salvar');
@@ -73,11 +75,36 @@
             }
         }
 
+        async function registrarLog(acao, detalhes) {
+            const user = auth.currentUser;
+            if (!user) return;
+            try {
+                await addDoc(logAuditoriaCollection, {
+                    acao: acao,
+                    autor: { uid: user.uid, nome: user.displayName || user.email },
+                    timestamp: serverTimestamp(),
+                    detalhes: detalhes
+                });
+            } catch (error) {
+                console.error("Erro ao registrar log de auditoria:", error);
+            }
+        }
+
         btnSalvar.addEventListener('click', async () => {
             const novaMensagem = txtMural.value;
             feedback.textContent = "Salvando...";
+
             try {
+                // Pega a mensagem antiga ANTES de salvar a nova
+                const docAntigo = await getDoc(muralRef);
+                const mensagemAntiga = docAntigo.exists() ? docAntigo.data().mensagem : "";
+                
+                // Salva a nova mensagem
                 await setDoc(muralRef, { mensagem: novaMensagem });
+
+                // Registra o log de auditoria
+                await registrarLog("ALTEROU_MURAL", { mensagemAntiga: mensagemAntiga, mensagemNova: novaMensagem });
+                
                 feedback.textContent = "Mensagem salva com sucesso!";
                 feedback.style.color = "green";
             } catch (error) {
@@ -87,7 +114,7 @@
             }
         });
 
-        // 3. AGORA CARREGAMOS A MENSAGEM DIRETAMENTE, POIS O PORTEIRO JÁ FEZ A VERIFICAÇÃO
+        // Carrega a mensagem do mural assim que a página é acessada
         carregarMensagemAtual();
     </script>
     <script type="module" src="/logout.js"></script>
