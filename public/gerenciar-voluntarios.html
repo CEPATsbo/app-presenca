@@ -7,10 +7,10 @@
     <script type="module" src="/auth-guard.js"></script>
     <style>
         body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background-color: #f4f6f9; display: flex; flex-direction: column; align-items: center; min-height: 100vh; margin: 0; padding: 20px; box-sizing: border-box; }
-        .admin-nav { width: 100%; max-width: 1000px; background-color: #fff; padding: 15px; margin-bottom: 30px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); text-align: center; display: flex; flex-wrap: wrap; justify-content: center; gap: 15px 25px; }
+        .admin-nav { width: 100%; max-width: 900px; background-color: #fff; padding: 15px; margin-bottom: 30px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); text-align: center; display: flex; flex-wrap: wrap; justify-content: center; gap: 15px 25px; }
         .admin-nav a { margin: 0; padding: 0; background-color: transparent; color: #1565c0; text-decoration: none; font-weight: bold; font-size: 1.1em; white-space: nowrap; }
         .admin-nav a.active, .admin-nav a:hover { text-decoration: underline; background-color: transparent; color: #0d47a1; }
-        .container { background-color: white; padding: 40px; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.15); width: 100%; max-width: 1000px; margin-bottom: 30px; }
+        .container { background-color: white; padding: 40px; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.15); width: 100%; max-width: 900px; margin-bottom: 30px; }
         h1, h2 { text-align: center; color: #333; margin-top: 0; }
         p { color: #666; text-align: center; margin-top: -15px; margin-bottom: 30px; }
         .form-container { border-bottom: 1px solid #ddd; padding-bottom: 30px; margin-bottom: 30px; }
@@ -19,20 +19,22 @@
         .form-item label { margin-bottom: 5px; font-weight: bold; color: #555; }
         .form-item input { padding: 10px; border-radius: 6px; border: 1px solid #ccc; font-size: 1em; }
         .add-button { grid-column: 1 / -1; padding: 12px; background-color: #2e7d32; color: white; border: none; border-radius: 6px; font-size: 1.1em; font-weight: bold; cursor: pointer; margin-top: 10px; }
-        .lista-container table { width: 100%; border-collapse: collapse; margin-top: 20px; table-layout: fixed; }
-        .lista-container th, .lista-container td { border: 1px solid #ddd; padding: 10px; text-align: left; vertical-align: middle; word-wrap: break-word; }
-        .lista-container th { background-color: #f2f2f2; }
-        .status-indicator { display: inline-block; width: 14px; height: 14px; border-radius: 50%; }
-        .status-ativo { background-color: #4CAF50; }
-        .status-inativo { background-color: #FF9800; }
-        .status-pendente { background-color: #f44336; }
-        .actions { display: flex; flex-direction: column; gap: 8px; width: 120px; }
+        #lista-voluntarios { list-style-type: none; padding: 0; margin: 20px 0; }
+        .item-voluntario { display: flex; justify-content: space-between; align-items: center; padding: 15px; border-bottom: 1px solid #eee; gap: 15px; border-left-width: 8px; border-left-style: solid; transition: border-left-color 0.3s ease-in-out; margin-bottom: 8px; border-radius: 0 8px 8px 0; background-color: #fafafa; }
+        .status-ativo { border-left-color: #4CAF50; } /* Verde */
+        .status-inativo { border-left-color: #FF9800; } /* Laranja */
+        .status-pendente { border-left-color: #f44336; } /* Vermelho */
+        .voluntario-info { flex-grow: 1; }
+        .voluntario-info strong { font-size: 1.2em; display: block; margin-bottom: 4px;}
+        .voluntario-info small { color: #777; }
+        .actions { display: flex; flex-direction: column; gap: 8px; align-items: center; }
         .actions-buttons { display: flex; gap: 10px; }
-        .actions-buttons button { padding: 8px 12px; border-radius: 4px; cursor: pointer; border: 1px solid #ccc; font-size: 0.9em; width: 100%; }
+        .actions-buttons button { padding: 8px 12px; border-radius: 4px; cursor: pointer; border: 1px solid #ccc; font-size: 0.9em; }
         .btn-edit { background-color: #1976d2; color: white; border-color: #1976d2;}
-        .btn-toggle { background-color: #ffb300; width: 100%; }
+        .btn-toggle { background-color: #ffb300; width: 100%;}
         .btn-delete { background-color: #c62828; color: white; border-color: #c62828; }
-        .td-center { text-align: center; }
+        .tasv-container { text-align: center; padding-left: 15px; }
+        .tasv-container label { font-size: 0.8em; font-weight: bold; }
         .tasv-checkbox { transform: scale(1.5); cursor: pointer; }
         .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.6); display: none; justify-content: center; align-items: center; z-index: 1000; }
         .modal-content { background-color: white; padding: 30px; border-radius: 10px; width: 90%; max-width: 600px; }
@@ -54,14 +56,10 @@
     <a href="#" id="btn-logout" style="color: #c62828;">Sair</a>
 </nav>
     <div class="container form-container">
-        <h1>Adicionar Novo Voluntário</h1>
         </div>
     <div class="container lista-container">
         <h2 id="titulo-lista">Lista de Voluntários Cadastrados</h2>
-        <table>
-            <thead><tr><th style="width: 8%;">Status</th><th>Nome / Contato</th><th style="width: 10%;" id="th-tasv">TASV</th><th style="width: 20%;">Ações</th></tr></thead>
-            <tbody id="tabela-voluntarios"><tr><td colspan="4">Carregando...</td></tr></tbody>
-        </table>
+        <ul id="lista-voluntarios"><li>Carregando...</li></ul>
     </div>
     <div id="edit-modal" class="modal-overlay">
         </div>
@@ -92,9 +90,8 @@
             telefone: document.getElementById('telefone'),
             aniversario: document.getElementById('aniversario'),
             btnAdd: document.getElementById('btn-adicionar'),
-            tabelaBody: document.getElementById('tabela-voluntarios'),
+            listaUl: document.getElementById('lista-voluntarios'),
             tituloLista: document.getElementById('titulo-lista'),
-            thTasv: document.getElementById('th-tasv'),
             editModal: document.getElementById('edit-modal'),
             editNome: document.getElementById('edit-nome'),
             editEndereco: document.getElementById('edit-endereco'),
@@ -115,58 +112,74 @@
                     timestamp: serverTimestamp(),
                     detalhes: detalhes
                 });
-            } catch (error) { console.error("Erro ao registrar log:", error); }
+            } catch (error) { console.error("Erro ao registrar log de auditoria:", error); }
         }
 
         function carregarVoluntarios() {
             const anoVigente = new Date().getFullYear();
-            ui.thTasv.textContent = `TASV ${anoVigente}`;
             const q = query(voluntariosCollection, orderBy("nome"));
             onSnapshot(q, (snapshot) => {
                 ui.tituloLista.textContent = `Lista de Voluntários Cadastrados (TOTAL = ${snapshot.size})`;
-                ui.tabelaBody.innerHTML = '';
-                if (snapshot.empty) { ui.tabelaBody.innerHTML = '<tr><td colspan="4">Nenhum voluntário.</td></tr>'; return; }
+                ui.listaUl.innerHTML = '';
+                if (snapshot.empty) { ui.listaUl.innerHTML = '<li>Nenhum voluntário cadastrado.</li>'; return; }
                 snapshot.forEach(docSnapshot => {
                     const v = docSnapshot.data();
                     const id = docSnapshot.id;
-                    let statusClasse = 'status-pendente', statusTitle = 'Ativo (TASV pendente)';
-                    if (v.statusVoluntario === 'inativo') { statusClasse = 'status-inativo'; statusTitle = 'Inativo';
-                    } else if (v.tasvAssinadoAno === anoVigente) { statusClasse = 'status-ativo'; statusTitle = 'Ativo (TASV em dia)'; }
+                    let statusClasse = 'status-pendente';
+                    if (v.statusVoluntario === 'inativo') {
+                        statusClasse = 'status-inativo';
+                    } else if (v.tasvAssinadoAno === anoVigente) {
+                        statusClasse = 'status-ativo';
+                    }
                     
-                    const tr = document.createElement('tr');
-                    tr.innerHTML = `
-                        <td class="td-center" title="${statusTitle}"><span class="status-indicator ${statusClasse}"></span></td>
-                        <td><strong>${v.nome}</strong><br><small>${v.endereco||'N/A'} | ${v.telefone||'N/A'} | Aniv: ${v.aniversario||'N/A'}</small></td>
-                        <td class="td-center"><input type="checkbox" data-id="${id}" class="tasv-checkbox" ${v.tasvAssinadoAno === anoVigente ? 'checked' : ''}></td>
-                        <td class="actions">
+                    const li = document.createElement('li');
+                    li.className = `item-voluntario ${statusClasse}`;
+                    li.innerHTML = `
+                        <div class="voluntario-info">
+                            <strong>${v.nome}</strong>
+                            <small>${v.endereco || 'Endereço não informado'} | ${v.telefone || 'Telefone não informado'} | Aniversário: ${v.aniversario || 'N/A'}</small>
+                        </div>
+                        <div class="tasv-container">
+                            <label for="tasv-${id}">TASV ${anoVigente}</label>
+                            <input type="checkbox" id="tasv-${id}" data-id="${id}" class="tasv-checkbox" ${v.tasvAssinadoAno === anoVigente ? 'checked' : ''}>
+                        </div>
+                        <div class="actions">
                             <div class="actions-buttons">
                                 <button data-id="${id}" class="btn-edit">Editar</button>
                                 <button data-id="${id}" data-nome="${v.nome}" class="btn-delete">Apagar</button>
                             </div>
                             <button data-id="${id}" data-status="${v.statusVoluntario || 'ativo'}" class="btn-toggle">Tornar ${v.statusVoluntario === 'ativo' ? 'Inativo' : 'Ativo'}</button>
-                        </td>
+                        </div>
                     `;
-                    ui.tabelaBody.appendChild(tr);
+                    ui.listaUl.appendChild(li);
                 });
             });
         }
 
         const handlePhone = (event) => { event.target.value = phoneMask(event.target.value); };
-        const phoneMask = (value) => { if (!value) return ""; value = value.replace(/\D/g,''); value = value.replace(/(\d{2})(\d)/,"($1) $2"); value = value.replace(/(\d)(\d{4})$/,"$1-$2"); return value; };
+        const phoneMask = (value) => {
+            if (!value) return "";
+            value = value.replace(/\D/g,'');
+            value = value.replace(/(\d{2})(\d)/,"($1) $2");
+            value = value.replace(/(\d)(\d{4})$/,"$1-$2");
+            return value;
+        };
 
         function setupEventListeners() {
             ui.telefone.addEventListener('input', handlePhone);
             ui.editTelefone.addEventListener('input', handlePhone);
+
             ui.btnAdd.addEventListener('click', async () => {
                 const novoVoluntario = { nome: ui.nome.value.trim(), endereco: ui.endereco.value.trim(), telefone: ui.telefone.value.trim(), aniversario: ui.aniversario.value.trim(), statusVoluntario: 'ativo', ultimaPresenca: null, tasvAssinadoAno: null, criadoEm: serverTimestamp() };
-                if (!novoVoluntario.nome) return alert("O 'Nome Completo' é obrigatório.");
+                if (!novoVoluntario.nome) return alert("O campo 'Nome Completo' é obrigatório.");
                 try {
                     await addDoc(voluntariosCollection, novoVoluntario);
                     await registrarLog("CRIOU_VOLUNTARIO", { nome: novoVoluntario.nome });
                     ui.nome.value = ''; ui.endereco.value = ''; ui.telefone.value = ''; ui.aniversario.value = '';
-                } catch (error) { console.error("Erro ao adicionar:", error); }
+                } catch (error) { console.error("Erro ao adicionar voluntário:", error); }
             });
-            ui.tabelaBody.addEventListener('change', async (e) => {
+
+            ui.listaUl.addEventListener('input', async (e) => {
                 if (e.target.classList.contains('tasv-checkbox')) {
                     const id = e.target.dataset.id;
                     const novoValor = e.target.checked ? new Date().getFullYear() : null;
@@ -174,7 +187,8 @@
                     await registrarLog("ATUALIZOU_TASV", { voluntarioId: id, tasvParaAno: novoValor });
                 }
             });
-            ui.tabelaBody.addEventListener('click', async (e) => {
+
+            ui.listaUl.addEventListener('click', async (e) => {
                 const id = e.target.dataset.id;
                 if (!id) return;
                 const docRef = doc(db, 'voluntarios', id);
@@ -202,6 +216,7 @@
                     }
                 }
             });
+            
             ui.btnSalvar.addEventListener('click', async () => {
                 if (!currentEditingId) return;
                 const docRef = doc(db, 'voluntarios', currentEditingId);
@@ -215,6 +230,7 @@
                     currentEditingId = null;
                 } catch (error) { console.error("Erro ao salvar:", error); }
             });
+
             ui.btnCancelar.addEventListener('click', () => { ui.editModal.style.display = 'none'; currentEditingId = null; });
         }
         
