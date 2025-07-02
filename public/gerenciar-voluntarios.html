@@ -56,39 +56,18 @@
     <a href="#" id="btn-logout" style="color: #c62828;">Sair</a>
 </nav>
     <div class="container form-container">
-        <h1>Adicionar Novo Voluntário</h1>
-        <div class="form-grid">
-            <div class="form-item"><label for="nome">Nome Completo:</label><input type="text" id="nome" required></div>
-            <div class="form-item"><label for="endereco">Endereço:</label><input type="text" id="endereco"></div>
-            <div class="form-item"><label for="telefone">Telefone:</label><input type="tel" id="telefone" maxlength="15"></div>
-            <div class="form-item"><label for="aniversario">Aniversário (DD/MM):</label><input type="text" id="aniversario" placeholder="Ex: 25/12"></div>
         </div>
-        <button id="btn-adicionar" class="add-button">Adicionar Voluntário</button>
-    </div>
     <div class="container lista-container">
-        <h2 id="titulo-lista">Lista de Voluntários Cadastrados</h2>
-        <ul id="lista-voluntarios"><li>Carregando...</li></ul>
-    </div>
-    <div id="edit-modal" class="modal-overlay">
-        <div class="modal-content">
-            <h2>Editar Voluntário</h2>
-            <div class="form-grid">
-                <div class="form-item"><label for="edit-nome">Nome Completo:</label><input type="text" id="edit-nome" required></div>
-                <div class="form-item"><label for="edit-endereco">Endereço:</label><input type="text" id="edit-endereco"></div>
-                <div class="form-item"><label for="edit-telefone">Telefone:</label><input type="tel" id="edit-telefone" maxlength="15"></div>
-                <div class="form-item"><label for="edit-aniversario">Aniversário (DD/MM):</label><input type="text" id="edit-aniversario"></div>
-            </div>
-            <div class="modal-actions">
-                <button id="btn-cancelar-edicao" class="btn-delete">Cancelar</button>
-                <button id="btn-salvar-edicao" class="add-button">Salvar Alterações</button>
-            </div>
         </div>
-    </div>
+    <div id="edit-modal" class="modal-overlay">
+        </div>
 
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
         import { getFirestore, collection, onSnapshot, addDoc, deleteDoc, doc, getDoc, orderBy, query, serverTimestamp, updateDoc } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
-        
+        // --- NOVA IMPORTAÇÃO PARA PEGAR O USUÁRIO LOGADO ---
+        import { getAuth } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-auth.js";
+
         const firebaseConfig = {
   apiKey: "AIzaSyBV7RPjk3cFTqL-aIpflJcUojKg1ZXMLuU",
   authDomain: "voluntarios-ativos---cepat.firebaseapp.com",
@@ -100,8 +79,10 @@
         
         const app = initializeApp(firebaseConfig);
         const db = getFirestore(app);
+        const auth = getAuth(app); // Pega a instância da autenticação
         const voluntariosCollection = collection(db, 'voluntarios');
-        
+        const logAuditoriaCollection = collection(db, 'log_auditoria');
+
         const ui = {
             nome: document.getElementById('nome'),
             endereco: document.getElementById('endereco'),
@@ -120,28 +101,49 @@
         };
         let currentEditingId = null;
 
+        // --- FUNÇÃO AUXILIAR PARA REGISTRAR LOG ---
+        async function registrarLog(acao, detalhes) {
+            const user = auth.currentUser;
+            if (!user) {
+                console.warn("Nenhum usuário logado, log de auditoria não será salvo.");
+                return;
+            }
+            try {
+                await addDoc(logAuditoriaCollection, {
+                    acao: acao,
+                    autor: {
+                        uid: user.uid,
+                        nome: user.displayName || user.email
+                    },
+                    timestamp: serverTimestamp(),
+                    detalhes: detalhes
+                });
+            } catch (error) {
+                console.error("Erro ao registrar log de auditoria:", error);
+            }
+        }
+
         function carregarVoluntarios() {
             const anoVigente = new Date().getFullYear();
+            ui.tituloLista.textContent = 'Lista de Voluntários Cadastrados'; // Texto inicial
+            ui.thTasv.textContent = `TASV ${anoVigente}`;
             const q = query(voluntariosCollection, orderBy("nome"));
             onSnapshot(q, (snapshot) => {
                 ui.tituloLista.textContent = `Lista de Voluntários Cadastrados (TOTAL = ${snapshot.size})`;
                 ui.listaUl.innerHTML = '';
-                if (snapshot.empty) { ui.listaUl.innerHTML = '<li>Nenhum voluntário cadastrado.</li>'; }
+                if (snapshot.empty) { ui.listaUl.innerHTML = '<li>Nenhum voluntário cadastrado.</li>'; return; }
                 snapshot.forEach(docSnapshot => {
                     const v = docSnapshot.data();
                     const id = docSnapshot.id;
                     let statusClasse = 'status-pendente';
-                    if (v.statusVoluntario === 'inativo') {
-                        statusClasse = 'status-inativo';
-                    } else if (v.tasvAssinadoAno === anoVigente) {
-                        statusClasse = 'status-ativo';
-                    }
+                    if (v.statusVoluntario === 'inativo') { statusClasse = 'status-inativo'; } 
+                    else if (v.tasvAssinadoAno === anoVigente) { statusClasse = 'status-ativo'; }
                     const li = document.createElement('li');
                     li.className = `item-voluntario ${statusClasse}`;
                     li.innerHTML = `
                         <div class="voluntario-info">
                             <strong>${v.nome}</strong>
-                            <small>${v.endereco || 'Endereço não informado'} | ${v.telefone || 'Telefone não informado'} | Aniversário: ${v.aniversario || 'N/A'}</small>
+                            <small>${v.endereco || 'N/A'} | ${v.telefone || 'N/A'} | Aniversário: ${v.aniversario || 'N/A'}</small>
                         </div>
                         <div class="tasv-container">
                             <label for="tasv-${id}">TASV ${anoVigente}</label>
@@ -150,7 +152,7 @@
                         <div class="actions">
                             <div class="actions-buttons">
                                 <button data-id="${id}" class="btn-edit">Editar</button>
-                                <button data-id="${id}" class="btn-delete">Apagar</button>
+                                <button data-id="${id}" data-nome="${v.nome}" class="btn-delete">Apagar</button>
                             </div>
                             <button data-id="${id}" data-status="${v.statusVoluntario || 'ativo'}" class="btn-toggle">Tornar ${v.statusVoluntario === 'ativo' ? 'Inativo' : 'Ativo'}</button>
                         </div>
@@ -160,10 +162,7 @@
             });
         }
 
-        const handlePhone = (event) => {
-            let input = event.target;
-            input.value = phoneMask(input.value);
-        };
+        const handlePhone = (event) => { event.target.value = phoneMask(event.target.value); };
         const phoneMask = (value) => {
             if (!value) return "";
             value = value.replace(/\D/g,'');
@@ -177,29 +176,31 @@
             ui.editTelefone.addEventListener('input', handlePhone);
 
             ui.btnAdd.addEventListener('click', async () => {
-                const nome = ui.nome.value.trim();
-                if (!nome) return alert("O campo 'Nome Completo' é obrigatório.");
+                const novoVoluntario = {
+                    nome: ui.nome.value.trim(),
+                    endereco: ui.endereco.value.trim(),
+                    telefone: ui.telefone.value.trim(),
+                    aniversario: ui.aniversario.value.trim(),
+                    statusVoluntario: 'ativo',
+                    ultimaPresenca: null,
+                    tasvAssinadoAno: null,
+                    criadoEm: serverTimestamp()
+                };
+                if (!novoVoluntario.nome) return alert("O campo 'Nome Completo' é obrigatório.");
                 try {
-                    await addDoc(voluntariosCollection, {
-                        nome: nome,
-                        endereco: ui.endereco.value.trim(),
-                        telefone: ui.telefone.value.trim(),
-                        aniversario: ui.aniversario.value.trim(),
-                        statusVoluntario: 'ativo',
-                        ultimaPresenca: null,
-                        tasvAssinadoAno: null,
-                        criadoEm: serverTimestamp()
-                    });
+                    await addDoc(voluntariosCollection, novoVoluntario);
+                    await registrarLog("CRIOU_VOLUNTARIO", { nome: novoVoluntario.nome });
                     ui.nome.value = ''; ui.endereco.value = ''; ui.telefone.value = ''; ui.aniversario.value = '';
-                } catch (error) { console.error("Erro ao adicionar voluntário:", error); alert("Ocorreu um erro ao adicionar."); }
+                } catch (error) { console.error("Erro ao adicionar voluntário:", error); }
             });
 
             ui.listaUl.addEventListener('change', async (e) => {
-                 if (e.target.classList.contains('tasv-checkbox')) {
+                if (e.target.classList.contains('tasv-checkbox')) {
                     const id = e.target.dataset.id;
                     const anoVigente = new Date().getFullYear();
                     const novoValorTasv = e.target.checked ? anoVigente : null;
                     await updateDoc(doc(db, 'voluntarios', id), { tasvAssinadoAno: novoValorTasv });
+                    await registrarLog("ATUALIZOU_TASV", { voluntarioId: id, tasvParaAno: novoValorTasv });
                 }
             });
 
@@ -208,10 +209,16 @@
                 if (!id) return;
                 const docRef = doc(db, 'voluntarios', id);
                 if (e.target.classList.contains('btn-delete')) {
-                    if (confirm(`Tem certeza que deseja apagar este voluntário?`)) { await deleteDoc(docRef); }
+                    const nomeVoluntario = e.target.dataset.nome;
+                    if (confirm(`Tem certeza que deseja apagar ${nomeVoluntario}?`)) {
+                        const docSnap = await getDoc(docRef);
+                        await registrarLog("APAGOU_VOLUNTARIO", { voluntarioId: id, dadosAntigos: docSnap.data() });
+                        await deleteDoc(docRef);
+                    }
                 } else if (e.target.classList.contains('btn-toggle')) {
                     const novoStatus = e.target.dataset.status === 'ativo' ? 'inativo' : 'ativo';
                     await updateDoc(docRef, { statusVoluntario: novoStatus });
+                    await registrarLog("ALTEROU_STATUS_VOLUNTARIO", { voluntarioId: id, novoStatus: novoStatus });
                 } else if (e.target.classList.contains('btn-edit')) {
                     const docSnap = await getDoc(docRef);
                     if (docSnap.exists()) {
@@ -229,22 +236,23 @@
             ui.btnSalvar.addEventListener('click', async () => {
                 if (!currentEditingId) return;
                 const docRef = doc(db, 'voluntarios', currentEditingId);
+                const docSnap = await getDoc(docRef);
+                const dadosAntigos = docSnap.data();
+                const dadosNovos = {
+                    nome: ui.editNome.value.trim(),
+                    endereco: ui.editEndereco.value.trim(),
+                    telefone: ui.editTelefone.value.trim(),
+                    aniversario: ui.editAniversario.value.trim()
+                };
                 try {
-                    await updateDoc(docRef, {
-                        nome: ui.editNome.value.trim(),
-                        endereco: ui.editEndereco.value.trim(),
-                        telefone: ui.editTelefone.value.trim(),
-                        aniversario: ui.editAniversario.value.trim()
-                    });
+                    await updateDoc(docRef, dadosNovos);
+                    await registrarLog("EDITOU_VOLUNTARIO", { voluntarioId: currentEditingId, dadosAntigos, dadosNovos });
                     ui.editModal.style.display = 'none';
                     currentEditingId = null;
-                } catch (error) { console.error("Erro ao salvar:", error); alert("Ocorreu um erro ao salvar."); }
+                } catch (error) { console.error("Erro ao salvar:", error); }
             });
 
-            ui.btnCancelar.addEventListener('click', () => {
-                ui.editModal.style.display = 'none';
-                currentEditingId = null;
-            });
+            ui.btnCancelar.addEventListener('click', () => { ui.editModal.style.display = 'none'; currentEditingId = null; });
         }
 
         carregarVoluntarios();
