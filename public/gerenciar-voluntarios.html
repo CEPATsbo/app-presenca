@@ -21,9 +21,9 @@
         .add-button { grid-column: 1 / -1; padding: 12px; background-color: #2e7d32; color: white; border: none; border-radius: 6px; font-size: 1.1em; font-weight: bold; cursor: pointer; margin-top: 10px; }
         #lista-voluntarios { list-style-type: none; padding: 0; margin: 20px 0; }
         .item-voluntario { display: flex; justify-content: space-between; align-items: center; padding: 15px; border-bottom: 1px solid #eee; gap: 15px; border-left-width: 8px; border-left-style: solid; transition: border-left-color 0.3s ease-in-out; margin-bottom: 8px; border-radius: 0 8px 8px 0; background-color: #fafafa; }
-        .status-ativo { border-left-color: #4CAF50; } /* Verde */
-        .status-inativo { border-left-color: #FF9800; } /* Laranja */
-        .status-pendente { border-left-color: #f44336; } /* Vermelho */
+        .status-ativo { border-left-color: #4CAF50; }
+        .status-inativo { border-left-color: #FF9800; }
+        .status-pendente { border-left-color: #f44336; }
         .voluntario-info { flex-grow: 1; }
         .voluntario-info strong { font-size: 1.2em; display: block; margin-bottom: 4px;}
         .voluntario-info small { color: #777; }
@@ -31,9 +31,9 @@
         .actions-buttons { display: flex; gap: 10px; }
         .actions-buttons button { padding: 8px 12px; border-radius: 4px; cursor: pointer; border: 1px solid #ccc; font-size: 0.9em; }
         .btn-edit { background-color: #1976d2; color: white; border-color: #1976d2;}
-        .btn-toggle { background-color: #ffb300; width: 100%;}
+        .btn-toggle { background-color: #ffb300; }
         .btn-delete { background-color: #c62828; color: white; border-color: #c62828; }
-        .tasv-container { text-align: center; padding-left: 15px; }
+        .tasv-container { text-align: center; }
         .tasv-container label { font-size: 0.8em; font-weight: bold; }
         .tasv-checkbox { transform: scale(1.5); cursor: pointer; }
         .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.6); display: none; justify-content: center; align-items: center; z-index: 1000; }
@@ -56,13 +56,34 @@
     <a href="#" id="btn-logout" style="color: #c62828;">Sair</a>
 </nav>
     <div class="container form-container">
+        <h1>Adicionar Novo Voluntário</h1>
+        <div class="form-grid">
+            <div class="form-item"><label for="nome">Nome Completo:</label><input type="text" id="nome" required></div>
+            <div class="form-item"><label for="endereco">Endereço:</label><input type="text" id="endereco"></div>
+            <div class="form-item"><label for="telefone">Telefone:</label><input type="tel" id="telefone" maxlength="15"></div>
+            <div class="form-item"><label for="aniversario">Aniversário (DD/MM):</label><input type="text" id="aniversario" placeholder="Ex: 25/12"></div>
         </div>
+        <button id="btn-adicionar" class="add-button">Adicionar Voluntário</button>
+    </div>
     <div class="container lista-container">
         <h2 id="titulo-lista">Lista de Voluntários Cadastrados</h2>
         <ul id="lista-voluntarios"><li>Carregando...</li></ul>
     </div>
     <div id="edit-modal" class="modal-overlay">
+        <div class="modal-content">
+            <h2>Editar Voluntário</h2>
+            <div class="form-grid">
+                <div class="form-item"><label for="edit-nome">Nome Completo:</label><input type="text" id="edit-nome" required></div>
+                <div class="form-item"><label for="edit-endereco">Endereço:</label><input type="text" id="edit-endereco"></div>
+                <div class="form-item"><label for="edit-telefone">Telefone:</label><input type="tel" id="edit-telefone" maxlength="15"></div>
+                <div class="form-item"><label for="edit-aniversario">Aniversário (DD/MM):</label><input type="text" id="edit-aniversario"></div>
+            </div>
+            <div class="modal-actions">
+                <button id="btn-cancelar-edicao" class="btn-delete">Cancelar</button>
+                <button id="btn-salvar-edicao" class="add-button">Salvar Alterações</button>
+            </div>
         </div>
+    </div>
 
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
@@ -83,7 +104,7 @@
         const auth = getAuth(app);
         const voluntariosCollection = collection(db, 'voluntarios');
         const logAuditoriaCollection = collection(db, 'log_auditoria');
-
+        
         const ui = {
             nome: document.getElementById('nome'),
             endereco: document.getElementById('endereco'),
@@ -112,11 +133,15 @@
                     timestamp: serverTimestamp(),
                     detalhes: detalhes
                 });
-            } catch (error) { console.error("Erro ao registrar log de auditoria:", error); }
+            } catch (error) {
+                console.error("Erro ao registrar log:", error);
+            }
         }
 
         function carregarVoluntarios() {
             const anoVigente = new Date().getFullYear();
+            // A tag <th> do TASV não existe no código que você enviou, então removemos a referência a ela por enquanto.
+            // Se quiser adicioná-la, precisamos ajustar o HTML da tabela.
             const q = query(voluntariosCollection, orderBy("nome"));
             onSnapshot(q, (snapshot) => {
                 ui.tituloLista.textContent = `Lista de Voluntários Cadastrados (TOTAL = ${snapshot.size})`;
@@ -126,18 +151,14 @@
                     const v = docSnapshot.data();
                     const id = docSnapshot.id;
                     let statusClasse = 'status-pendente';
-                    if (v.statusVoluntario === 'inativo') {
-                        statusClasse = 'status-inativo';
-                    } else if (v.tasvAssinadoAno === anoVigente) {
-                        statusClasse = 'status-ativo';
-                    }
-                    
+                    if (v.statusVoluntario === 'inativo') { statusClasse = 'status-inativo'; } 
+                    else if (v.tasvAssinadoAno === anoVigente) { statusClasse = 'status-ativo'; }
                     const li = document.createElement('li');
                     li.className = `item-voluntario ${statusClasse}`;
                     li.innerHTML = `
                         <div class="voluntario-info">
                             <strong>${v.nome}</strong>
-                            <small>${v.endereco || 'Endereço não informado'} | ${v.telefone || 'Telefone não informado'} | Aniversário: ${v.aniversario || 'N/A'}</small>
+                            <small>${v.endereco || 'N/A'} | ${v.telefone || 'N/A'} | Aniversário: ${v.aniversario || 'N/A'}</small>
                         </div>
                         <div class="tasv-container">
                             <label for="tasv-${id}">TASV ${anoVigente}</label>
@@ -179,7 +200,7 @@
                 } catch (error) { console.error("Erro ao adicionar voluntário:", error); }
             });
 
-            ui.listaUl.addEventListener('input', async (e) => {
+            ui.listaUl.addEventListener('change', async (e) => {
                 if (e.target.classList.contains('tasv-checkbox')) {
                     const id = e.target.dataset.id;
                     const novoValor = e.target.checked ? new Date().getFullYear() : null;
