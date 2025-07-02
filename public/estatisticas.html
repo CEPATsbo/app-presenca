@@ -99,7 +99,8 @@
         function destacarBarras(atividade, corDestaque) {
             if (!graficoFrequencia || !voluntariosOrdenadosGlobal.length) return;
             const novasCores = voluntariosOrdenadosGlobal.map(([nome]) => {
-                const participouDaAtividade = todosOsDados.some(p => p.nome === nome && p.atividade.includes(atividade));
+                const dadosFiltrados = todosOsDados.filter(d => d.data >= ui.dataInicio.value && d.data <= ui.dataFim.value);
+                const participouDaAtividade = dadosFiltrados.some(p => p.nome === nome && p.atividade.includes(atividade));
                 return participouDaAtividade ? corDestaque : COR_DESTAQUE_FADE;
             });
             graficoFrequencia.data.datasets[0].backgroundColor = novasCores;
@@ -130,9 +131,16 @@
             destacarBarras(atividadeHover, corDestaque);
         };
         
-        function gerarGraficos(dados) {
+        const handleLegendLeave = (evt, item, legend) => {
+            if (!atividadeDestaqueFixo) {
+                restaurarCoresBarras();
+            }
+        };
+
+        function renderizarGraficos(dados) {
             if (graficoFrequencia) graficoFrequencia.destroy();
             if (graficoAtividades) graficoAtividades.destroy();
+            atividadeDestaqueFixo = null;
             
             const contagemVoluntarios = {};
             dados.forEach(d => { contagemVoluntarios[d.nome] = (contagemVoluntarios[d.nome] || 0) + 1; });
@@ -144,6 +152,7 @@
             
             const contagemAtividades = {};
             dados.forEach(dado => { dado.atividade.split(', ').forEach(a => { contagemAtividades[a] = (contagemAtividades[a] || 0) + 1; }); });
+            
             const atividadesOrdenadas = Object.entries(contagemAtividades).sort(([a], [b]) => a.localeCompare(b));
             
             const labelsPizza = atividadesOrdenadas.map(item => item[0]);
@@ -153,7 +162,7 @@
             graficoAtividades = new Chart(document.getElementById('grafico-atividades'), {
                 type: 'doughnut',
                 data: { labels: labelsPizza, datasets: [{ data: dadosPizza, backgroundColor: coresPizza, hoverOffset: 4 }] },
-                options: { plugins: { legend: { position: 'bottom', onClick: handleLegendClick, onHover: handleLegendHover, onLeave: restaurarCoresBarras } } }
+                options: { plugins: { legend: { position: 'bottom', onClick: handleLegendClick, onHover: handleLegendHover, onLeave: handleLegendLeave } } }
             });
         }
         
@@ -182,7 +191,7 @@
             
             ui.chartsGrid.style.display = 'grid';
             ui.loadingMessage.style.display = 'none';
-            gerarGraficos(dadosFiltrados);
+            renderizarGraficos(dadosFiltrados);
         }
 
         async function inicializar() {
