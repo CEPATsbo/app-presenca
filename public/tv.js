@@ -1,13 +1,10 @@
-// VERSÃO FINAL COM BALANCEAMENTO DE COLUNAS
+// VERSÃO FINAL CORRIGIDA - COM BALANCEAMENTO E TODAS AS FUNÇÕES
 
 import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
 import { getFirestore, collection, query, where, onSnapshot } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
 
 document.addEventListener('DOMContentLoaded', () => {
 
-    // =================================================================
-    //  COLE AQUI O SEU OBJETO 'firebaseConfig' COMPLETO
-    // =================================================================
     const firebaseConfig = {
   apiKey: "AIzaSyBV7RPjk3cFTqL-aIpflJcUojKg1ZXMLuU",
   authDomain: "voluntarios-ativos---cepat.firebaseapp.com",
@@ -16,16 +13,12 @@ document.addEventListener('DOMContentLoaded', () => {
   messagingSenderId: "66122858261",
   appId: "1:66122858261:web:7fa21f1805463b5c08331c"
 };
-    // =================================================================
-
-    // --- CONFIGURAÇÕES DO PAINEL ---
-    const TEMPO_CARROSSEL_MS = 15000; // 15 segundos por página
-    const MAX_VOLUNTARIOS_POR_BLOCO = 5;
-    const MAX_VOLUNTARIOS_POR_COLUNA = 7;
-    // ------------------------------------
-
     const app = initializeApp(firebaseConfig);
     const db = getFirestore(app);
+
+    const TEMPO_CARROSSEL_MS = 15000;
+    const MAX_VOLUNTARIOS_POR_BLOCO = 5;
+    const MAX_VOLUNTARIOS_POR_COLUNA = 7;
 
     const listaPresencaDiv = document.getElementById('lista-presenca');
     const dataHojeSpan = document.getElementById('data-hoje');
@@ -36,12 +29,19 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function getDataDeHojeSP() {
         const agora = new Date();
-        const formatadorData = new Intl.DateTimeFormat('pt-BR', { year: 'numeric', month: '2-digit', day: '2-digit', timeZone: 'America/Sao_Paulo' });
-        if (dataHojeSpan) dataHojeSpan.textContent = `(${formatadorData.format(agora)})`;
+        // Formata a data para a consulta no Firestore (AAAA-MM-DD)
         const formatadorQuery = new Intl.DateTimeFormat('en-CA', { year: 'numeric', month: '2-digit', day: '2-digit', timeZone: 'America/Sao_Paulo' });
         return formatadorQuery.format(agora);
     }
 
+    // --- FUNÇÃO RESTAURADA ---
+    function atualizarDataVisivel(dataString) {
+        if (dataHojeSpan) {
+            const [ano, mes, dia] = dataString.split('-');
+            dataHojeSpan.textContent = `(${dia}/${mes}/${ano})`;
+        }
+    }
+    
     function renderizarLista(presentes) {
         if(!listaPresencaDiv) return;
 
@@ -61,7 +61,6 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
-        // 1. Criar todos os blocos de atividade primeiro
         const todosOsBlocos = [];
         Object.keys(porAtividade).sort().forEach(atividade => {
             const voluntarios = porAtividade[atividade].sort();
@@ -79,7 +78,6 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         });
 
-        // 2. Organizar os blocos em colunas e páginas de carrossel
         const colunasPorPagina = Math.max(1, Math.floor(window.innerWidth / 420));
         const paginasDoCarrossel = [];
         let paginaAtual = [];
@@ -87,13 +85,13 @@ document.addEventListener('DOMContentLoaded', () => {
         let contagemNaColuna = 0;
         
         todosOsBlocos.forEach(bloco => {
-            if (colunaAtual.length === 0) { // Primeira caixa de uma coluna
+            if (colunaAtual.length === 0) {
                 colunaAtual.push(bloco);
                 contagemNaColuna = bloco.contagem;
-            } else if (colunaAtual.length === 1 && (contagemNaColuna + bloco.contagem) <= MAX_VOLUNTARIOS_POR_COLUNA) { // Segunda caixa, se couber
+            } else if (colunaAtual.length === 1 && (contagemNaColuna + bloco.contagem) <= MAX_VOLUNTARIOS_POR_COLUNA) {
                 colunaAtual.push(bloco);
                 contagemNaColuna += bloco.contagem;
-            } else { // Não cabe na coluna atual, precisa ir para a próxima
+            } else {
                 paginaAtual.push(colunaAtual);
                 if (paginaAtual.length >= colunasPorPagina) {
                     paginasDoCarrossel.push(paginaAtual);
@@ -106,12 +104,10 @@ document.addEventListener('DOMContentLoaded', () => {
         if (colunaAtual.length > 0) paginaAtual.push(colunaAtual);
         if (paginaAtual.length > 0) paginasDoCarrossel.push(paginaAtual);
 
-        // 3. Renderizar o HTML a partir das páginas do carrossel
         paginasDoCarrossel.forEach((pagina, index) => {
             const paginaDiv = document.createElement('div');
             paginaDiv.className = 'pagina-carrossel';
             if (index > 0) paginaDiv.style.display = 'none';
-
             pagina.forEach(coluna => {
                 const colunaDiv = document.createElement('div');
                 colunaDiv.className = 'coluna';
@@ -157,7 +153,11 @@ document.addEventListener('DOMContentLoaded', () => {
         if (unsubscribe) unsubscribe();
         dataAtualParaConsulta = getDataDeHojeSP();
         atualizarDataVisivel(dataAtualParaConsulta);
-        const q = query(collection(db, "presencas"), where("data", "==", dataAtualParaConsulta), where("status", "==", "presente"));
+        const q = query(
+            collection(db, "presencas"), 
+            where("data", "==", dataAtualParaConsulta),
+            where("status", "==", "presente")
+        );
         unsubscribe = onSnapshot(q, (querySnapshot) => {
             const presentes = [];
             querySnapshot.forEach((doc) => presentes.push(doc.data()));
@@ -173,7 +173,7 @@ document.addEventListener('DOMContentLoaded', () => {
     setInterval(() => {
         const novaDataSP = getDataDeHojeSP();
         if (novaDataSP !== dataAtualParaConsulta) {
-            console.log("Virada de dia detectada! Reiniciando o painel...");
+            console.log("Virada de dia detectada! Recarregando a página...");
             window.location.reload();
         }
     }, 60000);
