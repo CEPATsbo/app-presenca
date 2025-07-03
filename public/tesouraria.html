@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin - Tesouraria</title>
+    <script type="module" src="/auth-guard.js"></script>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background-color: #f4f6f9; display: flex; flex-direction: column; align-items: center; margin: 0; padding: 20px; box-sizing: border-box; }
+        .admin-nav { width: 100%; max-width: 1000px; background-color: #fff; padding: 15px; margin-bottom: 30px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); text-align: center; display: flex; flex-wrap: wrap; justify-content: center; gap: 15px 25px; }
+        .admin-nav a { color: #1565c0; text-decoration: none; font-weight: bold; font-size: 1.1em; }
+        .admin-nav a.active, .admin-nav a:hover { text-decoration: underline; color: #0d47a1; }
+        .balancete-container { background-color: white; padding: 40px; border-radius: 8px; box-shadow: 0 4px 20px rgba(0,0,0,0.1); width: 100%; max-width: 1000px; }
+        .cabecalho { text-align: center; margin-bottom: 30px; }
+        .cabecalho h1 { font-size: 1.5em; margin: 0; }
+        .cabecalho p { font-size: 0.9em; margin: 2px 0; }
+        .cabecalho h3 { font-weight: normal; }
+        .cabecalho span[contenteditable="true"] { background-color: #e3f2fd; padding: 2px 5px; cursor: text; }
+        .corpo-balancete { display: flex; justify-content: space-between; gap: 40px; flex-wrap: wrap;}
+        .coluna { width: 100%; min-width: 400px; flex: 1; }
+        .coluna h2 { background-color: #e0e0e0; padding: 8px; text-align: center; font-size: 1.2em; margin: 0; }
+        .tabela-balancete { width: 100%; border-collapse: collapse; }
+        .tabela-balancete th, .tabela-balancete td { border: 1px solid #ccc; padding: 8px; font-size: 0.9em; }
+        .tabela-balancete th { background-color: #f2f2f2; text-align: left; }
+        .tabela-balancete input[type="number"] { width: 100%; border: none; background: #fffde7; text-align: right; padding: 5px; box-sizing: border-box; font-size: 1em; }
+        .tabela-balancete input[type="number"]:focus { outline: 1px solid #007bff; }
+        .tabela-balancete td[contenteditable="true"] { background-color: #e3f2fd; cursor: text; }
+        .categoria-header th { background-color: #dcedc8; font-weight: bold; }
+        .total-row td { font-weight: bold; background-color: #f1f8e9; }
+        .rodape-assinaturas { margin-top: 60px; display: flex; justify-content: space-around; flex-wrap: wrap; gap: 40px; }
+        .assinatura { text-align: center; width: 300px; }
+        .assinatura .linha { border-top: 1px solid #333; padding-top: 5px; }
+        .assinatura .cargo { font-size: 0.9em; }
+    </style>
+</head>
+<body>
+    <nav class="admin-nav">
+        <a href="/gerenciar-diretoria.html">Gerenciar Diretoria</a> 
+        <a href="/gerenciar-voluntarios.html">Gerenciar Voluntários</a>
+        <a href="/registro-manual.html">Registro Manual</a>
+        <a href="/relatorio.html">Gerar Relatório</a>
+        <a href="/tesouraria.html" class="active">Tesouraria</a>
+        <a href="/mural.html">Editar Mural</a>
+        <a href="/atividades.html">Gerenciar Atividades</a>
+        <a href="/notificacoes.html">Notificações</a>
+        <a href="/tv.html" target="_blank">Ver Painel da TV ↗</a>
+        <a href="#" id="btn-logout" style="color: #c62828;">Sair</a>
+    </nav>
+
+    <div class="balancete-container">
+        <div class="cabecalho">
+            <h1>C. E. PAULO DE TARSO</h1>
+            <p>CNPJ Nº 12.253.749/0001-20</p>
+            <p>RUA DO CROMO, 782, VL. PANTANO II - SANTA BARBARA D'OESTE - SP</p>
+            <h3>BALANCETE REFERENTE A <span id="periodo-referencia" contenteditable="true">JANEIRO A ABRIL 2025</span></h3>
+        </div>
+
+        <div class="corpo-balancete">
+            <div class="coluna">
+                <h2>RECEITAS</h2>
+                <table class="tabela-balancete">
+                    <thead><tr><th>RECEITAS</th><th>VALOR</th></tr></thead>
+                    <tbody>
+                        <tr class="categoria-header"><th colspan="2">1-CONTRIBUIÇÕES E TRANSFERÊNCIAS</th></tr>
+                        <tr><td contenteditable="true">Doações Voluntários/Espontênea</td><td><input type="number" id="rec-doacoes" step="0.01" class="input-receita"></td></tr>
+                        <tr><td contenteditable="true">Rendimento Conta Pagbank</td><td><input type="number" id="rec-rend-pagbank" step="0.01" class="input-receita"></td></tr>
+                        <tr><td contenteditable="true">Transferência Sicoob para Pagbank</td><td><input type="number" id="rec-transf-sicoob" step="0.01" class="input-receita"></td></tr>
+                        <tr class="categoria-header"><th colspan="2">2-EVENTOS DIVERSOS</th></tr>
+                        <tr><td contenteditable="true">Cantina Palestra</td><td><input type="number" id="rec-cantina" step="0.01" class="input-receita"></td></tr>
+                        <tr><td contenteditable="true">Feijoada</td><td><input type="number" id="rec-feijoada" step="0.01" class="input-receita"></td></tr>
+                        <tr><td contenteditable="true">Bazar</td><td><input type="number" id="rec-bazar" step="0.01" class="input-receita"></td></tr>
+                        <tr><td contenteditable="true">Rifa</td><td><input type="number" id="rec-rifa" step="0.01" class="input-receita"></td></tr>
+                        <tr><td contenteditable="true">Pizza</td><td><input type="number" id="rec-pizza" step="0.01" class="input-receita"></td></tr>
+                        <tr><td contenteditable="true">Camiseta</td><td><input type="number" id="rec-camiseta" step="0.01" class="input-receita"></td></tr>
+                        <tr><td contenteditable="true">Baile</td><td><input type="number" id="rec-baile" step="0.01" class="input-receita"></td></tr>
+                        <tr class="categoria-header"><th colspan="2">3-BIBLIOTECA</th></tr>
+                        <tr><td contenteditable="true">Vendas de livros</td><td><input type="number" id="rec-biblioteca" step="0.01" class="input-receita"></td></tr>
+                        <tr class="categoria-header"><th colspan="2">4-DIVERSOS</th></tr>
+                        <tr><td contenteditable="true"></td><td><input type="number" step="0.01" class="input-receita"></td></tr>
+                    </tbody>
+                    <tfoot>
+                        <tr class="total-row"><td>TOTAL DE RECEITAS</td><td id="total-receitas">R$ 0,00</td></tr>
+                    </tfoot>
+                </table>
+            </div>
+
+            <div class="coluna">
+                <h2>DESPESAS</h2>
+                <table class="tabela-balancete">
+                    <thead><tr><th>DESPESAS</th><th>VALOR</th></tr></thead>
+                    <tbody>
+                        <tr class="categoria-header"><th colspan="2">1-MANUTENÇÃO BANCÁRIA</th></tr>
+                        <tr><td contenteditable="true">Seguro Pix</td><td><input type="number" id="des-seg-pix" step="0.01" class="input-despesa"></td></tr>
+                        <tr><td contenteditable="true">Taxa bancária</td><td><input type="number" id="des-taxa-banco" step="0.01" class="input-despesa"></td></tr>
+                        <tr class="categoria-header"><th colspan="2">2-EVENTOS DIVERSOS</th></tr>
+                        <tr><td contenteditable="true">Cantina Palestra</td><td><input type="number" id="des-cantina" step="0.01" class="input-despesa"></td></tr>
+                        <tr><td contenteditable="true">Prêmio da Rifa</td><td><input type="number" id="des-premio-rifa" step="0.01" class="input-despesa"></td></tr>
+                        <tr><td contenteditable="true">Doação EGM 2025</td><td><input type="number" id="des-doacao-egm" step="0.01" class="input-despesa"></td></tr>
+                        <tr><td contenteditable="true">Pizza Pagamento</td><td><input type="number" id="des-pizza" step="0.01" class="input-despesa"></td></tr>
+                        <tr><td contenteditable="true">Camiseta Parcela 2/2</td><td><input type="number" id="des-camiseta" step="0.01" class="input-despesa"></td></tr>
+                        <tr class="categoria-header"><th colspan="2">4-IMPOSTOS PREFEITURA</th></tr>
+                        <tr><td contenteditable="true">IPTU (1/10)</td><td><input type="number" id="des-iptu" step="0.01" class="input-despesa"></td></tr>
+                        <tr><td contenteditable="true">Conselho de Engenharia</td><td><input type="number" id="des-conselho-eng" step="0.01" class="input-despesa"></td></tr>
+                        <tr class="categoria-header"><th colspan="2">5-MANUTENÇÃO ESTABELECIMENTO</th></tr>
+                        <tr><td contenteditable="true">Claro Móvel</td><td><input type="number" id="des-claro-movel" step="0.01" class="input-despesa"></td></tr>
+                        <tr><td contenteditable="true">DAE</td><td><input type="number" id="des-dae" step="0.01" class="input-despesa"></td></tr>
+                        <tr><td contenteditable="true">Internet Claro</td><td><input type="number" id="des-internet" step="0.01" class="input-despesa"></td></tr>
+                        <tr><td contenteditable="true">Faxineira</td><td><input type="number" id="des-faxineira" step="0.01" class="input-despesa"></td></tr>
+                        <tr><td contenteditable="true">Galão de água</td><td><input type="number" id="des-agua" step="0.01" class="input-despesa"></td></tr>
+                        <tr><td contenteditable="true">CPFL</td><td><input type="number" id="des-cpfl" step="0.01" class="input-despesa"></td></tr>
+                        <tr><td contenteditable="true">Gás Mollon</td><td><input type="number" id="des-gas" step="0.01" class="input-despesa"></td></tr>
+                        <tr><td contenteditable="true">Parcela do terreno (DEZ a ABR)</td><td><input type="number" id="des-terreno" step="0.01" class="input-despesa"></td></tr>
+                        <tr><td contenteditable="true">Produtos de limpeza</td><td><input type="number" id="des-limpeza" step="0.01" class="input-despesa"></td></tr>
+                        <tr><td contenteditable="true">Cartório</td><td><input type="number" id="des-cartorio" step="0.01" class="input-despesa"></td></tr>
+                        <tr><td contenteditable="true">Conserto diversos casa</td><td><input type="number" id="des-consertos" step="0.01" class="input-despesa"></td></tr>
+                        <tr class="categoria-header"><th colspan="2">6-DIVERSOS</th></tr>
+                        <tr><td contenteditable="true">Evangelização Infantil (Materiais)</td><td><input type="number" id="des-evangelizacao" step="0.01" class="input-despesa"></td></tr>
+                        <tr><td contenteditable="true">Homenagem diretoria</td><td><input type="number" id="des-homenagem" step="0.01" class="input-despesa"></td></tr>
+                    </tbody>
+                    <tfoot>
+                        <tr class="total-row"><td>TOTAL DE DESPESAS NO PERÍODO</td><td id="total-despesas">R$ 0,00</td></tr>
+                    </tfoot>
+                </table>
+            </div>
+        </div>
+        
+        <div class="corpo-balancete" style="margin-top: 20px;">
+             <div class="coluna">
+                <table class="tabela-balancete">
+                    <tr class="total-row"><td>SALDO NO PERÍODO (Receitas - Despesas)</td><td id="saldo-periodo">R$ 0,00</td></tr>
+                </table>
+            </div>
+             <div class="coluna">
+                <table class="tabela-balancete">
+                    <tr><td contenteditable="true">PagBank Ag. 001 CC 03054064-5</td><td><input type="number" id="saldo-pagbank" step="0.01" class="input-saldo-final"></td></tr>
+                    <tr><td contenteditable="true">Sicoob</td><td><input type="number" id="saldo-sicoob" step="0.01" class="input-saldo-final"></td></tr>
+                    <tr><td contenteditable="true">Em espécie</td><td><input type="number" id="saldo-especie" step="0.01" class="input-saldo-final"></td></tr>
+                    <tr class="total-row"><td>SALDO TOTAL (PagBank+Sicoob+Espécie)</td><td id="saldo-total">R$ 0,00</td></tr>
+                </table>
+             </div>
+        </div>
+
+        <div class="rodape-assinaturas">
+            <div class="assinatura"><div class="linha"></div><div class="cargo">PRESIDENTE</div></div>
+            <div class="assinatura"><div class="linha"></div><div class="cargo">TESOUREIRO</div></div>
+            <div class="assinatura"><div class="linha"></div><div class="cargo">Membro do conselho fiscal</div></div>
+            <div class="assinatura"><div class="linha"></div><div class="cargo">Membro do conselho Fiscal</div></div>
+        </div>
+    </div>
+    <script type="module" src="/logout.js"></script>
+</body>
+</html>
