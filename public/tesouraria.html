@@ -26,11 +26,14 @@
         .tabela-balancete input[type="number"]:focus { outline: 1px solid #007bff; }
         .tabela-balancete td[contenteditable="true"] { background-color: #e3f2fd; cursor: text; }
         .categoria-header th { background-color: #dcedc8; font-weight: bold; }
-        .total-row td { font-weight: bold; background-color: #f1f8e9; }
+        .total-row td { font-weight: bold; background-color: #f1f8e9; text-align: right; }
+        .total-row td:first-child { text-align: left; }
         .rodape-assinaturas { margin-top: 60px; display: flex; justify-content: space-around; flex-wrap: wrap; gap: 40px; }
         .assinatura { text-align: center; width: 300px; }
         .assinatura .linha { border-top: 1px solid #333; padding-top: 5px; }
         .assinatura .cargo { font-size: 0.9em; }
+        .actions-container { text-align: center; margin-top: 40px; }
+        .actions-container button { width: auto; padding: 15px 30px; font-size: 1.2em; }
     </style>
 </head>
 <body>
@@ -52,7 +55,7 @@
             <h1>C. E. PAULO DE TARSO</h1>
             <p>CNPJ Nº 12.253.749/0001-20</p>
             <p>RUA DO CROMO, 782, VL. PANTANO II - SANTA BARBARA D'OESTE - SP</p>
-            <h3>BALANCETE REFERENTE A <span id="periodo-referencia" contenteditable="true">JANEIRO A ABRIL 2025</span></h3>
+            <h3>BALANCETE REFERENTE A <span id="periodo-referencia" contenteditable="true">JULHO 2025</span></h3>
         </div>
 
         <div class="corpo-balancete">
@@ -140,6 +143,10 @@
              </div>
         </div>
 
+        <div class="actions-container">
+             <button>Salvar Balancete</button>
+        </div>
+
         <div class="rodape-assinaturas">
             <div class="assinatura"><div class="linha"></div><div class="cargo">PRESIDENTE</div></div>
             <div class="assinatura"><div class="linha"></div><div class="cargo">TESOUREIRO</div></div>
@@ -147,6 +154,55 @@
             <div class="assinatura"><div class="linha"></div><div class="cargo">Membro do conselho Fiscal</div></div>
         </div>
     </div>
+    
+    <script type="module">
+        document.addEventListener('DOMContentLoaded', () => {
+            const inputsReceitas = document.querySelectorAll('.input-receita');
+            const inputsDespesas = document.querySelectorAll('.input-despesa');
+            const inputsSaldoFinal = document.querySelectorAll('.input-saldo-final');
+
+            const totalReceitasEl = document.getElementById('total-receitas');
+            const totalDespesasEl = document.getElementById('total-despesas');
+            const saldoPeriodoEl = document.getElementById('saldo-periodo');
+            const saldoTotalEl = document.getElementById('saldo-total');
+
+            function formatarMoeda(valor) {
+                return valor.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+            }
+
+            function calcularETotais() {
+                let totalReceitas = 0;
+                inputsReceitas.forEach(input => {
+                    totalReceitas += parseFloat(input.value) || 0;
+                });
+
+                let totalDespesas = 0;
+                inputsDespesas.forEach(input => {
+                    totalDespesas += parseFloat(input.value) || 0;
+                });
+                
+                let saldoFinal = 0;
+                inputsSaldoFinal.forEach(input => {
+                    saldoFinal += parseFloat(input.value) || 0;
+                });
+
+                const saldoPeriodo = totalReceitas - totalDespesas;
+
+                totalReceitasEl.textContent = formatarMoeda(totalReceitas);
+                totalDespesasEl.textContent = formatarMoeda(totalDespesas);
+                saldoPeriodoEl.textContent = formatarMoeda(saldoPeriodo);
+                saldoTotalEl.textContent = formatarMoeda(saldoFinal);
+            }
+
+            // Adiciona o "vigia" a todos os campos de input de valor
+            document.querySelectorAll('input[type="number"]').forEach(input => {
+                input.addEventListener('input', calcularETotais);
+            });
+
+            // Calcula os totais uma vez ao carregar a página
+            calcularETotais();
+        });
+    </script>
     <script type="module" src="/logout.js"></script>
 </body>
 </html>
