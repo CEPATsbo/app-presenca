@@ -1,4 +1,4 @@
-// VERSÃO FINAL CORRIGIDA - CARROSSEL E BALANCEAMENTO
+// VERSÃO FINAL CORRIGIDA - FUNÇÃO RESTAURADA
 
 import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
 import { getFirestore, collection, query, where, onSnapshot } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
@@ -29,12 +29,18 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function getDataDeHojeSP() {
         const agora = new Date();
-        const formatadorData = new Intl.DateTimeFormat('pt-BR', { year: 'numeric', month: '2-digit', day: '2-digit', timeZone: 'America/Sao_Paulo' });
-        if (dataHojeSpan) dataHojeSpan.textContent = `(${formatadorData.format(agora)})`;
         const formatadorQuery = new Intl.DateTimeFormat('en-CA', { year: 'numeric', month: '2-digit', day: '2-digit', timeZone: 'America/Sao_Paulo' });
         return formatadorQuery.format(agora);
     }
 
+    // --- FUNÇÃO RESTAURADA ---
+    function atualizarDataVisivel(dataString) {
+        if (dataHojeSpan) {
+            const [ano, mes, dia] = dataString.split('-');
+            dataHojeSpan.textContent = `(${dia}/${mes}/${ano})`;
+        }
+    }
+    
     function renderizarLista(presentes) {
         if(!listaPresencaDiv) return;
 
@@ -96,7 +102,7 @@ document.addEventListener('DOMContentLoaded', () => {
         paginasDeColunas.forEach((pagina, index) => {
             const paginaDiv = document.createElement('div');
             paginaDiv.className = 'pagina-carrossel';
-            paginaDiv.style.display = 'none'; // Começa escondida
+            paginaDiv.style.display = 'none';
             pagina.forEach(coluna => {
                 const colunaDiv = document.createElement('div');
                 colunaDiv.className = 'coluna';
@@ -110,9 +116,7 @@ document.addEventListener('DOMContentLoaded', () => {
             });
             listaPresencaDiv.appendChild(paginaDiv);
         });
-
-        // --- CORREÇÃO AQUI ---
-        // Passa a lista de elementos HTML para o carrossel, não a lista de dados
+        
         const paginasRenderizadas = document.querySelectorAll('.pagina-carrossel');
         iniciarCarrossel(paginasRenderizadas);
     }
@@ -121,7 +125,6 @@ document.addEventListener('DOMContentLoaded', () => {
         if (carrosselInterval) clearInterval(carrosselInterval);
         if (paginas.length === 0) return;
         
-        // Garante que a primeira página seja exibida se for a única
         if (paginas.length <= 1) {
              if (paginas.length === 1) paginas[0].style.display = 'flex';
              return;
@@ -149,8 +152,12 @@ document.addEventListener('DOMContentLoaded', () => {
     function carregarPresencas() {
         if (unsubscribe) unsubscribe();
         dataAtualParaConsulta = getDataDeHojeSP();
-        atualizarDataVisivel(dataAtualParaConsulta);
-        const q = query(collection(db, "presencas"), where("data", "==", dataAtualParaConsulta), where("status", "==", "presente"));
+        atualizarDataVisivel(dataAtualParaConsulta); // A chamada que estava falhando
+        const q = query(
+            collection(db, "presencas"), 
+            where("data", "==", dataAtualParaConsulta),
+            where("status", "==", "presente")
+        );
         unsubscribe = onSnapshot(q, (querySnapshot) => {
             const presentes = [];
             querySnapshot.forEach((doc) => presentes.push(doc.data()));
