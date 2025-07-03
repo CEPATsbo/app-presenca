@@ -7,7 +7,7 @@
     <script type="module" src="/auth-guard.js"></script>
     <style>
         body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background-color: #f4f6f9; display: flex; flex-direction: column; align-items: center; min-height: 100vh; margin: 0; padding: 20px; box-sizing: border-box; }
-        .admin-nav { width: 100%; max-width: 800px; background-color: #fff; padding: 15px; margin-bottom: 30px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); text-align: center; display: flex; flex-wrap: wrap; justify-content: center; gap: 15px 25px; }
+        .admin-nav { width: 100%; max-width: 900px; background-color: #fff; padding: 15px; margin-bottom: 30px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); text-align: center; display: flex; flex-wrap: wrap; justify-content: center; gap: 15px 25px; }
         .admin-nav a { margin: 0; padding: 0; background-color: transparent; color: #1565c0; text-decoration: none; font-weight: bold; font-size: 1.1em; white-space: nowrap; }
         .admin-nav a.active, .admin-nav a:hover { text-decoration: underline; background-color: transparent; color: #0d47a1; }
         .container { background-color: white; padding: 40px; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.15); width: 100%; max-width: 600px; margin-bottom: 30px; }
@@ -85,7 +85,8 @@
 
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
-        import { getFirestore, collection, onSnapshot, addDoc, deleteDoc, doc, orderBy, query, where, Timestamp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
+        import { getFirestore, collection, onSnapshot, addDoc, deleteDoc, doc, getDoc, orderBy, query, where, Timestamp, serverTimestamp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
+        import { getAuth } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-auth.js";
         
         const firebaseConfig = {
   apiKey: "AIzaSyBV7RPjk3cFTqL-aIpflJcUojKg1ZXMLuU",
@@ -98,7 +99,9 @@
         
         const app = initializeApp(firebaseConfig);
         const db = getFirestore(app);
+        const auth = getAuth(app);
         const agendamentosCollection = collection(db, 'notificacoes_agendadas');
+        const logAuditoriaCollection = collection(db, 'log_auditoria');
         
         const ui = {
             titulo: document.getElementById('titulo-notificacao'),
@@ -114,6 +117,21 @@
             camposRecorrente: document.getElementById('campos-recorrente')
         };
         
+        async function registrarLog(acao, detalhes) {
+            const user = auth.currentUser;
+            if (!user) return;
+            try {
+                await addDoc(logAuditoriaCollection, {
+                    acao: acao,
+                    autor: { uid: user.uid, nome: user.displayName || user.email },
+                    timestamp: serverTimestamp(),
+                    detalhes: detalhes
+                });
+            } catch (error) {
+                console.error("Erro ao registrar log de auditoria:", error);
+            }
+        }
+
         function carregarAgendamentos() {
             const q = query(agendamentosCollection, orderBy("criadoEm", "desc"));
             onSnapshot(q, (snapshot) => {
@@ -144,12 +162,17 @@
             const titulo = ui.titulo.value.trim(), corpo = ui.corpo.value.trim();
             if (!titulo || !corpo) return alert("Preencha título e corpo da mensagem.");
             if (!confirm("Enviar esta notificação para todos agora?")) return;
+            
             ui.btnAcao.disabled = true;
             ui.feedback.textContent = "Conectando com o robô de envio...";
+            
+            await registrarLog("ENVIOU_NOTIFICACAO_IMEDIATA", { titulo, corpo });
+
             try {
                 const functionUrl = "https://southamerica-east1-voluntarios-ativos---cepat.cloudfunctions.net/enviarNotificacaoImediata";
                 const response = await fetch(functionUrl, {
-                    method: 'POST', headers: { 'Content-Type': 'application/json' },
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ titulo, corpo })
                 });
                 const resultado = await response.json();
@@ -171,7 +194,9 @@
             const dataDeEnvio = new Date(`${data}T${hora}`);
             if (dataDeEnvio < new Date()) return alert("A data e hora devem ser no futuro.");
             try {
-                await addDoc(agendamentosCollection, { titulo, corpo, enviarEm: Timestamp.fromDate(dataDeEnvio), status: 'pendente', tipo: 'unico', criadoEm: Timestamp.now() });
+                const dadosAgendamento = { titulo, corpo, enviarEm: Timestamp.fromDate(dataDeEnvio), status: 'pendente', tipo: 'unico', criadoEm: Timestamp.now() };
+                await addDoc(agendamentosCollection, dadosAgendamento);
+                await registrarLog("AGENDOU_NOTIFICACAO_UNICA", dadosAgendamento);
                 alert("Envio único agendado com sucesso!");
                 ui.titulo.value = ''; ui.corpo.value = '';
             } catch (e) { alert("Erro ao agendar."); console.error(e); }
@@ -181,7 +206,9 @@
             const titulo = ui.titulo.value.trim(), corpo = ui.corpo.value.trim(), hora = ui.horaRecorrente.value, diaEl = document.querySelector('input[name="diaDaSemana"]:checked');
             if (!titulo || !corpo || !hora || !diaEl) return alert("Preencha todos os campos.");
             try {
-                await addDoc(agendamentosCollection, { titulo, corpo, hora, tipo: 'recorrente', diaDaSemana: parseInt(diaEl.value), criadoEm: Timestamp.now() });
+                const dadosAgendamento = { titulo, corpo, hora, tipo: 'recorrente', diaDaSemana: parseInt(diaEl.value), criadoEm: Timestamp.now() };
+                await addDoc(agendamentosCollection, dadosAgendamento);
+                await registrarLog("CRIOU_AGENDAMENTO_RECORRENTE", dadosAgendamento);
                 alert("Agendamento recorrente salvo com sucesso!");
                 ui.titulo.value = ''; ui.corpo.value = '';
             } catch (e) { alert("Erro ao salvar."); console.error(e); }
@@ -206,8 +233,14 @@
 
         ui.listaUl.addEventListener('click', async (e) => {
             if (e.target.classList.contains('btn-delete')) {
+                const id = e.target.dataset.id;
                 if (confirm('Tem certeza que deseja excluir este agendamento?')) {
-                    await deleteDoc(doc(db, 'notificacoes_agendadas', e.target.dataset.id));
+                    const docRef = doc(db, 'notificacoes_agendadas', id);
+                    const docSnap = await getDoc(docRef);
+                    if(docSnap.exists()){
+                        await registrarLog("APAGOU_AGENDAMENTO", { agendamentoId: id, dadosAntigos: docSnap.data() });
+                    }
+                    await deleteDoc(docRef);
                 }
             }
         });
