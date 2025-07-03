@@ -20,7 +20,7 @@ function configurarWebPush() {
             );
             return true;
         } else {
-            console.error("ERRO CRÍTICO: Chaves VAPID não configuradas no ambiente.");
+            console.error("ERRO CRÍTICO: As chaves VAPID não estão configuradas no ambiente.");
             return false;
         }
     } catch (error) {
@@ -51,7 +51,6 @@ async function enviarNotificacoesParaTodos(titulo, corpo) {
     await Promise.all(sendPromises);
     return { successCount, failureCount, totalCount: inscricoesSnapshot.size };
 }
-
 
 // --- ROBÔS DE GESTÃO DA DIRETORIA ---
 
@@ -147,20 +146,32 @@ exports.enviarNotificacaoImediata = functions.region(REGIAO).https.onRequest((re
 
 exports.verificarAgendamentosAgendados = functions.region(REGIAO).pubsub.schedule('every 10 minutes').timeZone('America/Sao_Paulo').onRun(async (context) => {
     console.log('[CRON-GOOGLE] Verificação de agendamentos iniciada.');
+    
+    // --- LÓGICA DE DATA/HORA CORRIGIDA ---
     const agora = new Date();
-    const agoraTimestamp = admin.firestore.Timestamp.fromDate(agora);
+    const agoraSP = new Date(agora.toLocaleString("en-US", { timeZone: "America/Sao_Paulo" }));
+    
+    const diaDaSemanaSP = agoraSP.getDay(); // Domingo = 0, Segunda = 1, etc.
+    const horaAtualSP = agora.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Sao_Paulo', hour12: false });
+    const hojeFormatadoSP = new Intl.DateTimeFormat('en-CA', { year: 'numeric', month: '2-digit', day: '2-digit', timeZone: 'America/Sao_Paulo' }).format(agora);
+    
     const agendamentosRef = db.collection('notificacoes_agendadas');
+
+    // Lógica para envios únicos (não precisa de alteração, pois já usa timestamp)
+    const agoraTimestamp = admin.firestore.Timestamp.fromDate(agora);
     const unicosSnap = await agendamentosRef.where('tipo', '==', 'unico').where('status', '==', 'pendente').where('enviarEm', '<=', agoraTimestamp).get();
-    for (const doc of unicosSnap.docs) { await enviarNotificacoesParaTodos(doc.data().titulo, doc.data().corpo); await doc.ref.update({ status: 'enviada' }); }
-    const diaDaSemana = agora.getDay();
-    const horaAtual = agora.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', hour12: false });
-    const hojeFormatado = agora.toISOString().split('T')[0];
-    const recorrentesSnap = await agendamentosRef.where('tipo', '==', 'recorrente').where('diaDaSemana', '==', diaDaSemana).get();
+    for (const doc of unicosSnap.docs) {
+        await enviarNotificacoesParaTodos(doc.data().titulo, doc.data().corpo);
+        await doc.ref.update({ status: 'enviada' });
+    }
+    
+    // Lógica para envios recorrentes (agora usando os valores de São Paulo)
+    const recorrentesSnap = await agendamentosRef.where('tipo', '==', 'recorrente').where('diaDaSemana', '==', diaDaSemanaSP).get();
     for (const doc of recorrentesSnap.docs) {
         const agendamento = doc.data();
-        if (horaAtual >= agendamento.hora && agendamento.ultimoEnvio !== hojeFormatado) {
+        if (horaAtualSP >= agendamento.hora && agendamento.ultimoEnvio !== hojeFormatadoSP) {
             await enviarNotificacoesParaTodos(agendamento.titulo, agendamento.corpo);
-            await doc.ref.update({ ultimoEnvio: hojeFormatado });
+            await doc.ref.update({ ultimoEnvio: hojeFormatadoSP });
         }
     }
     return null;
