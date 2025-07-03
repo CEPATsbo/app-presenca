@@ -23,6 +23,8 @@
         th { background-color: #f2f2f2; }
         .btn-revogar { background-color: #c62828; color: white; border: none; padding: 8px 12px; border-radius: 4px; cursor: pointer; }
         .log-details { font-size: 0.8em; color: #666; white-space: pre-wrap; word-break: break-all; background-color: #f9f9f9; padding: 5px; border-radius: 4px; }
+        .filtros-logs { display: flex; align-items: flex-end; gap: 15px; margin-bottom: 20px; flex-wrap: wrap; }
+        .filtros-logs button { width: auto; padding: 10px 20px; font-size: 1em; background-color: #1976d2; }
     </style>
 </head>
 <body>
@@ -57,7 +59,12 @@
         </div>
         <div class="container">
             <h2>Log de Auditoria do Sistema</h2>
-            <table style="width: 100%;">
+            <div class="filtros-logs">
+                <div class="form-item"><label for="log-data-inicio">De:</label><input type="date" id="log-data-inicio"></div>
+                <div class="form-item"><label for="log-data-fim">Até:</label><input type="date" id="log-data-fim"></div>
+                <button id="btn-filtrar-logs">Filtrar Logs</button>
+            </div>
+            <table>
                 <thead><tr><th>Data/Hora</th><th>Autor</th><th>Ação</th><th>Detalhes</th></tr></thead>
                 <tbody id="tabela-logs"></tbody>
             </table>
@@ -73,7 +80,7 @@
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
         import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-auth.js";
-        import { getFirestore, collection, query, where, onSnapshot, orderBy, limit } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
+        import { getFirestore, collection, query, where, onSnapshot, orderBy, limit, Timestamp, getDocs } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
         import { getFunctions, httpsCallable } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-functions.js";
         
         const firebaseConfig = {
@@ -97,6 +104,9 @@
         const feedback = document.getElementById('feedback');
         const tabelaDiretoria = document.getElementById('tabela-diretoria');
         const tabelaLogs = document.getElementById('tabela-logs');
+        const btnFiltrarLogs = document.getElementById('btn-filtrar-logs');
+        const logDataInicio = document.getElementById('log-data-inicio');
+        const logDataFim = document.getElementById('log-data-fim');
         
         onAuthStateChanged(auth, (user) => {
             if (user) {
@@ -105,7 +115,7 @@
                     if (userRole === 'super-admin') {
                         mainContent.style.display = 'block';
                         carregarDiretoria();
-                        carregarLogsDeAuditoria();
+                        setupLogFilters();
                     } else if (userRole === 'diretor') {
                         mainContent.querySelector('.form-container').style.display = 'none';
                         mainContent.querySelector('.container:last-child').style.display = 'none';
@@ -128,24 +138,40 @@
                 snapshot.forEach(doc => {
                     const diretor = doc.data();
                     const tr = document.createElement('tr');
-                    tr.innerHTML = `
-                        <td>${diretor.nome}</td>
-                        <td>${diretor.email || 'N/A'}</td>
-                        <td>${diretor.role}</td>
-                        <td><button class="btn-revogar" data-uid="${diretor.authUid}" disabled>Revogar</button></td>
-                    `;
+                    tr.innerHTML = `<td>${diretor.nome}</td><td>${diretor.email || 'N/A'}</td><td>${diretor.role}</td><td><button class="btn-revogar" data-uid="${diretor.authUid}" disabled>Revogar</button></td>`;
                     tabelaDiretoria.appendChild(tr);
                 });
             });
         }
+        
+        function setupLogFilters() {
+            const hoje = new Date();
+            const umaSemanaAtras = new Date();
+            umaSemanaAtras.setDate(hoje.getDate() - 7);
+            logDataFim.value = hoje.toISOString().split('T')[0];
+            logDataInicio.value = umaSemanaAtras.toISOString().split('T')[0];
+            btnFiltrarLogs.addEventListener('click', carregarLogsDeAuditoria);
+            carregarLogsDeAuditoria();
+        }
 
-        // --- NOVA FUNÇÃO PARA CARREGAR OS LOGS ---
-        function carregarLogsDeAuditoria() {
-            const q = query(collection(db, "log_auditoria"), orderBy("timestamp", "desc"), limit(100)); // Busca os últimos 100 logs
-            onSnapshot(q, (snapshot) => {
+        async function carregarLogsDeAuditoria() {
+            tabelaLogs.innerHTML = `<tr><td colspan="4">Carregando logs...</td></tr>`;
+            const dataInicio = new Date(logDataInicio.value);
+            dataInicio.setUTCHours(0, 0, 0, 0);
+            const dataFim = new Date(logDataFim.value);
+            dataFim.setUTCHours(23, 59, 59, 999);
+            
+            const q = query(collection(db, "log_auditoria"),
+                where("timestamp", ">=", Timestamp.fromDate(dataInicio)),
+                where("timestamp", "<=", Timestamp.fromDate(dataFim)),
+                orderBy("timestamp", "desc")
+            );
+
+            try {
+                const snapshot = await getDocs(q);
                 tabelaLogs.innerHTML = "";
                 if (snapshot.empty) {
-                    tabelaLogs.innerHTML = `<tr><td colspan="4">Nenhum registro de auditoria encontrado.</td></tr>`;
+                    tabelaLogs.innerHTML = `<tr><td colspan="4">Nenhum registro de auditoria para este período.</td></tr>`;
                     return;
                 }
                 snapshot.forEach(doc => {
@@ -154,17 +180,14 @@
                     const autor = log.autor ? log.autor.nome : 'Desconhecido';
                     const acao = log.acao || 'Ação desconhecida';
                     const detalhes = log.detalhes ? JSON.stringify(log.detalhes, null, 2) : '{}';
-
                     const tr = document.createElement('tr');
-                    tr.innerHTML = `
-                        <td>${data}</td>
-                        <td>${autor}</td>
-                        <td>${acao}</td>
-                        <td><pre class="log-details">${detalhes}</pre></td>
-                    `;
+                    tr.innerHTML = `<td>${data}</td><td>${autor}</td><td>${acao}</td><td><pre class="log-details">${detalhes}</pre></td>`;
                     tabelaLogs.appendChild(tr);
                 });
-            });
+            } catch (error) {
+                console.error("Erro ao buscar logs:", error);
+                tabelaLogs.innerHTML = `<tr><td colspan="4" style="color: red;">Erro ao carregar logs. Pode ser necessário criar um índice no Firebase. Verifique o console (F12) para o link.</td></tr>`;
+            }
         }
 
         btnConvidar.addEventListener('click', async () => {
