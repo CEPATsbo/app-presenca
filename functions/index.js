@@ -9,40 +9,51 @@ const db = admin.firestore();
 
 const REGIAO = 'southamerica-east1';
 
-try {
-    const vapidConfig = functions.config().vapid;
-    if (vapidConfig && vapidConfig.public_key && vapidConfig.private_key) {
-        webpush.setVapidDetails(
-          "mailto:cepaulodetarso.sbo@gmail.com", // Coloque seu e-mail aqui
-          vapidConfig.public_key,
-          vapidConfig.private_key
-        );
-    } else {
-        console.error("ERRO CRÍTICO: As chaves VAPID não estão configuradas no ambiente.");
+function configurarWebPush() {
+    try {
+        const vapidConfig = functions.config().vapid;
+        if (vapidConfig && vapidConfig.public_key && vapidConfig.private_key) {
+            webpush.setVapidDetails(
+              "mailto:cepaulodetarso.sbo@gmail.com",
+              vapidConfig.public_key,
+              vapidConfig.private_key
+            );
+            return true;
+        } else {
+            console.error("ERRO CRÍTICO: Chaves VAPID não configuradas no ambiente.");
+            return false;
+        }
+    } catch (error) {
+        console.error("ERRO ao ler a configuração VAPID:", error);
+        return false;
     }
-} catch (error) {
-    console.error("ERRO ao ler a configuração VAPID:", error);
 }
 
 async function enviarNotificacoesParaTodos(titulo, corpo) {
+    if (!configurarWebPush()) {
+        return { successCount: 0, failureCount: 0, totalCount: 0 };
+    }
     const inscricoesSnapshot = await db.collection('inscricoes').get();
     if (inscricoesSnapshot.empty) {
-        return { successCount: 0, totalCount: 0 };
+        return { successCount: 0, totalCount: inscricoesSnapshot.size };
     }
     const payload = JSON.stringify({ title: titulo, body: corpo });
     let successCount = 0;
+    let failureCount = 0;
     const sendPromises = inscricoesSnapshot.docs.map(doc => {
         return webpush.sendNotification(doc.data(), payload)
             .then(() => successCount++)
             .catch(error => {
-                if (error.statusCode === 410) {
-                    return doc.ref.delete();
-                }
+                failureCount++;
+                if (error.statusCode === 410) { return doc.ref.delete(); }
             });
     });
     await Promise.all(sendPromises);
-    return { successCount, totalCount: inscricoesSnapshot.size };
+    return { successCount, failureCount, totalCount: inscricoesSnapshot.size };
 }
+
+
+// --- ROBÔS DE GESTÃO DA DIRETORIA ---
 
 exports.definirSuperAdmin = functions.region(REGIAO).https.onRequest(async (req, res) => {
     if (req.query.senha !== "amorcaridade") {
@@ -50,7 +61,7 @@ exports.definirSuperAdmin = functions.region(REGIAO).https.onRequest(async (req,
     }
     const email = req.query.email;
     if (!email) {
-        return res.status(400).send('Forneça um parâmetro de email. Ex: ?email=seu@email.com&senha=amorcaridade');
+        return res.status(400).send('Forneça um parâmetro de email.');
     }
     try {
         const user = await admin.auth().getUserByEmail(email);
@@ -99,10 +110,32 @@ exports.convidarDiretor = functions.region(REGIAO).https.onCall(async (data, con
     }
 });
 
+exports.revogarAcessoDiretor = functions.region(REGIAO).https.onCall(async (data, context) => {
+    if (context.auth.token.role !== 'super-admin') {
+        throw new functions.https.HttpsError('permission-denied', 'Apenas o Super Admin pode revogar acesso.');
+    }
+    const uidParaRevogar = data.uid;
+    if (!uidParaRevogar) {
+        throw new functions.https.HttpsError('invalid-argument', 'O UID do diretor é necessário.');
+    }
+    try {
+        await admin.auth().setCustomUserClaims(uidParaRevogar, { role: 'voluntario' });
+        const userQuery = await db.collection('voluntarios').where('authUid', '==', uidParaRevogar).limit(1).get();
+        if (!userQuery.empty) {
+            await userQuery.docs[0].ref.update({ role: 'voluntario' });
+        }
+        return { success: true, message: 'Acesso de diretor revogado com sucesso.' };
+    } catch (error) {
+        console.error("Erro ao revogar acesso de diretor:", error);
+        throw new functions.https.HttpsError('internal', 'Erro interno ao tentar revogar o acesso.');
+    }
+});
+
+
+// --- ROBÔS DE NOTIFICAÇÃO ---
 exports.enviarNotificacaoImediata = functions.region(REGIAO).https.onRequest((req, res) => {
     cors(req, res, async () => {
         if (req.method !== 'POST') { return res.status(405).send({ error: 'Método não permitido!' });}
-        if (!functions.config().vapid) { return res.status(500).json({ error: 'Configuração VAPID ausente.' }); }
         try {
             const { titulo, corpo } = req.body;
             if (!titulo || !corpo) { return res.status(400).json({ error: 'Título e corpo são obrigatórios.' }); }
@@ -113,17 +146,14 @@ exports.enviarNotificacaoImediata = functions.region(REGIAO).https.onRequest((re
 });
 
 exports.verificarAgendamentosAgendados = functions.region(REGIAO).pubsub.schedule('every 10 minutes').timeZone('America/Sao_Paulo').onRun(async (context) => {
-    if (!functions.config().vapid) { return null; }
+    console.log('[CRON-GOOGLE] Verificação de agendamentos iniciada.');
     const agora = new Date();
     const agoraTimestamp = admin.firestore.Timestamp.fromDate(agora);
     const agendamentosRef = db.collection('notificacoes_agendadas');
     const unicosSnap = await agendamentosRef.where('tipo', '==', 'unico').where('status', '==', 'pendente').where('enviarEm', '<=', agoraTimestamp).get();
-    for (const doc of unicosSnap.docs) {
-        await enviarNotificacoesParaTodos(doc.data().titulo, doc.data().corpo);
-        await doc.ref.update({ status: 'enviada' });
-    }
+    for (const doc of unicosSnap.docs) { await enviarNotificacoesParaTodos(doc.data().titulo, doc.data().corpo); await doc.ref.update({ status: 'enviada' }); }
     const diaDaSemana = agora.getDay();
-    const horaAtual = agora.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Sao_Paulo' });
+    const horaAtual = agora.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', hour12: false });
     const hojeFormatado = agora.toISOString().split('T')[0];
     const recorrentesSnap = await agendamentosRef.where('tipo', '==', 'recorrente').where('diaDaSemana', '==', diaDaSemana).get();
     for (const doc of recorrentesSnap.docs) {
@@ -136,6 +166,7 @@ exports.verificarAgendamentosAgendados = functions.region(REGIAO).pubsub.schedul
     return null;
 });
 
+// --- ROBÔS DE MANUTENÇÃO ---
 exports.verificarInatividadeVoluntarios = functions.region(REGIAO).pubsub.schedule('5 4 * * *').timeZone('America/Sao_Paulo').onRun(async (context) => {
     const dataLimite = new Date();
     dataLimite.setDate(dataLimite.getDate() - 45);

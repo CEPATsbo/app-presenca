@@ -22,6 +22,7 @@
         th, td { padding: 12px; border-bottom: 1px solid #eee; text-align: left; vertical-align: top; }
         th { background-color: #f2f2f2; }
         .btn-revogar { background-color: #c62828; color: white; border: none; padding: 8px 12px; border-radius: 4px; cursor: pointer; }
+        .btn-revogar:disabled { background-color: #aaa; }
         .log-details { font-size: 0.8em; color: #666; white-space: pre-wrap; word-break: break-all; background-color: #f9f9f9; padding: 5px; border-radius: 4px; }
         .filtros-logs { display: flex; align-items: flex-end; gap: 15px; margin-bottom: 20px; flex-wrap: wrap; }
         .filtros-logs button { width: auto; padding: 10px 20px; font-size: 1em; background-color: #1976d2; }
@@ -80,7 +81,7 @@
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
         import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-auth.js";
-        import { getFirestore, collection, query, where, onSnapshot, orderBy, limit, Timestamp, getDocs } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
+        import { getFirestore, collection, query, where, onSnapshot, orderBy, limit, Timestamp, getDocs, addDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
         import { getFunctions, httpsCallable } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-functions.js";
         
         const firebaseConfig = {
@@ -91,6 +92,7 @@
   messagingSenderId: "66122858261",
   appId: "1:66122858261:web:7fa21f1805463b5c08331c"
 };
+        
         const app = initializeApp(firebaseConfig);
         const auth = getAuth(app);
         const db = getFirestore(app);
@@ -114,14 +116,11 @@
                     const userRole = idTokenResult.claims.role;
                     if (userRole === 'super-admin') {
                         mainContent.style.display = 'block';
-                        carregarDiretoria();
+                        carregarDiretoria(user.uid);
                         setupLogFilters();
                     } else if (userRole === 'diretor') {
-                        mainContent.querySelector('.form-container').style.display = 'none';
-                        mainContent.querySelector('.container:last-child').style.display = 'none';
-                        mainContent.querySelector('h2').textContent = "Membros da Diretoria";
-                        mainContent.style.display = 'block';
-                        carregarDiretoria();
+                        acessoNegado.style.display = 'block';
+                        acessoNegado.querySelector('p').textContent = 'Você não tem permissão para gerenciar a diretoria.'
                     } else {
                         acessoNegado.style.display = 'block';
                     }
@@ -131,19 +130,62 @@
             }
         });
 
-        function carregarDiretoria() {
+        function carregarDiretoria(uidLogado) {
             const q = query(collection(db, "voluntarios"), where("role", "in", ["diretor", "super-admin"]));
             onSnapshot(q, (snapshot) => {
                 tabelaDiretoria.innerHTML = "";
                 snapshot.forEach(doc => {
                     const diretor = doc.data();
                     const tr = document.createElement('tr');
-                    tr.innerHTML = `<td>${diretor.nome}</td><td>${diretor.email || 'N/A'}</td><td>${diretor.role}</td><td><button class="btn-revogar" data-uid="${diretor.authUid}" disabled>Revogar</button></td>`;
+                    let acoesHtml = '';
+                    if (diretor.role === 'diretor' && diretor.authUid !== uidLogado) {
+                        acoesHtml = `<button class="btn-revogar" data-uid="${diretor.authUid}" data-nome="${diretor.nome}">Revogar Acesso</button>`;
+                    }
+                    tr.innerHTML = `<td>${diretor.nome}</td><td>${diretor.email || 'N/A'}</td><td>${diretor.role}</td><td>${acoesHtml}</td>`;
                     tabelaDiretoria.appendChild(tr);
                 });
             });
         }
+
+        tabelaDiretoria.addEventListener('click', async (e) => {
+            if (e.target.classList.contains('btn-revogar')) {
+                const uidParaRevogar = e.target.dataset.uid;
+                const nomeParaRevogar = e.target.dataset.nome;
+                
+                if (confirm(`Tem certeza que deseja revogar o acesso de diretor de ${nomeParaRevogar}? Esta pessoa voltará a ser um voluntário comum.`)) {
+                    e.target.disabled = true;
+                    e.target.textContent = 'Revogando...';
+                    
+                    try {
+                        const revogarAcessoDiretor = httpsCallable(functions, 'revogarAcessoDiretor');
+                        const resultado = await revogarAcessoDiretor({ uid: uidParaRevogar });
+
+                        if (resultado.data.success) {
+                            alert(`Acesso de ${nomeParaRevogar} revogado com sucesso.`);
+                            await registrarLog("REVOGOU_DIRETOR", { diretorRevogado: { nome: nomeParaRevogar, uid: uidParaRevogar } });
+                        } else {
+                            throw new Error(resultado.data.message || 'Erro desconhecido.');
+                        }
+                    } catch (error) {
+                        console.error("Erro ao revogar acesso:", error);
+                        alert(`Erro ao revogar acesso: ${error.message}`);
+                    } finally {
+                        e.target.disabled = false;
+                        e.target.textContent = 'Revogar Acesso';
+                    }
+                }
+            }
+        });
         
+        async function registrarLog(acao, detalhes) {
+            const user = auth.currentUser;
+            if (!user) return;
+            await addDoc(collection(db, 'log_auditoria'), {
+                acao, autor: { uid: user.uid, nome: user.displayName || user.email },
+                timestamp: serverTimestamp(), detalhes
+            });
+        }
+
         function setupLogFilters() {
             const hoje = new Date();
             const umaSemanaAtras = new Date();
@@ -156,64 +198,45 @@
 
         async function carregarLogsDeAuditoria() {
             tabelaLogs.innerHTML = `<tr><td colspan="4">Carregando logs...</td></tr>`;
-            const dataInicio = new Date(logDataInicio.value);
-            dataInicio.setUTCHours(0, 0, 0, 0);
-            const dataFim = new Date(logDataFim.value);
-            dataFim.setUTCHours(23, 59, 59, 999);
-            
-            const q = query(collection(db, "log_auditoria"),
-                where("timestamp", ">=", Timestamp.fromDate(dataInicio)),
-                where("timestamp", "<=", Timestamp.fromDate(dataFim)),
-                orderBy("timestamp", "desc")
-            );
-
+            const dataInicio = new Date(logDataInicio.value); dataInicio.setUTCHours(0, 0, 0, 0);
+            const dataFim = new Date(logDataFim.value); dataFim.setUTCHours(23, 59, 59, 999);
+            const q = query(collection(db, "log_auditoria"), where("timestamp", ">=", Timestamp.fromDate(dataInicio)), where("timestamp", "<=", Timestamp.fromDate(dataFim)), orderBy("timestamp", "desc"));
             try {
                 const snapshot = await getDocs(q);
                 tabelaLogs.innerHTML = "";
-                if (snapshot.empty) {
-                    tabelaLogs.innerHTML = `<tr><td colspan="4">Nenhum registro de auditoria para este período.</td></tr>`;
-                    return;
-                }
+                if (snapshot.empty) { tabelaLogs.innerHTML = `<tr><td colspan="4">Nenhum registro para este período.</td></tr>`; return; }
                 snapshot.forEach(doc => {
                     const log = doc.data();
                     const data = log.timestamp ? log.timestamp.toDate().toLocaleString('pt-BR') : 'N/A';
                     const autor = log.autor ? log.autor.nome : 'Desconhecido';
-                    const acao = log.acao || 'Ação desconhecida';
+                    const acao = log.acao || 'N/A';
                     const detalhes = log.detalhes ? JSON.stringify(log.detalhes, null, 2) : '{}';
                     const tr = document.createElement('tr');
                     tr.innerHTML = `<td>${data}</td><td>${autor}</td><td>${acao}</td><td><pre class="log-details">${detalhes}</pre></td>`;
                     tabelaLogs.appendChild(tr);
                 });
-            } catch (error) {
-                console.error("Erro ao buscar logs:", error);
-                tabelaLogs.innerHTML = `<tr><td colspan="4" style="color: red;">Erro ao carregar logs. Pode ser necessário criar um índice no Firebase. Verifique o console (F12) para o link.</td></tr>`;
-            }
+            } catch (error) { console.error("Erro ao buscar logs:", error); tabelaLogs.innerHTML = `<tr><td colspan="4" style="color: red;">Erro ao carregar. Verifique o console (F12).</td></tr>`; }
         }
 
         btnConvidar.addEventListener('click', async () => {
-            const nome = nomeInput.value.trim();
-            const email = emailInput.value.trim();
-            if (!nome || !email) { return alert("Por favor, preencha o nome e o email."); }
+            const nome = nomeInput.value.trim(), email = emailInput.value.trim();
+            if (!nome || !email) { return alert("Preencha o nome e o email."); }
             btnConvidar.disabled = true;
             feedback.textContent = "Convidando diretor...";
             try {
                 const convidarDiretor = httpsCallable(functions, 'convidarDiretor');
                 const resultado = await convidarDiretor({ nome, email });
                 if(resultado.data.success) {
+                    await registrarLog("CONVIDOU_DIRETOR", { nomeConvidado: nome, emailConvidado: email });
                     feedback.textContent = resultado.data.message;
                     feedback.style.color = "green";
-                    nomeInput.value = '';
-                    emailInput.value = '';
-                } else {
-                    throw new Error(resultado.data.message || 'Erro desconhecido.');
-                }
+                    nomeInput.value = ''; emailInput.value = '';
+                } else { throw new Error(resultado.data.message || 'Erro desconhecido.'); }
             } catch (error) {
                 console.error("Erro ao convidar diretor:", error);
                 feedback.textContent = `Erro: ${error.message}`;
                 feedback.style.color = "red";
-            } finally {
-                btnConvidar.disabled = false;
-            }
+            } finally { btnConvidar.disabled = false; }
         });
     </script>
     <script type="module" src="/logout.js"></script>
