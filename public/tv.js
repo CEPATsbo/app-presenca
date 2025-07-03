@@ -1,4 +1,4 @@
-// VERSÃO FINAL CORRIGIDA - COM BALANCEAMENTO E TODAS AS FUNÇÕES
+// VERSÃO FINAL CORRIGIDA - CARROSSEL E BALANCEAMENTO
 
 import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
 import { getFirestore, collection, query, where, onSnapshot } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
@@ -29,19 +29,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function getDataDeHojeSP() {
         const agora = new Date();
-        // Formata a data para a consulta no Firestore (AAAA-MM-DD)
+        const formatadorData = new Intl.DateTimeFormat('pt-BR', { year: 'numeric', month: '2-digit', day: '2-digit', timeZone: 'America/Sao_Paulo' });
+        if (dataHojeSpan) dataHojeSpan.textContent = `(${formatadorData.format(agora)})`;
         const formatadorQuery = new Intl.DateTimeFormat('en-CA', { year: 'numeric', month: '2-digit', day: '2-digit', timeZone: 'America/Sao_Paulo' });
         return formatadorQuery.format(agora);
     }
 
-    // --- FUNÇÃO RESTAURADA ---
-    function atualizarDataVisivel(dataString) {
-        if (dataHojeSpan) {
-            const [ano, mes, dia] = dataString.split('-');
-            dataHojeSpan.textContent = `(${dia}/${mes}/${ano})`;
-        }
-    }
-    
     function renderizarLista(presentes) {
         if(!listaPresencaDiv) return;
 
@@ -70,7 +63,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 const fim = inicio + MAX_VOLUNTARIOS_POR_BLOCO;
                 const nomesDoBloco = voluntarios.slice(inicio, fim);
                 todosOsBlocos.push({
-                    atividade: atividade,
                     titulo: totalPaginas > 1 ? `${atividade} (pág ${i + 1}/${totalPaginas})` : atividade,
                     nomes: nomesDoBloco,
                     contagem: nomesDoBloco.length
@@ -79,22 +71,19 @@ document.addEventListener('DOMContentLoaded', () => {
         });
 
         const colunasPorPagina = Math.max(1, Math.floor(window.innerWidth / 420));
-        const paginasDoCarrossel = [];
+        const paginasDeColunas = [];
         let paginaAtual = [];
         let colunaAtual = [];
         let contagemNaColuna = 0;
         
         todosOsBlocos.forEach(bloco => {
-            if (colunaAtual.length === 0) {
-                colunaAtual.push(bloco);
-                contagemNaColuna = bloco.contagem;
-            } else if (colunaAtual.length === 1 && (contagemNaColuna + bloco.contagem) <= MAX_VOLUNTARIOS_POR_COLUNA) {
+            if (colunaAtual.length < 2 && (contagemNaColuna + bloco.contagem) <= MAX_VOLUNTARIOS_POR_COLUNA) {
                 colunaAtual.push(bloco);
                 contagemNaColuna += bloco.contagem;
             } else {
                 paginaAtual.push(colunaAtual);
                 if (paginaAtual.length >= colunasPorPagina) {
-                    paginasDoCarrossel.push(paginaAtual);
+                    paginasDeColunas.push(paginaAtual);
                     paginaAtual = [];
                 }
                 colunaAtual = [bloco];
@@ -102,12 +91,12 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         });
         if (colunaAtual.length > 0) paginaAtual.push(colunaAtual);
-        if (paginaAtual.length > 0) paginasDoCarrossel.push(paginaAtual);
+        if (paginaAtual.length > 0) paginasDeColunas.push(paginaAtual);
 
-        paginasDoCarrossel.forEach((pagina, index) => {
+        paginasDeColunas.forEach((pagina, index) => {
             const paginaDiv = document.createElement('div');
             paginaDiv.className = 'pagina-carrossel';
-            if (index > 0) paginaDiv.style.display = 'none';
+            paginaDiv.style.display = 'none'; // Começa escondida
             pagina.forEach(coluna => {
                 const colunaDiv = document.createElement('div');
                 colunaDiv.className = 'coluna';
@@ -122,18 +111,26 @@ document.addEventListener('DOMContentLoaded', () => {
             listaPresencaDiv.appendChild(paginaDiv);
         });
 
-        iniciarCarrossel(paginasDoCarrossel);
+        // --- CORREÇÃO AQUI ---
+        // Passa a lista de elementos HTML para o carrossel, não a lista de dados
+        const paginasRenderizadas = document.querySelectorAll('.pagina-carrossel');
+        iniciarCarrossel(paginasRenderizadas);
     }
     
     function iniciarCarrossel(paginas) {
         if (carrosselInterval) clearInterval(carrosselInterval);
+        if (paginas.length === 0) return;
+        
+        // Garante que a primeira página seja exibida se for a única
         if (paginas.length <= 1) {
              if (paginas.length === 1) paginas[0].style.display = 'flex';
              return;
         }
         
         let paginaAtualIndex = 0;
-        paginas.forEach((p, i) => p.style.display = i === 0 ? 'flex' : 'none');
+        paginas.forEach((p, i) => {
+            p.style.display = i === 0 ? 'flex' : 'none';
+        });
 
         carrosselInterval = setInterval(() => {
             paginas[paginaAtualIndex].style.display = 'none';
@@ -153,11 +150,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (unsubscribe) unsubscribe();
         dataAtualParaConsulta = getDataDeHojeSP();
         atualizarDataVisivel(dataAtualParaConsulta);
-        const q = query(
-            collection(db, "presencas"), 
-            where("data", "==", dataAtualParaConsulta),
-            where("status", "==", "presente")
-        );
+        const q = query(collection(db, "presencas"), where("data", "==", dataAtualParaConsulta), where("status", "==", "presente"));
         unsubscribe = onSnapshot(q, (querySnapshot) => {
             const presentes = [];
             querySnapshot.forEach((doc) => presentes.push(doc.data()));
