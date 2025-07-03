@@ -52,38 +52,76 @@ async function enviarNotificacoesParaTodos(titulo, corpo) {
     return { successCount, failureCount, totalCount: inscricoesSnapshot.size };
 }
 
-// --- ROBÔS DE GESTÃO DA DIRETORIA ---
+// =====================================================================
+// NOVO ROBÔ SINCRONIZADOR DE STATUS E ÚLTIMA PRESENÇA
+// =====================================================================
+exports.sincronizarStatusVoluntario = functions.region(REGIAO).firestore
+    .document('presencas/{presencaId}')
+    .onWrite(async (change, context) => {
+        
+        const dadosPresenca = change.after.exists ? change.after.data() : null;
+        const dadosAntigos = change.before.exists ? change.before.data() : null;
+        
+        // Só executa se uma presença for CRIADA ou ATUALIZADA para o status 'presente'
+        if (!dadosPresenca || dadosPresenca.status !== 'presente') {
+            if (dadosAntigos && dadosAntigos.status === 'presente' && (!dadosPresenca || dadosPresenca.status !== 'presente')) {
+                 console.log(`SINCRONIZADOR: Voluntário ${dadosAntigos.nome} fez check-out. Nenhuma atualização de status necessária.`);
+            }
+            return null;
+        }
+        
+        // Evita rodar de novo se o status já era 'presente' e só outro campo (como ultimaAtualizacao) mudou
+        if (dadosAntigos && dadosAntigos.status === 'presente') {
+            return null;
+        }
 
+        const nomeVoluntario = dadosPresenca.nome;
+        const dataPresenca = dadosPresenca.data;
+
+        console.log(`SINCRONIZADOR: Presença 'presente' detectada para ${nomeVoluntario} em ${dataPresenca}. Buscando ficha...`);
+        
+        const voluntariosRef = db.collection('voluntarios');
+        const q = voluntariosRef.where('nome', '==', nomeVoluntario).limit(1);
+        const snapshot = await q.get();
+
+        if (snapshot.empty) {
+            console.error(`ERRO DE SINCRONIA: Presença registrada para '${nomeVoluntario}', mas ele não foi encontrado na lista mestra.`);
+            return null;
+        }
+
+        const voluntarioDocRef = snapshot.docs[0].ref;
+        try {
+            await voluntarioDocRef.update({
+                ultimaPresenca: dataPresenca,
+                statusVoluntario: 'ativo'
+            });
+            console.log(`SINCRONIZADOR: Ficha de '${nomeVoluntario}' atualizada com sucesso.`);
+        } catch (error) {
+            console.error(`SINCRONIZADOR: Erro ao atualizar a ficha de '${nomeVoluntario}':`, error);
+        }
+        return null;
+    });
+
+
+// --- ROBÔS DE GESTÃO DA DIRETORIA ---
 exports.definirSuperAdmin = functions.region(REGIAO).https.onRequest(async (req, res) => {
-    if (req.query.senha !== "amorcaridade") {
-        return res.status(401).send('Acesso não autorizado.');
-    }
+    if (req.query.senha !== "amorcaridade") { return res.status(401).send('Acesso não autorizado.'); }
     const email = req.query.email;
-    if (!email) {
-        return res.status(400).send('Forneça um parâmetro de email.');
-    }
+    if (!email) { return res.status(400).send('Forneça um parâmetro de email.'); }
     try {
         const user = await admin.auth().getUserByEmail(email);
         await admin.auth().setCustomUserClaims(user.uid, { role: 'super-admin' });
         const q = db.collection('voluntarios').where('authUid', '==', user.uid);
         const snapshot = await q.get();
-        if (!snapshot.empty) {
-            await snapshot.docs[0].ref.update({ role: 'super-admin' });
-        }
+        if (!snapshot.empty) { await snapshot.docs[0].ref.update({ role: 'super-admin' }); }
         return res.status(200).send(`Sucesso! O usuário ${email} agora é Super Admin.`);
-    } catch (error) {
-        return res.status(500).send(`Erro: ${error.message}`);
-    }
+    } catch (error) { return res.status(500).send(`Erro: ${error.message}`); }
 });
 
 exports.convidarDiretor = functions.region(REGIAO).https.onCall(async (data, context) => {
-    if (context.auth.token.role !== 'super-admin') {
-        throw new functions.https.HttpsError('permission-denied', 'Apenas o super-admin pode executar esta ação.');
-    }
+    if (context.auth.token.role !== 'super-admin') { throw new functions.https.HttpsError('permission-denied', 'Apenas o super-admin pode executar esta ação.'); }
     const { email, nome } = data;
-    if (!email || !nome) {
-        throw new functions.https.HttpsError('invalid-argument', 'Email e nome são obrigatórios.');
-    }
+    if (!email || !nome) { throw new functions.https.HttpsError('invalid-argument', 'Email e nome são obrigatórios.'); }
     try {
         const userRecord = await admin.auth().createUser({ email, displayName: nome });
         await admin.auth().setCustomUserClaims(userRecord.uid, { role: 'diretor' });
@@ -97,10 +135,7 @@ exports.convidarDiretor = functions.region(REGIAO).https.onCall(async (data, con
         if (resultados.length > 0 && resultados[0].score < 0.3) {
             await voluntariosRef.doc(resultados[0].item.id).update({ email, authUid: userRecord.uid, role: 'diretor' });
         } else {
-            await voluntariosRef.doc(userRecord.uid).set({
-                nome, email, authUid: userRecord.uid, role: 'diretor',
-                statusVoluntario: 'ativo', criadoEm: admin.firestore.FieldValue.serverTimestamp()
-            });
+            await voluntariosRef.doc(userRecord.uid).set({ nome, email, authUid: userRecord.uid, role: 'diretor', statusVoluntario: 'ativo', criadoEm: admin.firestore.FieldValue.serverTimestamp() });
         }
         return { success: true, message: `Diretor ${nome} convidado com sucesso!` };
     } catch (error) {
@@ -110,31 +145,21 @@ exports.convidarDiretor = functions.region(REGIAO).https.onCall(async (data, con
 });
 
 exports.revogarAcessoDiretor = functions.region(REGIAO).https.onCall(async (data, context) => {
-    if (context.auth.token.role !== 'super-admin') {
-        throw new functions.https.HttpsError('permission-denied', 'Apenas o Super Admin pode revogar acesso.');
-    }
+    if (context.auth.token.role !== 'super-admin') { throw new functions.https.HttpsError('permission-denied', 'Apenas o Super Admin pode revogar acesso.'); }
     const uidParaRevogar = data.uid;
-    if (!uidParaRevogar) {
-        throw new functions.https.HttpsError('invalid-argument', 'O UID do diretor é necessário.');
-    }
+    if (!uidParaRevogar) { throw new functions.https.HttpsError('invalid-argument', 'O UID do diretor é necessário.'); }
     try {
         await admin.auth().setCustomUserClaims(uidParaRevogar, { role: 'voluntario' });
         const userQuery = await db.collection('voluntarios').where('authUid', '==', uidParaRevogar).limit(1).get();
-        if (!userQuery.empty) {
-            await userQuery.docs[0].ref.update({ role: 'voluntario' });
-        }
+        if (!userQuery.empty) { await userQuery.docs[0].ref.update({ role: 'voluntario' }); }
         return { success: true, message: 'Acesso de diretor revogado com sucesso.' };
-    } catch (error) {
-        console.error("Erro ao revogar acesso de diretor:", error);
-        throw new functions.https.HttpsError('internal', 'Erro interno ao tentar revogar o acesso.');
-    }
+    } catch (error) { console.error("Erro ao revogar acesso de diretor:", error); throw new functions.https.HttpsError('internal', 'Erro interno ao tentar revogar o acesso.'); }
 });
-
 
 // --- ROBÔS DE NOTIFICAÇÃO ---
 exports.enviarNotificacaoImediata = functions.region(REGIAO).https.onRequest((req, res) => {
     cors(req, res, async () => {
-        if (req.method !== 'POST') { return res.status(405).send({ error: 'Método não permitido!' });}
+        if (req.method !== 'POST') { return res.status(405).send({ error: 'Método não permitido!' }); }
         try {
             const { titulo, corpo } = req.body;
             if (!titulo || !corpo) { return res.status(400).json({ error: 'Título e corpo são obrigatórios.' }); }
@@ -145,33 +170,20 @@ exports.enviarNotificacaoImediata = functions.region(REGIAO).https.onRequest((re
 });
 
 exports.verificarAgendamentosAgendados = functions.region(REGIAO).pubsub.schedule('every 10 minutes').timeZone('America/Sao_Paulo').onRun(async (context) => {
-    console.log('[CRON-GOOGLE] Verificação de agendamentos iniciada.');
-    
-    // --- LÓGICA DE DATA/HORA CORRIGIDA ---
     const agora = new Date();
-    const agoraSP = new Date(agora.toLocaleString("en-US", { timeZone: "America/Sao_Paulo" }));
-    
-    const diaDaSemanaSP = agoraSP.getDay(); // Domingo = 0, Segunda = 1, etc.
-    const horaAtualSP = agora.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Sao_Paulo', hour12: false });
-    const hojeFormatadoSP = new Intl.DateTimeFormat('en-CA', { year: 'numeric', month: '2-digit', day: '2-digit', timeZone: 'America/Sao_Paulo' }).format(agora);
-    
-    const agendamentosRef = db.collection('notificacoes_agendadas');
-
-    // Lógica para envios únicos (não precisa de alteração, pois já usa timestamp)
     const agoraTimestamp = admin.firestore.Timestamp.fromDate(agora);
+    const agendamentosRef = db.collection('notificacoes_agendadas');
     const unicosSnap = await agendamentosRef.where('tipo', '==', 'unico').where('status', '==', 'pendente').where('enviarEm', '<=', agoraTimestamp).get();
-    for (const doc of unicosSnap.docs) {
-        await enviarNotificacoesParaTodos(doc.data().titulo, doc.data().corpo);
-        await doc.ref.update({ status: 'enviada' });
-    }
-    
-    // Lógica para envios recorrentes (agora usando os valores de São Paulo)
-    const recorrentesSnap = await agendamentosRef.where('tipo', '==', 'recorrente').where('diaDaSemana', '==', diaDaSemanaSP).get();
+    for (const doc of unicosSnap.docs) { await enviarNotificacoesParaTodos(doc.data().titulo, doc.data().corpo); await doc.ref.update({ status: 'enviada' }); }
+    const diaDaSemana = agora.getDay();
+    const horaAtual = agora.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', hour12: false });
+    const hojeFormatado = agora.toISOString().split('T')[0];
+    const recorrentesSnap = await agendamentosRef.where('tipo', '==', 'recorrente').where('diaDaSemana', '==', diaDaSemana).get();
     for (const doc of recorrentesSnap.docs) {
         const agendamento = doc.data();
-        if (horaAtualSP >= agendamento.hora && agendamento.ultimoEnvio !== hojeFormatadoSP) {
+        if (horaAtual >= agendamento.hora && agendamento.ultimoEnvio !== hojeFormatado) {
             await enviarNotificacoesParaTodos(agendamento.titulo, agendamento.corpo);
-            await doc.ref.update({ ultimoEnvio: hojeFormatadoSP });
+            await doc.ref.update({ ultimoEnvio: hojeFormatado });
         }
     }
     return null;

@@ -1,4 +1,4 @@
-// VERSÃO FINAL - DETETIVE DE NOMES COM LÓGICA CORRIGIDA
+// VERSÃO FINAL - LÓGICA DE ATUALIZAÇÃO MOVIDA PARA O BACKEND
 
 import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
 import { getFirestore, doc, getDoc, setDoc, updateDoc, serverTimestamp, collection, query, where, getDocs, orderBy, addDoc } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
@@ -6,7 +6,6 @@ import Fuse from 'https://cdn.jsdelivr.net/npm/fuse.js@7.0.0/dist/fuse.mjs';
 
 document.addEventListener('DOMContentLoaded', async () => {
     
-    // =================================================================
     const firebaseConfig = {
   apiKey: "AIzaSyBV7RPjk3cFTqL-aIpflJcUojKg1ZXMLuU",
   authDomain: "voluntarios-ativos---cepat.firebaseapp.com",
@@ -16,7 +15,6 @@ document.addEventListener('DOMContentLoaded', async () => {
   appId: "1:66122858261:web:7fa21f1805463b5c08331c"
 };
     const VAPID_PUBLIC_KEY = 'BMpfTCErYrAMkosCBVdmAg3-gAfv82Q6TTIg2amEmIST0_SipaUpq7AxDZ1VhiGfxilUzugQxrK92Buu6d9FM2Y';
-    // =================================================================
 
     const app = initializeApp(firebaseConfig);
     const db = getFirestore(app);
@@ -38,23 +36,53 @@ document.addEventListener('DOMContentLoaded', async () => {
     async function buscarAtividadesDoFirestore() { try { const q = query(collection(db, "atividades"), where("ativo", "==", true), orderBy("nome")); const s = await getDocs(q); listaDeAtividades = s.docs.map(d => d.data().nome); criarCheckboxesDeAtividade(); } catch (e) { console.error("Erro ao buscar atividades:", e); if(atividadeContainer) atividadeContainer.innerHTML = "<p style='color:red;'>Não foi possível carregar atividades.</p>"; } }
     function criarCheckboxesDeAtividade() { if (!atividadeContainer) return; atividadeContainer.innerHTML = ''; listaDeAtividades.forEach(a => { const d = document.createElement('div'); d.className = 'checkbox-item'; const c = document.createElement('input'); c.type = 'checkbox'; c.id = a.replace(/\s+/g, '-'); c.name = 'atividade'; c.value = a; c.addEventListener('change', handleCheckboxChange); const l = document.createElement('label'); l.htmlFor = c.id; l.textContent = a; d.appendChild(c); d.appendChild(l); atividadeContainer.appendChild(d); }); }
     function getDistance(lat1, lon1, lat2, lon2) { const R = 6371e3; const φ1 = lat1 * Math.PI / 180, φ2 = lat2 * Math.PI / 180; const Δφ = (lat2 - lat1) * Math.PI / 180, Δλ = (lon2 - lon1) * Math.PI / 180; const a = Math.sin(Δφ / 2) * Math.sin(Δφ / 2) + Math.cos(φ1) * Math.cos(φ2) * Math.sin(Δλ / 2) * Math.sin(Δλ / 2); const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a)); return R * c; }
-    async function atualizarPresenca(novoStatus) { if (!userInfo.nome || !userInfo.atividade || !userInfo.id) { console.error("UserInfo incompleto para registrar presença", userInfo); return; } const df = getDataDeHojeSP(); const id = `${df}_${userInfo.nome.replace(/\s+/g, '_')}`; const docRef = doc(db, "presencas", id); const voluntarioRef = doc(db, 'voluntarios', userInfo.id); try { const docSnap = await getDoc(docRef); const dadosParaSalvar = { status: novoStatus, ultimaAtualizacao: serverTimestamp() }; if (!docSnap.exists() && novoStatus === 'presente') { dadosParaSalvar.nome = userInfo.nome; dadosParaSalvar.atividade = userInfo.atividade; dadosParaSalvar.data = df; dadosParaSalvar.primeiroCheckin = serverTimestamp(); } await setDoc(docRef, dadosParaSalvar, { merge: true }); await updateDoc(voluntarioRef, { ultimaPresenca: df }); statusAtualVoluntario = novoStatus; if (novoStatus === 'presente') { feedback.textContent = `Presença confirmada.`; feedback.style.color = "green"; } else { feedback.textContent = `Saída registrada.`; feedback.style.color = "#1565c0"; } } catch (e) { console.error("Erro ao atualizar presença:", e); } }
+    
+    // --- FUNÇÃO ATUALIZAR PRESENÇA SIMPLIFICADA ---
+    async function atualizarPresenca(novoStatus) {
+        if (!userInfo.nome || !userInfo.atividade) return;
+        const df = getDataDeHojeSP();
+        const id = `${df}_${userInfo.nome.replace(/\s+/g, '_')}`;
+        const docRef = doc(db, "presencas", id);
+        try {
+            const docSnap = await getDoc(docRef);
+            const dadosParaSalvar = { status: novoStatus, ultimaAtualizacao: serverTimestamp() };
+            if (!docSnap.exists() && novoStatus === 'presente') {
+                dadosParaSalvar.nome = userInfo.nome;
+                dadosParaSalvar.atividade = userInfo.atividade;
+                dadosParaSalvar.data = df;
+                dadosParaSalvar.primeiroCheckin = serverTimestamp();
+            }
+            await setDoc(docRef, dadosParaSalvar, { merge: true });
+            
+            // REMOVEMOS A ATUALIZAÇÃO DA FICHA MESTRA DAQUI. O BACKEND FARÁ ISSO.
+            
+            statusAtualVoluntario = novoStatus;
+            if (novoStatus === 'presente') { feedback.textContent = `Presença confirmada.`; feedback.style.color = "green";
+            } else { feedback.textContent = `Saída registrada.`; feedback.style.color = "#1565c0"; }
+        } catch (e) { console.error("Erro ao atualizar presença:", e); }
+    }
+
     function checarLocalizacao() { if (!navigator.geolocation) return; navigator.geolocation.getCurrentPosition(p => { const d = getDistance(p.coords.latitude, p.coords.longitude, CASA_ESPIRITA_LAT, CASA_ESPIRITA_LON); feedback.textContent = `Você está a ${d.toFixed(0)} metros de distância.`; if (d <= RAIO_EM_METROS) { if (statusAtualVoluntario !== 'presente') { atualizarPresenca('presente'); } } else { if (statusAtualVoluntario === 'presente') { atualizarPresenca('ausente'); } } }, () => { statusText.textContent = `Não foi possível obter localização.`; }, { enableHighAccuracy: true }); }
     function mostrarTelaDeStatus() { loginArea.classList.add('hidden'); statusArea.classList.remove('hidden'); document.getElementById('display-nome').textContent = userInfo.nome; document.getElementById('display-atividade').textContent = userInfo.atividade; if (monitorInterval) clearInterval(monitorInterval); checarLocalizacao(); monitorInterval = setInterval(checarLocalizacao, 600000); }
     async function carregarMural() { if (!muralContainer) return; try { const docSnap = await getDoc(doc(db, "configuracoes", "mural")); if (docSnap.exists() && docSnap.data().mensagem) { muralContainer.style.display = 'block'; muralContainer.innerText = docSnap.data().mensagem; } else { muralContainer.style.display = 'none'; } } catch (e) { console.error("Erro ao carregar mural:", e); muralContainer.style.display = 'none'; } }
     
+    // --- FUNÇÃO REGISTRAR VOLUNTÁRIO SIMPLIFICADA ---
     async function registrarVoluntario(voluntario, atividadesSelecionadas) {
         let voluntarioId = voluntario.id;
         let nomeFinal = voluntario.nome;
-        const dataDeHoje = getDataDeHojeSP();
+        
         if (!voluntarioId) {
-            const novoVoluntarioDoc = await addDoc(collection(db, "voluntarios"), { nome: nomeFinal, statusVoluntario: 'ativo', criadoEm: serverTimestamp(), endereco: '', telefone: '', aniversario: '', ultimaPresenca: dataDeHoje });
+            const novoVoluntarioDoc = await addDoc(collection(db, "voluntarios"), {
+                nome: nomeFinal, statusVoluntario: 'ativo', criadoEm: serverTimestamp(),
+                endereco: '', telefone: '', aniversario: '', ultimaPresenca: null, tasvAssinadoAno: null
+            });
             voluntarioId = novoVoluntarioDoc.id;
-        } else {
-            await updateDoc(doc(db, "voluntarios", voluntarioId), { ultimaPresenca: dataDeHoje, statusVoluntario: 'ativo' });
         }
+        
         const atividadesArray = Array.from(atividadesSelecionadas).map(cb => cb.value);
+        const dataDeHoje = getDataDeHojeSP();
         userInfo = { id: voluntarioId, nome: nomeFinal, atividade: atividadesArray.join(', '), loginDate: dataDeHoje };
+        
         localStorage.setItem('userInfo', JSON.stringify(userInfo));
         mostrarTelaDeStatus();
     }
@@ -94,12 +122,9 @@ document.addEventListener('DOMContentLoaded', async () => {
             try {
                 const voluntariosSnapshot = await getDocs(query(collection(db, "voluntarios")));
                 const listaDeVoluntarios = voluntariosSnapshot.docs.map(d => ({ id: d.id, ...d.data() }));
-                
                 const fuse = new Fuse(listaDeVoluntarios, { keys: ['nome'], includeScore: true, threshold: 0.45, distance: 100 });
                 const resultados = fuse.search(nomeDigitado);
-                
                 let voluntarioParaRegistrar = { id: null, nome: nomeDigitado };
-
                 if (resultados.length > 0) {
                     const melhorResultado = resultados[0].item;
                     if (nomeDigitado.toLowerCase() !== melhorResultado.nome.toLowerCase()) {
@@ -110,9 +135,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                         voluntarioParaRegistrar = melhorResultado;
                     }
                 }
-                
                 await registrarVoluntario(voluntarioParaRegistrar, atividadesSelecionadas);
-
             } catch (error) {
                 console.error("ERRO CRÍTICO no registro:", error);
                 alert("Ocorreu um erro crítico. Tente novamente.");
