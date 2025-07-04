@@ -52,58 +52,32 @@ async function enviarNotificacoesParaTodos(titulo, corpo) {
     return { successCount, failureCount, totalCount: inscricoesSnapshot.size };
 }
 
-// =====================================================================
-// NOVO ROBÔ SINCRONIZADOR DE STATUS E ÚLTIMA PRESENÇA
-// =====================================================================
 exports.sincronizarStatusVoluntario = functions.region(REGIAO).firestore
     .document('presencas/{presencaId}')
     .onWrite(async (change, context) => {
-        
         const dadosPresenca = change.after.exists ? change.after.data() : null;
         const dadosAntigos = change.before.exists ? change.before.data() : null;
-        
-        // Só executa se uma presença for CRIADA ou ATUALIZADA para o status 'presente'
         if (!dadosPresenca || dadosPresenca.status !== 'presente') {
             if (dadosAntigos && dadosAntigos.status === 'presente' && (!dadosPresenca || dadosPresenca.status !== 'presente')) {
-                 console.log(`SINCRONIZADOR: Voluntário ${dadosAntigos.nome} fez check-out. Nenhuma atualização de status necessária.`);
+                 console.log(`SINCRONIZADOR: Voluntário ${dadosAntigos.nome} fez check-out.`);
             }
             return null;
         }
-        
-        // Evita rodar de novo se o status já era 'presente' e só outro campo (como ultimaAtualizacao) mudou
-        if (dadosAntigos && dadosAntigos.status === 'presente') {
-            return null;
-        }
-
+        if (dadosAntigos && dadosAntigos.status === 'presente') { return null; }
         const nomeVoluntario = dadosPresenca.nome;
         const dataPresenca = dadosPresenca.data;
-
-        console.log(`SINCRONIZADOR: Presença 'presente' detectada para ${nomeVoluntario} em ${dataPresenca}. Buscando ficha...`);
-        
         const voluntariosRef = db.collection('voluntarios');
         const q = voluntariosRef.where('nome', '==', nomeVoluntario).limit(1);
         const snapshot = await q.get();
-
-        if (snapshot.empty) {
-            console.error(`ERRO DE SINCRONIA: Presença registrada para '${nomeVoluntario}', mas ele não foi encontrado na lista mestra.`);
-            return null;
-        }
-
+        if (snapshot.empty) { console.error(`ERRO DE SINCRONIA: Presença para '${nomeVoluntario}', mas não foi encontrado.`); return null; }
         const voluntarioDocRef = snapshot.docs[0].ref;
         try {
-            await voluntarioDocRef.update({
-                ultimaPresenca: dataPresenca,
-                statusVoluntario: 'ativo'
-            });
-            console.log(`SINCRONIZADOR: Ficha de '${nomeVoluntario}' atualizada com sucesso.`);
-        } catch (error) {
-            console.error(`SINCRONIZADOR: Erro ao atualizar a ficha de '${nomeVoluntario}':`, error);
-        }
+            await voluntarioDocRef.update({ ultimaPresenca: dataPresenca, statusVoluntario: 'ativo' });
+            console.log(`SINCRONIZADOR: Ficha de '${nomeVoluntario}' atualizada.`);
+        } catch (error) { console.error(`SINCRONIZADOR: Erro ao atualizar a ficha de '${nomeVoluntario}':`, error); }
         return null;
     });
 
-
-// --- ROBÔS DE GESTÃO DA DIRETORIA ---
 exports.definirSuperAdmin = functions.region(REGIAO).https.onRequest(async (req, res) => {
     if (req.query.senha !== "amorcaridade") { return res.status(401).send('Acesso não autorizado.'); }
     const email = req.query.email;
@@ -156,10 +130,33 @@ exports.revogarAcessoDiretor = functions.region(REGIAO).https.onCall(async (data
     } catch (error) { console.error("Erro ao revogar acesso de diretor:", error); throw new functions.https.HttpsError('internal', 'Erro interno ao tentar revogar o acesso.'); }
 });
 
-// --- ROBÔS DE NOTIFICAÇÃO ---
+// --- NOVO ROBÔ DE PROMOÇÃO ---
+exports.promoverParaTesoureiro = functions.region(REGIAO).https.onCall(async (data, context) => {
+    if (context.auth.token.role !== 'super-admin') {
+        throw new functions.https.HttpsError('permission-denied', 'Apenas o Super Admin pode promover usuários.');
+    }
+    const uidParaPromover = data.uid;
+    if (!uidParaPromover) {
+        throw new functions.https.HttpsError('invalid-argument', 'O UID do diretor é necessário.');
+    }
+    try {
+        await admin.auth().setCustomUserClaims(uidParaPromover, { role: 'tesoureiro' });
+        const userQuery = await db.collection('voluntarios').where('authUid', '==', uidParaPromover).limit(1).get();
+        if (!userQuery.empty) {
+            await userQuery.docs[0].ref.update({ role: 'tesoureiro' });
+        }
+        return { success: true, message: 'Usuário promovido a tesoureiro com sucesso.' };
+    } catch (error) {
+        console.error("Erro ao promover para tesoureiro:", error);
+        throw new functions.https.HttpsError('internal', 'Erro interno ao tentar promover o usuário.');
+    }
+});
+
+
 exports.enviarNotificacaoImediata = functions.region(REGIAO).https.onRequest((req, res) => {
     cors(req, res, async () => {
-        if (req.method !== 'POST') { return res.status(405).send({ error: 'Método não permitido!' }); }
+        if (req.method !== 'POST') { return res.status(405).send({ error: 'Método não permitido!' });}
+        if (!configurarWebPush()) { return res.status(500).json({ error: 'Falha na configuração VAPID.' });}
         try {
             const { titulo, corpo } = req.body;
             if (!titulo || !corpo) { return res.status(400).json({ error: 'Título e corpo são obrigatórios.' }); }
@@ -176,8 +173,8 @@ exports.verificarAgendamentosAgendados = functions.region(REGIAO).pubsub.schedul
     const unicosSnap = await agendamentosRef.where('tipo', '==', 'unico').where('status', '==', 'pendente').where('enviarEm', '<=', agoraTimestamp).get();
     for (const doc of unicosSnap.docs) { await enviarNotificacoesParaTodos(doc.data().titulo, doc.data().corpo); await doc.ref.update({ status: 'enviada' }); }
     const diaDaSemana = agora.getDay();
-    const horaAtual = agora.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', hour12: false });
-    const hojeFormatado = agora.toISOString().split('T')[0];
+    const horaAtual = agora.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'America/Sao_Paulo' });
+    const hojeFormatado = new Intl.DateTimeFormat('en-CA', { year: 'numeric', month: '2-digit', day: '2-digit', timeZone: 'America/Sao_Paulo' }).format(agora);
     const recorrentesSnap = await agendamentosRef.where('tipo', '==', 'recorrente').where('diaDaSemana', '==', diaDaSemana).get();
     for (const doc of recorrentesSnap.docs) {
         const agendamento = doc.data();
@@ -189,7 +186,6 @@ exports.verificarAgendamentosAgendados = functions.region(REGIAO).pubsub.schedul
     return null;
 });
 
-// --- ROBÔS DE MANUTENÇÃO ---
 exports.verificarInatividadeVoluntarios = functions.region(REGIAO).pubsub.schedule('5 4 * * *').timeZone('America/Sao_Paulo').onRun(async (context) => {
     const dataLimite = new Date();
     dataLimite.setDate(dataLimite.getDate() - 45);

@@ -19,13 +19,14 @@
         .form-item input { padding: 10px; border-radius: 6px; border: 1px solid #ccc; font-size: 1em; }
         .add-button { grid-column: 1 / -1; padding: 12px; background-color: #2e7d32; color: white; border: none; border-radius: 6px; font-size: 1.1em; font-weight: bold; cursor: pointer; margin-top: 10px; }
         table { width: 100%; border-collapse: collapse; margin-top: 15px; }
-        th, td { padding: 12px; border-bottom: 1px solid #eee; text-align: left; vertical-align: top; }
+        th, td { padding: 12px; border-bottom: 1px solid #eee; text-align: left; vertical-align: middle; }
         th { background-color: #f2f2f2; }
-        .btn-revogar { background-color: #c62828; color: white; border: none; padding: 8px 12px; border-radius: 4px; cursor: pointer; }
-        .btn-revogar:disabled { background-color: #aaa; }
+        .actions button { margin-right: 8px; border: none; padding: 8px 12px; border-radius: 4px; cursor: pointer; color: white; }
+        .btn-revogar { background-color: #c62828; }
+        .btn-promover { background-color: #FF9800; }
         .log-details { font-size: 0.8em; color: #666; white-space: pre-wrap; word-break: break-all; background-color: #f9f9f9; padding: 5px; border-radius: 4px; }
         .filtros-logs { display: flex; align-items: flex-end; gap: 15px; margin-bottom: 20px; flex-wrap: wrap; }
-        .filtros-logs button { width: auto; padding: 10px 20px; font-size: 1em; background-color: #1976d2; }
+        .filtros-logs button { width: auto; padding: 10px 20px; font-size: 1em; background-color: #1976d2; color: white; border: none; border-radius: 6px; cursor: pointer; }
     </style>
 </head>
 <body>
@@ -81,7 +82,7 @@
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
         import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-auth.js";
-        import { getFirestore, collection, query, where, onSnapshot, orderBy, limit, Timestamp, getDocs, addDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
+        import { getFirestore, collection, query, where, onSnapshot, orderBy, getDocs, addDoc, serverTimestamp, Timestamp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
         import { getFunctions, httpsCallable } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-functions.js";
         
         const firebaseConfig = {
@@ -92,7 +93,6 @@
   messagingSenderId: "66122858261",
   appId: "1:66122858261:web:7fa21f1805463b5c08331c"
 };
-        
         const app = initializeApp(firebaseConfig);
         const auth = getAuth(app);
         const db = getFirestore(app);
@@ -113,14 +113,10 @@
         onAuthStateChanged(auth, (user) => {
             if (user) {
                 user.getIdTokenResult(true).then((idTokenResult) => {
-                    const userRole = idTokenResult.claims.role;
-                    if (userRole === 'super-admin') {
+                    if (idTokenResult.claims.role === 'super-admin') {
                         mainContent.style.display = 'block';
                         carregarDiretoria(user.uid);
                         setupLogFilters();
-                    } else if (userRole === 'diretor') {
-                        acessoNegado.style.display = 'block';
-                        acessoNegado.querySelector('p').textContent = 'Você não tem permissão para gerenciar a diretoria.'
                     } else {
                         acessoNegado.style.display = 'block';
                     }
@@ -131,15 +127,18 @@
         });
 
         function carregarDiretoria(uidLogado) {
-            const q = query(collection(db, "voluntarios"), where("role", "in", ["diretor", "super-admin"]));
+            const q = query(collection(db, "voluntarios"), where("role", "in", ["diretor", "super-admin", "tesoureiro"]));
             onSnapshot(q, (snapshot) => {
                 tabelaDiretoria.innerHTML = "";
                 snapshot.forEach(doc => {
                     const diretor = doc.data();
                     const tr = document.createElement('tr');
                     let acoesHtml = '';
-                    if (diretor.role === 'diretor' && diretor.authUid !== uidLogado) {
-                        acoesHtml = `<button class="btn-revogar" data-uid="${diretor.authUid}" data-nome="${diretor.nome}">Revogar Acesso</button>`;
+                    if (diretor.authUid !== uidLogado) { // Não pode alterar a si mesmo
+                        if (diretor.role === 'diretor') {
+                            acoesHtml += `<button class="btn-promover" data-uid="${diretor.authUid}" data-nome="${diretor.nome}">Promover p/ Tesoureiro</button> `;
+                        }
+                        acoesHtml += `<button class="btn-revogar" data-uid="${diretor.authUid}" data-nome="${diretor.nome}">Revogar Acesso</button>`;
                     }
                     tr.innerHTML = `<td>${diretor.nome}</td><td>${diretor.email || 'N/A'}</td><td>${diretor.role}</td><td>${acoesHtml}</td>`;
                     tabelaDiretoria.appendChild(tr);
@@ -148,35 +147,38 @@
         }
 
         tabelaDiretoria.addEventListener('click', async (e) => {
-            if (e.target.classList.contains('btn-revogar')) {
-                const uidParaRevogar = e.target.dataset.uid;
-                const nomeParaRevogar = e.target.dataset.nome;
-                
-                if (confirm(`Tem certeza que deseja revogar o acesso de diretor de ${nomeParaRevogar}? Esta pessoa voltará a ser um voluntário comum.`)) {
-                    e.target.disabled = true;
-                    e.target.textContent = 'Revogando...';
-                    
-                    try {
-                        const revogarAcessoDiretor = httpsCallable(functions, 'revogarAcessoDiretor');
-                        const resultado = await revogarAcessoDiretor({ uid: uidParaRevogar });
+            const uid = e.target.dataset.uid;
+            const nome = e.target.dataset.nome;
+            if (!uid) return;
 
-                        if (resultado.data.success) {
-                            alert(`Acesso de ${nomeParaRevogar} revogado com sucesso.`);
-                            await registrarLog("REVOGOU_DIRETOR", { diretorRevogado: { nome: nomeParaRevogar, uid: uidParaRevogar } });
-                        } else {
-                            throw new Error(resultado.data.message || 'Erro desconhecido.');
-                        }
-                    } catch (error) {
-                        console.error("Erro ao revogar acesso:", error);
-                        alert(`Erro ao revogar acesso: ${error.message}`);
-                    } finally {
-                        e.target.disabled = false;
-                        e.target.textContent = 'Revogar Acesso';
-                    }
+            let acao, funcaoCallable, mensagemConfirmacao;
+
+            if (e.target.classList.contains('btn-promover')) {
+                mensagemConfirmacao = `Tem certeza que deseja promover ${nome} a Tesoureiro?`;
+                acao = "PROMOVEU_TESOUREIRO";
+                funcaoCallable = httpsCallable(functions, 'promoverParaTesoureiro');
+            } else if (e.target.classList.contains('btn-revogar')) {
+                mensagemConfirmacao = `Tem certeza que deseja revogar o acesso de diretor de ${nome}?`;
+                acao = "REVOGOU_DIRETOR";
+                funcaoCallable = httpsCallable(functions, 'revogarAcessoDiretor');
+            } else {
+                return;
+            }
+
+            if (confirm(mensagemConfirmacao)) {
+                e.target.disabled = true;
+                try {
+                    await funcaoCallable({ uid: uid });
+                    alert('Ação realizada com sucesso! O usuário precisa fazer logout e login novamente para a mudança ter efeito.');
+                    await registrarLog(acao, { alvo: { nome, uid } });
+                } catch (error) {
+                    alert(`Erro: ${error.message}`);
+                } finally {
+                    e.target.disabled = false;
                 }
             }
         });
-        
+
         async function registrarLog(acao, detalhes) {
             const user = auth.currentUser;
             if (!user) return;
