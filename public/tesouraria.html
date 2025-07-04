@@ -41,7 +41,7 @@
         .assinatura { text-align: center; width: 300px; }
         .assinatura .linha { border-top: 1px solid #333; padding-top: 5px; }
         .assinatura .cargo { font-size: 0.9em; }
-        .actions-container { display: flex; justify-content: center; gap: 20px; margin-top: 40px; flex-wrap: wrap;}
+        .actions-container { display: flex; justify-content: center; gap: 20px; margin-top: 40px; flex-wrap: wrap; }
         .actions-container button { width: auto; padding: 15px 30px; font-size: 1.2em; cursor: pointer; border: none; border-radius: 6px; color: white; }
         #btn-salvar { background-color: #1565c0; }
         #btn-liberar { background-color: #ff9800; }
@@ -80,7 +80,8 @@
                 <h2>RECEITAS</h2>
                 <table class="tabela-balancete">
                     <thead><tr><th style="width:70%;">RECEITAS</th><th>VALOR</th></tr></thead>
-                    <tbody id="corpo-tabela-receitas"></tbody>
+                    <tbody id="corpo-tabela-receitas">
+                        </tbody>
                     <tfoot><tr class="total-row"><td>TOTAL DE RECEITAS</td><td id="total-receitas">R$ 0,00</td></tr></tfoot>
                 </table>
                 <button class="btn-add-categoria" data-target="corpo-tabela-receitas">+ Adicionar Categoria de Receita</button>
@@ -89,7 +90,8 @@
                 <h2>DESPESAS</h2>
                 <table class="tabela-balancete">
                     <thead><tr><th style="width:70%;">DESPESAS</th><th>VALOR</th></tr></thead>
-                    <tbody id="corpo-tabela-despesas"></tbody>
+                    <tbody id="corpo-tabela-despesas">
+                        </tbody>
                     <tfoot><tr class="total-row"><td>TOTAL DE DESPESAS</td><td id="total-despesas">R$ 0,00</td></tr></tfoot>
                 </table>
                 <button class="btn-add-categoria" data-target="corpo-tabela-despesas">+ Adicionar Categoria de Despesa</button>
@@ -97,7 +99,7 @@
         </div>
         
         <div class="corpo-balancete" style="margin-top: 20px;">
-             <div class="coluna"><table class="tabela-balancete"><tr class="total-row"><td>SALDO NO PERÍODO (Receitas - Despesas)</td><td id="saldo-periodo">R$ 0,00</td></tr></table></div>
+             <div class="coluna"><table class="tabela-balancete"><tr class="total-row"><td>SALDO NO PERÍODO</td><td id="saldo-periodo">R$ 0,00</td></tr></table></div>
              <div class="coluna"><table class="tabela-balancete">
                     <tbody>
                         <tr><td id="nome-saldo-anterior" contenteditable="true">SALDO ANTERIOR (PagBank+Sicoob+Espécie)</td><td><input type="number" id="saldo-valor-anterior"></td></tr>
@@ -110,12 +112,7 @@
              <button id="btn-salvar">Salvar Balancete</button>
              <button id="btn-liberar">Liberar para Conselho Fiscal</button>
         </div>
-        <div class="rodape-assinaturas">
-            <div class="assinatura"><div class="linha"></div><div class="cargo">PRESIDENTE</div></div>
-            <div class="assinatura"><div class="linha"></div><div class="cargo">TESOUREIRO</div></div>
-            <div class="assinatura"><div class="linha"></div><div class="cargo">Membro do conselho fiscal</div></div>
-            <div class="assinatura"><div class="linha"></div><div class="cargo">Membro do conselho Fiscal</div></div>
-        </div>
+        <div class="rodape-assinaturas"></div>
     </div>
     
     <script type="module">
@@ -146,18 +143,21 @@
         const balancetePadrao = {
             saldoAnterior: 0,
             status: 'em elaboração',
-            nomes: {},
+            nomes: { "nome-saldo-anterior": "SALDO ANTERIOR (PagBank+Sicoob+Espécie)"},
             receitas: {
-                '1-CONTRIBUIÇÕES E TRANSFERÊNCIAS': [ { nome: 'Doações Voluntários/Espontênea', valor: 0 }],
-                '2-EVENTOS DIVERSOS': [ { nome: 'Cantina Palestra', valor: 0 } ],
+                '1-CONTRIBUIÇÕES E TRANSFERÊNCIAS': [ { nome: 'Doações Voluntários/Espontênea', valor: 0 }, { nome: 'Rendimento Conta Pagbank', valor: 0 }, { nome: 'Transferência Sicoob para Pagbank', valor: 0 } ],
+                '2-EVENTOS DIVERSOS': [ { nome: 'Cantina Palestra', valor: 0 }, { nome: 'Feijoada', valor: 0 }, { nome: 'Bazar', valor: 0 }, { nome: 'Rifa', valor: 0 }, { nome: 'Pizza', valor: 0 }, { nome: 'Camiseta', valor: 0 }, { nome: 'Baile', valor: 0 } ],
                 '3-BIBLIOTECA': [ { nome: 'Vendas de livros', valor: 0 } ]
             },
             despesas: {
-                '1-MANUTENÇÃO BANCÁRIA': [ { nome: 'Seguro Pix', valor: 0 } ],
-                '5-MANUTENÇÃO ESTABELECIMENTO': [ { nome: 'CPFL', valor: 0 } ]
+                '1-MANUTENÇÃO BANCÁRIA': [ { nome: 'Seguro Pix', valor: 0 }, { nome: 'Taxa bancária', valor: 0 } ],
+                '2-EVENTOS DIVERSOS': [ { nome: 'Cantina Palestra', valor: 0 }, { nome: 'Prêmio da Rifa', valor: 0 }, { nome: 'Doação EGM 2025', valor: 0 }, { nome: 'Pizza Pagamento', valor: 0 }, { nome: 'Camiseta Parcela 2/2', valor: 0 } ],
+                '4-IMPOSTOS PREFEITURA': [ { nome: 'IPTU (1/10)', valor: 0 }, { nome: 'Conselho de Engenharia', valor: 0 } ],
+                '5-MANUTENÇÃO ESTABELECIMENTO': [ { nome: 'Claro Móvel', valor: 0 }, { nome: 'DAE', valor: 0 }, { nome: 'Internet Claro', valor: 0 }, { nome: 'Faxineira', valor: 0 }, { nome: 'Galão de água', valor: 0 }, { nome: 'CPFL', valor: 0 }, { nome: 'Gás Mollon', valor: 0 }, { nome: 'Parcela do terreno (DEZ a ABR)', valor: 0 }, { nome: 'Produtos de limpeza', valor: 0 }, { nome: 'Cartório', valor: 0 }, { nome: 'Conserto diversos casa', valor: 0 } ],
+                '6-DIVERSOS': [ { nome: 'Evangelização Infantil (Materiais)', valor: 0 }, { nome: 'Homenagem diretoria', valor: 0 } ]
             }
         };
-
+        
         function formatarMoeda(valor) { return valor.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }); }
 
         function calcularETotais() {
@@ -207,9 +207,36 @@
             const user = auth.currentUser;
             if (!user) return;
             await addDoc(logAuditoriaCollection, {
-                acao: acao, autor: { uid: user.uid, nome: user.displayName || user.email },
-                timestamp: serverTimestamp(), detalhes: detalhes
+                acao, autor: { uid: user.uid, nome: user.displayName || user.email },
+                timestamp: serverTimestamp(), detalhes
             });
+        }
+        
+        function setEditavel(podeEditar) {
+            document.querySelectorAll('.balancete-container input[type="number"]').forEach(input => input.disabled = !podeEditar);
+            document.querySelectorAll('.balancete-container [contenteditable]').forEach(el => el.setAttribute('contenteditable', podeEditar));
+            document.querySelectorAll('.btn-add-row, .btn-add-categoria').forEach(btn => btn.style.visibility = podeEditar ? 'visible' : 'hidden');
+            btnSalvar.disabled = !podeEditar;
+            btnLiberar.disabled = !podeEditar;
+        }
+
+        function atualizarStatusUI(status) {
+            let texto, classe;
+            if (status === 'em revisão') {
+                texto = 'Status: Em Revisão pelo Conselho Fiscal';
+                classe = 'status-revisao';
+                setEditavel(false);
+            } else if (status === 'aprovado') {
+                texto = 'Status: Aprovado';
+                classe = 'status-aprovado';
+                setEditavel(false);
+            } else { // em elaboração
+                texto = 'Status: Em Elaboração';
+                classe = 'status-elaboracao';
+                setEditavel(true);
+            }
+            statusBar.textContent = texto;
+            statusBar.className = `status-bar ${classe}`;
         }
         
         function renderizarTabela(dados, mesAno) {
@@ -222,43 +249,16 @@
             document.getElementById('saldo-valor-anterior').value = dados.saldoAnterior || '';
             document.getElementById('nome-saldo-anterior').textContent = dados.nomes?.['nome-saldo-anterior'] || 'SALDO ANTERIOR (PagBank+Sicoob+Espécie)';
             
-            if (dados.receitas) Object.entries(dados.receitas).forEach(([cat, itens]) => {
-                const header = adicionarCategoriaHeader(corpoReceitas, cat);
+            if (dados.receitas) Object.entries(dados.receitas).forEach(([catNome, itens]) => {
+                const header = adicionarCategoriaHeader(corpoReceitas, catNome);
                 itens.forEach(item => adicionarLinhaApos(header, item.nome, item.valor, 'input-receita'));
             });
-            if (dados.despesas) Object.entries(dados.despesas).forEach(([cat, itens]) => {
-                const header = adicionarCategoriaHeader(corpoDespesas, cat);
+            if (dados.despesas) Object.entries(dados.despesas).forEach(([catNome, itens]) => {
+                const header = adicionarCategoriaHeader(corpoDespesas, catNome);
                 itens.forEach(item => adicionarLinhaApos(header, item.nome, item.valor, 'input-despesa'));
             });
-
             vincularEventListenersInputs();
             calcularETotais();
-        }
-        
-        function setEditavel(editavel) {
-            document.querySelectorAll('input[type="number"]').forEach(input => input.disabled = !editavel);
-            document.querySelectorAll('[contenteditable]').forEach(el => el.setAttribute('contenteditable', editavel));
-            document.querySelectorAll('.btn-add-row, .btn-add-categoria').forEach(btn => btn.style.display = editavel ? 'block' : 'none');
-        }
-
-        function atualizarStatusUI(status) {
-            let texto, classe, editavel = false;
-            if (status === 'em revisão') {
-                texto = 'Status: Em Revisão pelo Conselho Fiscal';
-                classe = 'status-revisao';
-            } else if (status === 'aprovado') {
-                texto = 'Status: Aprovado';
-                classe = 'status-aprovado';
-            } else { // em elaboração
-                texto = 'Status: Em Elaboração';
-                classe = 'status-elaboracao';
-                editavel = true;
-            }
-            statusBar.textContent = texto;
-            statusBar.className = `status-bar ${classe}`;
-            btnSalvar.disabled = !editavel;
-            btnLiberar.disabled = !editavel;
-            setEditavel(editavel);
         }
 
         async function carregarDadosDoMes(mesAno) {
@@ -274,15 +274,30 @@
             }
         }
 
-        btnSalvar.addEventListener('click', async () => { /* ...lógica que já funciona... */ });
-
+        btnSalvar.addEventListener('click', async () => {
+            const mesAno = seletorMesAno.value;
+            if (!mesAno) { return alert("Por favor, selecione um período."); }
+            btnSalvar.disabled = true; btnSalvar.textContent = "Salvando...";
+            const dadosParaSalvar = getDadosAtuaisDaTela();
+            try {
+                await setDoc(doc(db, "balancetes", mesAno), dadosParaSalvar, { merge: true }); // Usamos merge para não sobrescrever o status
+                await registrarLog("SALVOU_BALANCETE", { periodo: mesAno });
+                alert(`Balancete de ${mesAno} salvo com sucesso!`);
+            } catch (error) {
+                console.error("Erro ao salvar balancete:", error);
+                alert("Ocorreu um erro ao salvar.");
+            } finally {
+                btnSalvar.disabled = false; btnSalvar.textContent = "Salvar Balancete";
+            }
+        });
+        
         btnLiberar.addEventListener('click', async () => {
             const mesAno = seletorMesAno.value;
             if (!mesAno) return alert("Selecione um período.");
-            if (!confirm(`Tem certeza que deseja liberar o balancete de ${mesAno} para o Conselho Fiscal? Após a liberação, ele não poderá mais ser editado por você.`)) return;
+            if (!confirm(`Tem certeza que deseja liberar o balancete de ${mesAno} para o Conselho Fiscal? Após a liberação, ele não poderá mais ser editado.`)) return;
             
             btnLiberar.disabled = true;
-            await btnSalvar.click(); // Salva primeiro para garantir que os dados estão atualizados
+            await btnSalvar.click(); 
             const balanceteRef = doc(db, "balancetes", mesAno);
             try {
                 await updateDoc(balanceteRef, { status: 'em revisão' });
@@ -292,13 +307,30 @@
             } catch (error) {
                 console.error("Erro ao liberar balancete:", error);
                 alert("Ocorreu um erro ao liberar.");
+            } finally {
                 btnLiberar.disabled = false;
             }
         });
+        
+        function adicionarLinhaApos(linhaHeader, nome = "", valor = "") {
+            const tipoClasse = linhaHeader.parentElement.id.includes('receitas') ? 'input-receita' : 'input-despesa';
+            const novaLinha = document.createElement('tr');
+            novaLinha.innerHTML = `<td contenteditable="true">${nome}</td><td><input type="number" step="0.01" class="${tipoClasse}" value="${valor}"></td>`;
+            linhaHeader.insertAdjacentElement('afterend', novaLinha);
+            novaLinha.querySelector('input').addEventListener('input', calcularETotais);
+        }
 
-        function adicionarLinhaApos(linhaHeader, nome = "", valor = "") { /* ... */ }
-        function adicionarCategoriaHeader(tabelaBody, nome = "NOVA CATEGORIA") { /* ... */ }
-        function vincularEventListenersInputs() { /* ... */ }
+        function adicionarCategoriaHeader(tabelaBody, nome = "NOVA CATEGORIA") {
+             const novaLinha = tabelaBody.insertRow(-1);
+             novaLinha.className = 'categoria-header';
+             novaLinha.innerHTML = `<th colspan="2"><span contenteditable="true">${nome}</span> <button class="btn-add-row" title="Adicionar linha">+</button></th>`;
+             return novaLinha;
+        }
+        
+        function vincularEventListenersInputs() {
+            document.querySelectorAll('input[type="number"]').forEach(input => input.addEventListener('input', calcularETotais));
+            document.querySelectorAll('.btn-add-row').forEach(btn => btn.addEventListener('click', (e) => adicionarLinhaApos(e.target.closest('tr'))));
+        }
         
         function inicializar() {
             const hoje = new Date();
@@ -308,9 +340,12 @@
             seletorMesAno.value = mesAnoAtual;
             seletorMesAno.addEventListener('change', () => carregarDadosDoMes(seletorMesAno.value));
             carregarDadosDoMes(mesAnoAtual);
-            document.querySelectorAll('.btn-add-categoria').forEach(btn => btn.addEventListener('click', (e) => adicionarCategoriaHeader(document.getElementById(e.target.dataset.target))));
+            document.querySelectorAll('.btn-add-categoria').forEach(btn => {
+                btn.addEventListener('click', (e) => adicionarCategoriaHeader(document.getElementById(e.target.dataset.target)));
+            });
         }
         inicializar();
     </script>
+    <script type="module" src="/logout.js"></script>
 </body>
 </html>
