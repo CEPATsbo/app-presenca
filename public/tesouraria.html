@@ -56,20 +56,7 @@
         <a href="/tv.html" target="_blank">Ver Painel da TV ↗</a>
         <a href="#" id="btn-logout" style="color: #c62828;">Sair</a>
     </nav>
-
     <div class="balancete-container">
-        <div class="cabecalho">
-             <h1>C. E. PAULO DE TARSO</h1>
-             <p>CNPJ Nº 12.253.749/0001-20</p>
-             <p>RUA DO CROMO, 782, VL. PANTANO II - SANTA BARBARA D'OESTE - SP</p>
-             <h3>BALANCETE REFERENTE A <span id="periodo-referencia" contenteditable="true">JULHO 2025</span></h3>
-        </div>
-
-        <div class="seletor-periodo">
-            <label for="mes-ano">Período de Referência:</label>
-            <input type="month" id="mes-ano">
-        </div>
-        
         <div class="corpo-balancete">
             <div class="coluna">
                 <h2>RECEITAS</h2>
@@ -92,17 +79,6 @@
                 <button class="btn-add-categoria" data-target="corpo-tabela-despesas">+ Adicionar Categoria de Despesa</button>
             </div>
         </div>
-        
-        <div class="corpo-balancete" style="margin-top: 20px;">
-             <div class="coluna"><table class="tabela-balancete"><tr class="total-row"><td>SALDO NO PERÍODO</td><td id="saldo-periodo">R$ 0,00</td></tr></table></div>
-             <div class="coluna"><table class="tabela-balancete">
-                    <tbody>
-                        <tr><td contenteditable="true">SALDO ANTERIOR</td><td><input type="number" id="saldo-valor-anterior"></td></tr>
-                    </tbody>
-                    <tfoot><tr class="total-row"><td>SALDO ATUAL</td><td id="saldo-atual">R$ 0,00</td></tr></tfoot>
-                </table></div>
-        </div>
-        
         <div class="actions-container"><button id="btn-salvar">Salvar Balancete</button></div>
         <div class="rodape-assinaturas"></div>
     </div>
@@ -125,21 +101,34 @@
         document.addEventListener('DOMContentLoaded', () => {
             const seletorMesAno = document.getElementById('mes-ano');
             const btnSalvar = document.getElementById('btn-salvar');
-            const balanceteContainer = document.querySelector('.balancete-container');
-
+            
+            // --- ESTRUTURA PADRÃO DO BALANCETE ---
+            const balancetePadrao = {
+                periodoReferencia: '', saldoAnterior: 0,
+                receitas: {
+                    '1-CONTRIBUIÇÕES E TRANSFERÊNCIAS': [ { nome: 'Doações Voluntários/Espontênea', valor: 0 }, { nome: 'Rendimento Conta Pagbank', valor: 0 }, { nome: 'Transferência Sicoob para Pagbank', valor: 0 } ],
+                    '2-EVENTOS DIVERSOS': [ { nome: 'Cantina Palestra', valor: 0 }, { nome: 'Feijoada', valor: 0 }, { nome: 'Bazar', valor: 0 }, { nome: 'Rifa', valor: 0 }, { nome: 'Pizza', valor: 0 }, { nome: 'Camiseta', valor: 0 }, { nome: 'Baile', valor: 0 } ],
+                    '3-BIBLIOTECA': [ { nome: 'Vendas de livros', valor: 0 } ]
+                },
+                despesas: {
+                    '1-MANUTENÇÃO BANCÁRIA': [ { nome: 'Seguro Pix', valor: 0 }, { nome: 'Taxa bancária', valor: 0 } ],
+                    '2-EVENTOS DIVERSOS': [ { nome: 'Cantina Palestra', valor: 0 }, { nome: 'Prêmio da Rifa', valor: 0 }, { nome: 'Doação EGM 2025', valor: 0 }, { nome: 'Pizza Pagamento', valor: 0 }, { nome: 'Camiseta Parcela 2/2', valor: 0 } ],
+                    '4-IMPOSTOS PREFEITURA': [ { nome: 'IPTU (1/10)', valor: 0 }, { nome: 'Conselho de Engenharia', valor: 0 } ],
+                    '5-MANUTENÇÃO ESTABELECIMENTO': [ { nome: 'Claro Móvel', valor: 0 }, { nome: 'DAE', valor: 0 }, { nome: 'Internet Claro', valor: 0 }, { nome: 'Faxineira', valor: 0 }, { nome: 'Galão de água', valor: 0 }, { nome: 'CPFL', valor: 0 }, { nome: 'Gás Mollon', valor: 0 }, { nome: 'Parcela do terreno (DEZ a ABR)', valor: 0 }, { nome: 'Produtos de limpeza', valor: 0 }, { nome: 'Cartório', valor: 0 }, { nome: 'Conserto diversos casa', valor: 0 } ],
+                    '6-DIVERSOS': [ { nome: 'Evangelização Infantil (Materiais)', valor: 0 }, { nome: 'Homenagem diretoria', valor: 0 } ]
+                }
+            };
+            
             function formatarMoeda(valor) { return valor.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }); }
 
             function calcularETotais() {
                 let totalReceitas = 0;
                 document.querySelectorAll('.input-receita').forEach(input => { totalReceitas += parseFloat(input.value) || 0; });
-                
                 let totalDespesas = 0;
                 document.querySelectorAll('.input-despesa').forEach(input => { totalDespesas += parseFloat(input.value) || 0; });
-                
                 const saldoAnterior = parseFloat(document.getElementById('saldo-valor-anterior').value) || 0;
                 const saldoPeriodo = totalReceitas - totalDespesas;
                 const saldoAtual = saldoPeriodo + saldoAnterior;
-
                 document.getElementById('total-receitas').textContent = formatarMoeda(totalReceitas);
                 document.getElementById('total-despesas').textContent = formatarMoeda(totalDespesas);
                 document.getElementById('saldo-periodo').textContent = formatarMoeda(saldoPeriodo);
@@ -147,15 +136,23 @@
             }
 
             function getDadosAtuaisDaTela() {
-                const dados = { linhas: [] };
-                document.querySelectorAll('.tabela-balancete tbody tr').forEach(linha => {
-                    if (linha.classList.contains('categoria-header')) {
-                        dados.linhas.push({ tipo: 'categoria', nome: linha.querySelector('th').childNodes[0].textContent.trim() });
-                    } else {
-                        const nome = linha.cells[0].textContent;
-                        const valor = parseFloat(linha.cells[1].querySelector('input').value) || 0;
-                        const tipoInput = linha.cells[1].querySelector('input').classList.contains('input-receita') ? 'receita' : 'despesa';
-                        dados.linhas.push({ tipo: 'item', nome, valor, tipoInput });
+                const dados = { receitas: {}, despesas: {} };
+                document.querySelectorAll('#corpo-tabela-receitas .categoria-header').forEach(header => {
+                    const nomeCategoria = header.querySelector('th').childNodes[0].textContent.trim();
+                    dados.receitas[nomeCategoria] = [];
+                    let linhaAtual = header.nextElementSibling;
+                    while(linhaAtual && !linhaAtual.classList.contains('categoria-header')) {
+                        dados.receitas[nomeCategoria].push({ nome: linhaAtual.cells[0].textContent, valor: parseFloat(linhaAtual.cells[1].querySelector('input').value) || 0 });
+                        linhaAtual = linhaAtual.nextElementSibling;
+                    }
+                });
+                document.querySelectorAll('#corpo-tabela-despesas .categoria-header').forEach(header => {
+                    const nomeCategoria = header.querySelector('th').childNodes[0].textContent.trim();
+                    dados.despesas[nomeCategoria] = [];
+                    let linhaAtual = header.nextElementSibling;
+                    while(linhaAtual && !linhaAtual.classList.contains('categoria-header')) {
+                        dados.despesas[nomeCategoria].push({ nome: linhaAtual.cells[0].textContent, valor: parseFloat(linhaAtual.cells[1].querySelector('input').value) || 0 });
+                        linhaAtual = linhaAtual.nextElementSibling;
                     }
                 });
                 dados.saldoAnterior = parseFloat(document.getElementById('saldo-valor-anterior').value) || 0;
@@ -169,23 +166,18 @@
                 corpoReceitas.innerHTML = '';
                 corpoDespesas.innerHTML = '';
                 
-                document.getElementById('periodo-referencia').textContent = dados.periodoReferencia || new Date(`${mesAno}-01T12:00:00`).toLocaleString('pt-BR', { month: 'long', year: 'numeric' }).toUpperCase();
-                document.getElementById('saldo-valor-anterior').value = dados.saldoAnterior || 0;
+                document.getElementById('periodo-referencia').textContent = dados.periodoReferencia || new Date(`${mesAno}-02T00:00:00`).toLocaleString('pt-BR', { month: 'long', year: 'numeric' }).toUpperCase();
+                document.getElementById('saldo-valor-anterior').value = dados.saldoAnterior || '';
                 
-                let tabelaAtual = null;
-                dados.linhas.forEach(linha => {
-                    if(linha.tipo === 'categoria') {
-                        tabelaAtual = linha.nome.toUpperCase().includes('RECEITA') ? corpoReceitas : corpoDespesas;
-                    }
-                    const novaLinha = tabelaAtual.insertRow();
-                    if(linha.tipo === 'categoria') {
-                         novaLinha.className = 'categoria-header';
-                         novaLinha.innerHTML = `<th colspan="2">${linha.nome} <button class="btn-add-row" title="Adicionar linha nesta categoria">+</button></th>`;
-                    } else {
-                        novaLinha.innerHTML = `<td contenteditable="true">${linha.nome}</td><td><input type="number" step="0.01" class="input-${linha.tipoInput}" value="${linha.valor || ''}"></td>`;
-                    }
+                Object.entries(dados.receitas).forEach(([catNome, itens]) => {
+                    adicionarCategoriaHeader(corpoReceitas, catNome);
+                    itens.forEach(item => adicionarLinhaItem(corpoReceitas, item.nome, item.valor, 'input-receita'));
                 });
-                vincularEventListeners();
+                Object.entries(dados.despesas).forEach(([catNome, itens]) => {
+                    adicionarCategoriaHeader(corpoDespesas, catNome);
+                    itens.forEach(item => adicionarLinhaItem(corpoDespesas, item.nome, item.valor, 'input-despesa'));
+                });
+                vincularEventListenersInputs();
                 calcularETotais();
             }
 
@@ -196,16 +188,14 @@
                 if (docSnap.exists()) {
                     renderizarTabela(docSnap.data(), mesAno);
                 } else {
-                    const dadosPadrao = { periodoReferencia: '', saldoAnterior: 0, linhas: [ {tipo: 'categoria', nome: '1-CONTRIBUIÇÕES'}, {tipo: 'item', nome: 'Doações', tipoInput: 'receita'}, {tipo: 'categoria', nome: '1-MANUTENÇÃO'}, {tipo: 'item', nome: 'Água', tipoInput: 'despesa'} ] };
-                    renderizarTabela(dadosPadrao, mesAno);
+                    renderizarTabela(balancetePadrao, mesAno);
                 }
             }
 
             btnSalvar.addEventListener('click', async () => {
                 const mesAno = seletorMesAno.value;
-                if (!mesAno) return alert("Por favor, selecione um período.");
-                btnSalvar.disabled = true;
-                btnSalvar.textContent = "Salvando...";
+                if (!mesAno) { return alert("Por favor, selecione um período."); }
+                btnSalvar.disabled = true; btnSalvar.textContent = "Salvando...";
                 const dadosParaSalvar = getDadosAtuaisDaTela();
                 try {
                     await setDoc(doc(db, "balancetes", mesAno), dadosParaSalvar);
@@ -214,34 +204,40 @@
                     console.error("Erro ao salvar balancete:", error);
                     alert("Ocorreu um erro ao salvar.");
                 } finally {
-                    btnSalvar.disabled = false;
-                    btnSalvar.textContent = "Salvar Balancete";
+                    btnSalvar.disabled = false; btnSalvar.textContent = "Salvar Balancete";
                 }
             });
             
-            function adicionarLinha(event) {
-                const headerRow = event.target.closest('tr');
-                const tabelaBody = headerRow.parentElement;
-                const novaLinha = document.createElement('tr');
-                const tipoClasse = tabelaBody.id.includes('receitas') ? 'input-receita' : 'input-despesa';
-                novaLinha.innerHTML = `<td contenteditable="true">Nova Linha</td><td><input type="number" step="0.01" class="${tipoClasse}"></td>`;
-                headerRow.insertAdjacentElement('afterend', novaLinha);
+            function adicionarLinhaItem(tabelaBody, nome = "Nova Linha", valor = '', tipoClasse) {
+                const novaLinha = tabelaBody.insertRow(-1); // Adiciona no final do tbody
+                novaLinha.innerHTML = `<td contenteditable="true">${nome}</td><td><input type="number" step="0.01" class="${tipoClasse}" value="${valor}"></td>`;
                 novaLinha.querySelector('input').addEventListener('input', calcularETotais);
             }
 
-            function adicionarCategoria(event) {
-                const targetId = event.target.dataset.target;
-                const tabelaBody = document.getElementById(targetId);
-                const novaLinha = tabelaBody.insertRow();
-                novaLinha.className = 'categoria-header';
-                novaLinha.innerHTML = `<th colspan="2" contenteditable="true">NOVA CATEGORIA <button class="btn-add-row" title="Adicionar linha">+</button></th>`;
-                novaLinha.querySelector('.btn-add-row').addEventListener('click', adicionarLinha);
+            function adicionarCategoriaHeader(tabelaBody, nome = "NOVA CATEGORIA") {
+                 const novaLinha = tabelaBody.insertRow(-1);
+                 novaLinha.className = 'categoria-header';
+                 novaLinha.innerHTML = `<th colspan="2"><span contenteditable="true">${nome}</span> <button class="btn-add-row" title="Adicionar linha nesta categoria">+</button></th>`;
+                 novaLinha.querySelector('.btn-add-row').addEventListener('click', () => {
+                     const tipoClasse = tabelaBody.id.includes('receitas') ? 'input-receita' : 'input-despesa';
+                     adicionarLinhaApos(novaLinha, tipoClasse);
+                 });
             }
 
-            function vincularEventListeners() {
+            function adicionarLinhaApos(linhaHeader, tipoClasse) {
+                const tabelaBody = linhaHeader.parentElement;
+                const novaLinha = document.createElement('tr');
+                novaLinha.innerHTML = `<td contenteditable="true">Nova Linha</td><td><input type="number" step="0.01" class="${tipoClasse}"></td>`;
+                linhaHeader.insertAdjacentElement('afterend', novaLinha);
+                novaLinha.querySelector('input').addEventListener('input', calcularETotais);
+            }
+            
+            function vincularEventListenersInputs() {
                 document.querySelectorAll('input[type="number"]').forEach(input => input.addEventListener('input', calcularETotais));
-                document.querySelectorAll('.btn-add-row').forEach(btn => btn.addEventListener('click', adicionarLinha));
-                document.querySelectorAll('.btn-add-categoria').forEach(btn => btn.addEventListener('click', adicionarCategoria));
+                document.querySelectorAll('.btn-add-row').forEach(btn => btn.addEventListener('click', (e) => adicionarLinhaApos(e.target.closest('tr'), e.target.closest('tbody').id.includes('receitas') ? 'input-receita' : 'input-despesa' )));
+                document.querySelectorAll('.btn-add-categoria').forEach(btn => {
+                    btn.addEventListener('click', (e) => adicionarCategoriaHeader(document.getElementById(e.target.dataset.target)));
+                });
             }
             
             function inicializar() {
