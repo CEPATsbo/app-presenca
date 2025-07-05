@@ -13,7 +13,7 @@
         .main-container { display: flex; gap: 30px; width: 100%; max-width: 1600px; align-items: flex-start; }
         .balancete-container { background-color: white; padding: 40px; border-radius: 8px; box-shadow: 0 4px 20px rgba(0,0,0,0.1); flex-grow: 1; }
         .controles-container { background-color: white; padding: 20px; border-radius: 8px; box-shadow: 0 4px 20px rgba(0,0,0,0.1); width: 100%; max-width: 350px; position: -webkit-sticky; position: sticky; top: 20px; }
-        h1, h2, h3 { text-align: center; color: #333; margin-top: 0; }
+        h1, h2, h3, h4 { text-align: center; color: #333; margin-top: 0; }
         .cabecalho { text-align: center; margin-bottom: 20px; }
         .cabecalho h1 { font-size: 1.5em; margin: 0; }
         .cabecalho p { font-size: 0.9em; margin: 2px 0; }
@@ -37,13 +37,29 @@
         #status-balancete { padding: 12px; margin-bottom: 20px; border-radius: 6px; text-align: center; font-weight: bold; font-size: 1.1em; }
         .status-revisao { background-color: #E1F5FE; color: #0277BD; }
         .status-aprovado { background-color: #C8E6C9; color: #2E7D32; }
+        #area-aprovacao { border-top: 1px solid #ddd; margin-top: 20px; padding-top: 20px; }
+        #area-aprovacao button { width: 100%; padding: 12px; font-size: 1em; cursor: pointer; border: none; border-radius: 6px; color: white; margin-bottom: 10px; }
+        #btn-aprovar { background-color: #2e7d32; }
+        #btn-reprovar { background-color: #c62828; }
+        #area-aprovacao textarea { width: 100%; box-sizing: border-box; margin-top: 10px; height: 80px; padding: 8px; border: 1px solid #ccc; border-radius: 6px; }
+        #lista-aprovacoes { list-style-type: none; padding: 0; font-size: 0.9em; max-height: 150px; overflow-y: auto; }
+        #lista-aprovacoes li { background-color: #f0f0f0; padding: 5px 8px; border-radius: 4px; margin-bottom: 5px; }
+        .hidden { display: none; }
     </style>
 </head>
 <body>
     <nav class="admin-nav">
-        </nav>
+        <!-- Seu menu de navegação aqui -->
+    </nav>
 
-    <div class="main-container">
+    <div id="acesso-negado" style="display: none;">
+        <div class="container" style="text-align: center;">
+            <h1>Acesso Negado</h1>
+            <p>Apenas membros do Conselho Fiscal e da Diretoria podem acessar esta página.</p>
+        </div>
+    </div>
+    
+    <div id="main-content" class="main-container" style="display: none;">
         <div class="balancete-container">
             <div class="cabecalho">
                 <h1>C. E. PAULO DE TARSO</h1>
@@ -80,7 +96,8 @@
             </div>
             <p id="mensagem-inicial">Selecione um balancete para iniciar a revisão.</p>
             <div class="rodape-assinaturas">
-                </div>
+                <!-- Assinaturas aqui -->
+            </div>
         </div>
 
         <div class="controles-container">
@@ -90,14 +107,24 @@
                 <select id="seletor-balancete"><option value="">-- Carregando... --</option></select>
             </div>
             <div id="status-balancete"></div>
-            <div id="area-aprovacao">
+            <div id="area-aprovacao" style="display: none;">
+                <h4>Aprovações Recebidas:</h4>
+                <div id="lista-aprovacoes"></div>
+                <div id="area-de-votacao" style="margin-top: 20px;">
+                    <button id="btn-aprovar">Aprovar Balancete</button>
+                    <button id="btn-reprovar">Reprovar com Ressalva</button>
+                    <textarea id="texto-ressalva" placeholder="Se reprovar, digite a justificativa ou pergunta aqui..." class="hidden"></textarea>
+                    <button id="btn-enviar-ressalva" class="hidden" style="background-color: #555; margin-top: 5px;">Enviar Ressalva</button>
                 </div>
+            </div>
         </div>
     </div>
     
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
-        import { getFirestore, collection, query, where, onSnapshot, doc, getDoc, Timestamp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
+        import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-auth.js";
+        import { getFirestore, collection, query, where, onSnapshot, doc, getDoc, updateDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
+        import { getFunctions, httpsCallable } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-functions.js";
         
         const firebaseConfig = {
   apiKey: "AIzaSyBV7RPjk3cFTqL-aIpflJcUojKg1ZXMLuU",
@@ -110,14 +137,110 @@
         
         const app = initializeApp(firebaseConfig);
         const db = getFirestore(app);
+        const auth = getAuth(app);
+        const functions = getFunctions(app, 'southamerica-east1');
 
         const seletorBalancete = document.getElementById('seletor-balancete');
         const balanceteContent = document.getElementById('balancete-content');
         const mensagemInicial = document.getElementById('mensagem-inicial');
         const tituloBalancete = document.getElementById('titulo-balancete');
         const statusBar = document.getElementById('status-balancete');
+        const areaAprovacao = document.getElementById('area-aprovacao');
+        const btnAprovar = document.getElementById('btn-aprovar');
+        const btnReprovar = document.getElementById('btn-reprovar');
+        const textoRessalva = document.getElementById('texto-ressalva');
+        const btnEnviarRessalva = document.getElementById('btn-enviar-ressalva');
+        const listaAprovacoes = document.getElementById('lista-aprovacoes');
+        
+        let currentUser = null;
+        let unsubscribeBalancete = null;
 
-        function formatarMoeda(valor) { return (valor || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }); }
+        onAuthStateChanged(auth, (user) => {
+            if (user) {
+                currentUser = user;
+                user.getIdTokenResult(true).then((idTokenResult) => {
+                    const userRole = idTokenResult.claims.role;
+                    if (['conselheiro', 'tesoureiro', 'diretor', 'super-admin'].includes(userRole)) {
+                        document.getElementById('main-content').style.display = 'flex';
+                        carregarListaDeBalancetes();
+                    } else {
+                        document.getElementById('acesso-negado').style.display = 'block';
+                    }
+                });
+            } else {
+                window.location.href = window.location.origin + '/login.html';
+            }
+        });
+
+        function carregarListaDeBalancetes() {
+            const q = query(collection(db, "balancetes"), where("status", "in", ["em revisão", "aprovado"]));
+            onSnapshot(q, (snapshot) => {
+                const mesAnoSelecionado = seletorBalancete.value;
+                seletorBalancete.innerHTML = '<option value="">-- Selecione um período --</option>';
+                if (snapshot.empty) {
+                    seletorBalancete.innerHTML = '<option value="">Nenhum balancete disponível</option>';
+                    return;
+                }
+                snapshot.docs.sort((a, b) => b.id.localeCompare(a.id)).forEach(doc => {
+                    const option = document.createElement('option');
+                    option.value = doc.id;
+                    const dataFormatada = new Date(`${doc.id}-02T00:00:00`).toLocaleString('pt-BR', { month: 'long', year: 'numeric' });
+                    option.textContent = dataFormatada.charAt(0).toUpperCase() + dataFormatada.slice(1);
+                    seletorBalancete.appendChild(option);
+                });
+                if (mesAnoSelecionado) {
+                    seletorBalancete.value = mesAnoSelecionado;
+                }
+            });
+        }
+
+        async function carregarBalanceteSelecionado() {
+            if (unsubscribeBalancete) unsubscribeBalancete();
+            
+            const mesAno = seletorBalancete.value;
+            if (!mesAno) {
+                balanceteContent.style.display = 'none';
+                mensagemInicial.style.display = 'block';
+                statusBar.innerHTML = '';
+                areaAprovacao.style.display = 'none';
+                return;
+            }
+            
+            const balanceteRef = doc(db, "balancetes", mesAno);
+            
+            unsubscribeBalancete = onSnapshot(balanceteRef, (docSnap) => {
+                if (docSnap.exists()) {
+                    const balancete = docSnap.data();
+                    renderizarBalancete(balancete, mesAno);
+                    
+                    const status = balancete.status || 'em revisão';
+                    statusBar.textContent = `Status: ${status.replace('em revisão', 'Em Revisão').replace('aprovado', 'Aprovado')}`;
+                    statusBar.className = `status-bar status-${status.split(' ')[0]}`;
+                    
+                    const aprovacoes = balancete.aprovacoes || {};
+                    const jaVotou = currentUser ? aprovacoes[currentUser.uid] : false;
+                    
+                    areaAprovacao.style.display = 'block';
+                    const userRole = auth.currentUser.claims.role;
+                    const podeVotar = userRole === 'conselheiro' || userRole === 'super-admin';
+
+                    if (balancete.status === 'em revisão' && podeVotar && !jaVotou) {
+                        document.getElementById('area-de-votacao').style.display = 'block';
+                    } else {
+                        document.getElementById('area-de-votacao').style.display = 'none';
+                    }
+                    
+                    listaAprovacoes.innerHTML = '<h4>Aprovações:</h4>';
+                    if (Object.keys(aprovacoes).length > 0) {
+                        Object.values(aprovacoes).forEach(aprovacao => {
+                            listaAprovacoes.innerHTML += `<li>✅ ${aprovacao.nome}</li>`;
+                        });
+                    } else {
+                        listaAprovacoes.innerHTML += '<li>Nenhuma aprovação ainda.</li>';
+                    }
+                }
+            });
+        }
 
         function renderizarBalancete(dados, mesAno) {
             const dataFormatada = new Date(`${mesAno}-02T00:00:00`).toLocaleString('pt-BR', { month: 'long', year: 'numeric' }).toUpperCase();
@@ -158,51 +281,47 @@
             balanceteContent.style.display = 'block';
             mensagemInicial.style.display = 'none';
         }
-        
-        async function carregarBalanceteSelecionado() {
+
+        function formatarMoeda(valor) { return (valor || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }); }
+
+        async function registrarVoto(voto, mensagem = null) {
             const mesAno = seletorBalancete.value;
-            if (!mesAno) {
-                balanceteContent.style.display = 'none';
-                mensagemInicial.style.display = 'block';
-                statusBar.innerHTML = '';
-                return;
-            }
-            
-            const balanceteRef = doc(db, "balancetes", mesAno);
-            const docSnap = await getDoc(balanceteRef);
+            if (!mesAno || !currentUser) return;
 
-            if (docSnap.exists()) {
-                renderizarBalancete(docSnap.data(), mesAno);
-                const status = docSnap.data().status || 'em revisão';
-                statusBar.textContent = `Status: ${status.replace('-', ' ')}`;
-                statusBar.className = `status-bar status-${status.split(' ')[0]}`;
+            const registrarVotoConselho = httpsCallable(functions, 'registrarVotoConselho');
+            try {
+                await registrarVotoConselho({ balanceteId: mesAno, voto, mensagem });
+                alert('Sua ação foi registrada com sucesso!');
+                textoRessalva.value = '';
+                textoRessalva.classList.add('hidden');
+                btnEnviarRessalva.classList.add('hidden');
+            } catch (error) {
+                console.error("Erro ao registrar voto:", error);
+                alert(`Ocorreu um erro: ${error.message}`);
             }
         }
 
-        function carregarListaDeBalancetes() {
-            const q = query(collection(db, "balancetes"), where("status", "==", "em revisão"));
-            onSnapshot(q, (snapshot) => {
-                seletorBalancete.innerHTML = '<option value="">-- Selecione um período --</option>';
-                if (snapshot.empty) {
-                    seletorBalancete.innerHTML = '<option value="">Nenhum balancete em revisão</option>';
-                    return;
-                }
-                snapshot.forEach(doc => {
-                    const option = document.createElement('option');
-                    option.value = doc.id; // Ex: "2025-07"
-                    const dataFormatada = new Date(`${doc.id}-02T00:00:00`).toLocaleString('pt-BR', { month: 'long', year: 'numeric' });
-                    option.textContent = dataFormatada.charAt(0).toUpperCase() + dataFormatada.slice(1);
-                    seletorBalancete.appendChild(option);
-                });
-            }, (error) => {
-                console.error("Erro ao buscar balancetes para revisão:", error);
-                seletorBalancete.innerHTML = '<option value="">Erro ao carregar</option>';
-            });
-        }
-        
+        btnAprovar.addEventListener('click', () => {
+            if (confirm('Tem certeza que deseja APROVAR este balancete?')) {
+                registrarVoto('aprovado');
+            }
+        });
+
+        btnReprovar.addEventListener('click', () => {
+            textoRessalva.classList.toggle('hidden');
+            btnEnviarRessalva.classList.toggle('hidden');
+        });
+
+        btnEnviarRessalva.addEventListener('click', () => {
+            const ressalva = textoRessalva.value.trim();
+            if (!ressalva) return alert('Por favor, escreva a justificativa para a reprovação.');
+            if (confirm('Tem certeza que deseja enviar esta ressalva?')) {
+                registrarVoto('reprovado', ressalva);
+            }
+        });
+
         seletorBalancete.addEventListener('change', carregarBalanceteSelecionado);
         carregarListaDeBalancetes();
-
     </script>
     <script type="module" src="/logout.js"></script>
 </body>
