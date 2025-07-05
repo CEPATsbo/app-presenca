@@ -4,7 +4,6 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Admin - Conselho Fiscal</title>
-    <script type="module" src="/auth-guard.js"></script>
     <style>
         body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background-color: #f4f6f9; display: flex; flex-direction: column; align-items: center; margin: 0; padding: 20px; box-sizing: border-box; }
         .admin-nav { width: 100%; max-width: 1100px; background-color: #fff; padding: 15px; margin-bottom: 30px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); text-align: center; display: flex; flex-wrap: wrap; justify-content: center; gap: 15px 25px; }
@@ -50,12 +49,14 @@
 <body>
     <nav class="admin-nav">
         </nav>
+
     <div id="acesso-negado" style="display: none;">
         <div class="container" style="text-align: center;">
             <h1>Acesso Negado</h1>
             <p>Apenas membros do Conselho Fiscal e da Diretoria podem acessar esta página.</p>
         </div>
     </div>
+    
     <div id="main-content" class="main-container" style="display: none;">
         <div class="balancete-container">
             <div class="cabecalho">
@@ -99,6 +100,7 @@
                 <div class="assinatura"><div class="linha"></div><div class="cargo">Membro do conselho Fiscal</div></div>
             </div>
         </div>
+
         <div class="controles-container">
             <h2>Painel do Conselho</h2>
             <div class="seletor-periodo">
@@ -126,207 +128,214 @@
         import { getFunctions, httpsCallable } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-functions.js";
         
         const firebaseConfig = {
-  apiKey: "AIzaSyBV7RPjk3cFTqL-aIpflJcUojKg1ZXMLuU",
-  authDomain: "voluntarios-ativos---cepat.firebaseapp.com",
-  projectId: "voluntarios-ativos---cepat",
-  storageBucket: "voluntarios-ativos---cepat.firebasestorage.app",
-  messagingSenderId: "66122858261",
-  appId: "1:66122858261:web:7fa21f1805463b5c08331c"
-};
+            apiKey: "AIzaSyBV7RPjk3cFTqL-aIpflJcUojKg1ZXMLuU",
+            authDomain: "voluntarios-ativos---cepat.firebaseapp.com",
+            projectId: "voluntarios-ativos---cepat",
+            storageBucket: "voluntarios-ativos---cepat.firebasestorage.app",
+            messagingSenderId: "66122858261",
+            appId: "1:66122858261:web:7fa21f1805463b5c08331c"
+        };
         
         const app = initializeApp(firebaseConfig);
         const db = getFirestore(app);
         const auth = getAuth(app);
         const functions = getFunctions(app, 'southamerica-east1');
 
-        const mainContent = document.getElementById('main-content');
-        const acessoNegado = document.getElementById('acesso-negado');
-        const seletorBalancete = document.getElementById('seletor-balancete');
-        const balanceteContent = document.getElementById('balancete-content');
-        const mensagemInicial = document.getElementById('mensagem-inicial');
-        const tituloBalancete = document.getElementById('titulo-balancete');
-        const statusBar = document.getElementById('status-balancete');
-        const areaAprovacao = document.getElementById('area-aprovacao');
-        const btnAprovar = document.getElementById('btn-aprovar');
-        const btnReprovar = document.getElementById('btn-reprovar');
-        const textoRessalva = document.getElementById('texto-ressalva');
-        const btnEnviarRessalva = document.getElementById('btn-enviar-ressalva');
-        const listaAprovacoes = document.getElementById('lista-aprovacoes');
-        
-        let currentUser = null;
-        let unsubscribeBalancete = null;
+        document.addEventListener('DOMContentLoaded', () => {
+            const mainContent = document.getElementById('main-content');
+            const acessoNegado = document.getElementById('acesso-negado');
+            const seletorBalancete = document.getElementById('seletor-balancete');
+            const balanceteContent = document.getElementById('balancete-content');
+            const mensagemInicial = document.getElementById('mensagem-inicial');
+            const tituloBalancete = document.getElementById('titulo-balancete');
+            const statusBar = document.getElementById('status-balancete');
+            const areaAprovacao = document.getElementById('area-aprovacao');
+            const btnAprovar = document.getElementById('btn-aprovar');
+            const btnReprovar = document.getElementById('btn-reprovar');
+            const textoRessalva = document.getElementById('texto-ressalva');
+            const btnEnviarRessalva = document.getElementById('btn-enviar-ressalva');
+            const listaAprovacoes = document.getElementById('lista-aprovacoes');
+            
+            let currentUser = null;
+            let unsubscribeBalancete = null;
 
-        onAuthStateChanged(auth, (user) => {
-            if (user) {
-                currentUser = user;
-                user.getIdTokenResult(true).then((idTokenResult) => {
-                    currentUser.claims = idTokenResult.claims; // Armazena as permissões atualizadas
-                    const userRole = currentUser.claims.role || '';
-                    if (['conselheiro', 'tesoureiro', 'diretor', 'super-admin'].includes(userRole)) {
-                        mainContent.style.display = 'flex';
-                        carregarListaDeBalancetes();
-                    } else {
-                        acessoNegado.style.display = 'block';
+            onAuthStateChanged(auth, (user) => {
+                if (user) {
+                    currentUser = user;
+                    user.getIdTokenResult(true).then((idTokenResult) => {
+                        currentUser.claims = idTokenResult.claims;
+                        const userRole = currentUser.claims.role || '';
+                        if (['conselheiro', 'tesoureiro', 'diretor', 'super-admin'].includes(userRole)) {
+                            mainContent.style.display = 'flex';
+                            carregarListaDeBalancetes();
+                        } else {
+                            acessoNegado.style.display = 'block';
+                        }
+                    });
+                } else {
+                    window.location.href = window.location.origin + '/login.html';
+                }
+            });
+
+            function carregarListaDeBalancetes() {
+                const q = query(collection(db, "balancetes"), where("status", "in", ["em revisão", "aprovado"]));
+                onSnapshot(q, (snapshot) => {
+                    const mesAnoSelecionado = seletorBalancete.value;
+                    seletorBalancete.innerHTML = '<option value="">-- Selecione um período --</option>';
+                    if (snapshot.empty) {
+                        seletorBalancete.innerHTML = '<option value="">Nenhum balancete disponível</option>';
+                        return;
                     }
+                    snapshot.docs.sort((a, b) => b.id.localeCompare(a.id)).forEach(doc => {
+                        const option = document.createElement('option');
+                        option.value = doc.id;
+                        const dataFormatada = new Date(`${doc.id}-02T00:00:00`).toLocaleString('pt-BR', { month: 'long', year: 'numeric' });
+                        option.textContent = dataFormatada.charAt(0).toUpperCase() + dataFormatada.slice(1);
+                        seletorBalancete.appendChild(option);
+                    });
+                    if (mesAnoSelecionado) { seletorBalancete.value = mesAnoSelecionado; }
+                }, (error) => {
+                    console.error("Erro ao carregar lista de balancetes:", error);
                 });
-            } else {
-                window.location.href = window.location.origin + '/login.html';
             }
-        });
 
-        function carregarListaDeBalancetes() {
-            const q = query(collection(db, "balancetes"), where("status", "in", ["em revisão", "aprovado"]));
-            onSnapshot(q, (snapshot) => {
-                const mesAnoSelecionado = seletorBalancete.value;
-                seletorBalancete.innerHTML = '<option value="">-- Selecione um período --</option>';
-                if (snapshot.empty) {
-                    seletorBalancete.innerHTML = '<option value="">Nenhum balancete disponível</option>';
+            async function carregarBalanceteSelecionado() {
+                if (unsubscribeBalancete) unsubscribeBalancete();
+                
+                const mesAno = seletorBalancete.value;
+                if (!mesAno) {
+                    balanceteContent.style.display = 'none';
+                    mensagemInicial.style.display = 'block';
+                    statusBar.innerHTML = '';
+                    areaAprovacao.style.display = 'none';
                     return;
                 }
-                snapshot.docs.sort((a, b) => b.id.localeCompare(a.id)).forEach(doc => {
-                    const option = document.createElement('option');
-                    option.value = doc.id;
-                    const dataFormatada = new Date(`${doc.id}-02T00:00:00`).toLocaleString('pt-BR', { month: 'long', year: 'numeric' });
-                    option.textContent = dataFormatada.charAt(0).toUpperCase() + dataFormatada.slice(1);
-                    seletorBalancete.appendChild(option);
-                });
-                if (mesAnoSelecionado) { seletorBalancete.value = mesAnoSelecionado; }
-            });
-        }
+                
+                const balanceteRef = doc(db, "balancetes", mesAno);
+                
+                unsubscribeBalancete = onSnapshot(balanceteRef, (docSnap) => {
+                    if (docSnap.exists()) {
+                        const balancete = docSnap.data();
+                        renderizarBalancete(balancete, mesAno);
+                        
+                        const status = balancete.status || 'em revisão';
+                        statusBar.textContent = `Status: ${status.replace('em revisão', 'Em Revisão').replace('aprovado', 'Aprovado')}`;
+                        statusBar.className = `status-bar status-${status.split(' ')[0]}`;
+                        
+                        const userRole = currentUser?.claims?.role;
+                        const podeVotar = userRole === 'conselheiro' || userRole === 'super-admin';
+                        
+                        const aprovacoes = balancete.aprovacoes || {};
+                        const jaVotou = currentUser ? aprovacoes[currentUser.uid] : false;
+                        
+                        areaAprovacao.style.display = 'block';
 
-        async function carregarBalanceteSelecionado() {
-            if (unsubscribeBalancete) unsubscribeBalancete();
-            
-            const mesAno = seletorBalancete.value;
-            if (!mesAno) {
-                balanceteContent.style.display = 'none';
-                mensagemInicial.style.display = 'block';
-                statusBar.innerHTML = '';
-                areaAprovacao.style.display = 'none';
-                return;
-            }
-            
-            const balanceteRef = doc(db, "balancetes", mesAno);
-            
-            unsubscribeBalancete = onSnapshot(balanceteRef, (docSnap) => {
-                if (docSnap.exists()) {
-                    const balancete = docSnap.data();
-                    renderizarBalancete(balancete, mesAno);
-                    
-                    const status = balancete.status || 'em revisão';
-                    statusBar.textContent = `Status: ${status.replace('em revisão', 'Em Revisão').replace('aprovado', 'Aprovado')}`;
-                    statusBar.className = `status-bar status-${status.split(' ')[0]}`;
-                    
-                    const userRole = currentUser?.claims?.role;
-                    const podeVotar = userRole === 'conselheiro' || userRole === 'super-admin';
-                    
-                    const aprovacoes = balancete.aprovacoes || {};
-                    const jaVotou = currentUser ? aprovacoes[currentUser.uid] : false;
-                    
-                    areaAprovacao.style.display = 'block';
-
-                    if (balancete.status === 'em revisão' && podeVotar && !jaVotou) {
-                        document.getElementById('area-de-votacao').style.display = 'block';
-                    } else {
-                        document.getElementById('area-de-votacao').style.display = 'none';
+                        if (balancete.status === 'em revisão' && podeVotar && !jaVotou) {
+                            document.getElementById('area-de-votacao').style.display = 'block';
+                        } else {
+                            document.getElementById('area-de-votacao').style.display = 'none';
+                        }
+                        
+                        listaAprovacoes.innerHTML = '<h4>Aprovações Recebidas:</h4>';
+                        if (Object.keys(aprovacoes).length > 0) {
+                            Object.values(aprovacoes).forEach(aprovacao => {
+                                const dataAprovacao = aprovacao.data ? aprovacao.data.toDate().toLocaleDateString('pt-BR') : '';
+                                listaAprovacoes.innerHTML += `<li>✅ ${aprovacao.nome} (${dataAprovacao})</li>`;
+                            });
+                        } else {
+                            listaAprovacoes.innerHTML += '<li>Nenhuma aprovação ainda.</li>';
+                        }
                     }
-                    
-                    listaAprovacoes.innerHTML = '<h4>Aprovações Recebidas:</h4>';
-                    if (Object.keys(aprovacoes).length > 0) {
-                        Object.values(aprovacoes).forEach(aprovacao => {
-                            const dataAprovacao = aprovacao.data ? aprovacao.data.toDate().toLocaleDateString('pt-BR') : '';
-                            listaAprovacoes.innerHTML += `<li>✅ ${aprovacao.nome} (${dataAprovacao})</li>`;
-                        });
-                    } else {
-                        listaAprovacoes.innerHTML += '<li>Nenhuma aprovação ainda.</li>';
+                });
+            }
+
+            function renderizarBalancete(dados, mesAno) {
+                const dataFormatada = new Date(`${mesAno}-02T00:00:00`).toLocaleString('pt-BR', { month: 'long', year: 'numeric' }).toUpperCase();
+                tituloBalancete.textContent = `BALANCETE REFERENTE A ${dataFormatada}`;
+                let totalReceitas = 0, totalDespesas = 0;
+                const corpoReceitas = document.getElementById('corpo-tabela-receitas');
+                const corpoDespesas = document.getElementById('corpo-tabela-despesas');
+                corpoReceitas.innerHTML = ''; corpoDespesas.innerHTML = '';
+
+                Object.entries(dados.receitas || {}).forEach(([cat, itens]) => {
+                    corpoReceitas.innerHTML += `<tr class="categoria-header"><th colspan="2">${cat}</th></tr>`;
+                    itens.forEach(item => {
+                        corpoReceitas.innerHTML += `<tr><td>${item.nome}</td><td class="valor">${formatarMoeda(item.valor)}</td></tr>`;
+                        totalReceitas += item.valor;
+                    });
+                });
+                Object.entries(dados.despesas || {}).forEach(([cat, itens]) => {
+                    corpoDespesas.innerHTML += `<tr class="categoria-header"><th colspan="2">${cat}</th></tr>`;
+                    itens.forEach(item => {
+                        corpoDespesas.innerHTML += `<tr><td>${item.nome}</td><td class="valor">${formatarMoeda(item.valor)}</td></tr>`;
+                        totalDespesas += item.valor;
+                    });
+                });
+
+                document.getElementById('total-receitas').textContent = formatarMoeda(totalReceitas);
+                document.getElementById('total-despesas').textContent = formatarMoeda(totalDespesas);
+                const saldoAnterior = dados.saldoAnterior || 0;
+                const saldoPeriodo = totalReceitas - totalDespesas;
+                const saldoAtual = saldoPeriodo + saldoAnterior;
+                document.getElementById('nome-saldo-anterior').textContent = dados.nomes?.['nome-saldo-anterior'] || 'SALDO ANTERIOR';
+                document.getElementById('saldo-valor-anterior').textContent = formatarMoeda(saldoAnterior);
+                document.getElementById('saldo-periodo').textContent = formatarMoeda(saldoPeriodo);
+                document.getElementById('saldo-atual').textContent = formatarMoeda(saldoAtual);
+                balanceteContent.style.display = 'block';
+                mensagemInicial.style.display = 'none';
+            }
+
+            function formatarMoeda(valor) { return (valor || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }); }
+
+            async function registrarVoto(voto, mensagem = null) {
+                const mesAno = seletorBalancete.value;
+                if (!mesAno || !currentUser) return;
+                const registrarVotoConselho = httpsCallable(functions, 'registrarVotoConselho');
+                try {
+                    const botao = voto === 'aprovado' ? btnAprovar : btnEnviarRessalva;
+                    botao.disabled = true;
+                    botao.textContent = 'Enviando...';
+                    await registrarVotoConselho({ balanceteId: mesAno, voto, mensagem });
+                    alert('Sua ação foi registrada com sucesso!');
+                    textoRessalva.value = '';
+                    textoRessalva.classList.add('hidden');
+                    btnEnviarRessalva.classList.add('hidden');
+                } catch (error) {
+                    console.error("Erro ao registrar voto:", error);
+                    alert(`Ocorreu um erro: ${error.message}`);
+                } finally {
+                    const botaoAprovar = document.getElementById('btn-aprovar');
+                    const botaoEnviarRessalva = document.getElementById('btn-enviar-ressalva');
+                    if(botaoAprovar) {
+                        botaoAprovar.disabled = false;
+                        botaoAprovar.textContent = 'Aprovar Balancete';
+                    }
+                    if(botaoEnviarRessalva) {
+                        botaoEnviarRessalva.disabled = false;
+                        botaoEnviarRessalva.textContent = 'Enviar Ressalva';
                     }
                 }
-            });
-        }
+            }
 
-        function renderizarBalancete(dados, mesAno) {
-            const dataFormatada = new Date(`${mesAno}-02T00:00:00`).toLocaleString('pt-BR', { month: 'long', year: 'numeric' }).toUpperCase();
-            tituloBalancete.textContent = `BALANCETE REFERENTE A ${dataFormatada}`;
-            let totalReceitas = 0, totalDespesas = 0;
-            const corpoReceitas = document.getElementById('corpo-tabela-receitas');
-            const corpoDespesas = document.getElementById('corpo-tabela-despesas');
-            corpoReceitas.innerHTML = ''; corpoDespesas.innerHTML = '';
-
-            Object.entries(dados.receitas || {}).forEach(([cat, itens]) => {
-                corpoReceitas.innerHTML += `<tr class="categoria-header"><th colspan="2">${cat}</th></tr>`;
-                itens.forEach(item => {
-                    corpoReceitas.innerHTML += `<tr><td>${item.nome}</td><td class="valor">${formatarMoeda(item.valor)}</td></tr>`;
-                    totalReceitas += item.valor;
-                });
-            });
-            Object.entries(dados.despesas || {}).forEach(([cat, itens]) => {
-                corpoDespesas.innerHTML += `<tr class="categoria-header"><th colspan="2">${cat}</th></tr>`;
-                itens.forEach(item => {
-                    corpoDespesas.innerHTML += `<tr><td>${item.nome}</td><td class="valor">${formatarMoeda(item.valor)}</td></tr>`;
-                    totalDespesas += item.valor;
-                });
-            });
-
-            document.getElementById('total-receitas').textContent = formatarMoeda(totalReceitas);
-            document.getElementById('total-despesas').textContent = formatarMoeda(totalDespesas);
-            const saldoAnterior = dados.saldoAnterior || 0;
-            const saldoPeriodo = totalReceitas - totalDespesas;
-            const saldoAtual = saldoPeriodo + saldoAnterior;
-            document.getElementById('nome-saldo-anterior').textContent = dados.nomes?.['nome-saldo-anterior'] || 'SALDO ANTERIOR';
-            document.getElementById('saldo-valor-anterior').textContent = formatarMoeda(saldoAnterior);
-            document.getElementById('saldo-periodo').textContent = formatarMoeda(saldoPeriodo);
-            document.getElementById('saldo-atual').textContent = formatarMoeda(saldoAtual);
-            balanceteContent.style.display = 'block';
-            mensagemInicial.style.display = 'none';
-        }
-
-        function formatarMoeda(valor) { return (valor || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }); }
-
-        async function registrarVoto(voto, mensagem = null) {
-            const mesAno = seletorBalancete.value;
-            if (!mesAno || !currentUser) return;
-            const registrarVotoConselho = httpsCallable(functions, 'registrarVotoConselho');
-            try {
-                const botao = voto === 'aprovado' ? btnAprovar : btnEnviarRessalva;
-                botao.disabled = true;
-                botao.textContent = 'Enviando...';
-                await registrarVotoConselho({ balanceteId: mesAno, voto, mensagem });
-                alert('Sua ação foi registrada com sucesso!');
-                textoRessalva.value = '';
-                textoRessalva.classList.add('hidden');
-                btnEnviarRessalva.classList.add('hidden');
-            } catch (error) {
-                console.error("Erro ao registrar voto:", error);
-                alert(`Ocorreu um erro: ${error.message}`);
-            } finally {
-                if(btnAprovar) btnAprovar.disabled = false;
-                if(btnEnviarRessalva) {
-                    btnEnviarRessalva.disabled = false;
-                    btnEnviarRessalva.textContent = 'Enviar Ressalva';
+            btnAprovar.addEventListener('click', () => {
+                if (confirm('Tem certeza que deseja APROVAR este balancete?')) {
+                    registrarVoto('aprovado');
                 }
-            }
-        }
-
-        btnAprovar.addEventListener('click', () => {
-            if (confirm('Tem certeza que deseja APROVAR este balancete?')) {
-                registrarVoto('aprovado');
-            }
+            });
+            btnReprovar.addEventListener('click', () => {
+                textoRessalva.classList.toggle('hidden');
+                btnEnviarRessalva.classList.toggle('hidden');
+            });
+            btnEnviarRessalva.addEventListener('click', () => {
+                const ressalva = textoRessalva.value.trim();
+                if (!ressalva) return alert('Por favor, escreva a justificativa para a reprovação.');
+                if (confirm('Tem certeza que deseja enviar esta ressalva?')) {
+                    registrarVoto('reprovado', ressalva);
+                }
+            });
+            
+            seletorBalancete.addEventListener('change', carregarBalanceteSelecionado);
         });
-        btnReprovar.addEventListener('click', () => {
-            textoRessalva.classList.toggle('hidden');
-            btnEnviarRessalva.classList.toggle('hidden');
-        });
-        btnEnviarRessalva.addEventListener('click', () => {
-            const ressalva = textoRessalva.value.trim();
-            if (!ressalva) return alert('Por favor, escreva a justificativa para a reprovação.');
-            if (confirm('Tem certeza que deseja enviar esta ressalva?')) {
-                registrarVoto('reprovado', ressalva);
-            }
-        });
-        
-        seletorBalancete.addEventListener('change', carregarBalanceteSelecionado);
-        
-        // A chamada inicial para carregar a lista acontece dentro do onAuthStateChanged
     </script>
     <script type="module" src="/logout.js"></script>
 </body>
