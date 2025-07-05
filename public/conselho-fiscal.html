@@ -41,8 +41,7 @@
 </head>
 <body>
     <nav class="admin-nav">
-        <!-- Seu menu de navegação aqui -->
-    </nav>
+        </nav>
 
     <div class="main-container">
         <div class="balancete-container">
@@ -52,33 +51,54 @@
                 <p>RUA DO CROMO, 782, VL. PANTANO II - SANTA BARBARA D'OESTE - SP</p>
                 <h3 id="titulo-balancete">BALANCETE</h3>
             </div>
-            <div id="balancete-content">
-                <!-- O conteúdo do balancete será carregado aqui pelo JavaScript -->
+            <div id="balancete-content" style="display: none;">
+                <div class="corpo-balancete">
+                    <div class="coluna">
+                        <h2>RECEITAS</h2>
+                        <table class="tabela-balancete">
+                            <thead><tr><th style="width:70%;">RECEITAS</th><th>VALOR</th></tr></thead>
+                            <tbody id="corpo-tabela-receitas"></tbody>
+                            <tfoot><tr class="total-row"><td>TOTAL DE RECEITAS</td><td id="total-receitas"></td></tr></tfoot>
+                        </table>
+                    </div>
+                    <div class="coluna">
+                        <h2>DESPESAS</h2>
+                        <table class="tabela-balancete">
+                            <thead><tr><th style="width:70%;">DESPESAS</th><th>VALOR</th></tr></thead>
+                            <tbody id="corpo-tabela-despesas"></tbody>
+                            <tfoot><tr class="total-row"><td>TOTAL DE DESPESAS</td><td id="total-despesas"></td></tr></tfoot>
+                        </table>
+                    </div>
+                </div>
+                <div class="corpo-balancete" style="margin-top: 20px;">
+                     <div class="coluna"><table class="tabela-balancete"><tr class="total-row"><td>SALDO NO PERÍODO</td><td id="saldo-periodo"></td></tr></table></div>
+                     <div class="coluna"><table class="tabela-balancete">
+                            <tbody><tr><td id="nome-saldo-anterior">SALDO ANTERIOR</td><td id="saldo-valor-anterior" class="valor"></td></tr></tbody>
+                            <tfoot><tr class="total-row"><td>SALDO ATUAL</td><td id="saldo-atual"></td></tr></tfoot>
+                        </table></div>
+                </div>
             </div>
+            <p id="mensagem-inicial">Selecione um balancete para iniciar a revisão.</p>
             <div class="rodape-assinaturas">
-                <!-- Assinaturas aqui -->
-            </div>
+                </div>
         </div>
 
         <div class="controles-container">
             <h2>Painel do Conselho</h2>
             <div class="seletor-periodo">
                 <label for="seletor-balancete">Selecione o Balancete para Revisão:</label>
-                <select id="seletor-balancete">
-                    <option value="">-- Carregando... --</option>
-                </select>
+                <select id="seletor-balancete"><option value="">-- Carregando... --</option></select>
             </div>
             <div id="status-balancete"></div>
             <div id="area-aprovacao">
-                <!-- Botões de aprovação e área de mensagens virão aqui -->
-            </div>
+                </div>
         </div>
     </div>
     
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
-        // Importações do Firestore e Auth virão aqui no próximo passo
-
+        import { getFirestore, collection, query, where, onSnapshot, doc, getDoc, Timestamp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
+        
         const firebaseConfig = {
   apiKey: "AIzaSyBV7RPjk3cFTqL-aIpflJcUojKg1ZXMLuU",
   authDomain: "voluntarios-ativos---cepat.firebaseapp.com",
@@ -89,11 +109,100 @@
 };
         
         const app = initializeApp(firebaseConfig);
-        // const db = getFirestore(app);
-        // const auth = getAuth(app);
+        const db = getFirestore(app);
 
-        // O JavaScript para carregar os dados e gerenciar as aprovações será adicionado aqui.
-        // Por enquanto, esta é apenas a estrutura visual.
+        const seletorBalancete = document.getElementById('seletor-balancete');
+        const balanceteContent = document.getElementById('balancete-content');
+        const mensagemInicial = document.getElementById('mensagem-inicial');
+        const tituloBalancete = document.getElementById('titulo-balancete');
+        const statusBar = document.getElementById('status-balancete');
+
+        function formatarMoeda(valor) { return (valor || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }); }
+
+        function renderizarBalancete(dados, mesAno) {
+            const dataFormatada = new Date(`${mesAno}-02T00:00:00`).toLocaleString('pt-BR', { month: 'long', year: 'numeric' }).toUpperCase();
+            tituloBalancete.textContent = `BALANCETE REFERENTE A ${dataFormatada}`;
+            
+            let totalReceitas = 0, totalDespesas = 0;
+            const corpoReceitas = document.getElementById('corpo-tabela-receitas');
+            const corpoDespesas = document.getElementById('corpo-tabela-despesas');
+            corpoReceitas.innerHTML = ''; corpoDespesas.innerHTML = '';
+
+            Object.entries(dados.receitas || {}).forEach(([cat, itens]) => {
+                corpoReceitas.innerHTML += `<tr class="categoria-header"><th colspan="2">${cat}</th></tr>`;
+                itens.forEach(item => {
+                    corpoReceitas.innerHTML += `<tr><td>${item.nome}</td><td class="valor">${formatarMoeda(item.valor)}</td></tr>`;
+                    totalReceitas += item.valor;
+                });
+            });
+            Object.entries(dados.despesas || {}).forEach(([cat, itens]) => {
+                corpoDespesas.innerHTML += `<tr class="categoria-header"><th colspan="2">${cat}</th></tr>`;
+                itens.forEach(item => {
+                    corpoDespesas.innerHTML += `<tr><td>${item.nome}</td><td class="valor">${formatarMoeda(item.valor)}</td></tr>`;
+                    totalDespesas += item.valor;
+                });
+            });
+
+            document.getElementById('total-receitas').textContent = formatarMoeda(totalReceitas);
+            document.getElementById('total-despesas').textContent = formatarMoeda(totalDespesas);
+            
+            const saldoAnterior = dados.saldoAnterior || 0;
+            const saldoPeriodo = totalReceitas - totalDespesas;
+            const saldoAtual = saldoPeriodo + saldoAnterior;
+
+            document.getElementById('nome-saldo-anterior').textContent = dados.nomes?.['nome-saldo-anterior'] || 'SALDO ANTERIOR';
+            document.getElementById('saldo-valor-anterior').textContent = formatarMoeda(saldoAnterior);
+            document.getElementById('saldo-periodo').textContent = formatarMoeda(saldoPeriodo);
+            document.getElementById('saldo-atual').textContent = formatarMoeda(saldoAtual);
+            
+            balanceteContent.style.display = 'block';
+            mensagemInicial.style.display = 'none';
+        }
+        
+        async function carregarBalanceteSelecionado() {
+            const mesAno = seletorBalancete.value;
+            if (!mesAno) {
+                balanceteContent.style.display = 'none';
+                mensagemInicial.style.display = 'block';
+                statusBar.innerHTML = '';
+                return;
+            }
+            
+            const balanceteRef = doc(db, "balancetes", mesAno);
+            const docSnap = await getDoc(balanceteRef);
+
+            if (docSnap.exists()) {
+                renderizarBalancete(docSnap.data(), mesAno);
+                const status = docSnap.data().status || 'em revisão';
+                statusBar.textContent = `Status: ${status.replace('-', ' ')}`;
+                statusBar.className = `status-bar status-${status.split(' ')[0]}`;
+            }
+        }
+
+        function carregarListaDeBalancetes() {
+            const q = query(collection(db, "balancetes"), where("status", "==", "em revisão"));
+            onSnapshot(q, (snapshot) => {
+                seletorBalancete.innerHTML = '<option value="">-- Selecione um período --</option>';
+                if (snapshot.empty) {
+                    seletorBalancete.innerHTML = '<option value="">Nenhum balancete em revisão</option>';
+                    return;
+                }
+                snapshot.forEach(doc => {
+                    const option = document.createElement('option');
+                    option.value = doc.id; // Ex: "2025-07"
+                    const dataFormatada = new Date(`${doc.id}-02T00:00:00`).toLocaleString('pt-BR', { month: 'long', year: 'numeric' });
+                    option.textContent = dataFormatada.charAt(0).toUpperCase() + dataFormatada.slice(1);
+                    seletorBalancete.appendChild(option);
+                });
+            }, (error) => {
+                console.error("Erro ao buscar balancetes para revisão:", error);
+                seletorBalancete.innerHTML = '<option value="">Erro ao carregar</option>';
+            });
+        }
+        
+        seletorBalancete.addEventListener('change', carregarBalanceteSelecionado);
+        carregarListaDeBalancetes();
+
     </script>
     <script type="module" src="/logout.js"></script>
 </body>
