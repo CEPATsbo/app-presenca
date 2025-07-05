@@ -49,16 +49,13 @@
 </head>
 <body>
     <nav class="admin-nav">
-        <!-- Seu menu de navegação aqui -->
-    </nav>
-
+        </nav>
     <div id="acesso-negado" style="display: none;">
         <div class="container" style="text-align: center;">
             <h1>Acesso Negado</h1>
             <p>Apenas membros do Conselho Fiscal e da Diretoria podem acessar esta página.</p>
         </div>
     </div>
-    
     <div id="main-content" class="main-container" style="display: none;">
         <div class="balancete-container">
             <div class="cabecalho">
@@ -96,10 +93,12 @@
             </div>
             <p id="mensagem-inicial">Selecione um balancete para iniciar a revisão.</p>
             <div class="rodape-assinaturas">
-                <!-- Assinaturas aqui -->
+                <div class="assinatura"><div class="linha"></div><div class="cargo">PRESIDENTE</div></div>
+                <div class="assinatura"><div class="linha"></div><div class="cargo">TESOUREIRO</div></div>
+                <div class="assinatura"><div class="linha"></div><div class="cargo">Membro do conselho fiscal</div></div>
+                <div class="assinatura"><div class="linha"></div><div class="cargo">Membro do conselho Fiscal</div></div>
             </div>
         </div>
-
         <div class="controles-container">
             <h2>Painel do Conselho</h2>
             <div class="seletor-periodo">
@@ -123,7 +122,7 @@
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
         import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-auth.js";
-        import { getFirestore, collection, query, where, onSnapshot, doc, getDoc, updateDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
+        import { getFirestore, collection, query, where, onSnapshot, doc, getDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
         import { getFunctions, httpsCallable } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-functions.js";
         
         const firebaseConfig = {
@@ -140,6 +139,8 @@
         const auth = getAuth(app);
         const functions = getFunctions(app, 'southamerica-east1');
 
+        const mainContent = document.getElementById('main-content');
+        const acessoNegado = document.getElementById('acesso-negado');
         const seletorBalancete = document.getElementById('seletor-balancete');
         const balanceteContent = document.getElementById('balancete-content');
         const mensagemInicial = document.getElementById('mensagem-inicial');
@@ -159,12 +160,13 @@
             if (user) {
                 currentUser = user;
                 user.getIdTokenResult(true).then((idTokenResult) => {
-                    const userRole = idTokenResult.claims.role;
+                    currentUser.claims = idTokenResult.claims; // Armazena as permissões atualizadas
+                    const userRole = currentUser.claims.role || '';
                     if (['conselheiro', 'tesoureiro', 'diretor', 'super-admin'].includes(userRole)) {
-                        document.getElementById('main-content').style.display = 'flex';
+                        mainContent.style.display = 'flex';
                         carregarListaDeBalancetes();
                     } else {
-                        document.getElementById('acesso-negado').style.display = 'block';
+                        acessoNegado.style.display = 'block';
                     }
                 });
             } else {
@@ -188,9 +190,7 @@
                     option.textContent = dataFormatada.charAt(0).toUpperCase() + dataFormatada.slice(1);
                     seletorBalancete.appendChild(option);
                 });
-                if (mesAnoSelecionado) {
-                    seletorBalancete.value = mesAnoSelecionado;
-                }
+                if (mesAnoSelecionado) { seletorBalancete.value = mesAnoSelecionado; }
             });
         }
 
@@ -217,12 +217,13 @@
                     statusBar.textContent = `Status: ${status.replace('em revisão', 'Em Revisão').replace('aprovado', 'Aprovado')}`;
                     statusBar.className = `status-bar status-${status.split(' ')[0]}`;
                     
+                    const userRole = currentUser?.claims?.role;
+                    const podeVotar = userRole === 'conselheiro' || userRole === 'super-admin';
+                    
                     const aprovacoes = balancete.aprovacoes || {};
                     const jaVotou = currentUser ? aprovacoes[currentUser.uid] : false;
                     
                     areaAprovacao.style.display = 'block';
-                    const userRole = auth.currentUser.claims.role;
-                    const podeVotar = userRole === 'conselheiro' || userRole === 'super-admin';
 
                     if (balancete.status === 'em revisão' && podeVotar && !jaVotou) {
                         document.getElementById('area-de-votacao').style.display = 'block';
@@ -230,10 +231,11 @@
                         document.getElementById('area-de-votacao').style.display = 'none';
                     }
                     
-                    listaAprovacoes.innerHTML = '<h4>Aprovações:</h4>';
+                    listaAprovacoes.innerHTML = '<h4>Aprovações Recebidas:</h4>';
                     if (Object.keys(aprovacoes).length > 0) {
                         Object.values(aprovacoes).forEach(aprovacao => {
-                            listaAprovacoes.innerHTML += `<li>✅ ${aprovacao.nome}</li>`;
+                            const dataAprovacao = aprovacao.data ? aprovacao.data.toDate().toLocaleDateString('pt-BR') : '';
+                            listaAprovacoes.innerHTML += `<li>✅ ${aprovacao.nome} (${dataAprovacao})</li>`;
                         });
                     } else {
                         listaAprovacoes.innerHTML += '<li>Nenhuma aprovação ainda.</li>';
@@ -245,7 +247,6 @@
         function renderizarBalancete(dados, mesAno) {
             const dataFormatada = new Date(`${mesAno}-02T00:00:00`).toLocaleString('pt-BR', { month: 'long', year: 'numeric' }).toUpperCase();
             tituloBalancete.textContent = `BALANCETE REFERENTE A ${dataFormatada}`;
-            
             let totalReceitas = 0, totalDespesas = 0;
             const corpoReceitas = document.getElementById('corpo-tabela-receitas');
             const corpoDespesas = document.getElementById('corpo-tabela-despesas');
@@ -268,16 +269,13 @@
 
             document.getElementById('total-receitas').textContent = formatarMoeda(totalReceitas);
             document.getElementById('total-despesas').textContent = formatarMoeda(totalDespesas);
-            
             const saldoAnterior = dados.saldoAnterior || 0;
             const saldoPeriodo = totalReceitas - totalDespesas;
             const saldoAtual = saldoPeriodo + saldoAnterior;
-
             document.getElementById('nome-saldo-anterior').textContent = dados.nomes?.['nome-saldo-anterior'] || 'SALDO ANTERIOR';
             document.getElementById('saldo-valor-anterior').textContent = formatarMoeda(saldoAnterior);
             document.getElementById('saldo-periodo').textContent = formatarMoeda(saldoPeriodo);
             document.getElementById('saldo-atual').textContent = formatarMoeda(saldoAtual);
-            
             balanceteContent.style.display = 'block';
             mensagemInicial.style.display = 'none';
         }
@@ -287,9 +285,11 @@
         async function registrarVoto(voto, mensagem = null) {
             const mesAno = seletorBalancete.value;
             if (!mesAno || !currentUser) return;
-
             const registrarVotoConselho = httpsCallable(functions, 'registrarVotoConselho');
             try {
+                const botao = voto === 'aprovado' ? btnAprovar : btnEnviarRessalva;
+                botao.disabled = true;
+                botao.textContent = 'Enviando...';
                 await registrarVotoConselho({ balanceteId: mesAno, voto, mensagem });
                 alert('Sua ação foi registrada com sucesso!');
                 textoRessalva.value = '';
@@ -298,6 +298,12 @@
             } catch (error) {
                 console.error("Erro ao registrar voto:", error);
                 alert(`Ocorreu um erro: ${error.message}`);
+            } finally {
+                if(btnAprovar) btnAprovar.disabled = false;
+                if(btnEnviarRessalva) {
+                    btnEnviarRessalva.disabled = false;
+                    btnEnviarRessalva.textContent = 'Enviar Ressalva';
+                }
             }
         }
 
@@ -306,12 +312,10 @@
                 registrarVoto('aprovado');
             }
         });
-
         btnReprovar.addEventListener('click', () => {
             textoRessalva.classList.toggle('hidden');
             btnEnviarRessalva.classList.toggle('hidden');
         });
-
         btnEnviarRessalva.addEventListener('click', () => {
             const ressalva = textoRessalva.value.trim();
             if (!ressalva) return alert('Por favor, escreva a justificativa para a reprovação.');
@@ -319,9 +323,10 @@
                 registrarVoto('reprovado', ressalva);
             }
         });
-
+        
         seletorBalancete.addEventListener('change', carregarBalanceteSelecionado);
-        carregarListaDeBalancetes();
+        
+        // A chamada inicial para carregar a lista acontece dentro do onAuthStateChanged
     </script>
     <script type="module" src="/logout.js"></script>
 </body>

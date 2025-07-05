@@ -6,18 +6,20 @@ const Fuse = require("fuse.js");
 
 admin.initializeApp();
 const db = admin.firestore();
-
 const REGIAO = 'southamerica-east1';
 
+let vapidConfigurado = false;
 function configurarWebPush() {
+    if (vapidConfigurado) return true;
     try {
         const vapidConfig = functions.config().vapid;
         if (vapidConfig && vapidConfig.public_key && vapidConfig.private_key) {
             webpush.setVapidDetails(
-              "mailto:cepaulodetarso.sbo@gmail.com",
+              "mailto:cepaulodetarso.sbo@gmail.com", // Coloque seu e-mail aqui
               vapidConfig.public_key,
               vapidConfig.private_key
             );
+            vapidConfigurado = true;
             return true;
         } else {
             console.error("ERRO CRÍTICO: As chaves VAPID não estão configuradas no ambiente.");
@@ -52,32 +54,7 @@ async function enviarNotificacoesParaTodos(titulo, corpo) {
     return { successCount, failureCount, totalCount: inscricoesSnapshot.size };
 }
 
-exports.sincronizarStatusVoluntario = functions.region(REGIAO).firestore
-    .document('presencas/{presencaId}')
-    .onWrite(async (change, context) => {
-        const dadosPresenca = change.after.exists ? change.after.data() : null;
-        const dadosAntigos = change.before.exists ? change.before.data() : null;
-        if (!dadosPresenca || dadosPresenca.status !== 'presente') {
-            if (dadosAntigos && dadosAntigos.status === 'presente' && (!dadosPresenca || dadosPresenca.status !== 'presente')) {
-                 console.log(`SINCRONIZADOR: Voluntário ${dadosAntigos.nome} fez check-out.`);
-            }
-            return null;
-        }
-        if (dadosAntigos && dadosAntigos.status === 'presente') { return null; }
-        const nomeVoluntario = dadosPresenca.nome;
-        const dataPresenca = dadosPresenca.data;
-        const voluntariosRef = db.collection('voluntarios');
-        const q = voluntariosRef.where('nome', '==', nomeVoluntario).limit(1);
-        const snapshot = await q.get();
-        if (snapshot.empty) { console.error(`ERRO DE SINCRONIA: Presença para '${nomeVoluntario}', mas não foi encontrado.`); return null; }
-        const voluntarioDocRef = snapshot.docs[0].ref;
-        try {
-            await voluntarioDocRef.update({ ultimaPresenca: dataPresenca, statusVoluntario: 'ativo' });
-            console.log(`SINCRONIZADOR: Ficha de '${nomeVoluntario}' atualizada.`);
-        } catch (error) { console.error(`SINCRONIZADOR: Erro ao atualizar a ficha de '${nomeVoluntario}':`, error); }
-        return null;
-    });
-
+// --- ROBÔS DE GESTÃO DA DIRETORIA ---
 exports.definirSuperAdmin = functions.region(REGIAO).https.onRequest(async (req, res) => {
     if (req.query.senha !== "amorcaridade") { return res.status(401).send('Acesso não autorizado.'); }
     const email = req.query.email;
@@ -118,6 +95,18 @@ exports.convidarDiretor = functions.region(REGIAO).https.onCall(async (data, con
     }
 });
 
+exports.promoverParaTesoureiro = functions.region(REGIAO).https.onCall(async (data, context) => {
+    if (context.auth.token.role !== 'super-admin') { throw new functions.https.HttpsError('permission-denied', 'Apenas o Super Admin pode promover usuários.'); }
+    const uidParaPromover = data.uid;
+    if (!uidParaPromover) { throw new functions.https.HttpsError('invalid-argument', 'O UID do diretor é necessário.'); }
+    try {
+        await admin.auth().setCustomUserClaims(uidParaPromover, { role: 'tesoureiro' });
+        const userQuery = await db.collection('voluntarios').where('authUid', '==', uidParaPromover).limit(1).get();
+        if (!userQuery.empty) { await userQuery.docs[0].ref.update({ role: 'tesoureiro' }); }
+        return { success: true, message: 'Usuário promovido a tesoureiro com sucesso.' };
+    } catch (error) { console.error("Erro ao promover para tesoureiro:", error); throw new functions.https.HttpsError('internal', 'Erro interno ao tentar promover o usuário.'); }
+});
+
 exports.revogarAcessoDiretor = functions.region(REGIAO).https.onCall(async (data, context) => {
     if (context.auth.token.role !== 'super-admin') { throw new functions.https.HttpsError('permission-denied', 'Apenas o Super Admin pode revogar acesso.'); }
     const uidParaRevogar = data.uid;
@@ -130,33 +119,51 @@ exports.revogarAcessoDiretor = functions.region(REGIAO).https.onCall(async (data
     } catch (error) { console.error("Erro ao revogar acesso de diretor:", error); throw new functions.https.HttpsError('internal', 'Erro interno ao tentar revogar o acesso.'); }
 });
 
-// --- NOVO ROBÔ DE PROMOÇÃO ---
-exports.promoverParaTesoureiro = functions.region(REGIAO).https.onCall(async (data, context) => {
-    if (context.auth.token.role !== 'super-admin') {
-        throw new functions.https.HttpsError('permission-denied', 'Apenas o Super Admin pode promover usuários.');
-    }
-    const uidParaPromover = data.uid;
-    if (!uidParaPromover) {
-        throw new functions.https.HttpsError('invalid-argument', 'O UID do diretor é necessário.');
-    }
+exports.registrarVotoConselho = functions.region(REGIAO).https.onCall(async (data, context) => {
+    const userRole = context.auth.token.role;
+    if (!['conselheiro', 'super-admin'].includes(userRole)) { throw new functions.https.HttpsError('permission-denied', 'Apenas membros do conselho ou super-admin podem votar.'); }
+    const { balanceteId, voto, mensagem } = data;
+    if (!balanceteId || !voto) { throw new functions.https.HttpsError('invalid-argument', 'ID do balancete e voto são obrigatórios.'); }
+    const balanceteRef = db.collection('balancetes').doc(balanceteId);
+    const logAuditoriaCollection = db.collection('log_auditoria');
+    const autor = { uid: context.auth.uid, nome: context.auth.token.name || context.auth.token.email };
+    const NUMERO_DE_VOTOS_PARA_APROVAR = 3;
     try {
-        await admin.auth().setCustomUserClaims(uidParaPromover, { role: 'tesoureiro' });
-        const userQuery = await db.collection('voluntarios').where('authUid', '==', uidParaPromover).limit(1).get();
-        if (!userQuery.empty) {
-            await userQuery.docs[0].ref.update({ role: 'tesoureiro' });
+        const balanceteDoc = await balanceteRef.get();
+        if (!balanceteDoc.exists) { throw new functions.https.HttpsError('not-found', 'Balancete não encontrado.'); }
+        const balanceteData = balanceteDoc.data();
+        if (balanceteData.status !== 'em revisão') { throw new functions.https.HttpsError('failed-precondition', 'Este balancete não está mais aberto para revisão.'); }
+        if (balanceteData.aprovacoes && balanceteData.aprovacoes[autor.uid]) { throw new functions.https.HttpsError('already-exists', 'Você já votou neste balancete.'); }
+        let updateData = {};
+        let logDetalhes = {};
+        if (voto === 'aprovado') {
+            const campoAprovacao = `aprovacoes.${autor.uid}`;
+            updateData[campoAprovacao] = { nome: autor.nome, data: admin.firestore.FieldValue.serverTimestamp() };
+            logDetalhes = { balanceteId, voto: 'APROVADO' };
+        } else if (voto === 'reprovado') {
+            if (!mensagem) { throw new functions.https.HttpsError('invalid-argument', 'Uma mensagem com a ressalva é obrigatória para reprovar.'); }
+            updateData.status = 'em elaboração';
+            updateData.mensagens = admin.firestore.FieldValue.arrayUnion({ autor, texto: mensagem, data: admin.firestore.FieldValue.serverTimestamp() });
+            logDetalhes = { balanceteId, voto: 'REPROVADO', ressalva: mensagem };
         }
-        return { success: true, message: 'Usuário promovido a tesoureiro com sucesso.' };
-    } catch (error) {
-        console.error("Erro ao promover para tesoureiro:", error);
-        throw new functions.https.HttpsError('internal', 'Erro interno ao tentar promover o usuário.');
-    }
+        await balanceteRef.update(updateData);
+        await logAuditoriaCollection.add({ acao: "VOTOU_BALANCETE", autor, timestamp: admin.firestore.FieldValue.serverTimestamp(), detalhes: logDetalhes });
+        if (voto === 'aprovado') {
+            const balanceteAtualizado = await balanceteRef.get();
+            const totalAprovacoes = Object.keys(balanceteAtualizado.data().aprovacoes || {}).length;
+            if (totalAprovacoes >= NUMERO_DE_VOTOS_PARA_APROVAR) {
+                await balanceteRef.update({ status: 'aprovado' });
+                await logAuditoriaCollection.add({ acao: "BALANCETE_APROVADO_AUTO", autor: { nome: 'SISTEMA' }, timestamp: admin.firestore.FieldValue.serverTimestamp(), detalhes: { balanceteId, totalVotos: totalAprovacoes } });
+            }
+        }
+        return { success: true, message: 'Ação registrada com sucesso!' };
+    } catch (error) { console.error("Erro ao registrar voto do conselho:", error); throw error; }
 });
 
-
+// --- ROBÔ DE NOTIFICAÇÃO IMEDIATA ---
 exports.enviarNotificacaoImediata = functions.region(REGIAO).https.onRequest((req, res) => {
     cors(req, res, async () => {
-        if (req.method !== 'POST') { return res.status(405).send({ error: 'Método não permitido!' });}
-        if (!configurarWebPush()) { return res.status(500).json({ error: 'Falha na configuração VAPID.' });}
+        if (req.method !== 'POST') { return res.status(405).send({ error: 'Método não permitido!' }); }
         try {
             const { titulo, corpo } = req.body;
             if (!titulo || !corpo) { return res.status(400).json({ error: 'Título e corpo são obrigatórios.' }); }
@@ -166,7 +173,9 @@ exports.enviarNotificacaoImediata = functions.region(REGIAO).https.onRequest((re
     });
 });
 
+// --- ROBÔS AGENDADOS ---
 exports.verificarAgendamentosAgendados = functions.region(REGIAO).pubsub.schedule('every 10 minutes').timeZone('America/Sao_Paulo').onRun(async (context) => {
+    if (!configurarWebPush()) { return null; }
     const agora = new Date();
     const agoraTimestamp = admin.firestore.Timestamp.fromDate(agora);
     const agendamentosRef = db.collection('notificacoes_agendadas');
@@ -206,5 +215,23 @@ exports.resetarTasvAnual = functions.region(REGIAO).pubsub.schedule('0 4 1 1 *')
     const batch = db.batch();
     snapshot.forEach(doc => { batch.update(doc.ref, { tasvAssinadoAno: null }); });
     await batch.commit();
+    return null;
+});
+
+exports.sincronizarStatusVoluntario = functions.region(REGIAO).firestore.document('presencas/{presencaId}').onWrite(async (change, context) => {
+    const dadosPresenca = change.after.exists ? change.after.data() : null;
+    const dadosAntigos = change.before.exists ? change.before.data() : null;
+    if (!dadosPresenca || dadosPresenca.status !== 'presente') { return null; }
+    if (dadosAntigos && dadosAntigos.status === 'presente') { return null; }
+    const nomeVoluntario = dadosPresenca.nome;
+    const dataPresenca = dadosPresenca.data;
+    const voluntariosRef = db.collection('voluntarios');
+    const q = voluntariosRef.where('nome', '==', nomeVoluntario).limit(1);
+    const snapshot = await q.get();
+    if (snapshot.empty) { return null; }
+    const voluntarioDocRef = snapshot.docs[0].ref;
+    try {
+        await voluntarioDocRef.update({ ultimaPresenca: dataPresenca, statusVoluntario: 'ativo' });
+    } catch (error) { console.error(`SINCRONIZADOR: Erro ao atualizar a ficha de '${nomeVoluntario}':`, error); }
     return null;
 });
