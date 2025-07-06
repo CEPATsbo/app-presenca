@@ -201,9 +201,14 @@
                 document.getElementById('saldo-periodo').textContent = formatarMoeda(saldoPeriodo);
                 document.getElementById('saldo-atual').textContent = formatarMoeda(saldoAtual);
             }
-
+            
+            // ===================================================================
+            // INÍCIO DA FUNÇÃO CORRIGIDA
+            // ===================================================================
             function getDadosAtuaisDaTela() {
-                const dados = { receitas: {}, despesas: {}, nomes: {}, status: balanceteAtual.status || 'em elaboração' };
+                // Objeto de dados SEM o campo 'status'.
+                const dados = { receitas: {}, despesas: {}, nomes: {}, saldoAnterior: 0 };
+                
                 document.querySelectorAll('#corpo-tabela-receitas .categoria-header').forEach(header => {
                     const nomeCategoria = header.querySelector('th span').textContent.trim();
                     dados.receitas[nomeCategoria] = [];
@@ -230,6 +235,9 @@
                 dados.nomes['nome-saldo-anterior'] = document.getElementById('nome-saldo-anterior').textContent;
                 return dados;
             }
+            // ===================================================================
+            // FIM DA FUNÇÃO CORRIGIDA
+            // ===================================================================
 
             async function registrarLog(acao, detalhes) {
                 const user = auth.currentUser;
@@ -281,7 +289,7 @@
                     mensagens.forEach(msg => {
                         const data = msg.data ? msg.data.toDate().toLocaleString('pt-BR') : 'Enviando...';
                         const autor = msg.autor.nome || 'Anônimo';
-                        const tipoClasse = msg.autor.nome.toLowerCase().includes('conselh') ? 'mensagem-conselho' : 'mensagem-tesouraria';
+                        const tipoClasse = (msg.autor.nome.toLowerCase().includes('conselh') || msg.autor.nome.toLowerCase().includes('edumills')) ? 'mensagem-conselho' : 'mensagem-tesouraria';
                         const li = document.createElement('li');
                         li.className = `mensagem ${tipoClasse}`;
                         li.innerHTML = `
@@ -336,9 +344,6 @@
                 }
             }
             
-            // ===================================================================
-            // INÍCIO DO BLOCO CORRIGIDO
-            // ===================================================================
             async function salvarBalancete() {
                 const mesAno = seletorMesAno.value;
                 if (!mesAno) {
@@ -352,11 +357,13 @@
                 const balanceteRef = doc(db, "balancetes", mesAno);
 
                 try {
-                    // Lógica explícita: se o balancete não existe, usa setDoc. Se existe, usa updateDoc.
                     if (balanceteExisteNoDB) {
                         await updateDoc(balanceteRef, dadosParaSalvar);
                     } else {
+                        // Ao criar, precisamos garantir que o status seja definido
+                        dadosParaSalvar.status = 'em elaboração';
                         await setDoc(balanceteRef, dadosParaSalvar);
+                        balanceteExisteNoDB = true; // Atualiza a flag após a criação
                     }
                     await registrarLog("SALVOU_BALANCETE", { periodo: mesAno });
                 } catch (error) {
@@ -432,10 +439,7 @@
                     alert("Ocorreu um erro ao enviar a resposta.");
                 }
             });
-            // ===================================================================
-            // FIM DO BLOCO CORRIGIDO
-            // ===================================================================
-
+            
             function adicionarLinhaApos(linhaHeader, nome = "", valor = "") {
                 const tipoClasse = linhaHeader.parentElement.id.includes('receitas') ? 'input-receita' : 'input-despesa';
                 const novaLinha = document.createElement('tr');
