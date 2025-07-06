@@ -28,11 +28,12 @@
         .voluntario-info strong { font-size: 1.2em; display: block; margin-bottom: 4px;}
         .voluntario-info small { color: #777; }
         .actions { display: flex; flex-direction: column; gap: 8px; align-items: center; }
-        .actions-buttons { display: flex; gap: 10px; }
+        .actions-buttons { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
         .actions-buttons button { padding: 8px 12px; border-radius: 4px; cursor: pointer; border: 1px solid #ccc; font-size: 0.9em; }
         .btn-edit { background-color: #1976d2; color: white; border-color: #1976d2;}
         .btn-toggle { background-color: #ffb300; }
         .btn-delete { background-color: #c62828; color: white; border-color: #c62828; }
+        .btn-promover-conselheiro { background-color: #0277BD; color: white; border-color: #0277BD; } /* Estilo para o novo botão */
         .tasv-container { text-align: center; }
         .tasv-container label { font-size: 0.8em; font-weight: bold; }
         .tasv-checkbox { transform: scale(1.5); cursor: pointer; }
@@ -89,20 +90,29 @@
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
         import { getFirestore, collection, onSnapshot, addDoc, deleteDoc, doc, getDoc, orderBy, query, serverTimestamp, updateDoc } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
-        import { getAuth } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-auth.js";
+        import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-auth.js";
+        // ===================================================================
+        // IMPORTAÇÃO ADICIONADA
+        // ===================================================================
+        import { getFunctions, httpsCallable } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-functions.js";
         
         const firebaseConfig = {
-  apiKey: "AIzaSyBV7RPjk3cFTqL-aIpflJcUojKg1ZXMLuU",
-  authDomain: "voluntarios-ativos---cepat.firebaseapp.com",
-  projectId: "voluntarios-ativos---cepat",
-  storageBucket: "voluntarios-ativos---cepat.firebasestorage.app",
-  messagingSenderId: "66122858261",
-  appId: "1:66122858261:web:7fa21f1805463b5c08331c"
-};
+            apiKey: "AIzaSyBV7RPjk3cFTqL-aIpflJcUojKg1ZXMLuU",
+            authDomain: "voluntarios-ativos---cepat.firebaseapp.com",
+            projectId: "voluntarios-ativos---cepat",
+            storageBucket: "voluntarios-ativos---cepat.firebasestorage.app",
+            messagingSenderId: "66122858261",
+            appId: "1:66122858261:web:7fa21f1805463b5c08331c"
+        };
         
         const app = initializeApp(firebaseConfig);
         const db = getFirestore(app);
         const auth = getAuth(app);
+        // ===================================================================
+        // INICIALIZAÇÃO ADICIONADA
+        // ===================================================================
+        const functions = getFunctions(app, 'southamerica-east1');
+        
         const voluntariosCollection = collection(db, 'voluntarios');
         const logAuditoriaCollection = collection(db, 'log_auditoria');
         
@@ -123,6 +133,12 @@
             btnCancelar: document.getElementById('btn-cancelar-edicao'),
         };
         let currentEditingId = null;
+        let userRole = ''; // Armazena o cargo do usuário logado
+
+        // Guarda a role do usuário logado assim que a autenticação estiver pronta
+        document.addEventListener('authReady', () => {
+             userRole = auth.currentUser?.claims?.role || '';
+        });
 
         async function registrarLog(acao, detalhes) {
             const user = auth.currentUser;
@@ -141,25 +157,35 @@
 
         function carregarVoluntarios() {
             const anoVigente = new Date().getFullYear();
-            // A tag <th> do TASV não existe no código que você enviou, então removemos a referência a ela por enquanto.
-            // Se quiser adicioná-la, precisamos ajustar o HTML da tabela.
             const q = query(voluntariosCollection, orderBy("nome"));
             onSnapshot(q, (snapshot) => {
                 ui.tituloLista.textContent = `Lista de Voluntários Cadastrados (TOTAL = ${snapshot.size})`;
                 ui.listaUl.innerHTML = '';
                 if (snapshot.empty) { ui.listaUl.innerHTML = '<li>Nenhum voluntário cadastrado.</li>'; return; }
+                
                 snapshot.forEach(docSnapshot => {
                     const v = docSnapshot.data();
                     const id = docSnapshot.id;
                     let statusClasse = 'status-pendente';
                     if (v.statusVoluntario === 'inativo') { statusClasse = 'status-inativo'; } 
                     else if (v.tasvAssinadoAno === anoVigente) { statusClasse = 'status-ativo'; }
+                    
                     const li = document.createElement('li');
                     li.className = `item-voluntario ${statusClasse}`;
+                    
+                    // ===================================================================
+                    // LÓGICA DO BOTÃO "PROMOVER A CONSELHEIRO" ADICIONADA AQUI
+                    // ===================================================================
+                    let botaoPromoverConselheiro = '';
+                    // O botão só aparece se o usuário logado for super-admin E o voluntário listado não tiver um cargo especial
+                    if (userRole === 'super-admin' && (!v.role || v.role === 'voluntario')) {
+                        botaoPromoverConselheiro = `<button data-id="${v.authUid || id}" data-nome="${v.nome}" class="btn-promover-conselheiro">Promover a Conselheiro</button>`;
+                    }
+
                     li.innerHTML = `
                         <div class="voluntario-info">
                             <strong>${v.nome}</strong>
-                            <small>${v.endereco || 'N/A'} | ${v.telefone || 'N/A'} | Aniversário: ${v.aniversario || 'N/A'}</small>
+                            <small>${v.endereco || 'N/A'} | ${v.telefone || 'N/A'} | Aniversário: ${v.aniversario || 'N/A'} | Cargo: ${v.role || 'voluntario'}</small>
                         </div>
                         <div class="tasv-container">
                             <label for="tasv-${id}">TASV ${anoVigente}</label>
@@ -169,6 +195,7 @@
                             <div class="actions-buttons">
                                 <button data-id="${id}" class="btn-edit">Editar</button>
                                 <button data-id="${id}" data-nome="${v.nome}" class="btn-delete">Apagar</button>
+                                ${botaoPromoverConselheiro}
                             </div>
                             <button data-id="${id}" data-status="${v.statusVoluntario || 'ativo'}" class="btn-toggle">Tornar ${v.statusVoluntario === 'ativo' ? 'Inativo' : 'Ativo'}</button>
                         </div>
@@ -236,6 +263,32 @@
                         ui.editAniversario.value = data.aniversario || '';
                         ui.editModal.style.display = 'flex';
                     }
+                // ===================================================================
+                // LÓGICA DO CLIQUE NO BOTÃO ADICIONADA AQUI
+                // ===================================================================
+                } else if (e.target.classList.contains('btn-promover-conselheiro')) {
+                    const nome = e.target.dataset.nome;
+                    const uidParaPromover = e.target.dataset.id; // O id aqui é o authUid
+                    
+                    if (!uidParaPromover) return alert('Erro: UID do usuário não encontrado. Não é possível promover.');
+
+                    if (confirm(`Tem certeza que deseja promover ${nome} a Conselheiro Fiscal?`)) {
+                        e.target.disabled = true;
+                        e.target.textContent = "Promovendo...";
+                        
+                        try {
+                            const promoverParaConselheiro = httpsCallable(functions, 'promoverParaConselheiro');
+                            const resultado = await promoverParaConselheiro({ uid: uidParaPromover });
+                            alert(resultado.data.message);
+                            await registrarLog("PROMOVEU_CONSELHEIRO", { alvo: { nome, uid: uidParaPromover } });
+                            // A lista irá recarregar automaticamente pelo onSnapshot
+                        } catch (error) {
+                            console.error("Erro ao promover para conselheiro:", error);
+                            alert(`Erro: ${error.message}`);
+                            e.target.disabled = false;
+                            e.target.textContent = "Promover a Conselheiro";
+                        }
+                    }
                 }
             });
             
@@ -256,8 +309,22 @@
             ui.btnCancelar.addEventListener('click', () => { ui.editModal.style.display = 'none'; currentEditingId = null; });
         }
         
-        carregarVoluntarios();
-        setupEventListeners();
+        // Chamando a função principal
+        onAuthStateChanged(auth, (user) => {
+            if (user) {
+                user.getIdTokenResult(true).then((idTokenResult) => {
+                    auth.currentUser.claims = idTokenResult.claims;
+                    document.dispatchEvent(new Event('authReady'));
+                    
+                    // Inicializa as funções da página depois que o usuário estiver pronto
+                    setupEventListeners();
+                    carregarVoluntarios();
+                });
+            } else {
+                window.location.href = '/login.html';
+            }
+        });
+
     </script>
     <script type="module" src="/logout.js"></script>
 </body>
