@@ -216,25 +216,20 @@ exports.verificarAprovacaoFinal = functions.region(REGIAO).firestore.document('b
     return null;
 });
 
-// ===================================================================
-// NOVA CLOUD FUNCTION ADICIONADA: O "CÉREBRO" DO TEMPO
-// ===================================================================
 exports.calcularCicloVibracoes = functions.region(REGIAO).https.onCall((data, context) => {
-    // LÓGICA MELHORADA para garantir o uso correto do fuso horário
     const agoraUTC = new Date();
     const agoraSP = new Date(agoraUTC.toLocaleString("en-US", { timeZone: "America/Sao_Paulo" }));
 
-    const diaDaSemana = agoraSP.getDay(); // Domingo = 0, Quinta = 4
+    const diaDaSemana = agoraSP.getDay();
     const hora = agoraSP.getHours();
     const minuto = agoraSP.getMinutes();
 
     let dataFimCiclo = new Date(agoraSP);
-    dataFimCiclo.setHours(19, 20, 0, 0); // Define o horário de fechamento
+    dataFimCiclo.setHours(19, 20, 0, 0);
 
     const diasAteQuinta = (4 - diaDaSemana + 7) % 7;
     dataFimCiclo.setDate(dataFimCiclo.getDate() + diasAteQuinta);
 
-    // Se hoje é quinta E já passou do horário de fechamento, o fim do ciclo é na PRÓXIMA quinta.
     if (diaDaSemana === 4 && (hora > 19 || (hora === 19 && minuto >= 20))) {
         dataFimCiclo.setDate(dataFimCiclo.getDate() + 7);
     }
@@ -262,9 +257,6 @@ exports.enviarNotificacaoImediata = functions.region(REGIAO).https.onRequest((re
     });
 });
 
-// ===================================================================
-// FUNÇÃO COM LÓGICA DE TEMPO CORRIGIDA
-// ===================================================================
 exports.verificarAgendamentosAgendados = functions.region(REGIAO).pubsub.schedule('every 10 minutes').timeZone('America/Sao_Paulo').onRun(async (context) => {
     if (!configurarWebPush()) { return null; }
     
@@ -318,4 +310,70 @@ exports.resetarTasvAnual = functions.region(REGIAO).pubsub.schedule('0 4 1 1 *')
     snapshot.forEach(doc => { batch.update(doc.ref, { tasvAssinadoAno: null }); });
     await batch.commit();
     return null;
+});
+
+// ===================================================================
+// NOVO ROBÔ DE ARQUIVAMENTO E LIMPEZA
+// ===================================================================
+exports.arquivarVibracoesSemanais = functions.region(REGIAO).pubsub.schedule('30 22 * * 4').timeZone('America/Sao_Paulo').onRun(async (context) => {
+    console.log("Iniciando o arquivamento semanal dos pedidos de vibração.");
+
+    // Calcula o ciclo que acabou de fechar
+    const agoraSP = new Date(new Date().toLocaleString("en-US", { timeZone: "America/Sao_Paulo" }));
+    
+    // O fim do ciclo foi na quinta-feira desta semana, às 19:20
+    let dataFimCiclo = new Date(agoraSP);
+    dataFimCiclo.setHours(19, 20, 0, 0);
+
+    // O início do ciclo foi 7 dias antes, às 19:21
+    let dataInicioCiclo = new Date(dataFimCiclo);
+    dataInicioCiclo.setDate(dataInicioCiclo.getDate() - 7);
+    dataInicioCiclo.setMinutes(dataInicioCiclo.getMinutes() + 1);
+
+    const cicloInicio = admin.firestore.Timestamp.fromDate(dataInicioCiclo);
+    const cicloFim = admin.firestore.Timestamp.fromDate(dataFimCiclo);
+    
+    const semanaDeReferencia = new Intl.DateTimeFormat('en-CA', { year: 'numeric', month: '2-digit', day: '2-digit' }).format(dataFimCiclo);
+
+    // Função auxiliar para processar uma coleção
+    const processarColecao = async (nomeColecao) => {
+        const colecaoRef = db.collection(nomeColecao);
+        const historicoRef = db.collection('historico_vibracoes');
+
+        const snapshot = await colecaoRef.where('dataCriacao', '>=', cicloInicio).where('dataCriacao', '<=', cicloFim).get();
+        
+        if (snapshot.empty) {
+            console.log(`Nenhum documento para arquivar na coleção '${nomeColecao}'.`);
+            return 0;
+        }
+
+        const batch = db.batch();
+        snapshot.forEach(doc => {
+            const dados = doc.data();
+            const dadosParaHistorico = {
+                ...dados,
+                tipo: nomeColecao.slice(0, -1), // 'encarnados' -> 'encarnado'
+                semanaDeReferencia: semanaDeReferencia,
+                arquivadoEm: admin.firestore.FieldValue.serverTimestamp()
+            };
+            
+            const novoHistoricoRef = historicoRef.doc(); // Cria um novo documento com ID aleatório
+            batch.set(novoHistoricoRef, dadosParaHistorico); // Copia para o histórico
+            batch.delete(doc.ref); // Deleta o original
+        });
+
+        await batch.commit();
+        console.log(`${snapshot.size} documentos da coleção '${nomeColecao}' foram arquivados e limpos.`);
+        return snapshot.size;
+    };
+
+    try {
+        const totalEncarnados = await processarColecao('encarnados');
+        const totalDesencarnados = await processarColecao('desencarnados');
+        console.log(`Arquivamento concluído. Total: ${totalEncarnados} encarnados, ${totalDesencarnados} desencarnados.`);
+        return null;
+    } catch (error) {
+        console.error("ERRO GRAVE durante o arquivamento das vibrações:", error);
+        return null;
+    }
 });
