@@ -115,6 +115,14 @@ exports.promoverParaTesoureiro = functions.region(REGIAO).https.onCall(async (da
 
 exports.promoverParaConselheiro = functions.region(REGIAO).https.onCall(async (data, context) => {
     if (context.auth.token.role !== 'super-admin') { throw new functions.https.HttpsError('permission-denied', 'Apenas o Super Admin pode promover usuários.'); }
+    // ===== INÍCIO DA NOVA LÓGICA DE VERIFICAÇÃO =====
+    const conselheirosQuery = db.collection('voluntarios').where('role', '==', 'conselheiro');
+    const conselheirosSnapshot = await conselheirosQuery.get();
+
+    if (conselheirosSnapshot.size >= 3) {
+        throw new functions.https.HttpsError('failed-precondition', 'O limite de 3 conselheiros já foi atingido. Não é possível promover um novo membro.');
+    }
+    // ===== FIM DA NOVA LÓGICA DE VERIFICAÇÃO =====
     const uidParaPromover = data.uid;
     if (!uidParaPromover) { throw new functions.https.HttpsError('invalid-argument', 'O UID do usuário é necessário.'); }
     try {
@@ -193,7 +201,7 @@ exports.verificarAprovacaoFinal = functions.region(REGIAO).firestore.document('b
 
     if (Object.keys(aprovacoesNovas).length === Object.keys(aprovacoesAntigas).length) { return null; }
     
-    const NUMERO_DE_VOTOS_PARA_APROVAR = 1;
+    const NUMERO_DE_VOTOS_PARA_APROVAR = 3;
     const totalAprovacoes = Object.keys(aprovacoesNovas).length;
     
     if (totalAprovacoes >= NUMERO_DE_VOTOS_PARA_APROVAR) {

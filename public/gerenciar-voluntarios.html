@@ -89,7 +89,10 @@
 
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
-        import { getFirestore, collection, onSnapshot, addDoc, deleteDoc, doc, getDoc, orderBy, query, serverTimestamp, updateDoc, where } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
+        // ===================================================================
+        // CORREÇÃO: Adicionado 'getDocs' à lista de importação
+        // ===================================================================
+        import { getFirestore, collection, onSnapshot, addDoc, deleteDoc, doc, getDoc, getDocs, orderBy, query, serverTimestamp, updateDoc, where } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
         import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-auth.js";
         import { getFunctions, httpsCallable } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-functions.js";
         
@@ -148,18 +151,13 @@
             }
         }
         
-        // ===================================================================
-        // FUNÇÃO ALTERADA PARA INCLUIR A CONTAGEM DE CONSELHEIROS
-        // ===================================================================
         async function carregarVoluntarios() {
             const anoVigente = new Date().getFullYear();
             
-            // Passo 1: Contar quantos conselheiros já existem.
             const queryConselheiros = query(voluntariosCollection, where("role", "==", "conselheiro"));
             const conselheirosSnapshot = await getDocs(queryConselheiros);
             const totalConselheiros = conselheirosSnapshot.size;
 
-            // Passo 2: Carregar e exibir todos os voluntários, usando a contagem para decidir se mostra o botão.
             const q = query(voluntariosCollection, orderBy("nome"));
             onSnapshot(q, (snapshot) => {
                 ui.tituloLista.textContent = `Lista de Voluntários Cadastrados (TOTAL = ${snapshot.size}) | Conselheiros Ativos: ${totalConselheiros}/3`;
@@ -177,7 +175,6 @@
                     li.className = `item-voluntario ${statusClasse}`;
                     
                     let botaoPromoverConselheiro = '';
-                    // Passo 3: Condição extra para mostrar o botão - só mostra se o limite não foi atingido.
                     if (userRole === 'super-admin' && (!v.role || v.role === 'voluntario') && totalConselheiros < 3) {
                         botaoPromoverConselheiro = `<button data-id="${v.authUid || id}" data-nome="${v.nome}" class="btn-promover-conselheiro">Promover a Conselheiro</button>`;
                     }
@@ -241,7 +238,6 @@
                 const id = e.target.dataset.id;
                 if (!id) return;
                 
-                // Para delete e toggle, a referência é o ID do documento
                 const docRef = e.target.classList.contains('btn-promover-conselheiro') ? null : doc(db, 'voluntarios', id);
                 
                 if (e.target.classList.contains('btn-delete')) {
@@ -268,7 +264,7 @@
                     }
                 } else if (e.target.classList.contains('btn-promover-conselheiro')) {
                     const nome = e.target.dataset.nome;
-                    const uidParaPromover = e.target.dataset.id; // Para este botão, o ID é o authUid
+                    const uidParaPromover = e.target.dataset.id;
                     
                     if (!uidParaPromover) return alert('Erro: UID do usuário não encontrado. O voluntário precisa ter uma conta de login para ser promovido.');
 
