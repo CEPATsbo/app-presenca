@@ -7,10 +7,7 @@
     <style>
         body {
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-            /* =================================================================== */
-            /* ALTERAÇÃO: Fundo em gradiente verde */
-            /* =================================================================== */
-            background-color: #e8f5e9; /* Cor de fallback caso o gradiente não carregue */
+            background-color: #e8f5e9;
             background-image: linear-gradient(135deg, #e8f5e9 0%, #c8e6c9 100%);
             display: flex;
             justify-content: center;
@@ -58,7 +55,7 @@
             color: #555;
         }
         .tipo-selecao input[type="radio"] {
-            display: none; /* Esconde o radio button padrão */
+            display: none; 
         }
         .bolinha {
             width: 50px;
@@ -69,21 +66,20 @@
             margin-bottom: 10px;
             transition: all 0.3s ease;
         }
-        /* Estilos quando selecionado */
         .tipo-selecao input[type="radio"]:checked + .bolinha {
             box-shadow: 0 0 15px rgba(0,0,0,0.2);
             transform: scale(1.1);
         }
         #radio-encarnado:checked + .bolinha {
-            background-color: #4CAF50; /* Verde */
+            background-color: #4CAF50;
             border-color: #388E3C;
         }
         #radio-desencarnado:checked + .bolinha {
-            background-color: #03A9F4; /* Azul Celeste */
+            background-color: #03A9F4;
             border-color: #0288D1;
         }
         .campos-container {
-            display: none; /* Escondido por padrão */
+            display: none;
             text-align: left;
             margin-top: 20px;
         }
@@ -148,7 +144,7 @@
     <div class="container">
         <h1>CEPAT - Trabalho de Vibrações</h1>
         <p class="info-text">
-            A Vibração é um processo mental de irradiação fluídica, ou seja: é a emissão de energias através da força do nosso pensamento direcionadas a um propósito específico. O Trabalho de Vibrações ocorre por meio da prece coletiva, por um grupo de trabalhadores, que sob o auxilio dos Bens Feitores espirituais e a soma das energias de todos os participantes, direcionam vibrações positivas e de coração à todos àqueles que necessitam da nossa ajuda (encarnados ou desencarnados).
+            A Vibração é um processo mental de irradiação fluídica, ou seja: é a emissão de energias através da força do nosso pensamento direcionadas a um proposito específico. O Trabalho de Vibração ocorre por meio da prece coletiva, por um grupo de trabalhadores, que sob o auxilio dos Bens Feitores espirituais e a soma das energias de todos os participantes, direcionam vibrações positivas e de coração à todos àqueles que necessitam da nossa ajuda (encarnadas ou desencarnadas).
         </p>
 
         <form id="form-vibracoes">
@@ -190,11 +186,25 @@
     </div>
 
     <script type="module">
-        // Importações do Firebase virão aqui no próximo passo
-        // import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
-        // import { getFirestore, collection, addDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
+        // ===================================================================
+        // CONEXÃO COM FIREBASE ADICIONADA
+        // ===================================================================
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
+        import { getFirestore, collection, addDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
 
-        // Lógica da interface (não precisa de Firebase ainda)
+        const firebaseConfig = {
+            apiKey: "AIzaSyBV7RPjk3cFTqL-aIpflJcUojKg1ZXMLuU",
+            authDomain: "voluntarios-ativos---cepat.firebaseapp.com",
+            projectId: "voluntarios-ativos---cepat",
+            storageBucket: "voluntarios-ativos---cepat.firebasestorage.app",
+            messagingSenderId: "66122858261",
+            appId: "1:66122858261:web:7fa21f1805463b5c08331c"
+        };
+        const app = initializeApp(firebaseConfig, "vibracoesApp");
+        const db = getFirestore(app);
+
+
+        // Lógica da interface (código anterior mantido)
         const radioEncarnado = document.getElementById('radio-encarnado');
         const radioDesencarnado = document.getElementById('radio-desencarnado');
         const camposEncarnado = document.getElementById('campos-encarnado');
@@ -207,7 +217,7 @@
         const feedbackDiv = document.getElementById('mensagem-feedback');
 
         function atualizarFormulario() {
-            feedbackDiv.style.display = 'none'; // Esconde feedback ao mudar
+            feedbackDiv.style.display = 'none';
             if (radioEncarnado.checked) {
                 camposEncarnado.style.display = 'block';
                 camposDesencarnado.style.display = 'none';
@@ -233,31 +243,61 @@
         radioEncarnado.addEventListener('change', atualizarFormulario);
         radioDesencarnado.addEventListener('change', atualizarFormulario);
 
-        form.addEventListener('submit', (e) => {
+        // ===================================================================
+        // LÓGICA DE SUBMISSÃO ALTERADA PARA SALVAR NO FIREBASE
+        // ===================================================================
+        form.addEventListener('submit', async (e) => {
             e.preventDefault();
-            // A lógica de salvar no Firebase virá aqui
-            
-            const tipo = radioEncarnado.checked ? 'encarnado' : 'desencarnado';
-            const nome = tipo === 'encarnado' ? nomeEncarnadoInput.value : nomeDesencarnadoInput.value;
-            const endereco = tipo === 'encarnado' ? enderecoEncarnadoInput.value : null;
-
-            console.log("Tipo:", tipo);
-            console.log("Nome:", nome);
-            if(endereco) console.log("Endereço:", endereco);
-
-            // Simulação de sucesso para teste
             btnEnviar.disabled = true;
             btnEnviar.textContent = 'Enviando...';
+
+            const tipo = radioEncarnado.checked ? 'encarnado' : 'desencarnado';
             
-            setTimeout(() => { // Simula a espera da resposta do servidor
+            let dadosParaSalvar = {};
+            let colecaoAlvo = '';
+
+            if (tipo === 'encarnado') {
+                colecaoAlvo = 'encarnados';
+                dadosParaSalvar = {
+                    nome: nomeEncarnadoInput.value.trim(),
+                    endereco: enderecoEncarnadoInput.value.trim(),
+                    dataCriacao: serverTimestamp() // Carimbo de tempo do servidor
+                };
+            } else { // desencarnado
+                colecaoAlvo = 'desencarnados';
+                dadosParaSalvar = {
+                    nome: nomeDesencarnadoInput.value.trim(),
+                    dataCriacao: serverTimestamp()
+                };
+            }
+            
+            try {
+                // Tenta adicionar o documento na coleção correta
+                await addDoc(collection(db, colecaoAlvo), dadosParaSalvar);
+
+                // Feedback de sucesso para o usuário
                 feedbackDiv.textContent = 'Seu pedido de vibração foi enviado com sucesso. Muita paz!';
                 feedbackDiv.className = 'feedback-sucesso';
                 feedbackDiv.style.display = 'block';
-                form.reset();
-                camposEncarnado.style.display = 'none';
-                camposDesencarnado.style.display = 'none';
-                btnEnviar.textContent = 'Selecione uma opção';
-            }, 1000);
+                
+                form.reset(); // Limpa o formulário
+                atualizarFormulario(); // Esconde os campos e reseta o botão
+
+            } catch (error) {
+                console.error("Erro ao salvar no Firestore: ", error);
+                
+                // Feedback de erro para o usuário
+                let mensagemErro = "Ocorreu um erro ao enviar seu pedido. Tente novamente.";
+                if (error.code === 'permission-denied') {
+                    mensagemErro = "O período para envio de nomes está fechado no momento. Por favor, tente novamente mais tarde.";
+                }
+                feedbackDiv.textContent = mensagemErro;
+                feedbackDiv.className = 'feedback-erro';
+                feedbackDiv.style.display = 'block';
+
+                btnEnviar.disabled = false; // Habilita o botão novamente em caso de erro
+                btnEnviar.textContent = radioEncarnado.checked ? 'Enviar Nome (Encarnado)' : 'Enviar Nome (Desencarnado)';
+            }
         });
     </script>
 </body>
