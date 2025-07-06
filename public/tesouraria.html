@@ -60,22 +60,13 @@
 </head>
 <body>
     <nav class="admin-nav">
-        <a href="/gerenciar-diretoria.html">Gerenciar Diretoria</a>
-        <a href="/tesouraria.html" class="active">Tesouraria</a>
-        <a href="/gerenciar-voluntarios.html">Gerenciar Voluntários</a>
-        <a href="/registro-manual.html">Registro Manual</a>
-        <a href="/relatorio.html">Gerar Relatório</a>
-        <a href="/mural.html">Editar Mural</a>
-        <a href="/atividades.html">Gerenciar Atividades</a>
-        <a href="/notificacoes.html">Notificações</a>
-        <a href="/tv.html" target="_blank">Ver Painel da TV ↗</a>
-        <a href="#" id="btn-logout" style="color: #c62828;">Sair</a>
+        <!-- Seu menu de navegação aqui -->
     </nav>
     <div id="acesso-negado" style="display: none;">
         <h1>Acesso Negado</h1>
         <p>Você não tem permissão para acessar o módulo da tesouraria.</p>
     </div>
-    <div class="balancete-container" id="conteudo-pagina" style="display: none;">
+    <div class="balancete-container" id="conteudo-pagina">
         <div class="cabecalho">
             <h1>C. E. PAULO DE TARSO</h1>
             <p>CNPJ Nº 12.253.749/0001-20</p>
@@ -127,6 +118,7 @@
                 <textarea id="texto-resposta" placeholder="Digite sua resposta à ressalva aqui..."></textarea>
                 <button id="btn-enviar-resposta">Enviar Resposta</button>
             </div>
+        </div>
         <div class="rodape-assinaturas">
             <div class="assinatura"><div class="linha"></div><div class="cargo">PRESIDENTE</div></div>
             <div class="assinatura"><div class="linha"></div><div class="cargo">TESOUREIRO</div></div>
@@ -137,7 +129,7 @@
     
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
-        import { getFirestore, doc, setDoc, getDoc, updateDoc, collection, addDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
+        import { getFirestore, doc, setDoc, getDoc, updateDoc, collection, addDoc, serverTimestamp, arrayUnion } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
         import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-auth.js";
         
         const firebaseConfig = {
@@ -152,28 +144,18 @@
         const app = initializeApp(firebaseConfig);
         const db = getFirestore(app);
         const auth = getAuth(app);
-        const logAuditoriaCollection = collection(db, 'log_auditoria');
-
-        let balanceteAtual = {};
-
-        // --- LÓGICA DE AUTENTICAÇÃO E INICIALIZAÇÃO ---
+        
         onAuthStateChanged(auth, (user) => {
             if (user) {
                 user.getIdTokenResult(true).then(idTokenResult => {
-                    auth.currentUser.claims = idTokenResult.claims; // Garante que as permissões estão atualizadas
-                    const userRole = auth.currentUser.claims.role || '';
+                    auth.currentUser.claims = idTokenResult.claims;
                     document.dispatchEvent(new Event('authReady'));
-                    if (['diretor', 'tesoureiro', 'super-admin'].includes(userRole)) {
-                        document.getElementById('conteudo-pagina').style.display = 'block';
-                        inicializarPagina();
-                    } else {
-                        document.getElementById('acesso-negado').style.display = 'block';
-                    }
                 });
             } else {
                 window.location.href = window.location.origin + '/login.html';
             }
         });
+
         document.addEventListener('authReady', () => {
             const userRole = auth.currentUser?.claims?.role || '';
             if (!['diretor', 'tesoureiro', 'super-admin'].includes(userRole)) {
@@ -190,7 +172,13 @@
             const btnLiberar = document.getElementById('btn-liberar');
             const statusBar = document.getElementById('status-bar');
             const tituloBalancete = document.getElementById('titulo-balancete');
-            
+            const logAuditoriaCollection = collection(db, 'log_auditoria');
+            const mensagensContainer = document.getElementById('mensagens-container');
+            const listaMensagens = document.getElementById('lista-mensagens');
+            const btnEnviarResposta = document.getElementById('btn-enviar-resposta');
+            const textoResposta = document.getElementById('texto-resposta');
+            let balanceteAtual = {};
+
             const balancetePadrao = {
                 saldoAnterior: 0, status: 'em elaboração',
                 nomes: { "nome-saldo-anterior": "SALDO ANTERIOR (PagBank+Sicoob+Espécie)"},
@@ -282,6 +270,28 @@
                 statusBar.className = `status-bar ${classe}`;
             }
             
+            function renderizarMensagens(mensagens) {
+                if (mensagens && mensagens.length > 0) {
+                    mensagensContainer.style.display = 'block';
+                    listaMensagens.innerHTML = '';
+                    mensagens.forEach(msg => {
+                        const data = msg.data ? msg.data.toDate().toLocaleString('pt-BR') : 'Enviando...';
+                        const autor = msg.autor.nome || 'Anônimo';
+                        const tipoClasse = msg.isResposta ? 'mensagem-tesouraria' : 'mensagem-conselho';
+                        const li = document.createElement('li');
+                        li.className = `mensagem ${tipoClasse}`;
+                        li.innerHTML = `
+                            <div class="mensagem-autor">${autor}</div>
+                            <div class="mensagem-data">${data}</div>
+                            <p>${msg.texto}</p>
+                        `;
+                        listaMensagens.appendChild(li);
+                    });
+                } else {
+                    mensagensContainer.style.display = 'none';
+                }
+            }
+
             function renderizarTabela(dados, mesAno) {
                 const corpoReceitas = document.getElementById('corpo-tabela-receitas');
                 const corpoDespesas = document.getElementById('corpo-tabela-despesas');
@@ -312,58 +322,13 @@
                     balanceteAtual = docSnap.data();
                     renderizarTabela(balanceteAtual, mesAno);
                     atualizarStatusUI(balanceteAtual.status || 'em elaboração');
-                    renderizarMensagens(docSnap.data().mensagens || []);
+                    renderizarMensagens(balanceteAtual.mensagens || []);
                 } else {
                     balanceteAtual = JSON.parse(JSON.stringify(balancetePadrao));
                     renderizarTabela(balanceteAtual, mesAno);
                     atualizarStatusUI('em elaboração');
                 }
             }
-
-            function renderizarMensagens(mensagens) {
-                listaMensagens.innerHTML = '';
-                if (mensagens.length === 0) {
-                    listaMensagens.innerHTML = '<li>Nenhuma ressalva ou mensagem para este balancete.</li>';
-                    return;
-                }
-                mensagens.forEach(msg => {
-                    const data = msg.data ? msg.data.toDate().toLocaleString('pt-BR') : 'Enviando...';
-                    const autor = msg.autor.nome || 'Anônimo';
-                    const tipoClasse = msg.isResposta ? 'mensagem-tesouraria' : 'mensagem-conselho';
-                    const li = document.createElement('li');
-                    li.className = `mensagem ${tipoClasse}`;
-                    li.innerHTML = `
-                        <div class="mensagem-autor">${autor}</div>
-                        <div class="mensagem-data">${data}</div>
-                        <p>${msg.texto}</p>
-                    `;
-                    listaMensagens.appendChild(li);
-                });
-            }
-            document.getElementById('btn-enviar-resposta').addEventListener('click', async () => {
-            const mesAno = document.getElementById('mes-ano').value;
-            const texto = document.getElementById('texto-resposta').value.trim();
-            if (!mesAno || !texto) return;
-
-            const user = auth.currentUser;
-            const novaMensagem = {
-                autor: { uid: user.uid, nome: user.displayName || user.email },
-                texto: texto,
-                data: serverTimestamp(),
-                isResposta: true // Identifica que é uma resposta da tesouraria
-            };
-
-            const balanceteRef = doc(db, "balancetes", mesAno);
-            try {
-                await updateDoc(balanceteRef, {
-                    mensagens: arrayUnion(novaMensagem)
-                });
-                document.getElementById('texto-resposta').value = '';
-                alert("Resposta enviada com sucesso!");
-            } catch (error) {
-                console.error("Erro ao enviar resposta:", error);
-            }
-        });
 
             btnSalvar.addEventListener('click', async () => {
                 const mesAno = seletorMesAno.value;
@@ -403,6 +368,32 @@
                 }
             });
             
+            document.getElementById('btn-enviar-resposta').addEventListener('click', async () => {
+                const mesAno = seletorMesAno.value;
+                const texto = document.getElementById('texto-resposta').value.trim();
+                if (!mesAno || !texto) return alert("Escreva uma resposta.");
+
+                const user = auth.currentUser;
+                const novaMensagem = {
+                    autor: { uid: user.uid, nome: user.displayName || user.email },
+                    texto: texto,
+                    data: serverTimestamp(),
+                    isResposta: true
+                };
+
+                const balanceteRef = doc(db, "balancetes", mesAno);
+                try {
+                    await updateDoc(balanceteRef, {
+                        mensagens: arrayUnion(novaMensagem)
+                    });
+                    document.getElementById('texto-resposta').value = '';
+                    alert("Resposta enviada com sucesso!");
+                } catch (error) {
+                    console.error("Erro ao enviar resposta:", error);
+                    alert("Ocorreu um erro ao enviar a resposta.");
+                }
+            });
+
             function adicionarLinhaApos(linhaHeader, nome = "", valor = "") {
                 const tipoClasse = linhaHeader.parentElement.id.includes('receitas') ? 'input-receita' : 'input-despesa';
                 const novaLinha = document.createElement('tr');
