@@ -186,9 +186,6 @@
     </div>
 
     <script type="module">
-        // ===================================================================
-        // CONEXÃO COM FIREBASE ADICIONADA
-        // ===================================================================
         import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
         import { getFirestore, collection, addDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
 
@@ -203,8 +200,6 @@
         const app = initializeApp(firebaseConfig, "vibracoesApp");
         const db = getFirestore(app);
 
-
-        // Lógica da interface (código anterior mantido)
         const radioEncarnado = document.getElementById('radio-encarnado');
         const radioDesencarnado = document.getElementById('radio-desencarnado');
         const camposEncarnado = document.getElementById('campos-encarnado');
@@ -243,9 +238,6 @@
         radioEncarnado.addEventListener('change', atualizarFormulario);
         radioDesencarnado.addEventListener('change', atualizarFormulario);
 
-        // ===================================================================
-        // LÓGICA DE SUBMISSÃO ALTERADA PARA SALVAR NO FIREBASE
-        // ===================================================================
         form.addEventListener('submit', async (e) => {
             e.preventDefault();
             btnEnviar.disabled = true;
@@ -261,9 +253,9 @@
                 dadosParaSalvar = {
                     nome: nomeEncarnadoInput.value.trim(),
                     endereco: enderecoEncarnadoInput.value.trim(),
-                    dataCriacao: serverTimestamp() // Carimbo de tempo do servidor
+                    dataCriacao: serverTimestamp()
                 };
-            } else { // desencarnado
+            } else {
                 colecaoAlvo = 'desencarnados';
                 dadosParaSalvar = {
                     nome: nomeDesencarnadoInput.value.trim(),
@@ -272,21 +264,29 @@
             }
             
             try {
-                // Tenta adicionar o documento na coleção correta
                 await addDoc(collection(db, colecaoAlvo), dadosParaSalvar);
 
-                // Feedback de sucesso para o usuário
+                // Mostra a mensagem de sucesso
                 feedbackDiv.textContent = 'Seu pedido de vibração foi enviado com sucesso. Muita paz!';
                 feedbackDiv.className = 'feedback-sucesso';
                 feedbackDiv.style.display = 'block';
                 
-                form.reset(); // Limpa o formulário
-                atualizarFormulario(); // Esconde os campos e reseta o botão
+                form.reset();
+                camposEncarnado.style.display = 'none';
+                camposDesencarnado.style.display = 'none';
+                
+                // ===================================================================
+                // LÓGICA DE FEEDBACK AJUSTADA
+                // ===================================================================
+                // Dá um tempo para o usuário ler a mensagem e só depois reseta o botão
+                setTimeout(() => {
+                    feedbackDiv.style.display = 'none';
+                    btnEnviar.textContent = 'Selecione uma opção';
+                }, 4000); // A mensagem de sucesso ficará visível por 4 segundos
 
             } catch (error) {
                 console.error("Erro ao salvar no Firestore: ", error);
                 
-                // Feedback de erro para o usuário
                 let mensagemErro = "Ocorreu um erro ao enviar seu pedido. Tente novamente.";
                 if (error.code === 'permission-denied') {
                     mensagemErro = "O período para envio de nomes está fechado no momento. Por favor, tente novamente mais tarde.";
@@ -295,7 +295,7 @@
                 feedbackDiv.className = 'feedback-erro';
                 feedbackDiv.style.display = 'block';
 
-                btnEnviar.disabled = false; // Habilita o botão novamente em caso de erro
+                btnEnviar.disabled = false;
                 btnEnviar.textContent = radioEncarnado.checked ? 'Enviar Nome (Encarnado)' : 'Enviar Nome (Desencarnado)';
             }
         });
