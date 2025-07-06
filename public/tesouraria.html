@@ -4,7 +4,6 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Admin - Tesouraria</title>
-    <!-- O auth-guard.js foi removido para evitar conflitos, a lógica está no script principal -->
     <style>
         body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background-color: #f4f6f9; display: flex; flex-direction: column; align-items: center; margin: 0; padding: 20px; box-sizing: border-box; }
         .admin-nav { width: 100%; max-width: 1100px; background-color: #fff; padding: 15px; margin-bottom: 30px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); text-align: center; display: flex; flex-wrap: wrap; justify-content: center; gap: 15px 25px; }
@@ -51,15 +50,15 @@
 </head>
 <body>
     <nav class="admin-nav">
-        <a href="/gerenciar-diretoria.html">Gerenciar Diretoria</a>
-        <a href="/tesouraria.html" class="active">Tesouraria</a>
-        <a href="/gerenciar-voluntarios.html">Gerenciar Voluntários</a>
-        <a href="/registro-manual.html">Registro Manual</a>
-        <a href="/relatorio.html">Gerar Relatório</a>
-        <a href="/mural.html">Editar Mural</a>
-        <a href="/atividades.html">Gerenciar Atividades</a>
-        <a href="/notificacoes.html">Notificações</a>
-        <a href="/tv.html" target="_blank">Ver Painel da TV ↗</a>
+        <a href="/gerenciar-diretoria.html">Gerenciar Diretoria</a> 
+        <a href="/tesouraria.html" class="active">Tesouraria</a> 
+        <a href="/gerenciar-voluntarios.html">Gerenciar Voluntários</a> 
+        <a href="/registro-manual.html">Registro Manual</a> 
+        <a href="/relatorio.html">Gerar Relatório</a> 
+        <a href="/mural.html">Editar Mural</a> 
+        <a href="/atividades.html">Gerenciar Atividades</a> 
+        <a href="/notificacoes.html">Notificações</a> 
+        <a href="/tv.html" target="_blank">Ver Painel da TV ↗</a> 
         <a href="#" id="btn-logout" style="color: #c62828;">Sair</a>
     </nav>
     <div class="balancete-container">
@@ -134,18 +133,9 @@
         const auth = getAuth(app);
         const logAuditoriaCollection = collection(db, 'log_auditoria');
 
-        onAuthStateChanged(auth, (user) => {
-            if (user) {
-                user.getIdTokenResult(true).then(idTokenResult => {
-                    auth.currentUser.claims = idTokenResult.claims;
-                    document.dispatchEvent(new Event('authReady'));
-                });
-            } else {
-                window.location.href = window.location.origin + '/login.html';
-            }
-        });
+        let balanceteAtual = {};
 
-        document.addEventListener('authReady', () => {
+        function inicializarPagina() {
             const seletorMesAno = document.getElementById('mes-ano');
             const btnSalvar = document.getElementById('btn-salvar');
             const btnLiberar = document.getElementById('btn-liberar');
@@ -176,7 +166,7 @@
             }
 
             function getDadosAtuaisDaTela() {
-                const dados = { receitas: {}, despesas: {}, nomes: {} };
+                const dados = { receitas: {}, despesas: {}, nomes: {}, status: balanceteAtual.status || 'em elaboração' };
                 document.querySelectorAll('#corpo-tabela-receitas .categoria-header').forEach(header => {
                     const nomeCategoria = header.querySelector('th span').textContent.trim();
                     dados.receitas[nomeCategoria] = [];
@@ -270,10 +260,12 @@
                 const balanceteRef = doc(db, "balancetes", mesAno);
                 const docSnap = await getDoc(balanceteRef);
                 if (docSnap.exists()) {
-                    renderizarTabela(docSnap.data(), mesAno);
-                    atualizarStatusUI(docSnap.data().status || 'em elaboração');
+                    balanceteAtual = docSnap.data();
+                    renderizarTabela(balanceteAtual, mesAno);
+                    atualizarStatusUI(balanceteAtual.status || 'em elaboração');
                 } else {
-                    renderizarTabela(balancetePadrao, mesAno);
+                    balanceteAtual = JSON.parse(JSON.stringify(balancetePadrao)); // Cria cópia limpa
+                    renderizarTabela(balanceteAtual, mesAno);
                     atualizarStatusUI('em elaboração');
                 }
             }
@@ -336,6 +328,10 @@
                 document.querySelectorAll('.btn-add-row').forEach(btn => btn.addEventListener('click', (e) => adicionarLinhaApos(e.target.closest('tr'))));
             }
             
+            document.querySelectorAll('.btn-add-categoria').forEach(btn => {
+                btn.addEventListener('click', (e) => adicionarCategoriaHeader(document.getElementById(e.target.dataset.target)));
+            });
+
             const hoje = new Date();
             const mes = (hoje.getMonth() + 1).toString().padStart(2, '0');
             const ano = hoje.getFullYear();
@@ -343,10 +339,7 @@
             seletorMesAno.value = mesAnoAtual;
             seletorMesAno.addEventListener('change', () => carregarDadosDoMes(seletorMesAno.value));
             carregarDadosDoMes(mesAnoAtual);
-            document.querySelectorAll('.btn-add-categoria').forEach(btn => {
-                btn.addEventListener('click', (e) => adicionarCategoriaHeader(document.getElementById(e.target.dataset.target)));
-            });
-        });
+        };
     </script>
     <script type="module" src="/logout.js"></script>
 </body>
