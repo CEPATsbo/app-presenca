@@ -1,0 +1,260 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CEPAT - Trabalho de Vibrações</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: #f4f6f9;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            margin: 0;
+            padding: 20px;
+            box-sizing: border-box;
+        }
+        .container {
+            width: 100%;
+            max-width: 600px;
+            background-color: white;
+            padding: 40px;
+            border-radius: 12px;
+            box-shadow: 0 6px 25px rgba(0,0,0,0.1);
+            text-align: center;
+        }
+        h1 {
+            color: #333;
+            margin-bottom: 10px;
+        }
+        .info-text {
+            color: #666;
+            font-size: 0.95em;
+            line-height: 1.6;
+            text-align: justify;
+            margin-bottom: 30px;
+            border-left: 4px solid #0277BD;
+            padding-left: 15px;
+            background-color: #f8f9fa;
+        }
+        .tipo-selecao {
+            display: flex;
+            justify-content: center;
+            gap: 30px;
+            margin-bottom: 30px;
+        }
+        .tipo-selecao label {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            cursor: pointer;
+            font-weight: bold;
+            color: #555;
+        }
+        .tipo-selecao input[type="radio"] {
+            display: none; /* Esconde o radio button padrão */
+        }
+        .bolinha {
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            background-color: #e0e0e0;
+            border: 3px solid #ccc;
+            margin-bottom: 10px;
+            transition: all 0.3s ease;
+        }
+        /* Estilos quando selecionado */
+        .tipo-selecao input[type="radio"]:checked + .bolinha {
+            box-shadow: 0 0 15px rgba(0,0,0,0.2);
+            transform: scale(1.1);
+        }
+        #radio-encarnado:checked + .bolinha {
+            background-color: #4CAF50; /* Verde */
+            border-color: #388E3C;
+        }
+        #radio-desencarnado:checked + .bolinha {
+            background-color: #03A9F4; /* Azul Celeste */
+            border-color: #0288D1;
+        }
+        .campos-container {
+            display: none; /* Escondido por padrão */
+            text-align: left;
+            margin-top: 20px;
+        }
+        .campo-item {
+            display: flex;
+            flex-direction: column;
+            margin-bottom: 20px;
+        }
+        .campo-item label {
+            margin-bottom: 5px;
+            font-weight: bold;
+            color: #555;
+        }
+        .campo-item input {
+            padding: 12px;
+            border-radius: 6px;
+            border: 1px solid #ccc;
+            font-size: 1em;
+        }
+        .campo-item input:focus {
+            outline: none;
+            border-color: #0277BD;
+            box-shadow: 0 0 5px rgba(2, 119, 189, 0.5);
+        }
+        .btn-enviar {
+            width: 100%;
+            padding: 15px;
+            font-size: 1.2em;
+            font-weight: bold;
+            color: white;
+            background-color: #2E7D32;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+        .btn-enviar:hover {
+            background-color: #1B5E20;
+        }
+        .btn-enviar:disabled {
+            background-color: #aaa;
+            cursor: not-allowed;
+        }
+        #mensagem-feedback {
+            margin-top: 20px;
+            font-weight: bold;
+            padding: 10px;
+            border-radius: 6px;
+            display: none;
+        }
+        .feedback-sucesso {
+            background-color: #C8E6C9;
+            color: #2E7D32;
+        }
+        .feedback-erro {
+            background-color: #FFCDD2;
+            color: #C62828;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>CEPAT - Trabalho de Vibrações</h1>
+        <p class="info-text">
+            A Vibração é um processo mental de irradiação fluídica, ou seja: é a emissão de energias através da força do nosso pensamento direcionadas a um proposito específico. O Trabalho de Vibração ocorre por meio da prece coletiva, por um grupo de trabalhadores, que sob o auxilio dos Bens Feitores espirituais e a soma das energias de todos os participantes, direcionam vibrações positivas e de coração à todos àqueles que necessitam da nossa ajuda (encarnadas ou desencarnadas).
+        </p>
+
+        <form id="form-vibracoes">
+            <div class="tipo-selecao">
+                <label>
+                    Encarnado
+                    <input type="radio" id="radio-encarnado" name="tipo" value="encarnado">
+                    <span class="bolinha"></span>
+                </label>
+                <label>
+                    Desencarnado
+                    <input type="radio" id="radio-desencarnado" name="tipo" value="desencarnado">
+                    <span class="bolinha"></span>
+                </label>
+            </div>
+
+            <div id="campos-encarnado" class="campos-container">
+                <div class="campo-item">
+                    <label for="nome-encarnado">Nome Completo:</label>
+                    <input type="text" id="nome-encarnado" required>
+                </div>
+                <div class="campo-item">
+                    <label for="endereco-encarnado">Endereço (Cidade/Estado ou completo):</label>
+                    <input type="text" id="endereco-encarnado" required>
+                </div>
+            </div>
+
+            <div id="campos-desencarnado" class="campos-container">
+                <div class="campo-item">
+                    <label for="nome-desencarnado">Nome Completo:</label>
+                    <input type="text" id="nome-desencarnado" required>
+                </div>
+            </div>
+
+            <button type="submit" id="btn-enviar" class="btn-enviar" disabled>Selecione uma opção</button>
+        </form>
+
+        <div id="mensagem-feedback"></div>
+    </div>
+
+    <script type="module">
+        // Importações do Firebase virão aqui no próximo passo
+        // import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
+        // import { getFirestore, collection, addDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
+
+        // Lógica da interface (não precisa de Firebase ainda)
+        const radioEncarnado = document.getElementById('radio-encarnado');
+        const radioDesencarnado = document.getElementById('radio-desencarnado');
+        const camposEncarnado = document.getElementById('campos-encarnado');
+        const camposDesencarnado = document.getElementById('campos-desencarnado');
+        const nomeEncarnadoInput = document.getElementById('nome-encarnado');
+        const enderecoEncarnadoInput = document.getElementById('endereco-encarnado');
+        const nomeDesencarnadoInput = document.getElementById('nome-desencarnado');
+        const btnEnviar = document.getElementById('btn-enviar');
+        const form = document.getElementById('form-vibracoes');
+        const feedbackDiv = document.getElementById('mensagem-feedback');
+
+        function atualizarFormulario() {
+            feedbackDiv.style.display = 'none'; // Esconde feedback ao mudar
+            if (radioEncarnado.checked) {
+                camposEncarnado.style.display = 'block';
+                camposDesencarnado.style.display = 'none';
+                nomeDesencarnadoInput.required = false;
+                nomeEncarnadoInput.required = true;
+                enderecoEncarnadoInput.required = true;
+                btnEnviar.textContent = 'Enviar Nome (Encarnado)';
+                btnEnviar.disabled = false;
+            } else if (radioDesencarnado.checked) {
+                camposEncarnado.style.display = 'none';
+                camposDesencarnado.style.display = 'block';
+                nomeEncarnadoInput.required = false;
+                enderecoEncarnadoInput.required = false;
+                nomeDesencarnadoInput.required = true;
+                btnEnviar.textContent = 'Enviar Nome (Desencarnado)';
+                btnEnviar.disabled = false;
+            } else {
+                btnEnviar.textContent = 'Selecione uma opção';
+                btnEnviar.disabled = true;
+            }
+        }
+
+        radioEncarnado.addEventListener('change', atualizarFormulario);
+        radioDesencarnado.addEventListener('change', atualizarFormulario);
+
+        form.addEventListener('submit', (e) => {
+            e.preventDefault();
+            // A lógica de salvar no Firebase virá aqui
+            
+            const tipo = radioEncarnado.checked ? 'encarnado' : 'desencarnado';
+            const nome = tipo === 'encarnado' ? nomeEncarnadoInput.value : nomeDesencarnadoInput.value;
+            const endereco = tipo === 'encarnado' ? enderecoEncarnadoInput.value : null;
+
+            console.log("Tipo:", tipo);
+            console.log("Nome:", nome);
+            if(endereco) console.log("Endereço:", endereco);
+
+            // Simulação de sucesso para teste
+            btnEnviar.disabled = true;
+            btnEnviar.textContent = 'Enviando...';
+            
+            setTimeout(() => { // Simula a espera da resposta do servidor
+                feedbackDiv.textContent = 'Seu pedido de vibração foi enviado com sucesso. Muita paz!';
+                feedbackDiv.className = 'feedback-sucesso';
+                feedbackDiv.style.display = 'block';
+                form.reset();
+                camposEncarnado.style.display = 'none';
+                camposDesencarnado.style.display = 'none';
+                btnEnviar.textContent = 'Selecione uma opção';
+            }, 1000);
+        });
+    </script>
+</body>
+</html>
