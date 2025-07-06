@@ -9,7 +9,8 @@
         .admin-nav { width: 100%; max-width: 1100px; background-color: #fff; padding: 15px; margin-bottom: 30px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); text-align: center; display: flex; flex-wrap: wrap; justify-content: center; gap: 15px 25px; }
         .admin-nav a { color: #1565c0; text-decoration: none; font-weight: bold; font-size: 1.1em; }
         .admin-nav a.active, .admin-nav a:hover { text-decoration: underline; color: #0d47a1; }
-        .balancete-container { display: none; background-color: white; padding: 40px; border-radius: 8px; box-shadow: 0 4px 20px rgba(0,0,0,0.1); width: 100%; max-width: 1100px; }
+        .balancete-container { display: none; background-color: white; padding: 40px; border-radius: 8px; box-shadow: 0 4px 20px rgba(0,0,0,0.1); width: 100%; max-width: 1100px; margin-bottom: 30px; }
+        #acesso-negado { text-align: center; }
         .cabecalho { text-align: center; margin-bottom: 20px; }
         .cabecalho h1 { font-size: 1.5em; margin: 0; }
         .cabecalho p { font-size: 0.9em; margin: 2px 0; }
@@ -46,7 +47,15 @@
         #btn-salvar { background-color: #1565c0; }
         #btn-liberar { background-color: #ff9800; }
         .actions-container button:disabled { background-color: #aaa; cursor: not-allowed; }
-        #acesso-negado { text-align: center; }
+        .mensagens-container { margin-top: 30px; border-top: 2px solid #ccc; padding-top: 20px; }
+        .mensagens-lista { list-style-type: none; padding: 0; margin-top: 10px; max-height: 200px; overflow-y: auto; border: 1px solid #ddd; padding: 10px; border-radius: 6px; }
+        .mensagem { margin-bottom: 10px; padding: 10px; border-radius: 8px; }
+        .mensagem-conselho { background-color: #fff3e0; border-left: 4px solid #ff9800; }
+        .mensagem-tesouraria { background-color: #e8f5e9; border-left: 4px solid #4caf50; }
+        .mensagem-autor { font-weight: bold; font-size: 0.9em; }
+        .mensagem-data { font-size: 0.8em; color: #777; }
+        #form-resposta textarea { width: 100%; box-sizing: border-box; height: 80px; margin-top: 10px; padding: 8px; border: 1px solid #ccc; border-radius: 6px; }
+        #form-resposta button { width: auto; font-size: 1em; padding: 10px 20px; background-color: #0d47a1; margin-top: 5px; }
     </style>
 </head>
 <body>
@@ -153,6 +162,7 @@
                 user.getIdTokenResult(true).then(idTokenResult => {
                     auth.currentUser.claims = idTokenResult.claims; // Garante que as permissões estão atualizadas
                     const userRole = auth.currentUser.claims.role || '';
+                    document.dispatchEvent(new Event('authReady'));
                     if (['diretor', 'tesoureiro', 'super-admin'].includes(userRole)) {
                         document.getElementById('conteudo-pagina').style.display = 'block';
                         inicializarPagina();
@@ -163,6 +173,15 @@
             } else {
                 window.location.href = window.location.origin + '/login.html';
             }
+        });
+        document.addEventListener('authReady', () => {
+            const userRole = auth.currentUser?.claims?.role || '';
+            if (!['diretor', 'tesoureiro', 'super-admin'].includes(userRole)) {
+                document.getElementById('acesso-negado').style.display = 'block';
+                return;
+            }
+            document.getElementById('conteudo-pagina').style.display = 'block';
+            inicializarPagina();
         });
 
         function inicializarPagina() {

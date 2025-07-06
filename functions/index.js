@@ -139,23 +139,25 @@ exports.revogarAcessoDiretor = functions.region(REGIAO).https.onCall(async (data
 
 exports.registrarVotoConselho = functions.region(REGIAO).https.onCall(async (data, context) => {
     const userRole = context.auth.token.role;
-    if (!['conselheiro', 'super-admin'].includes(userRole)) { throw new functions.https.HttpsError('permission-denied', 'Apenas membros do conselho ou super-admin podem votar.'); }
+    if (!['conselheiro', 'super-admin'].includes(userRole)) {
+        throw new functions.https.HttpsError('permission-denied', 'Apenas membros do conselho ou super-admin podem votar.');
+    }
     const { balanceteId, voto, mensagem } = data;
-    if (!balanceteId || !voto) { throw new functions.https.HttpsError('invalid-argument', 'ID do balancete e voto são obrigatórios.'); }
+    if (!balanceteId || !voto) {
+        throw new functions.https.HttpsError('invalid-argument', 'ID do balancete e voto são obrigatórios.');
+    }
     const balanceteRef = db.collection('balancetes').doc(balanceteId);
     const logAuditoriaCollection = db.collection('log_auditoria');
     const autor = { uid: context.auth.uid, nome: context.auth.token.name || context.auth.token.email };
-    
+    const NUMERO_DE_VOTOS_PARA_APROVAR = 3;
     try {
         const balanceteDoc = await balanceteRef.get();
         if (!balanceteDoc.exists) { throw new functions.https.HttpsError('not-found', 'Balancete não encontrado.'); }
         const balanceteData = balanceteDoc.data();
         if (balanceteData.status !== 'em revisão') { throw new functions.https.HttpsError('failed-precondition', 'Este balancete não está mais aberto para revisão.'); }
         if (balanceteData.aprovacoes && balanceteData.aprovacoes[autor.uid]) { throw new functions.https.HttpsError('already-exists', 'Você já votou neste balancete.'); }
-
         let updateData = {};
         let logDetalhes = {};
-        
         if (voto === 'aprovado') {
             const campoAprovacao = `aprovacoes.${autor.uid}`;
             updateData[campoAprovacao] = { nome: autor.nome, data: admin.firestore.FieldValue.serverTimestamp() };
@@ -166,10 +168,17 @@ exports.registrarVotoConselho = functions.region(REGIAO).https.onCall(async (dat
             updateData.mensagens = admin.firestore.FieldValue.arrayUnion({ autor, texto: mensagem, data: admin.firestore.FieldValue.serverTimestamp() });
             logDetalhes = { balanceteId, voto: 'REPROVADO', ressalva: mensagem };
         }
-        
         await balanceteRef.update(updateData);
+        // CORREÇÃO: Usando o método .add() do Admin SDK
         await logAuditoriaCollection.add({ acao: "VOTOU_BALANCETE", autor, timestamp: admin.firestore.FieldValue.serverTimestamp(), detalhes: logDetalhes });
-        
+        if (voto === 'aprovado') {
+            const balanceteAtualizado = await balanceteRef.get();
+            const totalAprovacoes = Object.keys(balanceteAtualizado.data().aprovacoes || {}).length;
+            if (totalAprovacoes >= NUMERO_DE_VOTOS_PARA_APROVAR) {
+                await balanceteRef.update({ status: 'aprovado' });
+                await logAuditoriaCollection.add({ acao: "BALANCETE_APROVADO_AUTO", autor: { nome: 'SISTEMA' }, timestamp: admin.firestore.FieldValue.serverTimestamp(), detalhes: { balanceteId, totalVotos: totalAprovacoes } });
+            }
+        }
         return { success: true, message: 'Ação registrada com sucesso!' };
     } catch (error) {
         console.error("Erro ao registrar voto do conselho:", error);
