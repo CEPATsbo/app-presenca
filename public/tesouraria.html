@@ -264,7 +264,7 @@
                 btnSalvar.disabled = !podeEditar;
                 btnLiberar.disabled = !podeEditar;
             }
-            
+
             function atualizarStatusUI(status) {
                 let texto, classe;
                 const userRole = auth.currentUser?.claims?.role;
@@ -337,9 +337,6 @@
                 calcularETotais();
             }
 
-            // ===================================================================
-            // FUNÇÃO PRINCIPAL ALTERADA PARA BUSCAR OS LOGS
-            // ===================================================================
             async function carregarDadosDoMes(mesAno) {
                 if (!mesAno) return;
                 const balanceteRef = doc(db, "balancetes", mesAno);
@@ -352,7 +349,6 @@
                     atualizarStatusUI(balanceteAtual.status || 'em elaboração');
                     renderizarMensagens(balanceteAtual.mensagens || []);
 
-                    // Se o balancete estiver aprovado, busca os logs de assinatura
                     if (balanceteAtual.status === 'aprovado') {
                         const logsQuery = query(
                             collection(db, "log_auditoria"),
@@ -369,7 +365,6 @@
                         });
                         renderizarAssinaturas(true, liberacaoLog, aprovacaoLogs);
                     } else {
-                        // Se não estiver aprovado, renderiza as assinaturas em branco
                         renderizarAssinaturas(false);
                     }
                 } else {
@@ -381,15 +376,11 @@
                 }
             }
             
-            // ===================================================================
-            // NOVA FUNÇÃO PARA RENDERIZAR AS ASSINATURAS
-            // ===================================================================
             function renderizarAssinaturas(isAprovado, logLiberacao, logsAprovacao) {
-                assinaturasSection.innerHTML = ''; // Limpa a seção
+                assinaturasSection.innerHTML = ''; 
                 let html = '';
 
                 if (isAprovado) {
-                    // Renderiza assinaturas digitais com base nos logs
                     let htmlLiberacao = '<li>Liberação não registrada.</li>';
                     if (logLiberacao && logLiberacao.timestamp) {
                         const data = logLiberacao.timestamp.toDate().toLocaleString('pt-BR');
@@ -418,7 +409,6 @@
                         </div>
                     `;
                 } else {
-                    // Renderiza as linhas de assinatura em branco
                     html = `
                         <div style="display: flex; justify-content: space-around; flex-wrap: wrap; gap: 40px;">
                             <div class="assinatura"><div class="linha"></div><div class="cargo">PRESIDENTE</div></div>
@@ -444,13 +434,15 @@
                 const balanceteRef = doc(db, "balancetes", mesAno);
 
                 try {
-                    if (balanceteExisteNoDB) {
-                        await updateDoc(balanceteRef, dadosParaSalvar);
-                    } else {
-                        dadosParaSalvar.status = 'em elaboração';
-                        await setDoc(balanceteRef, dadosParaSalvar);
-                        balanceteExisteNoDB = true; 
+                    // Voltamos a usar setDoc com merge:true, que é mais simples e funcionará com a regra de segurança final
+                    await setDoc(balanceteRef, dadosParaSalvar, { merge: true });
+                    
+                    // Se for um balancete novo, precisamos garantir que o status seja salvo
+                    if (!balanceteExisteNoDB) {
+                        await updateDoc(balanceteRef, { status: 'em elaboração' });
+                        balanceteExisteNoDB = true;
                     }
+
                     await registrarLog("SALVOU_BALANCETE", { periodo: mesAno });
                 } catch (error) {
                     console.error("Erro ao salvar balancete:", error);
@@ -526,50 +518,66 @@
                 }
             });
             
-            async function gerarPDF() {
+            // ===================================================================
+            // FUNÇÃO PDF ALTERADA COM O 'setTimeout'
+            // ===================================================================
+            function gerarPDF() {
                 const mesAno = seletorMesAno.value;
                 const dataFormatada = new Date(`${mesAno}-02T00:00:00`).toLocaleString('pt-BR', { month: 'long', year: 'numeric' });
-                const nomeArquivo = `balancete_${mesAno}_${dataFormatada.replace(' de ', '_')}.pdf`;
+                const nomeArquivo = `balancete_${mesAno}_${dataFormatada.replace(/ de /g, '_')}.pdf`;
                 
                 const btnContainer = document.querySelector('.actions-container');
                 btnContainer.style.display = 'none'; 
 
                 alert('Gerando o PDF... Por favor, aguarde.');
 
-                const { jsPDF } = window.jspdf;
-                const balanceteElement = document.getElementById('conteudo-pagina');
+                // Pausa para garantir que o DOM foi renderizado com os logs
+                setTimeout(async () => {
+                    const { jsPDF } = window.jspdf;
+                    const balanceteElement = document.getElementById('conteudo-pagina');
 
-                try {
-                    const canvas = await html2canvas(balanceteElement, {
-                        scale: 2,
-                        useCORS: true
-                    });
-                    
-                    const imgData = canvas.toDataURL('image/png');
-                    
-                    const pdf = new jsPDF({
-                        orientation: 'portrait',
-                        unit: 'mm',
-                        format: 'a4'
-                    });
+                    try {
+                        const canvas = await html2canvas(balanceteElement, {
+                            scale: 2,
+                            useCORS: true,
+                            windowWidth: balanceteElement.scrollWidth,
+                            windowHeight: balanceteElement.scrollHeight
+                        });
+                        
+                        const imgData = canvas.toDataURL('image/png');
+                        
+                        const pdf = new jsPDF({
+                            orientation: 'portrait',
+                            unit: 'mm',
+                            format: 'a4'
+                        });
 
-                    const pdfWidth = pdf.internal.pageSize.getWidth();
-                    const pdfHeight = pdf.internal.pageSize.getHeight();
-                    const imgWidth = canvas.width;
-                    const imgHeight = canvas.height;
-                    const ratio = imgWidth / imgHeight;
-                    const newImgWidth = pdfWidth;
-                    const newImgHeight = newImgWidth / ratio;
-                    
-                    pdf.addImage(imgData, 'PNG', 0, 0, newImgWidth, newImgHeight);
-                    pdf.save(nomeArquivo);
+                        const pdfWidth = pdf.internal.pageSize.getWidth();
+                        const pdfHeight = pdf.internal.pageSize.getHeight();
+                        const imgWidth = canvas.width;
+                        const imgHeight = canvas.height;
+                        const ratio = imgWidth / imgHeight;
+                        let newImgWidth = pdfWidth;
+                        let newImgHeight = newImgWidth / ratio;
+                        
+                        // Se a imagem for mais alta que a página, ajusta pela altura
+                        if (newImgHeight > pdfHeight) {
+                            newImgHeight = pdfHeight;
+                            newImgWidth = newImgHeight * ratio;
+                        }
+                        
+                        const xOffset = (pdfWidth - newImgWidth) / 2;
+                        
+                        pdf.addImage(imgData, 'PNG', xOffset, 0, newImgWidth, newImgHeight);
+                        pdf.save(nomeArquivo);
 
-                } catch(error) {
-                    console.error("Erro ao gerar PDF:", error);
-                    alert("Ocorreu um erro ao gerar o PDF. Verifique o console.");
-                } finally {
-                    btnContainer.style.display = 'flex'; 
-                }
+                    } catch(error) {
+                        console.error("Erro ao gerar PDF:", error);
+                        alert("Ocorreu um erro ao gerar o PDF. Verifique o console.");
+                    } finally {
+                        btnContainer.style.display = 'flex'; 
+                    }
+                }, 200); // Atraso de 200ms
             }
             
             btnGerarPdf.addEventListener('click', gerarPDF);
