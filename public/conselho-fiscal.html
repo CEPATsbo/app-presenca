@@ -41,8 +41,13 @@
         #btn-aprovar { background-color: #2e7d32; }
         #btn-reprovar { background-color: #c62828; }
         #area-aprovacao textarea { width: 100%; box-sizing: border-box; margin-top: 10px; height: 80px; padding: 8px; border: 1px solid #ccc; border-radius: 6px; }
-        #lista-aprovacoes { list-style-type: none; padding: 0; font-size: 0.9em; max-height: 150px; overflow-y: auto; }
-        #lista-aprovacoes li { background-color: #f0f0f0; padding: 5px 8px; border-radius: 4px; margin-bottom: 5px; }
+        #lista-aprovacoes, #lista-mensagens { list-style-type: none; padding: 0; font-size: 0.9em; max-height: 150px; overflow-y: auto; }
+        #lista-aprovacoes li, #lista-mensagens li { background-color: #f0f0f0; padding: 8px; border-radius: 4px; margin-bottom: 5px; }
+        .mensagem { border-left: 4px solid; }
+        .mensagem-conselho { border-color: #ff9800; }
+        .mensagem-tesouraria { border-color: #4caf50; background-color: #f1f8e9; }
+        .mensagem-autor { font-weight: bold; }
+        .mensagem-data { font-size: 0.8em; color: #777; }
         .hidden { display: none; }
     </style>
 </head>
@@ -117,6 +122,9 @@
                     <textarea id="texto-ressalva" placeholder="Se reprovar, digite a justificativa ou pergunta aqui..." class="hidden"></textarea>
                     <button id="btn-enviar-ressalva" class="hidden" style="background-color: #555; margin-top: 5px;">Enviar Ressalva</button>
                 </div>
+                    <h5>Discussão e Ressalvas</h5>
+                    <ul id="lista-mensagens"></ul>
+                </div>
             </div>
         </div>
     </div>
@@ -124,7 +132,7 @@
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
         import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-auth.js";
-        import { getFirestore, collection, query, where, onSnapshot, doc, getDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
+        import { getFirestore, collection, query, where, onSnapshot, doc, getDoc, updateDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
         import { getFunctions, httpsCallable } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-functions.js";
         
         const firebaseConfig = {
@@ -155,6 +163,7 @@
             const textoRessalva = document.getElementById('texto-ressalva');
             const btnEnviarRessalva = document.getElementById('btn-enviar-ressalva');
             const listaAprovacoes = document.getElementById('lista-aprovacoes');
+            const listaMensagens = document.getElementById('lista-mensagens');
             
             let currentUser = null;
             let unsubscribeBalancete = null;
@@ -201,7 +210,6 @@
 
             async function carregarBalanceteSelecionado() {
                 if (unsubscribeBalancete) unsubscribeBalancete();
-                
                 const mesAno = seletorBalancete.value;
                 if (!mesAno) {
                     balanceteContent.style.display = 'none';
@@ -210,42 +218,59 @@
                     areaAprovacao.style.display = 'none';
                     return;
                 }
-                
                 const balanceteRef = doc(db, "balancetes", mesAno);
-                
                 unsubscribeBalancete = onSnapshot(balanceteRef, (docSnap) => {
                     if (docSnap.exists()) {
                         const balancete = docSnap.data();
                         renderizarBalancete(balancete, mesAno);
-                        
                         const status = balancete.status || 'em revisão';
                         statusBar.textContent = `Status: ${status.replace('em revisão', 'Em Revisão').replace('aprovado', 'Aprovado')}`;
                         statusBar.className = `status-bar status-${status.split(' ')[0]}`;
                         
                         const userRole = currentUser?.claims?.role;
                         const podeVotar = userRole === 'conselheiro' || userRole === 'super-admin';
-                        
                         const aprovacoes = balancete.aprovacoes || {};
                         const jaVotou = currentUser ? aprovacoes[currentUser.uid] : false;
                         
                         areaAprovacao.style.display = 'block';
-
-                        if (balancete.status === 'em revisão' && podeVotar && !jaVotou) {
-                            document.getElementById('area-de-votacao').style.display = 'block';
-                        } else {
-                            document.getElementById('area-de-votacao').style.display = 'none';
-                        }
+                        document.getElementById('area-de-votacao').style.display = (balancete.status === 'em revisão' && podeVotar && !jaVotou) ? 'block' : 'none';
                         
-                        listaAprovacoes.innerHTML = '<h4>Aprovações Recebidas:</h4>';
-                        if (Object.keys(aprovacoes).length > 0) {
-                            Object.values(aprovacoes).forEach(aprovacao => {
-                                const dataAprovacao = aprovacao.data ? aprovacao.data.toDate().toLocaleDateString('pt-BR') : '';
-                                listaAprovacoes.innerHTML += `<li>✅ ${aprovacao.nome} (${dataAprovacao})</li>`;
-                            });
-                        } else {
-                            listaAprovacoes.innerHTML += '<li>Nenhuma aprovação ainda.</li>';
-                        }
+                        renderizarAprovacoes(aprovacoes);
+                        renderizarMensagens(balancete.mensagens || []);
                     }
+                });
+            }
+
+            function renderizarAprovacoes(aprovacoes) {
+                listaAprovacoes.innerHTML = '<h4>Aprovações Recebidas:</h4>';
+                if (Object.keys(aprovacoes).length > 0) {
+                    Object.values(aprovacoes).forEach(aprovacao => {
+                        const dataAprovacao = aprovacao.data ? aprovacao.data.toDate().toLocaleDateString('pt-BR') : '';
+                        listaAprovacoes.innerHTML += `<li>✅ ${aprovacao.nome} (${dataAprovacao})</li>`;
+                    });
+                } else {
+                    listaAprovacoes.innerHTML += '<li>Nenhuma aprovação ainda.</li>';
+                }
+            }
+
+            function renderizarMensagens(mensagens) {
+                listaMensagens.innerHTML = '';
+                if (mensagens.length === 0) {
+                    listaMensagens.innerHTML = '<li>Nenhuma ressalva ou mensagem para este balancete.</li>';
+                    return;
+                }
+                mensagens.forEach(msg => {
+                    const data = msg.data ? msg.data.toDate().toLocaleString('pt-BR') : 'Enviando...';
+                    const autor = msg.autor.nome || 'Anônimo';
+                    const tipoClasse = msg.isResposta ? 'mensagem-tesouraria' : 'mensagem-conselho';
+                    const li = document.createElement('li');
+                    li.className = `mensagem ${tipoClasse}`;
+                    li.innerHTML = `
+                        <div class="mensagem-autor">${autor}</div>
+                        <div class="mensagem-data">${data}</div>
+                        <p>${msg.texto}</p>
+                    `;
+                    listaMensagens.appendChild(li);
                 });
             }
 
@@ -284,7 +309,6 @@
                 balanceteContent.style.display = 'block';
                 mensagemInicial.style.display = 'none';
             }
-
             function formatarMoeda(valor) { return (valor || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }); }
 
             async function registrarVoto(voto, mensagem = null) {
@@ -306,14 +330,8 @@
                 } finally {
                     const botaoAprovar = document.getElementById('btn-aprovar');
                     const botaoEnviarRessalva = document.getElementById('btn-enviar-ressalva');
-                    if(botaoAprovar) {
-                        botaoAprovar.disabled = false;
-                        botaoAprovar.textContent = 'Aprovar Balancete';
-                    }
-                    if(botaoEnviarRessalva) {
-                        botaoEnviarRessalva.disabled = false;
-                        botaoEnviarRessalva.textContent = 'Enviar Ressalva';
-                    }
+                    if(botaoAprovar) { botaoAprovar.disabled = false; botaoAprovar.textContent = 'Aprovar Balancete'; }
+                    if(botaoEnviarRessalva) { botaoEnviarRessalva.disabled = false; botaoEnviarRessalva.textContent = 'Enviar Ressalva'; }
                 }
             }
 
@@ -333,7 +351,6 @@
                     registrarVoto('reprovado', ressalva);
                 }
             });
-            
             seletorBalancete.addEventListener('change', carregarBalanceteSelecionado);
         });
     </script>
