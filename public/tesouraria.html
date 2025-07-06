@@ -157,7 +157,6 @@
 
         document.addEventListener('authReady', () => {
             const userRole = auth.currentUser?.claims?.role || '';
-            // Atualizado para incluir 'conselheiro' para que possam ver a página no futuro (portal da transparência)
             if (!['diretor', 'tesoureiro', 'super-admin', 'conselheiro'].includes(userRole)) {
                 document.getElementById('acesso-negado').style.display = 'block';
                 return;
@@ -178,6 +177,7 @@
             const btnEnviarResposta = document.getElementById('btn-enviar-resposta');
             const textoResposta = document.getElementById('texto-resposta');
             let balanceteAtual = {};
+            let balanceteExisteNoDB = false;
 
             const balancetePadrao = {
                 saldoAnterior: 0, status: 'em elaboração',
@@ -323,11 +323,13 @@
                 const balanceteRef = doc(db, "balancetes", mesAno);
                 const docSnap = await getDoc(balanceteRef);
                 if (docSnap.exists()) {
+                    balanceteExisteNoDB = true;
                     balanceteAtual = docSnap.data();
                     renderizarTabela(balanceteAtual, mesAno);
                     atualizarStatusUI(balanceteAtual.status || 'em elaboração');
                     renderizarMensagens(balanceteAtual.mensagens || []);
                 } else {
+                    balanceteExisteNoDB = false;
                     balanceteAtual = JSON.parse(JSON.stringify(balancetePadrao));
                     renderizarTabela(balanceteAtual, mesAno);
                     atualizarStatusUI('em elaboração');
@@ -345,14 +347,22 @@
                 }
                 btnSalvar.disabled = true;
                 btnSalvar.textContent = "Salvando...";
+                
                 const dadosParaSalvar = getDadosAtuaisDaTela();
+                const balanceteRef = doc(db, "balancetes", mesAno);
+
                 try {
-                    await setDoc(doc(db, "balancetes", mesAno), dadosParaSalvar, { merge: true });
+                    // Lógica explícita: se o balancete não existe, usa setDoc. Se existe, usa updateDoc.
+                    if (balanceteExisteNoDB) {
+                        await updateDoc(balanceteRef, dadosParaSalvar);
+                    } else {
+                        await setDoc(balanceteRef, dadosParaSalvar);
+                    }
                     await registrarLog("SALVOU_BALANCETE", { periodo: mesAno });
                 } catch (error) {
                     console.error("Erro ao salvar balancete:", error);
                     alert("Ocorreu um erro ao salvar.");
-                    throw error; // Lança o erro para que a função que chamou saiba que falhou
+                    throw error;
                 } finally {
                     btnSalvar.disabled = false;
                     btnSalvar.textContent = "Salvar Balancete";
@@ -368,10 +378,8 @@
                 
                 btnLiberar.disabled = true;
                 try {
-                    // Passo 1: Salva o estado atual e ESPERA a conclusão.
                     await salvarBalancete(); 
                     
-                    // Passo 2: Somente se o salvamento foi bem-sucedido, atualiza o status.
                     const balanceteRef = doc(db, "balancetes", mesAno);
                     await updateDoc(balanceteRef, { status: 'em revisão' });
                     await registrarLog("LIBEROU_BALANCETE", { periodo: mesAno });
@@ -379,7 +387,6 @@
                     atualizarStatusUI('em revisão');
                     alert("Balancete liberado com sucesso!");
                 } catch (error) {
-                    // O erro já foi logado pela função salvarBalancete
                     console.error("Erro ao liberar balancete:", error);
                     alert("Ocorreu um erro ao liberar o balancete. A operação foi cancelada.");
                 } finally {
