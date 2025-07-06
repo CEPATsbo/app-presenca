@@ -128,7 +128,8 @@
     
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
-        import { getFirestore, doc, setDoc, getDoc, updateDoc, collection, addDoc, serverTimestamp, arrayUnion } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
+        // REMOVIDO 'arrayUnion' pois não será mais usado aqui. Adicionado 'getDoc'.
+        import { getFirestore, doc, setDoc, getDoc, updateDoc, collection, addDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
         import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-auth.js";
         
         const firebaseConfig = {
@@ -369,7 +370,7 @@
             });
             
             // ===================================================================
-            // INÍCIO DO BLOCO CORRIGIDO
+            // INÍCIO DO BLOCO CORRIGIDO - Abordagem "Ler-Modificar-Escrever"
             // ===================================================================
             document.getElementById('btn-enviar-resposta').addEventListener('click', async () => {
                 const mesAno = seletorMesAno.value;
@@ -385,15 +386,22 @@
                 const novaMensagem = {
                     autor: { uid: user.uid, nome: user.displayName || user.email },
                     texto: texto,
-                    data: new Date(), // CORREÇÃO 1: Usando new Date()
-                    // Removido 'isResposta' para alinhar com a estrutura da Cloud Function
+                    data: new Date()
                 };
 
                 const balanceteRef = doc(db, "balancetes", mesAno);
                 try {
+                    // Passo 1: Ler o documento atual para pegar o array de mensagens existente
+                    const docSnap = await getDoc(balanceteRef);
+                    const mensagensAtuais = docSnap.exists() && docSnap.data().mensagens ? docSnap.data().mensagens : [];
+
+                    // Passo 2: Adicionar a nova mensagem ao array localmente
+                    mensagensAtuais.push(novaMensagem);
+
+                    // Passo 3: Salvar o array completo de volta, substituindo o antigo, e atualizar o status
                     await updateDoc(balanceteRef, {
-                        mensagens: arrayUnion([novaMensagem]), // CORREÇÃO 2: Envolvendo o objeto em colchetes
-                        status: 'em revisão' // MELHORIA: Devolvendo para o conselho
+                        mensagens: mensagensAtuais,
+                        status: 'em revisão'
                     });
 
                     document.getElementById('texto-resposta').value = '';
@@ -414,7 +422,7 @@
             function adicionarLinhaApos(linhaHeader, nome = "", valor = "") {
                 const tipoClasse = linhaHeader.parentElement.id.includes('receitas') ? 'input-receita' : 'input-despesa';
                 const novaLinha = document.createElement('tr');
-                novaLinha.innerHTML = `<td contenteditable="true">${nome}</td><td><input type="number" step="0.01" class="${tipoClasse}" value="${valor}"></td>`;
+                novaLinha.innerHTML = `<td contenteditable="true">${nome}</td><td><input type="number" step="0.01" class="${tipoClasse}" value="${valor || ''}"></td>`;
                 linhaHeader.insertAdjacentElement('afterend', novaLinha);
                 novaLinha.querySelector('input').addEventListener('input', calcularETotais);
             }
@@ -423,12 +431,18 @@
                  const novaLinha = tabelaBody.insertRow(-1);
                  novaLinha.className = 'categoria-header';
                  novaLinha.innerHTML = `<th colspan="2"><span contenteditable="true">${nome}</span> <button class="btn-add-row" title="Adicionar linha">+</button></th>`;
+                 vincularEventListenersInputs(); // Garante que o novo botão de adicionar linha funcione
                  return novaLinha;
             }
             
             function vincularEventListenersInputs() {
                 document.querySelectorAll('input[type="number"]').forEach(input => input.addEventListener('input', calcularETotais));
-                document.querySelectorAll('.btn-add-row').forEach(btn => btn.addEventListener('click', (e) => adicionarLinhaApos(e.target.closest('tr'))));
+                document.querySelectorAll('.btn-add-row').forEach(btn => {
+                    // Remove listener antigo para evitar duplicação
+                    const newBtn = btn.cloneNode(true);
+                    btn.parentNode.replaceChild(newBtn, btn);
+                    newBtn.addEventListener('click', (e) => adicionarLinhaApos(e.target.closest('tr')));
+                });
             }
             
             document.querySelectorAll('.btn-add-categoria').forEach(btn => {
