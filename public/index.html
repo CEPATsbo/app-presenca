@@ -10,8 +10,8 @@
         .btn-transparencia {
             display: inline-block;
             padding: 12px 25px;
-            margin: 20px auto; /* Centraliza o botão */
-            background-color: #0277BD; /* Um azul bonito do nosso tema */
+            margin: 20px auto;
+            background-color: #0277BD;
             color: white;
             text-decoration: none;
             font-size: 1.2em;
@@ -70,7 +70,6 @@
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
         import { getFirestore, doc, getDoc } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
-        import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-auth.js";
 
         const firebaseConfig = {
             apiKey: "AIzaSyBV7RPjk3cFTqL-aIpflJcUojKg1ZXMLuU",
@@ -81,39 +80,46 @@
             appId: "1:66122858261:web:7fa21f1805463b5c08331c"
         };
         
-        const app = initializeApp(firebaseConfig, "appSecundaria"); // Nomeie para evitar conflitos
+        // Inicializa o Firebase sem um nome para usar a instância padrão, evitando conflitos.
+        const app = initializeApp(firebaseConfig);
         const db = getFirestore(app);
-        const auth = getAuth(app);
 
-        async function verificarPortalTransparencia() {
+        async function verificarEExibirBotaoPortal() {
             try {
                 const configRef = doc(db, "configuracoes", "geral");
                 const docSnap = await getDoc(configRef);
 
                 if (docSnap.exists() && docSnap.data().portalTransparenciaAtivo === true) {
                     const container = document.getElementById('portal-link-container');
-                    container.innerHTML = ''; // Limpa antes de adicionar
-
-                    const portalLink = document.createElement('a');
-                    portalLink.href = '/transparencia.html';
-                    portalLink.className = 'btn-transparencia';
-                    portalLink.textContent = 'Portal da Transparência';
-                    
-                    container.appendChild(portalLink);
+                    if (container) {
+                        container.innerHTML = `<a href="/transparencia.html" class="btn-transparencia">Portal da Transparência</a>`;
+                    }
                 }
             } catch (error) {
                 console.error("Erro ao verificar configuração do portal:", error);
             }
         }
 
-        // Verifica o status do portal assim que o estado de autenticação for conhecido
-        onAuthStateChanged(auth, (user) => {
-            if (user) {
-                // O usuário está logado, então podemos verificar se o botão deve ser exibido.
-                // Isso garante que o botão só apareça na área de status.
-                verificarPortalTransparencia();
+        // Seleciona o alvo que o script.js modifica (a área de status)
+        const statusArea = document.getElementById('status-area');
+
+        // Cria um observador para vigiar mudanças nos atributos do alvo (especificamente, a classe 'hidden')
+        const observer = new MutationObserver((mutationsList, observer) => {
+            for(const mutation of mutationsList) {
+                if (mutation.type === 'attributes' && mutation.attributeName === 'class') {
+                    // Se a classe 'hidden' NÃO estiver mais presente, significa que a área ficou visível
+                    if (!statusArea.classList.contains('hidden')) {
+                        verificarEExibirBotaoPortal();
+                        // Uma vez que o botão foi exibido, não precisamos mais observar.
+                        observer.disconnect();
+                    }
+                }
             }
         });
+
+        // Inicia a observação no alvo, configurado para observar mudanças de atributos
+        observer.observe(statusArea, { attributes: true });
+
     </script>
 </body>
 </html>
