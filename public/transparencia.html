@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Portal da Transparência</title>
+    <script type="module" src="/auth-guard.js"></script>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background-color: #f4f6f9; display: flex; flex-direction: column; align-items: center; margin: 0; padding: 20px; box-sizing: border-box; }
+        .admin-nav { width: 100%; max-width: 1100px; background-color: #fff; padding: 15px; margin-bottom: 30px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); text-align: center; display: flex; flex-wrap: wrap; justify-content: center; gap: 15px 25px; }
+        .admin-nav a { margin: 0; padding: 0; background-color: transparent; color: #1565c0; text-decoration: none; font-weight: bold; font-size: 1.1em; white-space: nowrap; }
+        .admin-nav a.active, .admin-nav a:hover { text-decoration: underline; background-color: transparent; color: #0d47a1; }
+        .portal-container { width: 100%; max-width: 1100px; }
+        .balancete-aprovado-item { background-color: white; padding: 40px; border-radius: 8px; box-shadow: 0 4px 20px rgba(0,0,0,0.1); margin-bottom: 30px; }
+        h1, h2 { text-align: center; color: #333; margin-top: 0; }
+        .cabecalho { text-align: center; margin-bottom: 20px; }
+        .cabecalho h1 { font-size: 1.5em; margin: 0; }
+        .cabecalho p { font-size: 0.9em; margin: 2px 0; }
+        .cabecalho h3 { font-weight: normal; font-size: 1.2em; color: #444 }
+        .corpo-balancete { display: flex; justify-content: space-between; gap: 40px; flex-wrap: wrap;}
+        .coluna { width: 100%; min-width: 450px; flex: 1; }
+        .coluna h2 { background-color: #e0e0e0; padding: 8px; text-align: center; font-size: 1.2em; margin: 0; }
+        .tabela-balancete { width: 100%; border-collapse: collapse; }
+        .tabela-balancete th, .tabela-balancete td { border: 1px solid #ccc; padding: 8px; font-size: 0.9em; text-align: left; }
+        .tabela-balancete th { background-color: #f2f2f2; }
+        .tabela-balancete td.valor { text-align: right; }
+        .categoria-header th { background-color: #dcedc8; font-weight: bold; }
+        .total-row td { font-weight: bold; background-color: #f1f8e9; text-align: right; }
+        .total-row td:first-child { text-align: left; }
+        .assinaturas-container { margin-top: 40px; padding-top: 20px; border-top: 2px solid #333; }
+        .assinaturas-container h3 { text-align: center; color: #333; }
+        .assinatura-digital { background-color: #f5f5f5; border: 1px solid #ddd; padding: 15px; border-radius: 6px; margin-bottom: 15px; }
+        .assinatura-digital strong { color: #2E7D32; }
+        .assinatura-digital ul { padding-left: 20px; margin: 5px 0 0 0; }
+    </style>
+</head>
+<body>
+    <nav class="admin-nav">
+        <a href="/index.html">Presença</a>
+        <a href="/transparencia.html" class="active">Portal da Transparência</a>
+        <a href="#" id="btn-logout" style="color: #c62828;">Sair</a>
+    </nav>
+    <div class="portal-container">
+        <h1>Portal da Transparência</h1>
+        <div id="balancetes-aprovados-lista">
+            <h2 id="loading-message">Carregando balancetes aprovados...</h2>
+        </div>
+    </div>
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
+        import { getFirestore, collection, getDocs, query, where, orderBy, documentId } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
+        import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-auth.js";
+        
+        const firebaseConfig = {
+            apiKey: "AIzaSyBV7RPjk3cFTqL-aIpflJcUojKg1ZXMLuU",
+            authDomain: "voluntarios-ativos---cepat.firebaseapp.com",
+            projectId: "voluntarios-ativos---cepat",
+            storageBucket: "voluntarios-ativos---cepat.firebasestorage.app",
+            messagingSenderId: "66122858261",
+            appId: "1:66122858261:web:7fa21f1805463b5c08331c"
+        };
+        
+        const app = initializeApp(firebaseConfig);
+        const db = getFirestore(app);
+        const auth = getAuth(app);
+        
+        onAuthStateChanged(auth, (user) => {
+            if (!user) {
+                window.location.href = '/login.html';
+            } else {
+                carregarBalancetesAprovados();
+            }
+        });
+
+        function formatarMoeda(valor) {
+            return (valor || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+        }
+
+        async function carregarBalancetesAprovados() {
+            const listaContainer = document.getElementById('balancetes-aprovados-lista');
+            const loadingMessage = document.getElementById('loading-message');
+
+            try {
+                // 1. Buscar todos os balancetes com status 'aprovado'
+                const balancetesQuery = query(
+                    collection(db, "balancetes"), 
+                    where("status", "==", "aprovado"),
+                    orderBy(documentId(), "desc") // Ordena por ID (YYYY-MM), do mais novo para o mais antigo
+                );
+                const balancetesSnapshot = await getDocs(balancetesQuery);
+
+                if (balancetesSnapshot.empty) {
+                    loadingMessage.textContent = "Nenhum balancete aprovado para exibir.";
+                    return;
+                }
+                
+                loadingMessage.style.display = 'none'; // Esconde a mensagem de carregamento
+
+                // 2. Para cada balancete, buscar os logs de auditoria correspondentes
+                for (const doc of balancetesSnapshot.docs) {
+                    const balanceteId = doc.id;
+                    const balanceteData = doc.data();
+
+                    const logsQuery = query(
+                        collection(db, "log_auditoria"),
+                        where("detalhes.balanceteId", "==", balanceteId)
+                    );
+                    const logsSnapshot = await getDocs(logsQuery);
+                    
+                    let liberacaoLog = null;
+                    const aprovacaoLogs = [];
+                    logsSnapshot.forEach(logDoc => {
+                        const logData = logDoc.data();
+                        // Separa o log de liberação dos logs de aprovação
+                        if (logData.acao === 'LIBEROU_BALANCETE') {
+                            liberacaoLog = logData;
+                        } else if (logData.acao === 'VOTOU_BALANCETE' && logData.detalhes?.voto === 'APROVADO') {
+                            aprovacaoLogs.push(logData);
+                        }
+                    });
+                    
+                    // 3. Renderizar o HTML do balancete na tela
+                    renderizarBalancete(listaContainer, balanceteId, balanceteData, liberacaoLog, aprovacaoLogs);
+                }
+
+            } catch (error) {
+                console.error("Erro ao carregar balancetes:", error);
+                loadingMessage.textContent = "Ocorreu um erro ao carregar os dados.";
+                loadingMessage.style.color = 'red';
+            }
+        }
+
+        function renderizarBalancete(container, id, dados, logLiberacao, logsAprovacao) {
+            const dataFormatada = new Date(`${id}-02T00:00:00`).toLocaleString('pt-BR', { month: 'long', year: 'numeric' }).toUpperCase();
+            
+            const balanceteDiv = document.createElement('div');
+            balanceteDiv.className = 'balancete-aprovado-item';
+
+            // Calcular totais
+            let totalReceitas = 0;
+            Object.values(dados.receitas || {}).forEach(cat => cat.forEach(item => totalReceitas += item.valor));
+            let totalDespesas = 0;
+            Object.values(dados.despesas || {}).forEach(cat => cat.forEach(item => totalDespesas += item.valor));
+            const saldoPeriodo = totalReceitas - totalDespesas;
+            const saldoAtual = saldoPeriodo + (dados.saldoAnterior || 0);
+
+            let html = `
+                <div class="cabecalho">
+                    <h1>C. E. PAULO DE TARSO</h1>
+                    <h3>BALANCETE APROVADO REFERENTE A ${dataFormatada}</h3>
+                </div>
+                <div class="corpo-balancete">
+                    <div class="coluna">
+                        <h2>RECEITAS</h2>
+                        <table class="tabela-balancete">
+                            <thead><tr><th style="width:70%;">RECEITAS</th><th>VALOR</th></tr></thead>
+                            <tbody>${renderizarCategorias(dados.receitas)}</tbody>
+                            <tfoot><tr class="total-row"><td>TOTAL DE RECEITAS</td><td class="valor">${formatarMoeda(totalReceitas)}</td></tr></tfoot>
+                        </table>
+                    </div>
+                    <div class="coluna">
+                        <h2>DESPESAS</h2>
+                        <table class="tabela-balancete">
+                            <thead><tr><th style="width:70%;">DESPESAS</th><th>VALOR</th></tr></thead>
+                            <tbody>${renderizarCategorias(dados.despesas)}</tbody>
+                            <tfoot><tr class="total-row"><td>TOTAL DE DESPESAS</td><td class="valor">${formatarMoeda(totalDespesas)}</td></tr></tfoot>
+                        </table>
+                    </div>
+                </div>
+                <div class="corpo-balancete" style="margin-top: 20px;">
+                    <div class="coluna"><table class="tabela-balancete"><tr class="total-row"><td>SALDO NO PERÍODO</td><td class="valor">${formatarMoeda(saldoPeriodo)}</td></tr></table></div>
+                    <div class="coluna"><table class="tabela-balancete">
+                        <tbody>
+                            <tr><td>${dados.nomes?.['nome-saldo-anterior'] || 'SALDO ANTERIOR'}</td><td class="valor">${formatarMoeda(dados.saldoAnterior)}</td></tr>
+                        </tbody>
+                        <tfoot><tr class="total-row"><td>SALDO ATUAL</td><td class="valor">${formatarMoeda(saldoAtual)}</td></tr></tfoot>
+                    </table></div>
+                </div>
+                ${renderizarAssinaturasDigitais(logLiberacao, logsAprovacao)}
+            `;
+
+            balanceteDiv.innerHTML = html;
+            container.appendChild(balanceteDiv);
+        }
+
+        function renderizarCategorias(categorias) {
+            let html = '';
+            if (!categorias) return '';
+            Object.entries(categorias).forEach(([catNome, itens]) => {
+                html += `<tr class="categoria-header"><th colspan="2">${catNome}</th></tr>`;
+                itens.forEach(item => {
+                    html += `<tr><td>${item.nome}</td><td class="valor">${formatarMoeda(item.valor)}</td></tr>`;
+                });
+            });
+            return html;
+        }
+
+        function renderizarAssinaturasDigitais(logLiberacao, logsAprovacao) {
+            let htmlLiberacao = '<li>Liberação não registrada.</li>';
+            if (logLiberacao) {
+                const data = logLiberacao.timestamp.toDate().toLocaleString('pt-BR');
+                htmlLiberacao = `<li><strong>Liberado por:</strong> ${logLiberacao.autor.nome} em ${data}</li>`;
+            }
+
+            let htmlAprovacoes = '<li>Nenhum voto de aprovação registrado.</li>';
+            if (logsAprovacao && logsAprovacao.length > 0) {
+                htmlAprovacoes = logsAprovacao.map(log => {
+                    const data = log.timestamp.toDate().toLocaleString('pt-BR');
+                    return `<li><strong>Aprovado por:</strong> ${log.autor.nome} em ${data}</li>`;
+                }).join('');
+            }
+
+            return `
+                <div class="assinaturas-container">
+                    <h3>Registros de Aprovação</h3>
+                    <div class="assinatura-digital">
+                        <strong>TESOURARIA</strong>
+                        <ul>${htmlLiberacao}</ul>
+                    </div>
+                    <div class="assinatura-digital">
+                        <strong>CONSELHO FISCAL</strong>
+                        <ul>${htmlAprovacoes}</ul>
+                    </div>
+                </div>
+            `;
+        }
+
+    </script>
+</body>
+</html>
