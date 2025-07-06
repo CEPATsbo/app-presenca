@@ -16,7 +16,7 @@
         .cabecalho p { font-size: 0.9em; margin: 2px 0; }
         .cabecalho h3 { font-weight: normal; }
         .status-bar { padding: 12px; margin-bottom: 20px; border-radius: 6px; text-align: center; font-weight: bold; font-size: 1.1em; }
-        .status-elaboracao { background-color: #FFF9C4; color: #795548; }
+        .status-elaboracao, .status-com_ressalva { background-color: #FFF9C4; color: #795548; }
         .status-revisao { background-color: #E1F5FE; color: #0277BD; }
         .status-aprovado { background-color: #C8E6C9; color: #2E7D32; }
         .seletor-periodo { display: flex; justify-content: center; align-items: center; gap: 10px; margin-bottom: 20px; border-bottom: 1px solid #ddd; padding-bottom: 20px; }
@@ -128,18 +128,17 @@
     
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
-        // REMOVIDO 'arrayUnion' pois não será mais usado aqui. Adicionado 'getDoc'.
         import { getFirestore, doc, setDoc, getDoc, updateDoc, collection, addDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
         import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-auth.js";
         
         const firebaseConfig = {
- apiKey: "AIzaSyBV7RPjk3cFTqL-aIpflJcUojKg1ZXMLuU",
- authDomain: "voluntarios-ativos---cepat.firebaseapp.com",
- projectId: "voluntarios-ativos---cepat",
- storageBucket: "voluntarios-ativos---cepat.firebasestorage.app",
- messagingSenderId: "66122858261",
- appId: "1:66122858261:web:7fa21f1805463b5c08331c"
-};
+            apiKey: "AIzaSyBV7RPjk3cFTqL-aIpflJcUojKg1ZXMLuU",
+            authDomain: "voluntarios-ativos---cepat.firebaseapp.com",
+            projectId: "voluntarios-ativos---cepat",
+            storageBucket: "voluntarios-ativos---cepat.firebasestorage.app",
+            messagingSenderId: "66122858261",
+            appId: "1:66122858261:web:7fa21f1805463b5c08331c"
+        };
         
         const app = initializeApp(firebaseConfig);
         const db = getFirestore(app);
@@ -158,7 +157,8 @@
 
         document.addEventListener('authReady', () => {
             const userRole = auth.currentUser?.claims?.role || '';
-            if (!['diretor', 'tesoureiro', 'super-admin'].includes(userRole)) {
+            // Atualizado para incluir 'conselheiro' para que possam ver a página no futuro (portal da transparência)
+            if (!['diretor', 'tesoureiro', 'super-admin', 'conselheiro'].includes(userRole)) {
                 document.getElementById('acesso-negado').style.display = 'block';
                 return;
             }
@@ -261,10 +261,10 @@
                     texto = 'Status: Aprovado';
                     classe = 'status-aprovado';
                     setEditavel(false);
-                    } else if (status === 'com_ressalva') {
-        texto = 'Status: Pendente de Correção (com ressalvas do Conselho)';
-        classe = 'status-elaboracao'; // Pode usar a mesma cor amarela
-        setEditavel(podeEditar); // <<< A MÁGICA ACONTECE AQUI, TORNANDO EDITÁVEL
+                } else if (status === 'com_ressalva') {
+                    texto = 'Status: Pendente de Correção (com ressalvas do Conselho)';
+                    classe = 'status-com_ressalva';
+                    setEditavel(podeEditar);
                 } else {
                     texto = 'Status: Em Elaboração';
                     classe = 'status-elaboracao';
@@ -281,7 +281,6 @@
                     mensagens.forEach(msg => {
                         const data = msg.data ? msg.data.toDate().toLocaleString('pt-BR') : 'Enviando...';
                         const autor = msg.autor.nome || 'Anônimo';
-                        // A lógica aqui foi simplificada para corresponder à estrutura de dados da Cloud Function
                         const tipoClasse = msg.autor.nome.toLowerCase().includes('conselh') ? 'mensagem-conselho' : 'mensagem-tesouraria';
                         const li = document.createElement('li');
                         li.className = `mensagem ${tipoClasse}`;
@@ -334,23 +333,33 @@
                     atualizarStatusUI('em elaboração');
                 }
             }
-
-            btnSalvar.addEventListener('click', async () => {
+            
+            // ===================================================================
+            // INÍCIO DO BLOCO CORRIGIDO
+            // ===================================================================
+            async function salvarBalancete() {
                 const mesAno = seletorMesAno.value;
-                if (!mesAno) { return alert("Por favor, selecione um período."); }
-                btnSalvar.disabled = true; btnSalvar.textContent = "Salvando...";
+                if (!mesAno) {
+                    alert("Por favor, selecione um período.");
+                    throw new Error("Período não selecionado");
+                }
+                btnSalvar.disabled = true;
+                btnSalvar.textContent = "Salvando...";
                 const dadosParaSalvar = getDadosAtuaisDaTela();
                 try {
                     await setDoc(doc(db, "balancetes", mesAno), dadosParaSalvar, { merge: true });
                     await registrarLog("SALVOU_BALANCETE", { periodo: mesAno });
-                    alert(`Balancete de ${mesAno} salvo com sucesso!`);
                 } catch (error) {
                     console.error("Erro ao salvar balancete:", error);
                     alert("Ocorreu um erro ao salvar.");
+                    throw error; // Lança o erro para que a função que chamou saiba que falhou
                 } finally {
-                    btnSalvar.disabled = false; btnSalvar.textContent = "Salvar Balancete";
+                    btnSalvar.disabled = false;
+                    btnSalvar.textContent = "Salvar Balancete";
                 }
-            });
+            }
+
+            btnSalvar.addEventListener('click', salvarBalancete);
             
             btnLiberar.addEventListener('click', async () => {
                 const mesAno = seletorMesAno.value;
@@ -358,24 +367,26 @@
                 if (!confirm(`Tem certeza que deseja liberar o balancete de ${mesAno} para o Conselho Fiscal? Após a liberação, ele não poderá mais ser editado.`)) return;
                 
                 btnLiberar.disabled = true;
-                await btnSalvar.click(); 
-                const balanceteRef = doc(db, "balancetes", mesAno);
                 try {
+                    // Passo 1: Salva o estado atual e ESPERA a conclusão.
+                    await salvarBalancete(); 
+                    
+                    // Passo 2: Somente se o salvamento foi bem-sucedido, atualiza o status.
+                    const balanceteRef = doc(db, "balancetes", mesAno);
                     await updateDoc(balanceteRef, { status: 'em revisão' });
                     await registrarLog("LIBEROU_BALANCETE", { periodo: mesAno });
+                    
                     atualizarStatusUI('em revisão');
                     alert("Balancete liberado com sucesso!");
                 } catch (error) {
+                    // O erro já foi logado pela função salvarBalancete
                     console.error("Erro ao liberar balancete:", error);
-                    alert("Ocorreu um erro ao liberar.");
+                    alert("Ocorreu um erro ao liberar o balancete. A operação foi cancelada.");
                 } finally {
                     btnLiberar.disabled = false;
                 }
             });
             
-            // ===================================================================
-            // INÍCIO DO BLOCO CORRIGIDO - Abordagem "Ler-Modificar-Escrever"
-            // ===================================================================
             document.getElementById('btn-enviar-resposta').addEventListener('click', async () => {
                 const mesAno = seletorMesAno.value;
                 const texto = document.getElementById('texto-resposta').value.trim();
@@ -395,14 +406,10 @@
 
                 const balanceteRef = doc(db, "balancetes", mesAno);
                 try {
-                    // Passo 1: Ler o documento atual para pegar o array de mensagens existente
                     const docSnap = await getDoc(balanceteRef);
                     const mensagensAtuais = docSnap.exists() && docSnap.data().mensagens ? docSnap.data().mensagens : [];
-
-                    // Passo 2: Adicionar a nova mensagem ao array localmente
                     mensagensAtuais.push(novaMensagem);
 
-                    // Passo 3: Salvar o array completo de volta, substituindo o antigo, e atualizar o status
                     await updateDoc(balanceteRef, {
                         mensagens: mensagensAtuais,
                         status: 'em revisão'
@@ -411,7 +418,6 @@
                     document.getElementById('texto-resposta').value = '';
                     alert("Resposta enviada com sucesso! O balancete foi liberado novamente para o Conselho Fiscal.");
                     
-                    // Recarrega os dados para atualizar a tela com a nova mensagem e o novo status
                     carregarDadosDoMes(mesAno); 
                     
                 } catch (error) {
@@ -435,14 +441,13 @@
                  const novaLinha = tabelaBody.insertRow(-1);
                  novaLinha.className = 'categoria-header';
                  novaLinha.innerHTML = `<th colspan="2"><span contenteditable="true">${nome}</span> <button class="btn-add-row" title="Adicionar linha">+</button></th>`;
-                 vincularEventListenersInputs(); // Garante que o novo botão de adicionar linha funcione
+                 vincularEventListenersInputs();
                  return novaLinha;
             }
             
             function vincularEventListenersInputs() {
                 document.querySelectorAll('input[type="number"]').forEach(input => input.addEventListener('input', calcularETotais));
                 document.querySelectorAll('.btn-add-row').forEach(btn => {
-                    // Remove listener antigo para evitar duplicação
                     const newBtn = btn.cloneNode(true);
                     btn.parentNode.replaceChild(newBtn, btn);
                     newBtn.addEventListener('click', (e) => adicionarLinhaApos(e.target.closest('tr')));
