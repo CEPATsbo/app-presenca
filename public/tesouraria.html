@@ -4,6 +4,9 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Admin - Tesouraria</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+
     <style>
         body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background-color: #f4f6f9; display: flex; flex-direction: column; align-items: center; margin: 0; padding: 20px; box-sizing: border-box; }
         .admin-nav { width: 100%; max-width: 1100px; background-color: #fff; padding: 15px; margin-bottom: 30px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); text-align: center; display: flex; flex-wrap: wrap; justify-content: center; gap: 15px 25px; }
@@ -46,6 +49,7 @@
         .actions-container button { width: auto; padding: 15px 30px; font-size: 1.2em; cursor: pointer; border: none; border-radius: 6px; color: white; }
         #btn-salvar { background-color: #1565c0; }
         #btn-liberar { background-color: #ff9800; }
+        #btn-gerar-pdf { background-color: #4CAF50; } /* Estilo para o novo botão */
         .actions-container button:disabled { background-color: #aaa; cursor: not-allowed; }
         .mensagens-container { margin-top: 30px; border-top: 2px solid #ccc; padding-top: 20px; }
         .mensagens-lista { list-style-type: none; padding: 0; margin-top: 10px; max-height: 200px; overflow-y: auto; border: 1px solid #ddd; padding: 10px; border-radius: 6px; }
@@ -60,7 +64,17 @@
 </head>
 <body>
     <nav class="admin-nav">
-        </nav>
+        <a href="/gerenciar-diretoria.html">Gerenciar Diretoria</a>
+        <a href="/tesouraria.html" class="active">Tesouraria</a>
+        <a href="/gerenciar-voluntarios.html">Gerenciar Voluntários</a>
+        <a href="/registro-manual.html">Registro Manual</a>
+        <a href="/relatorio.html">Gerar Relatório</a>
+        <a href="/mural.html">Editar Mural</a>
+        <a href="/atividades.html">Gerenciar Atividades</a>
+        <a href="/notificacoes.html">Notificações</a>
+        <a href="/tv.html" target="_blank">Ver Painel da TV ↗</a>
+        <a href="#" id="btn-logout" style="color: #c62828;">Sair</a>
+    </nav>
     <div id="acesso-negado" style="display: none;">
         <h1>Acesso Negado</h1>
         <p>Você não tem permissão para acessar o módulo da tesouraria.</p>
@@ -109,6 +123,7 @@
         <div class="actions-container">
              <button id="btn-salvar">Salvar Balancete</button>
              <button id="btn-liberar">Liberar para Conselho Fiscal</button>
+             <button id="btn-gerar-pdf" style="display: none;">Gerar PDF</button>
         </div>
         <div class="mensagens-container" id="mensagens-container" style="display: none;">
             <h2>Comunicação com o Conselho Fiscal</h2>
@@ -169,6 +184,11 @@
             const seletorMesAno = document.getElementById('mes-ano');
             const btnSalvar = document.getElementById('btn-salvar');
             const btnLiberar = document.getElementById('btn-liberar');
+            // ===================================================================
+            // REFERÊNCIA AO NOVO BOTÃO DE PDF
+            // ===================================================================
+            const btnGerarPdf = document.getElementById('btn-gerar-pdf');
+
             const statusBar = document.getElementById('status-bar');
             const tituloBalancete = document.getElementById('titulo-balancete');
             const logAuditoriaCollection = collection(db, 'log_auditoria');
@@ -202,13 +222,8 @@
                 document.getElementById('saldo-atual').textContent = formatarMoeda(saldoAtual);
             }
             
-            // ===================================================================
-            // INÍCIO DA FUNÇÃO CORRIGIDA
-            // ===================================================================
             function getDadosAtuaisDaTela() {
-                // Objeto de dados SEM o campo 'status'.
                 const dados = { receitas: {}, despesas: {}, nomes: {}, saldoAnterior: 0 };
-                
                 document.querySelectorAll('#corpo-tabela-receitas .categoria-header').forEach(header => {
                     const nomeCategoria = header.querySelector('th span').textContent.trim();
                     dados.receitas[nomeCategoria] = [];
@@ -235,9 +250,6 @@
                 dados.nomes['nome-saldo-anterior'] = document.getElementById('nome-saldo-anterior').textContent;
                 return dados;
             }
-            // ===================================================================
-            // FIM DA FUNÇÃO CORRIGIDA
-            // ===================================================================
 
             async function registrarLog(acao, detalhes) {
                 const user = auth.currentUser;
@@ -256,10 +268,14 @@
                 btnLiberar.disabled = !podeEditar;
             }
 
+            // ===================================================================
+            // FUNÇÃO ALTERADA PARA CONTROLAR O BOTÃO DE PDF
+            // ===================================================================
             function atualizarStatusUI(status) {
                 let texto, classe;
                 const userRole = auth.currentUser?.claims?.role;
                 const podeEditar = userRole === 'tesoureiro' || userRole === 'super-admin';
+                btnGerarPdf.style.display = 'none'; // Esconde por padrão
                 
                 if (status === 'em revisão') {
                     texto = 'Status: Em Revisão pelo Conselho Fiscal';
@@ -269,6 +285,7 @@
                     texto = 'Status: Aprovado';
                     classe = 'status-aprovado';
                     setEditavel(false);
+                    btnGerarPdf.style.display = 'inline-block'; // Mostra o botão de PDF
                 } else if (status === 'com_ressalva') {
                     texto = 'Status: Pendente de Correção (com ressalvas do Conselho)';
                     classe = 'status-com_ressalva';
@@ -360,10 +377,9 @@
                     if (balanceteExisteNoDB) {
                         await updateDoc(balanceteRef, dadosParaSalvar);
                     } else {
-                        // Ao criar, precisamos garantir que o status seja definido
                         dadosParaSalvar.status = 'em elaboração';
                         await setDoc(balanceteRef, dadosParaSalvar);
-                        balanceteExisteNoDB = true; // Atualiza a flag após a criação
+                        balanceteExisteNoDB = true; 
                     }
                     await registrarLog("SALVOU_BALANCETE", { periodo: mesAno });
                 } catch (error) {
@@ -440,6 +456,60 @@
                 }
             });
             
+            // ===================================================================
+            // NOVA FUNÇÃO E LISTENER PARA GERAR O PDF
+            // ===================================================================
+            async function gerarPDF() {
+                const mesAno = seletorMesAno.value;
+                const dataFormatada = new Date(`${mesAno}-02T00:00:00`).toLocaleString('pt-BR', { month: 'long', year: 'numeric' });
+                const nomeArquivo = `balancete_${mesAno}_${dataFormatada.replace(' de ', '_')}.pdf`;
+                
+                const btnContainer = document.querySelector('.actions-container');
+                btnContainer.style.display = 'none'; // Esconde os botões para não aparecerem no PDF
+
+                alert('Gerando o PDF... Por favor, aguarde.');
+
+                const { jsPDF } = window.jspdf;
+                const balanceteElement = document.getElementById('conteudo-pagina');
+
+                try {
+                    const canvas = await html2canvas(balanceteElement, {
+                        scale: 2, // Aumenta a resolução da "foto" para melhor qualidade
+                        useCORS: true
+                    });
+                    
+                    const imgData = canvas.toDataURL('image/png');
+                    
+                    const pdf = new jsPDF({
+                        orientation: 'portrait',
+                        unit: 'mm',
+                        format: 'a4'
+                    });
+
+                    const pdfWidth = pdf.internal.pageSize.getWidth();
+                    const pdfHeight = pdf.internal.pageSize.getHeight();
+                    const imgWidth = canvas.width;
+                    const imgHeight = canvas.height;
+                    const ratio = imgWidth / imgHeight;
+                    const newImgWidth = pdfWidth;
+                    const newImgHeight = newImgWidth / ratio;
+                    
+                    pdf.addImage(imgData, 'PNG', 0, 0, newImgWidth, newImgHeight);
+                    pdf.save(nomeArquivo);
+
+                } catch(error) {
+                    console.error("Erro ao gerar PDF:", error);
+                    alert("Ocorreu um erro ao gerar o PDF. Verifique o console.");
+                } finally {
+                    btnContainer.style.display = 'flex'; // Mostra os botões novamente
+                }
+            }
+            
+            btnGerarPdf.addEventListener('click', gerarPDF);
+            // ===================================================================
+            // FIM DO NOVO BLOCO DE CÓDIGO
+            // ===================================================================
+
             function adicionarLinhaApos(linhaHeader, nome = "", valor = "") {
                 const tipoClasse = linhaHeader.parentElement.id.includes('receitas') ? 'input-receita' : 'input-despesa';
                 const novaLinha = document.createElement('tr');
