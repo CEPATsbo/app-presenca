@@ -164,7 +164,7 @@ exports.registrarVotoConselho = functions.region(REGIAO).https.onCall(async (dat
             logDetalhes = { balanceteId, voto: 'APROVADO' };
         } else if (voto === 'reprovado') {
             if (!mensagem) { throw new functions.https.HttpsError('invalid-argument', 'Uma mensagem com a ressalva é obrigatória para reprovar.'); }
-            updateData.status = 'em elaboração';
+            updateData.status = 'com_ressalva';
             // CORREÇÃO 1: Usando new Date() para evitar o erro em arrayUnion.
             updateData.mensagens = admin.firestore.FieldValue.arrayUnion({ autor, texto: mensagem, data: new Date() });
             logDetalhes = { balanceteId, voto: 'REPROVADO', ressalva: mensagem };
