@@ -41,15 +41,19 @@
         .btn-add-categoria { width: 100%; margin-top: 10px; background-color: #607d8b; color: white; border: none; padding: 8px; font-size: 0.9em; cursor: pointer; border-radius: 4px; }
         .total-row td { font-weight: bold; background-color: #f1f8e9; text-align: right; }
         .total-row td:first-child { text-align: left; }
-        .rodape-assinaturas { margin-top: 60px; display: flex; justify-content: space-around; flex-wrap: wrap; gap: 40px; }
+        .rodape-assinaturas { margin-top: 60px; }
         .assinatura { text-align: center; width: 300px; }
         .assinatura .linha { border-top: 1px solid #333; padding-top: 5px; }
         .assinatura .cargo { font-size: 0.9em; }
+        .assinaturas-container { padding-top: 20px; border-top: 2px solid #333; }
+        .assinatura-digital { background-color: #f5f5f5; border: 1px solid #ddd; padding: 15px; border-radius: 6px; margin-bottom: 15px; }
+        .assinatura-digital strong { color: #2E7D32; }
+        .assinatura-digital ul { padding-left: 20px; margin: 5px 0 0 0; list-style-type: none; }
         .actions-container { text-align: center; margin-top: 40px; display: flex; justify-content: center; gap: 20px; flex-wrap: wrap; }
         .actions-container button { width: auto; padding: 15px 30px; font-size: 1.2em; cursor: pointer; border: none; border-radius: 6px; color: white; }
         #btn-salvar { background-color: #1565c0; }
         #btn-liberar { background-color: #ff9800; }
-        #btn-gerar-pdf { background-color: #4CAF50; } /* Estilo para o novo botão */
+        #btn-gerar-pdf { background-color: #4CAF50; }
         .actions-container button:disabled { background-color: #aaa; cursor: not-allowed; }
         .mensagens-container { margin-top: 30px; border-top: 2px solid #ccc; padding-top: 20px; }
         .mensagens-lista { list-style-type: none; padding: 0; margin-top: 10px; max-height: 200px; overflow-y: auto; border: 1px solid #ddd; padding: 10px; border-radius: 6px; }
@@ -133,17 +137,13 @@
                 <button id="btn-enviar-resposta">Enviar Resposta</button>
             </div>
         </div>
-        <div class="rodape-assinaturas">
-            <div class="assinatura"><div class="linha"></div><div class="cargo">PRESIDENTE</div></div>
-            <div class="assinatura"><div class="linha"></div><div class="cargo">TESOUREIRO</div></div>
-            <div class="assinatura"><div class="linha"></div><div class="cargo">Membro do conselho fiscal</div></div>
-            <div class="assinatura"><div class="linha"></div><div class="cargo">Membro do conselho Fiscal</div></div>
-        </div>
+        <div class="rodape-assinaturas" id="assinaturas-section">
+            </div>
     </div>
     
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
-        import { getFirestore, doc, setDoc, getDoc, updateDoc, collection, addDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
+        import { getFirestore, doc, setDoc, getDoc, updateDoc, collection, addDoc, serverTimestamp, query, where, getDocs } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
         import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-auth.js";
         
         const firebaseConfig = {
@@ -184,11 +184,7 @@
             const seletorMesAno = document.getElementById('mes-ano');
             const btnSalvar = document.getElementById('btn-salvar');
             const btnLiberar = document.getElementById('btn-liberar');
-            // ===================================================================
-            // REFERÊNCIA AO NOVO BOTÃO DE PDF
-            // ===================================================================
             const btnGerarPdf = document.getElementById('btn-gerar-pdf');
-
             const statusBar = document.getElementById('status-bar');
             const tituloBalancete = document.getElementById('titulo-balancete');
             const logAuditoriaCollection = collection(db, 'log_auditoria');
@@ -196,6 +192,7 @@
             const listaMensagens = document.getElementById('lista-mensagens');
             const btnEnviarResposta = document.getElementById('btn-enviar-resposta');
             const textoResposta = document.getElementById('texto-resposta');
+            const assinaturasSection = document.getElementById('assinaturas-section');
             let balanceteAtual = {};
             let balanceteExisteNoDB = false;
 
@@ -267,15 +264,12 @@
                 btnSalvar.disabled = !podeEditar;
                 btnLiberar.disabled = !podeEditar;
             }
-
-            // ===================================================================
-            // FUNÇÃO ALTERADA PARA CONTROLAR O BOTÃO DE PDF
-            // ===================================================================
+            
             function atualizarStatusUI(status) {
                 let texto, classe;
                 const userRole = auth.currentUser?.claims?.role;
                 const podeEditar = userRole === 'tesoureiro' || userRole === 'super-admin';
-                btnGerarPdf.style.display = 'none'; // Esconde por padrão
+                btnGerarPdf.style.display = 'none';
                 
                 if (status === 'em revisão') {
                     texto = 'Status: Em Revisão pelo Conselho Fiscal';
@@ -285,7 +279,7 @@
                     texto = 'Status: Aprovado';
                     classe = 'status-aprovado';
                     setEditavel(false);
-                    btnGerarPdf.style.display = 'inline-block'; // Mostra o botão de PDF
+                    btnGerarPdf.style.display = 'inline-block';
                 } else if (status === 'com_ressalva') {
                     texto = 'Status: Pendente de Correção (com ressalvas do Conselho)';
                     classe = 'status-com_ressalva';
@@ -343,24 +337,100 @@
                 calcularETotais();
             }
 
+            // ===================================================================
+            // FUNÇÃO PRINCIPAL ALTERADA PARA BUSCAR OS LOGS
+            // ===================================================================
             async function carregarDadosDoMes(mesAno) {
                 if (!mesAno) return;
                 const balanceteRef = doc(db, "balancetes", mesAno);
                 const docSnap = await getDoc(balanceteRef);
+
                 if (docSnap.exists()) {
                     balanceteExisteNoDB = true;
                     balanceteAtual = docSnap.data();
                     renderizarTabela(balanceteAtual, mesAno);
                     atualizarStatusUI(balanceteAtual.status || 'em elaboração');
                     renderizarMensagens(balanceteAtual.mensagens || []);
+
+                    // Se o balancete estiver aprovado, busca os logs de assinatura
+                    if (balanceteAtual.status === 'aprovado') {
+                        const logsQuery = query(
+                            collection(db, "log_auditoria"),
+                            where("detalhes.balanceteId", "==", mesAno)
+                        );
+                        const logsSnapshot = await getDocs(logsQuery);
+                        
+                        let liberacaoLog = null;
+                        const aprovacaoLogs = [];
+                        logsSnapshot.forEach(logDoc => {
+                            const logData = logDoc.data();
+                            if (logData.acao === 'LIBEROU_BALANCETE') liberacaoLog = logData;
+                            else if (logData.acao === 'VOTOU_BALANCETE' && logData.detalhes?.voto === 'APROVADO') aprovacaoLogs.push(logData);
+                        });
+                        renderizarAssinaturas(true, liberacaoLog, aprovacaoLogs);
+                    } else {
+                        // Se não estiver aprovado, renderiza as assinaturas em branco
+                        renderizarAssinaturas(false);
+                    }
                 } else {
                     balanceteExisteNoDB = false;
                     balanceteAtual = JSON.parse(JSON.stringify(balancetePadrao));
                     renderizarTabela(balanceteAtual, mesAno);
                     atualizarStatusUI('em elaboração');
+                    renderizarAssinaturas(false);
                 }
             }
             
+            // ===================================================================
+            // NOVA FUNÇÃO PARA RENDERIZAR AS ASSINATURAS
+            // ===================================================================
+            function renderizarAssinaturas(isAprovado, logLiberacao, logsAprovacao) {
+                assinaturasSection.innerHTML = ''; // Limpa a seção
+                let html = '';
+
+                if (isAprovado) {
+                    // Renderiza assinaturas digitais com base nos logs
+                    let htmlLiberacao = '<li>Liberação não registrada.</li>';
+                    if (logLiberacao && logLiberacao.timestamp) {
+                        const data = logLiberacao.timestamp.toDate().toLocaleString('pt-BR');
+                        htmlLiberacao = `<li><strong>Liberado por:</strong> ${logLiberacao.autor.nome} em ${data}</li>`;
+                    }
+
+                    let htmlAprovacoes = '<li>Nenhum voto de aprovação registrado.</li>';
+                    if (logsAprovacao && logsAprovacao.length > 0) {
+                        htmlAprovacoes = logsAprovacao.map(log => {
+                            const data = log.timestamp.toDate().toLocaleString('pt-BR');
+                            return `<li><strong>Aprovado por:</strong> ${log.autor.nome} em ${data}</li>`;
+                        }).join('');
+                    }
+
+                    html = `
+                        <div class="assinaturas-container">
+                            <h3>Registros de Aprovação</h3>
+                            <div class="assinatura-digital">
+                                <strong>TESOURARIA</strong>
+                                <ul>${htmlLiberacao}</ul>
+                            </div>
+                            <div class="assinatura-digital">
+                                <strong>CONSELHO FISCAL</strong>
+                                <ul>${htmlAprovacoes}</ul>
+                            </div>
+                        </div>
+                    `;
+                } else {
+                    // Renderiza as linhas de assinatura em branco
+                    html = `
+                        <div style="display: flex; justify-content: space-around; flex-wrap: wrap; gap: 40px;">
+                            <div class="assinatura"><div class="linha"></div><div class="cargo">PRESIDENTE</div></div>
+                            <div class="assinatura"><div class="linha"></div><div class="cargo">TESOUREIRO</div></div>
+                            <div class="assinatura"><div class="linha"></div><div class="cargo">Membro do conselho fiscal</div></div>
+                            <div class="assinatura"><div class="linha"></div><div class="cargo">Membro do conselho Fiscal</div></div>
+                        </div>
+                    `;
+                }
+                assinaturasSection.innerHTML = html;
+            }
+
             async function salvarBalancete() {
                 const mesAno = seletorMesAno.value;
                 if (!mesAno) {
@@ -456,16 +526,13 @@
                 }
             });
             
-            // ===================================================================
-            // NOVA FUNÇÃO E LISTENER PARA GERAR O PDF
-            // ===================================================================
             async function gerarPDF() {
                 const mesAno = seletorMesAno.value;
                 const dataFormatada = new Date(`${mesAno}-02T00:00:00`).toLocaleString('pt-BR', { month: 'long', year: 'numeric' });
                 const nomeArquivo = `balancete_${mesAno}_${dataFormatada.replace(' de ', '_')}.pdf`;
                 
                 const btnContainer = document.querySelector('.actions-container');
-                btnContainer.style.display = 'none'; // Esconde os botões para não aparecerem no PDF
+                btnContainer.style.display = 'none'; 
 
                 alert('Gerando o PDF... Por favor, aguarde.');
 
@@ -474,7 +541,7 @@
 
                 try {
                     const canvas = await html2canvas(balanceteElement, {
-                        scale: 2, // Aumenta a resolução da "foto" para melhor qualidade
+                        scale: 2,
                         useCORS: true
                     });
                     
@@ -501,14 +568,11 @@
                     console.error("Erro ao gerar PDF:", error);
                     alert("Ocorreu um erro ao gerar o PDF. Verifique o console.");
                 } finally {
-                    btnContainer.style.display = 'flex'; // Mostra os botões novamente
+                    btnContainer.style.display = 'flex'; 
                 }
             }
             
             btnGerarPdf.addEventListener('click', gerarPDF);
-            // ===================================================================
-            // FIM DO NOVO BLOCO DE CÓDIGO
-            // ===================================================================
 
             function adicionarLinhaApos(linhaHeader, nome = "", valor = "") {
                 const tipoClasse = linhaHeader.parentElement.id.includes('receitas') ? 'input-receita' : 'input-despesa';
