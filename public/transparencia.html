@@ -11,11 +11,14 @@
         .admin-nav a { margin: 0; padding: 0; background-color: transparent; color: #1565c0; text-decoration: none; font-weight: bold; font-size: 1.1em; white-space: nowrap; }
         .admin-nav a.active, .admin-nav a:hover { text-decoration: underline; background-color: transparent; color: #0d47a1; }
         .portal-container { width: 100%; max-width: 1100px; }
-        .balancete-aprovado-item { background-color: white; padding: 40px; border-radius: 8px; box-shadow: 0 4px 20px rgba(0,0,0,0.1); margin-bottom: 30px; }
+        .seletor-container { background-color: #fff; padding: 20px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); margin-bottom: 30px; display: flex; justify-content: center; align-items: center; gap: 10px; }
+        .seletor-container label { font-weight: bold; font-size: 1.1em; }
+        .seletor-container select { font-size: 1.1em; padding: 8px; border-radius: 6px; border: 1px solid #ccc; }
+        .balancete-display { background-color: white; padding: 40px; border-radius: 8px; box-shadow: 0 4px 20px rgba(0,0,0,0.1); min-height: 500px; }
         h1, h2 { text-align: center; color: #333; margin-top: 0; }
         .cabecalho { text-align: center; margin-bottom: 20px; }
         .cabecalho h1 { font-size: 1.5em; margin: 0; }
-        .cabecalho p { font-size: 0.9em; margin: 2px 0; }
+        .cabecalho p { font-size: 0.9em; margin: 2px 0; color: #555;}
         .cabecalho h3 { font-weight: normal; font-size: 1.2em; color: #444 }
         .corpo-balancete { display: flex; justify-content: space-between; gap: 40px; flex-wrap: wrap;}
         .coluna { width: 100%; min-width: 450px; flex: 1; }
@@ -42,14 +45,20 @@
     </nav>
     <div class="portal-container">
         <h1>Portal da Transparência</h1>
-        <div id="balancetes-aprovados-lista">
-            <h2 id="loading-message">Carregando balancetes aprovados...</h2>
+        
+        <div id="seletor-wrapper" class="seletor-container" style="display: none;">
+            <label for="seletor-balancete">Consultar Balancete Aprovado:</label>
+            <select id="seletor-balancete"></select>
+        </div>
+
+        <div id="balancete-display" class="balancete-display">
+            <h2 id="loading-message">Carregando informações...</h2>
         </div>
     </div>
 
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
-        import { getFirestore, collection, getDocs, query, where, orderBy, documentId } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
+        import { getFirestore, collection, getDoc, getDocs, query, where, orderBy, doc, documentId } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
         import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-auth.js";
         
         const firebaseConfig = {
@@ -65,28 +74,26 @@
         const db = getFirestore(app);
         const auth = getAuth(app);
         
+        const seletorWrapper = document.getElementById('seletor-wrapper');
+        const seletorBalancete = document.getElementById('seletor-balancete');
+        const balanceteDisplay = document.getElementById('balancete-display');
+        const loadingMessage = document.getElementById('loading-message');
+
         onAuthStateChanged(auth, (user) => {
             if (!user) {
                 window.location.href = '/login.html';
             } else {
-                carregarBalancetesAprovados();
+                inicializarPortal();
             }
         });
 
-        function formatarMoeda(valor) {
-            return (valor || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
-        }
-
-        async function carregarBalancetesAprovados() {
-            const listaContainer = document.getElementById('balancetes-aprovados-lista');
-            const loadingMessage = document.getElementById('loading-message');
-
+        async function inicializarPortal() {
             try {
-                // 1. Buscar todos os balancetes com status 'aprovado'
+                // Passo 1: Buscar a lista de meses aprovados para popular o seletor.
                 const balancetesQuery = query(
                     collection(db, "balancetes"), 
                     where("status", "==", "aprovado"),
-                    orderBy(documentId(), "desc") // Ordena por ID (YYYY-MM), do mais novo para o mais antigo
+                    orderBy(documentId(), "desc")
                 );
                 const balancetesSnapshot = await getDocs(balancetesQuery);
 
@@ -95,49 +102,75 @@
                     return;
                 }
                 
-                loadingMessage.style.display = 'none'; // Esconde a mensagem de carregamento
+                // Popula o seletor
+                balancetesSnapshot.docs.forEach(doc => {
+                    const mesAno = doc.id;
+                    const dataFormatada = new Date(`${mesAno}-02T00:00:00`).toLocaleString('pt-BR', { month: 'long', year: 'numeric' });
+                    const option = new Option(dataFormatada.charAt(0).toUpperCase() + dataFormatada.slice(1), mesAno);
+                    seletorBalancete.add(option);
+                });
 
-                // 2. Para cada balancete, buscar os logs de auditoria correspondentes
-                for (const doc of balancetesSnapshot.docs) {
-                    const balanceteId = doc.id;
-                    const balanceteData = doc.data();
+                seletorWrapper.style.display = 'flex';
 
-                    const logsQuery = query(
-                        collection(db, "log_auditoria"),
-                        where("detalhes.balanceteId", "==", balanceteId)
-                    );
-                    const logsSnapshot = await getDocs(logsQuery);
-                    
-                    let liberacaoLog = null;
-                    const aprovacaoLogs = [];
-                    logsSnapshot.forEach(logDoc => {
-                        const logData = logDoc.data();
-                        // Separa o log de liberação dos logs de aprovação
-                        if (logData.acao === 'LIBEROU_BALANCETE') {
-                            liberacaoLog = logData;
-                        } else if (logData.acao === 'VOTOU_BALANCETE' && logData.detalhes?.voto === 'APROVADO') {
-                            aprovacaoLogs.push(logData);
-                        }
-                    });
-                    
-                    // 3. Renderizar o HTML do balancete na tela
-                    renderizarBalancete(listaContainer, balanceteId, balanceteData, liberacaoLog, aprovacaoLogs);
-                }
+                // Passo 2: Carregar o balancete mais recente por padrão.
+                const balanceteMaisRecenteId = balancetesSnapshot.docs[0].id;
+                await carregarBalanceteSelecionado(balanceteMaisRecenteId);
+
+                // Passo 3: Adicionar um listener para carregar outros meses quando selecionados.
+                seletorBalancete.addEventListener('change', (e) => {
+                    carregarBalanceteSelecionado(e.target.value);
+                });
 
             } catch (error) {
-                console.error("Erro ao carregar balancetes:", error);
-                loadingMessage.textContent = "Ocorreu um erro ao carregar os dados.";
-                loadingMessage.style.color = 'red';
+                console.error("Erro ao inicializar o portal:", error);
+                loadingMessage.textContent = "Ocorreu um erro ao carregar a lista de balancetes.";
             }
         }
 
-        function renderizarBalancete(container, id, dados, logLiberacao, logsAprovacao) {
+        async function carregarBalanceteSelecionado(balanceteId) {
+            if (!balanceteId) return;
+            
+            balanceteDisplay.innerHTML = `<h2>Carregando balancete de ${balanceteId}...</h2>`;
+
+            try {
+                // Busca os dados do balancete selecionado
+                const balanceteRef = doc(db, "balancetes", balanceteId);
+                const balanceteDoc = await getDoc(balanceteRef);
+
+                if (!balanceteDoc.exists()) {
+                    balanceteDisplay.innerHTML = `<h2>Balancete não encontrado.</h2>`;
+                    return;
+                }
+                const balanceteData = balanceteDoc.data();
+
+                // Busca os logs de auditoria para este balancete
+                const logsQuery = query(
+                    collection(db, "log_auditoria"),
+                    where("detalhes.balanceteId", "==", balanceteId)
+                );
+                const logsSnapshot = await getDocs(logsQuery);
+                
+                let liberacaoLog = null;
+                const aprovacaoLogs = [];
+                logsSnapshot.forEach(logDoc => {
+                    const logData = logDoc.data();
+                    if (logData.acao === 'LIBEROU_BALANCETE') liberacaoLog = logData;
+                    else if (logData.acao === 'VOTOU_BALANCETE' && logData.detalhes?.voto === 'APROVADO') aprovacaoLogs.push(logData);
+                });
+                
+                // Renderiza o HTML final
+                renderizarBalancete(balanceteId, balanceteData, liberacaoLog, aprovacaoLogs);
+
+            } catch (error) {
+                console.error(`Erro ao carregar dados para ${balanceteId}:`, error);
+                balanceteDisplay.innerHTML = `<h2>Ocorreu um erro ao carregar este balancete.</h2>`;
+            }
+        }
+
+        function renderizarBalancete(id, dados, logLiberacao, logsAprovacao) {
             const dataFormatada = new Date(`${id}-02T00:00:00`).toLocaleString('pt-BR', { month: 'long', year: 'numeric' }).toUpperCase();
             
-            const balanceteDiv = document.createElement('div');
-            balanceteDiv.className = 'balancete-aprovado-item';
-
-            // Calcular totais
+            // Cálculos
             let totalReceitas = 0;
             Object.values(dados.receitas || {}).forEach(cat => cat.forEach(item => totalReceitas += item.valor));
             let totalDespesas = 0;
@@ -145,9 +178,12 @@
             const saldoPeriodo = totalReceitas - totalDespesas;
             const saldoAtual = saldoPeriodo + (dados.saldoAnterior || 0);
 
-            let html = `
+            // Montagem do HTML
+            const html = `
                 <div class="cabecalho">
                     <h1>C. E. PAULO DE TARSO</h1>
+                    <p>CNPJ Nº 12.253.749/0001-20</p>
+                    <p>RUA DO CROMO, 782, VL. PANTANO II - SANTA BARBARA D'OESTE - SP</p>
                     <h3>BALANCETE APROVADO REFERENTE A ${dataFormatada}</h3>
                 </div>
                 <div class="corpo-balancete">
@@ -180,8 +216,7 @@
                 ${renderizarAssinaturasDigitais(logLiberacao, logsAprovacao)}
             `;
 
-            balanceteDiv.innerHTML = html;
-            container.appendChild(balanceteDiv);
+            balanceteDisplay.innerHTML = html;
         }
 
         function renderizarCategorias(categorias) {
@@ -196,9 +231,13 @@
             return html;
         }
 
+        function formatarMoeda(valor) {
+            return (valor || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+        }
+
         function renderizarAssinaturasDigitais(logLiberacao, logsAprovacao) {
             let htmlLiberacao = '<li>Liberação não registrada.</li>';
-            if (logLiberacao) {
+            if (logLiberacao && logLiberacao.timestamp) {
                 const data = logLiberacao.timestamp.toDate().toLocaleString('pt-BR');
                 htmlLiberacao = `<li><strong>Liberado por:</strong> ${logLiberacao.autor.nome} em ${data}</li>`;
             }
