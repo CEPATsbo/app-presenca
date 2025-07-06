@@ -113,29 +113,19 @@ exports.promoverParaTesoureiro = functions.region(REGIAO).https.onCall(async (da
     } catch (error) { console.error("Erro ao promover para tesoureiro:", error); throw new functions.https.HttpsError('internal', 'Erro interno ao tentar promover o usuário.'); }
 });
 
-// ===================================================================
-// FUNÇÃO ALTERADA PARA INCLUIR A TRAVA DE SEGURANÇA
-// ===================================================================
 exports.promoverParaConselheiro = functions.region(REGIAO).https.onCall(async (data, context) => {
     if (context.auth.token.role !== 'super-admin') { 
         throw new functions.https.HttpsError('permission-denied', 'Apenas o Super Admin pode promover usuários.'); 
     }
-
-    // PASSO 1: Contar quantos conselheiros já existem.
     const conselheirosQuery = db.collection('voluntarios').where('role', '==', 'conselheiro');
     const conselheirosSnapshot = await conselheirosQuery.get();
-
-    // PASSO 2: Verificar se o limite foi atingido.
     if (conselheirosSnapshot.size >= 3) {
         throw new functions.https.HttpsError('failed-precondition', 'O limite de 3 conselheiros já foi atingido. Não é possível promover um novo membro.');
     }
-
-    // PASSO 3: Se o limite não foi atingido, continuar com a lógica original.
     const uidParaPromover = data.uid;
     if (!uidParaPromover) { 
         throw new functions.https.HttpsError('invalid-argument', 'O UID do usuário é necessário.'); 
     }
-    
     try {
         await admin.auth().setCustomUserClaims(uidParaPromover, { role: 'conselheiro' });
         const userQuery = await db.collection('voluntarios').where('authUid', '==', uidParaPromover).limit(1).get();
@@ -198,8 +188,6 @@ exports.registrarVotoConselho = functions.region(REGIAO).https.onCall(async (dat
         
         await logAuditoriaCollection.add({ acao: "VOTOU_BALANCETE", autor, timestamp: admin.firestore.FieldValue.serverTimestamp(), detalhes: logDetalhes });
         
-        // LÓGICA REDUNDANTE REMOVIDA: A função 'verificarAprovacaoFinal' já cuida disso de forma mais eficiente.
-
         return { success: true, message: 'Ação registrada com sucesso!' };
     } catch (error) {
         console.error("Erro ao registrar voto do conselho:", error);
@@ -228,6 +216,39 @@ exports.verificarAprovacaoFinal = functions.region(REGIAO).firestore.document('b
     return null;
 });
 
+// ===================================================================
+// NOVA CLOUD FUNCTION ADICIONADA: O "CÉREBRO" DO TEMPO
+// ===================================================================
+exports.calcularCicloVibracoes = functions.region(REGIAO).https.onCall((data, context) => {
+    // LÓGICA MELHORADA para garantir o uso correto do fuso horário
+    const agoraUTC = new Date();
+    const agoraSP = new Date(agoraUTC.toLocaleString("en-US", { timeZone: "America/Sao_Paulo" }));
+
+    const diaDaSemana = agoraSP.getDay(); // Domingo = 0, Quinta = 4
+    const hora = agoraSP.getHours();
+    const minuto = agoraSP.getMinutes();
+
+    let dataFimCiclo = new Date(agoraSP);
+    dataFimCiclo.setHours(19, 20, 0, 0); // Define o horário de fechamento
+
+    const diasAteQuinta = (4 - diaDaSemana + 7) % 7;
+    dataFimCiclo.setDate(dataFimCiclo.getDate() + diasAteQuinta);
+
+    // Se hoje é quinta E já passou do horário de fechamento, o fim do ciclo é na PRÓXIMA quinta.
+    if (diaDaSemana === 4 && (hora > 19 || (hora === 19 && minuto >= 20))) {
+        dataFimCiclo.setDate(dataFimCiclo.getDate() + 7);
+    }
+    
+    let dataInicioCiclo = new Date(dataFimCiclo);
+    dataInicioCiclo.setDate(dataInicioCiclo.getDate() - 7);
+    dataInicioCiclo.setMinutes(dataInicioCiclo.getMinutes() + 1);
+    
+    return {
+        inicio: admin.firestore.Timestamp.fromDate(dataInicioCiclo),
+        fim: admin.firestore.Timestamp.fromDate(dataFimCiclo)
+    };
+});
+
 exports.enviarNotificacaoImediata = functions.region(REGIAO).https.onRequest((req, res) => {
     cors(req, res, async () => {
         if (req.method !== 'POST') { return res.status(405).send({ error: 'Método não permitido!' });}
@@ -241,20 +262,34 @@ exports.enviarNotificacaoImediata = functions.region(REGIAO).https.onRequest((re
     });
 });
 
+// ===================================================================
+// FUNÇÃO COM LÓGICA DE TEMPO CORRIGIDA
+// ===================================================================
 exports.verificarAgendamentosAgendados = functions.region(REGIAO).pubsub.schedule('every 10 minutes').timeZone('America/Sao_Paulo').onRun(async (context) => {
     if (!configurarWebPush()) { return null; }
-    const agora = new Date();
-    const agoraTimestamp = admin.firestore.Timestamp.fromDate(agora);
+    
+    const agoraSP = new Date(new Date().toLocaleString("en-US", { timeZone: "America/Sao_Paulo" }));
+    const agoraTimestamp = admin.firestore.Timestamp.fromDate(agoraSP);
+    
     const agendamentosRef = db.collection('notificacoes_agendadas');
     const unicosSnap = await agendamentosRef.where('tipo', '==', 'unico').where('status', '==', 'pendente').where('enviarEm', '<=', agoraTimestamp).get();
-    for (const doc of unicosSnap.docs) { await enviarNotificacoesParaTodos(doc.data().titulo, doc.data().corpo); await doc.ref.update({ status: 'enviada' }); }
-    const diaDaSemana = new Date(agora.toLocaleString("en-US", { timeZone: "America/Sao_Paulo" })).getDay();
-    const horaAtual = agora.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'America/Sao_Paulo' });
-    const hojeFormatado = new Intl.DateTimeFormat('en-CA', { year: 'numeric', month: '2-digit', day: '2-digit', timeZone: 'America/Sao_Paulo' }).format(agora);
+    for (const doc of unicosSnap.docs) { 
+        await enviarNotificacoesParaTodos(doc.data().titulo, doc.data().corpo); 
+        await doc.ref.update({ status: 'enviada' }); 
+    }
+    
+    const diaDaSemana = agoraSP.getDay();
+    const minutosAgora = agoraSP.getHours() * 60 + agoraSP.getMinutes();
+    const hojeFormatado = new Intl.DateTimeFormat('en-CA', { year: 'numeric', month: '2-digit', day: '2-digit', timeZone: 'America/Sao_Paulo' }).format(agoraSP);
+    
     const recorrentesSnap = await agendamentosRef.where('tipo', '==', 'recorrente').where('diaDaSemana', '==', diaDaSemana).get();
+    
     for (const doc of recorrentesSnap.docs) {
         const agendamento = doc.data();
-        if (horaAtual >= agendamento.hora && agendamento.ultimoEnvio !== hojeFormatado) {
+        const [horaAgendada, minutoAgendado] = agendamento.hora.split(':').map(Number);
+        const minutosAgendados = horaAgendada * 60 + minutoAgendado;
+
+        if (minutosAgora >= minutosAgendados && agendamento.ultimoEnvio !== hojeFormatado) {
             await enviarNotificacoesParaTodos(agendamento.titulo, agendamento.corpo);
             await doc.ref.update({ ultimoEnvio: hojeFormatado });
         }

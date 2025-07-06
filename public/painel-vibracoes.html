@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Painel de Vibrações</title>
+    <script type="module" src="/auth-guard.js"></script>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: #0a192f;
+            color: #cdd6f4;
+            margin: 0;
+            padding: 20px;
+            box-sizing: border-box;
+        }
+        .painel-container {
+            width: 100%;
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        header {
+            text-align: center;
+            padding-bottom: 20px;
+            border-bottom: 1px solid #1e3a5f;
+            margin-bottom: 30px;
+        }
+        header h1 {
+            color: #88c0d0;
+            margin: 0;
+            font-size: 2.5em;
+        }
+        header h2 {
+            color: #cdd6f4;
+            margin: 5px 0 0 0;
+            font-size: 1.2em;
+            font-weight: normal;
+        }
+        .listas-container {
+            display: flex;
+            gap: 40px;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+        .lista-coluna {
+            flex: 1;
+            min-width: 400px;
+            background-color: #112240;
+            padding: 25px;
+            border-radius: 8px;
+            border: 1px solid #1e3a5f;
+        }
+        .lista-coluna h3 {
+            text-align: center;
+            font-size: 1.8em;
+            color: #88c0d0;
+            margin-top: 0;
+            border-bottom: 1px solid #1e3a5f;
+            padding-bottom: 15px;
+            margin-bottom: 20px;
+        }
+        .lista-nomes {
+            list-style-type: none;
+            padding: 0;
+            margin: 0;
+            font-size: 1.3em;
+            line-height: 1.8;
+        }
+        .lista-nomes li {
+            padding: 5px 0;
+        }
+        .endereco {
+            font-size: 0.8em;
+            color: #82a3c1;
+            padding-left: 15px;
+            font-style: italic;
+        }
+        #loading-message {
+            text-align: center;
+            font-size: 1.5em;
+        }
+    </style>
+</head>
+<body>
+    <div class="painel-container">
+        <header>
+            <h1>Trabalho de Vibrações</h1>
+            <h2 id="periodo-info">Calculando período do ciclo...</h2>
+        </header>
+        <div class="listas-container">
+            <div class="lista-coluna">
+                <h3>Encarnados</h3>
+                <ul id="lista-encarnados" class="lista-nomes">
+                    <li id="loading-encarnados">Aguardando cálculo do ciclo...</li>
+                </ul>
+            </div>
+            <div class="lista-coluna">
+                <h3>Desencarnados</h3>
+                <ul id="lista-desencarnados" class="lista-nomes">
+                    <li id="loading-desencarnados">Aguardando cálculo do ciclo...</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
+        import { getFirestore, collection, getDocs, query, where, orderBy, Timestamp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
+        import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-auth.js";
+        // Importação da função para chamar a Cloud Function
+        import { getFunctions, httpsCallable } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-functions.js";
+
+        const firebaseConfig = {
+            apiKey: "AIzaSyBV7RPjk3cFTqL-aIpflJcUojKg1ZXMLuU",
+            authDomain: "voluntarios-ativos---cepat.firebaseapp.com",
+            projectId: "voluntarios-ativos---cepat",
+            storageBucket: "voluntarios-ativos---cepat.firebasestorage.app",
+            messagingSenderId: "66122858261",
+            appId: "1:66122858261:web:7fa21f1805463b5c08331c"
+        };
+        
+        const app = initializeApp(firebaseConfig, "painelVibracoesApp");
+        const db = getFirestore(app);
+        const auth = getAuth(app);
+        const functions = getFunctions(app, 'southamerica-east1');
+
+        onAuthStateChanged(auth, (user) => {
+            if (user) {
+                carregarNomes();
+            } else {
+                window.location.href = '/login.html';
+            }
+        });
+
+        // ===================================================================
+        // CÓDIGO ALTERADO PARA USAR A CLOUD FUNCTION
+        // ===================================================================
+        async function carregarNomes() {
+            try {
+                // Passo 1: Chamar a Cloud Function para obter o ciclo correto, calculado no servidor.
+                const calcularCicloVibracoes = httpsCallable(functions, 'calcularCicloVibracoes');
+                const resultado = await calcularCicloVibracoes();
+                const ciclo = resultado.data;
+
+                // Converte as datas recebidas (que vêm como strings ou objetos) para Timestamps do Firebase
+                const cicloInicio = new Timestamp(ciclo.inicio._seconds, ciclo.inicio._nanoseconds);
+                const cicloFim = new Timestamp(ciclo.fim._seconds, ciclo.fim._nanoseconds);
+
+                // Atualiza o cabeçalho com as datas corretas
+                const options = { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' };
+                const inicioFormatado = cicloInicio.toDate().toLocaleString('pt-BR', options);
+                const fimFormatado = cicloFim.toDate().toLocaleString('pt-BR', options);
+                document.getElementById('periodo-info').textContent = `Exibindo pedidos de ${inicioFormatado} até ${fimFormatado}`;
+
+                // Passo 2: Com o ciclo correto em mãos, busca e renderiza as listas.
+                renderizarLista('encarnados', 'lista-encarnados', 'loading-encarnados', cicloInicio, cicloFim);
+                renderizarLista('desencarnados', 'lista-desencarnados', 'loading-desencarnados', cicloInicio, cicloFim);
+
+            } catch (error) {
+                console.error("Erro ao obter ciclo de trabalho da Cloud Function:", error);
+                document.getElementById('periodo-info').textContent = "Erro ao calcular o período. Verifique o console.";
+                document.getElementById('loading-encarnados').textContent = "Falha.";
+                document.getElementById('loading-desencarnados').textContent = "Falha.";
+            }
+        }
+
+        async function renderizarLista(nomeColecao, idListaUl, idLoadingLi, cicloInicio, cicloFim) {
+            const listaUl = document.getElementById(idListaUl);
+            const loadingLi = document.getElementById(idLoadingLi);
+            loadingLi.textContent = "Buscando nomes...";
+
+            try {
+                const q = query(
+                    collection(db, nomeColecao),
+                    where("dataCriacao", ">=", cicloInicio),
+                    where("dataCriacao", "<=", cicloFim),
+                    orderBy("dataCriacao", "asc")
+                );
+
+                const snapshot = await getDocs(q);
+                loadingLi.style.display = 'none';
+
+                if (snapshot.empty) {
+                    const li = document.createElement('li');
+                    li.textContent = "Nenhum nome nesta lista para este período.";
+                    li.style.fontStyle = 'italic';
+                    listaUl.appendChild(li);
+                    return;
+                }
+
+                snapshot.forEach(doc => {
+                    const dados = doc.data();
+                    const li = document.createElement('li');
+                    li.textContent = dados.nome;
+                    listaUl.appendChild(li);
+
+                    if (dados.endereco) {
+                        const small = document.createElement('div');
+                        small.className = 'endereco';
+                        small.textContent = `(${dados.endereco})`;
+                        li.appendChild(small);
+                    }
+                });
+
+            } catch (error) {
+                console.error(`Erro ao carregar a lista de ${nomeColecao}:`, error);
+                loadingLi.textContent = "Erro ao carregar lista.";
+                loadingLi.style.color = "red";
+            }
+        }
+
+    </script>
+</body>
+</html>
