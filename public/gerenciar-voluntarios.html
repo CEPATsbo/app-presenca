@@ -33,7 +33,7 @@
         .btn-edit { background-color: #1976d2; color: white; border-color: #1976d2;}
         .btn-toggle { background-color: #ffb300; }
         .btn-delete { background-color: #c62828; color: white; border-color: #c62828; }
-        .btn-promover-conselheiro { background-color: #0277BD; color: white; border-color: #0277BD; } /* Estilo para o novo botão */
+        .btn-promover-conselheiro { background-color: #0277BD; color: white; border-color: #0277BD; }
         .tasv-container { text-align: center; }
         .tasv-container label { font-size: 0.8em; font-weight: bold; }
         .tasv-checkbox { transform: scale(1.5); cursor: pointer; }
@@ -89,11 +89,8 @@
 
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
-        import { getFirestore, collection, onSnapshot, addDoc, deleteDoc, doc, getDoc, orderBy, query, serverTimestamp, updateDoc } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
+        import { getFirestore, collection, onSnapshot, addDoc, deleteDoc, doc, getDoc, orderBy, query, serverTimestamp, updateDoc, where } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
         import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-auth.js";
-        // ===================================================================
-        // IMPORTAÇÃO ADICIONADA
-        // ===================================================================
         import { getFunctions, httpsCallable } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-functions.js";
         
         const firebaseConfig = {
@@ -108,9 +105,6 @@
         const app = initializeApp(firebaseConfig);
         const db = getFirestore(app);
         const auth = getAuth(app);
-        // ===================================================================
-        // INICIALIZAÇÃO ADICIONADA
-        // ===================================================================
         const functions = getFunctions(app, 'southamerica-east1');
         
         const voluntariosCollection = collection(db, 'voluntarios');
@@ -133,9 +127,8 @@
             btnCancelar: document.getElementById('btn-cancelar-edicao'),
         };
         let currentEditingId = null;
-        let userRole = ''; // Armazena o cargo do usuário logado
+        let userRole = '';
 
-        // Guarda a role do usuário logado assim que a autenticação estiver pronta
         document.addEventListener('authReady', () => {
              userRole = auth.currentUser?.claims?.role || '';
         });
@@ -154,12 +147,22 @@
                 console.error("Erro ao registrar log:", error);
             }
         }
-
-        function carregarVoluntarios() {
+        
+        // ===================================================================
+        // FUNÇÃO ALTERADA PARA INCLUIR A CONTAGEM DE CONSELHEIROS
+        // ===================================================================
+        async function carregarVoluntarios() {
             const anoVigente = new Date().getFullYear();
+            
+            // Passo 1: Contar quantos conselheiros já existem.
+            const queryConselheiros = query(voluntariosCollection, where("role", "==", "conselheiro"));
+            const conselheirosSnapshot = await getDocs(queryConselheiros);
+            const totalConselheiros = conselheirosSnapshot.size;
+
+            // Passo 2: Carregar e exibir todos os voluntários, usando a contagem para decidir se mostra o botão.
             const q = query(voluntariosCollection, orderBy("nome"));
             onSnapshot(q, (snapshot) => {
-                ui.tituloLista.textContent = `Lista de Voluntários Cadastrados (TOTAL = ${snapshot.size})`;
+                ui.tituloLista.textContent = `Lista de Voluntários Cadastrados (TOTAL = ${snapshot.size}) | Conselheiros Ativos: ${totalConselheiros}/3`;
                 ui.listaUl.innerHTML = '';
                 if (snapshot.empty) { ui.listaUl.innerHTML = '<li>Nenhum voluntário cadastrado.</li>'; return; }
                 
@@ -173,12 +176,9 @@
                     const li = document.createElement('li');
                     li.className = `item-voluntario ${statusClasse}`;
                     
-                    // ===================================================================
-                    // LÓGICA DO BOTÃO "PROMOVER A CONSELHEIRO" ADICIONADA AQUI
-                    // ===================================================================
                     let botaoPromoverConselheiro = '';
-                    // O botão só aparece se o usuário logado for super-admin E o voluntário listado não tiver um cargo especial
-                    if (userRole === 'super-admin' && (!v.role || v.role === 'voluntario')) {
+                    // Passo 3: Condição extra para mostrar o botão - só mostra se o limite não foi atingido.
+                    if (userRole === 'super-admin' && (!v.role || v.role === 'voluntario') && totalConselheiros < 3) {
                         botaoPromoverConselheiro = `<button data-id="${v.authUid || id}" data-nome="${v.nome}" class="btn-promover-conselheiro">Promover a Conselheiro</button>`;
                     }
 
@@ -240,7 +240,10 @@
             ui.listaUl.addEventListener('click', async (e) => {
                 const id = e.target.dataset.id;
                 if (!id) return;
-                const docRef = doc(db, 'voluntarios', id);
+                
+                // Para delete e toggle, a referência é o ID do documento
+                const docRef = e.target.classList.contains('btn-promover-conselheiro') ? null : doc(db, 'voluntarios', id);
+                
                 if (e.target.classList.contains('btn-delete')) {
                     const nome = e.target.dataset.nome;
                     if (confirm(`Tem certeza que deseja apagar ${nome}?`)) {
@@ -263,14 +266,11 @@
                         ui.editAniversario.value = data.aniversario || '';
                         ui.editModal.style.display = 'flex';
                     }
-                // ===================================================================
-                // LÓGICA DO CLIQUE NO BOTÃO ADICIONADA AQUI
-                // ===================================================================
                 } else if (e.target.classList.contains('btn-promover-conselheiro')) {
                     const nome = e.target.dataset.nome;
-                    const uidParaPromover = e.target.dataset.id; // O id aqui é o authUid
+                    const uidParaPromover = e.target.dataset.id; // Para este botão, o ID é o authUid
                     
-                    if (!uidParaPromover) return alert('Erro: UID do usuário não encontrado. Não é possível promover.');
+                    if (!uidParaPromover) return alert('Erro: UID do usuário não encontrado. O voluntário precisa ter uma conta de login para ser promovido.');
 
                     if (confirm(`Tem certeza que deseja promover ${nome} a Conselheiro Fiscal?`)) {
                         e.target.disabled = true;
@@ -281,7 +281,6 @@
                             const resultado = await promoverParaConselheiro({ uid: uidParaPromover });
                             alert(resultado.data.message);
                             await registrarLog("PROMOVEU_CONSELHEIRO", { alvo: { nome, uid: uidParaPromover } });
-                            // A lista irá recarregar automaticamente pelo onSnapshot
                         } catch (error) {
                             console.error("Erro ao promover para conselheiro:", error);
                             alert(`Erro: ${error.message}`);
@@ -309,14 +308,12 @@
             ui.btnCancelar.addEventListener('click', () => { ui.editModal.style.display = 'none'; currentEditingId = null; });
         }
         
-        // Chamando a função principal
         onAuthStateChanged(auth, (user) => {
             if (user) {
                 user.getIdTokenResult(true).then((idTokenResult) => {
                     auth.currentUser.claims = idTokenResult.claims;
                     document.dispatchEvent(new Event('authReady'));
                     
-                    // Inicializa as funções da página depois que o usuário estiver pronto
                     setupEventListeners();
                     carregarVoluntarios();
                 });
