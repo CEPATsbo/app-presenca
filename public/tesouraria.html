@@ -55,13 +55,12 @@
         .mensagem-autor { font-weight: bold; font-size: 0.9em; }
         .mensagem-data { font-size: 0.8em; color: #777; }
         #form-resposta textarea { width: 100%; box-sizing: border-box; height: 80px; margin-top: 10px; padding: 8px; border: 1px solid #ccc; border-radius: 6px; }
-        #form-resposta button { width: auto; font-size: 1em; padding: 10px 20px; background-color: #0d47a1; margin-top: 5px; }
+        #form-resposta button { width: auto; font-size: 1em; padding: 10px 20px; background-color: #0d47a1; margin-top: 5px; color: white; border: none; border-radius: 6px; cursor: pointer; }
     </style>
 </head>
 <body>
     <nav class="admin-nav">
-        <!-- Seu menu de navegação aqui -->
-    </nav>
+        </nav>
     <div id="acesso-negado" style="display: none;">
         <h1>Acesso Negado</h1>
         <p>Você não tem permissão para acessar o módulo da tesouraria.</p>
@@ -133,12 +132,12 @@
         import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-auth.js";
         
         const firebaseConfig = {
-  apiKey: "AIzaSyBV7RPjk3cFTqL-aIpflJcUojKg1ZXMLuU",
-  authDomain: "voluntarios-ativos---cepat.firebaseapp.com",
-  projectId: "voluntarios-ativos---cepat",
-  storageBucket: "voluntarios-ativos---cepat.firebasestorage.app",
-  messagingSenderId: "66122858261",
-  appId: "1:66122858261:web:7fa21f1805463b5c08331c"
+ apiKey: "AIzaSyBV7RPjk3cFTqL-aIpflJcUojKg1ZXMLuU",
+ authDomain: "voluntarios-ativos---cepat.firebaseapp.com",
+ projectId: "voluntarios-ativos---cepat",
+ storageBucket: "voluntarios-ativos---cepat.firebasestorage.app",
+ messagingSenderId: "66122858261",
+ appId: "1:66122858261:web:7fa21f1805463b5c08331c"
 };
         
         const app = initializeApp(firebaseConfig);
@@ -277,7 +276,8 @@
                     mensagens.forEach(msg => {
                         const data = msg.data ? msg.data.toDate().toLocaleString('pt-BR') : 'Enviando...';
                         const autor = msg.autor.nome || 'Anônimo';
-                        const tipoClasse = msg.isResposta ? 'mensagem-tesouraria' : 'mensagem-conselho';
+                        // A lógica aqui foi simplificada para corresponder à estrutura de dados da Cloud Function
+                        const tipoClasse = msg.autor.nome.toLowerCase().includes('conselh') ? 'mensagem-conselho' : 'mensagem-tesouraria';
                         const li = document.createElement('li');
                         li.className = `mensagem ${tipoClasse}`;
                         li.innerHTML = `
@@ -368,31 +368,48 @@
                 }
             });
             
+            // ===================================================================
+            // INÍCIO DO BLOCO CORRIGIDO
+            // ===================================================================
             document.getElementById('btn-enviar-resposta').addEventListener('click', async () => {
                 const mesAno = seletorMesAno.value;
                 const texto = document.getElementById('texto-resposta').value.trim();
                 if (!mesAno || !texto) return alert("Escreva uma resposta.");
 
                 const user = auth.currentUser;
+                if (!user) {
+                    alert("Usuário não autenticado. Por favor, faça login novamente.");
+                    return;
+                }
+                
                 const novaMensagem = {
                     autor: { uid: user.uid, nome: user.displayName || user.email },
                     texto: texto,
-                    data: serverTimestamp(),
-                    isResposta: true
+                    data: new Date(), // CORREÇÃO 1: Usando new Date()
+                    // Removido 'isResposta' para alinhar com a estrutura da Cloud Function
                 };
 
                 const balanceteRef = doc(db, "balancetes", mesAno);
                 try {
                     await updateDoc(balanceteRef, {
-                        mensagens: arrayUnion(novaMensagem)
+                        mensagens: arrayUnion([novaMensagem]), // CORREÇÃO 2: Envolvendo o objeto em colchetes
+                        status: 'em revisão' // MELHORIA: Devolvendo para o conselho
                     });
+
                     document.getElementById('texto-resposta').value = '';
-                    alert("Resposta enviada com sucesso!");
+                    alert("Resposta enviada com sucesso! O balancete foi liberado novamente para o Conselho Fiscal.");
+                    
+                    // Recarrega os dados para atualizar a tela com a nova mensagem e o novo status
+                    carregarDadosDoMes(mesAno); 
+                    
                 } catch (error) {
                     console.error("Erro ao enviar resposta:", error);
                     alert("Ocorreu um erro ao enviar a resposta.");
                 }
             });
+            // ===================================================================
+            // FIM DO BLOCO CORRIGIDO
+            // ===================================================================
 
             function adicionarLinhaApos(linhaHeader, nome = "", valor = "") {
                 const tipoClasse = linhaHeader.parentElement.id.includes('receitas') ? 'input-receita' : 'input-despesa';
