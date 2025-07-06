@@ -113,24 +113,40 @@ exports.promoverParaTesoureiro = functions.region(REGIAO).https.onCall(async (da
     } catch (error) { console.error("Erro ao promover para tesoureiro:", error); throw new functions.https.HttpsError('internal', 'Erro interno ao tentar promover o usuário.'); }
 });
 
+// ===================================================================
+// FUNÇÃO ALTERADA PARA INCLUIR A TRAVA DE SEGURANÇA
+// ===================================================================
 exports.promoverParaConselheiro = functions.region(REGIAO).https.onCall(async (data, context) => {
-    if (context.auth.token.role !== 'super-admin') { throw new functions.https.HttpsError('permission-denied', 'Apenas o Super Admin pode promover usuários.'); }
-    // ===== INÍCIO DA NOVA LÓGICA DE VERIFICAÇÃO =====
+    if (context.auth.token.role !== 'super-admin') { 
+        throw new functions.https.HttpsError('permission-denied', 'Apenas o Super Admin pode promover usuários.'); 
+    }
+
+    // PASSO 1: Contar quantos conselheiros já existem.
     const conselheirosQuery = db.collection('voluntarios').where('role', '==', 'conselheiro');
     const conselheirosSnapshot = await conselheirosQuery.get();
 
+    // PASSO 2: Verificar se o limite foi atingido.
     if (conselheirosSnapshot.size >= 3) {
         throw new functions.https.HttpsError('failed-precondition', 'O limite de 3 conselheiros já foi atingido. Não é possível promover um novo membro.');
     }
-    // ===== FIM DA NOVA LÓGICA DE VERIFICAÇÃO =====
+
+    // PASSO 3: Se o limite não foi atingido, continuar com a lógica original.
     const uidParaPromover = data.uid;
-    if (!uidParaPromover) { throw new functions.https.HttpsError('invalid-argument', 'O UID do usuário é necessário.'); }
+    if (!uidParaPromover) { 
+        throw new functions.https.HttpsError('invalid-argument', 'O UID do usuário é necessário.'); 
+    }
+    
     try {
         await admin.auth().setCustomUserClaims(uidParaPromover, { role: 'conselheiro' });
         const userQuery = await db.collection('voluntarios').where('authUid', '==', uidParaPromover).limit(1).get();
-        if (!userQuery.empty) { await userQuery.docs[0].ref.update({ role: 'conselheiro' }); }
+        if (!userQuery.empty) { 
+            await userQuery.docs[0].ref.update({ role: 'conselheiro' }); 
+        }
         return { success: true, message: 'Usuário promovido a conselheiro com sucesso.' };
-    } catch (error) { console.error("Erro ao promover para conselheiro:", error); throw new functions.https.HttpsError('internal', 'Erro interno ao tentar promover o usuário.'); }
+    } catch (error) { 
+        console.error("Erro ao promover para conselheiro:", error); 
+        throw new functions.https.HttpsError('internal', 'Erro interno ao tentar promover o usuário.'); 
+    }
 });
 
 exports.revogarAcessoDiretor = functions.region(REGIAO).https.onCall(async (data, context) => {
@@ -194,7 +210,7 @@ exports.registrarVotoConselho = functions.region(REGIAO).https.onCall(async (dat
 exports.verificarAprovacaoFinal = functions.region(REGIAO).firestore.document('balancetes/{balanceteId}').onUpdate(async (change, context) => {
     const balanceteNovo = change.after.data();
     const balanceteAntigo = change.before.data();
-    if (balanceteNovo.status !== 'em revisão') { return null; } // Só age se o status for 'em revisão'
+    if (balanceteNovo.status !== 'em revisão') { return null; }
     
     const aprovacoesNovas = balanceteNovo.aprovacoes || {};
     const aprovacoesAntigas = balanceteAntigo.aprovacoes || {};

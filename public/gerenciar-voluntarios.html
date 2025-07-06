@@ -89,9 +89,6 @@
 
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
-        // ===================================================================
-        // CORREÇÃO: Adicionado 'getDocs' à lista de importação
-        // ===================================================================
         import { getFirestore, collection, onSnapshot, addDoc, deleteDoc, doc, getDoc, getDocs, orderBy, query, serverTimestamp, updateDoc, where } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
         import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-auth.js";
         import { getFunctions, httpsCallable } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-functions.js";
@@ -175,8 +172,16 @@
                     li.className = `item-voluntario ${statusClasse}`;
                     
                     let botaoPromoverConselheiro = '';
-                    if (userRole === 'super-admin' && (!v.role || v.role === 'voluntario') && totalConselheiros < 3) {
-                        botaoPromoverConselheiro = `<button data-id="${v.authUid || id}" data-nome="${v.nome}" class="btn-promover-conselheiro">Promover a Conselheiro</button>`;
+                    // ===================================================================
+                    // LÓGICA DO BOTÃO APRIMORADA
+                    // ===================================================================
+                    // O botão só aparece se:
+                    // 1. O usuário logado for super-admin.
+                    // 2. O limite de 3 conselheiros não foi atingido.
+                    // 3. O voluntário listado tiver uma conta de acesso (v.authUid existe).
+                    // 4. O cargo atual do voluntário não for um cargo de gestão.
+                    if (userRole === 'super-admin' && totalConselheiros < 3 && v.authUid && (!v.role || v.role === 'voluntario')) {
+                        botaoPromoverConselheiro = `<button data-id="${v.authUid}" data-nome="${v.nome}" class="btn-promover-conselheiro">Promover a Conselheiro</button>`;
                     }
 
                     li.innerHTML = `
