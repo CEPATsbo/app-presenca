@@ -111,6 +111,13 @@
              <button id="btn-salvar">Salvar Balancete</button>
              <button id="btn-liberar">Liberar para Conselho Fiscal</button>
         </div>
+        <div class="mensagens-container" id="mensagens-container" style="display: none;">
+            <h2>Comunicação com o Conselho Fiscal</h2>
+            <ul class="mensagens-lista" id="lista-mensagens"></ul>
+            <div id="form-resposta" style="margin-top: 20px;">
+                <textarea id="texto-resposta" placeholder="Digite sua resposta à ressalva aqui..."></textarea>
+                <button id="btn-enviar-resposta">Enviar Resposta</button>
+            </div>
         <div class="rodape-assinaturas">
             <div class="assinatura"><div class="linha"></div><div class="cargo">PRESIDENTE</div></div>
             <div class="assinatura"><div class="linha"></div><div class="cargo">TESOUREIRO</div></div>
@@ -286,12 +293,58 @@
                     balanceteAtual = docSnap.data();
                     renderizarTabela(balanceteAtual, mesAno);
                     atualizarStatusUI(balanceteAtual.status || 'em elaboração');
+                    renderizarMensagens(docSnap.data().mensagens || []);
                 } else {
                     balanceteAtual = JSON.parse(JSON.stringify(balancetePadrao));
                     renderizarTabela(balanceteAtual, mesAno);
                     atualizarStatusUI('em elaboração');
                 }
             }
+
+            function renderizarMensagens(mensagens) {
+                listaMensagens.innerHTML = '';
+                if (mensagens.length === 0) {
+                    listaMensagens.innerHTML = '<li>Nenhuma ressalva ou mensagem para este balancete.</li>';
+                    return;
+                }
+                mensagens.forEach(msg => {
+                    const data = msg.data ? msg.data.toDate().toLocaleString('pt-BR') : 'Enviando...';
+                    const autor = msg.autor.nome || 'Anônimo';
+                    const tipoClasse = msg.isResposta ? 'mensagem-tesouraria' : 'mensagem-conselho';
+                    const li = document.createElement('li');
+                    li.className = `mensagem ${tipoClasse}`;
+                    li.innerHTML = `
+                        <div class="mensagem-autor">${autor}</div>
+                        <div class="mensagem-data">${data}</div>
+                        <p>${msg.texto}</p>
+                    `;
+                    listaMensagens.appendChild(li);
+                });
+            }
+            document.getElementById('btn-enviar-resposta').addEventListener('click', async () => {
+            const mesAno = document.getElementById('mes-ano').value;
+            const texto = document.getElementById('texto-resposta').value.trim();
+            if (!mesAno || !texto) return;
+
+            const user = auth.currentUser;
+            const novaMensagem = {
+                autor: { uid: user.uid, nome: user.displayName || user.email },
+                texto: texto,
+                data: serverTimestamp(),
+                isResposta: true // Identifica que é uma resposta da tesouraria
+            };
+
+            const balanceteRef = doc(db, "balancetes", mesAno);
+            try {
+                await updateDoc(balanceteRef, {
+                    mensagens: arrayUnion(novaMensagem)
+                });
+                document.getElementById('texto-resposta').value = '';
+                alert("Resposta enviada com sucesso!");
+            } catch (error) {
+                console.error("Erro ao enviar resposta:", error);
+            }
+        });
 
             btnSalvar.addEventListener('click', async () => {
                 const mesAno = seletorMesAno.value;
