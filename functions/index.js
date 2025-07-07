@@ -151,6 +151,38 @@ exports.revogarAcessoDiretor = functions.region(REGIAO).https.onCall(async (data
     } catch (error) { console.error("Erro ao revogar acesso de diretor:", error); throw new functions.https.HttpsError('internal', 'Erro interno ao tentar revogar o acesso.'); }
 });
 
+// ===================================================================
+// NOVA FUNÇÃO ADICIONADA PARA REVOGAR ACESSO DE CONSELHEIRO
+// ===================================================================
+
+exports.revogarAcessoConselheiro = functions.region(REGIAO).https.onCall(async (data, context) => {
+    // Apenas o Super Admin pode executar esta ação.
+    if (context.auth.token.role !== 'super-admin') {
+        throw new functions.https.HttpsError('permission-denied', 'Apenas o Super Admin pode revogar acesso de conselheiros.');
+    }
+
+    const uidParaRevogar = data.uid;
+    if (!uidParaRevogar) {
+        throw new functions.https.HttpsError('invalid-argument', 'O UID do conselheiro é necessário.');
+    }
+
+    try {
+        // Remove a permissão especial 'conselheiro' e o retorna para 'voluntario'
+        await admin.auth().setCustomUserClaims(uidParaRevogar, { role: 'voluntario' });
+
+        // Atualiza o cargo também no banco de dados 'voluntarios'
+        const userQuery = await db.collection('voluntarios').where('authUid', '==', uidParaRevogar).limit(1).get();
+        if (!userQuery.empty) {
+            await userQuery.docs[0].ref.update({ role: 'voluntario' });
+        }
+
+        return { success: true, message: 'Acesso de conselheiro revogado com sucesso. O usuário agora é um voluntário padrão.' };
+    } catch (error) {
+        console.error("Erro ao revogar acesso de conselheiro:", error);
+        throw new functions.https.HttpsError('internal', 'Erro interno ao tentar revogar o acesso do conselheiro.');
+    }
+});
+
 exports.registrarVotoConselho = functions.region(REGIAO).https.onCall(async (data, context) => {
     const userRole = context.auth.token.role;
     if (!['conselheiro', 'super-admin'].includes(userRole)) {

@@ -4,26 +4,31 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Super Admin - Gerenciar Diretoria</title>
-    <script type="module" src="/auth-guard.js"></script>
     <style>
         body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background-color: #f4f6f9; display: flex; flex-direction: column; align-items: center; min-height: 100vh; margin: 0; padding: 20px; box-sizing: border-box; }
         .admin-nav { width: 100%; max-width: 900px; background-color: #fff; padding: 15px; margin-bottom: 30px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); text-align: center; display: flex; flex-wrap: wrap; justify-content: center; gap: 15px 25px; }
         .admin-nav a { margin: 0; padding: 0; background-color: transparent; color: #1565c0; text-decoration: none; font-weight: bold; font-size: 1.1em; white-space: nowrap; }
         .admin-nav a.active, .admin-nav a:hover { text-decoration: underline; background-color: transparent; color: #0d47a1; }
-        .container { background-color: white; padding: 40px; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.15); width: 100%; max-width: 800px; margin-bottom: 30px; }
+        .container { background-color: white; padding: 40px; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.15); width: 100%; max-width: 900px; margin-bottom: 30px; }
         h1, h2 { text-align: center; color: #333; margin-top: 0; }
         .form-container { border-bottom: 1px solid #ddd; padding-bottom: 30px; margin-bottom: 30px; }
         .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
         .form-item { display: flex; flex-direction: column; }
         .form-item label { margin-bottom: 5px; font-weight: bold; color: #555; }
         .form-item input { padding: 10px; border-radius: 6px; border: 1px solid #ccc; font-size: 1em; }
-        .add-button { grid-column: 1 / -1; padding: 12px; background-color: #2e7d32; color: white; border: none; border-radius: 6px; font-size: 1.1em; font-weight: bold; cursor: pointer; margin-top: 10px; }
-        table { width: 100%; border-collapse: collapse; margin-top: 15px; }
-        th, td { padding: 12px; border-bottom: 1px solid #eee; text-align: left; vertical-align: middle; }
-        th { background-color: #f2f2f2; }
-        .actions button { margin-right: 8px; border: none; padding: 8px 12px; border-radius: 4px; cursor: pointer; color: white; }
-        .btn-revogar { background-color: #c62828; }
-        .btn-promover { background-color: #FF9800; }
+        .invite-button { grid-column: 1 / -1; padding: 12px; background-color: #2e7d32; color: white; border: none; border-radius: 6px; font-size: 1.1em; font-weight: bold; cursor: pointer; margin-top: 10px; }
+        .lista-diretoria { list-style-type: none; padding: 0; margin-top: 30px; }
+        .item-diretor { display: flex; justify-content: space-between; align-items: center; padding: 15px; border-left: 5px solid #ccc; margin-bottom: 10px; background-color: #fafafa; }
+        .item-diretor.role-diretor { border-left-color: #1976d2; }
+        .item-diretor.role-tesoureiro { border-left-color: #fbc02d; }
+        .item-diretor.role-conselheiro { border-left-color: #8e24aa; }
+        .item-diretor.role-super-admin { border-left-color: #e53935; }
+        .diretor-info strong { font-size: 1.2em; }
+        .diretor-info small { color: #777; display: block; }
+        .actions button { padding: 8px 12px; border-radius: 4px; cursor: pointer; border: none; font-size: 0.9em; color: white; margin-top: 5px; }
+        .btn-promover-tesoureiro { background-color: #fbc02d; color: #333; }
+        .btn-promover-conselheiro { background-color: #8e24aa; }
+        .btn-revogar-acesso { background-color: #d32f2f; }
         .log-details { font-size: 0.8em; color: #666; white-space: pre-wrap; word-break: break-all; background-color: #f9f9f9; padding: 5px; border-radius: 4px; }
         .filtros-logs { display: flex; align-items: flex-end; gap: 15px; margin-bottom: 20px; flex-wrap: wrap; }
         .filtros-logs button { width: auto; padding: 10px 20px; font-size: 1em; background-color: #1976d2; color: white; border: none; border-radius: 6px; cursor: pointer; }
@@ -44,23 +49,25 @@
     <a href="/tv.html" target="_blank" title="Abrir painel em uma nova aba">Ver Painel da TV ↗</a>
     <a href="#" id="btn-logout" style="color: #c62828;">Sair</a>
 </nav>
+
     <div id="main-content" style="display: none;">
-        <div class="container form-container">
+        <div class="container form-container" id="form-convite-container">
             <h1>Convidar Novo Diretor</h1>
             <div class="form-grid">
-                <div class="form-item"><label for="nome">Nome Completo do Diretor:</label><input type="text" id="nome" required></div>
-                <div class="form-item"><label for="email">Email do Diretor:</label><input type="email" id="email" required></div>
+                <div class="form-item"><label for="nome">Nome do Voluntário:</label><input type="text" id="nome" required></div>
+                <div class="form-item"><label for="email">Email:</label><input type="email" id="email" required></div>
             </div>
-            <button id="btn-convidar" class="add-button">Convidar Diretor</button>
-            <p id="feedback"></p>
+            <button id="btn-convidar" class="invite-button">Enviar Convite de Diretor</button>
         </div>
+
         <div class="container">
-            <h2>Diretoria Cadastrada</h2>
+            <h2>Gestão Atual</h2>
             <table style="width: 100%;">
-                <thead><tr><th>Nome</th><th>Email</th><th>Cargo</th><th>Ações</th></tr></thead>
+                <thead><tr><th>Nome</th><th>Email</th><th>Cargo</th><th id="coluna-acoes">Ações</th></tr></thead>
                 <tbody id="tabela-diretoria"></tbody>
             </table>
         </div>
+        
         <div class="container">
             <h2>Log de Auditoria do Sistema</h2>
             <div class="filtros-logs">
@@ -74,175 +81,187 @@
             </table>
         </div>
     </div>
+    
     <div id="acesso-negado" style="display: none;">
-        <div class="container">
+        <div class="container" style="text-align: center;">
             <h1>Acesso Negado</h1>
-            <p>Apenas o Super Administrador pode acessar esta página.</p>
+            <p>Você não tem permissão para visualizar esta página.</p>
         </div>
     </div>
-    
+
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
-        import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-auth.js";
-        import { getFirestore, collection, query, where, onSnapshot, orderBy, getDocs, addDoc, serverTimestamp, Timestamp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
+        import { getFirestore, collection, query, where, onSnapshot, getDocs, Timestamp, orderBy, addDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
         import { getFunctions, httpsCallable } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-functions.js";
-        
+        import { protegerPagina } from '/auth.js'; 
+
         const firebaseConfig = {
-  apiKey: "AIzaSyBV7RPjk3cFTqL-aIpflJcUojKg1ZXMLuU",
-  authDomain: "voluntarios-ativos---cepat.firebaseapp.com",
-  projectId: "voluntarios-ativos---cepat",
-  storageBucket: "voluntarios-ativos---cepat.firebasestorage.app",
-  messagingSenderId: "66122858261",
-  appId: "1:66122858261:web:7fa21f1805463b5c08331c"
-};
+            apiKey: "AIzaSyBV7RPjk3cFTqL-aIpflJcUojKg1ZXMLuU",
+            authDomain: "voluntarios-ativos---cepat.firebaseapp.com",
+            projectId: "voluntarios-ativos---cepat",
+            storageBucket: "voluntarios-ativos---cepat.firebasestorage.app",
+            messagingSenderId: "66122858261",
+            appId: "1:66122858261:web:7fa21f1805463b5c08331c"
+        };
         const app = initializeApp(firebaseConfig);
-        const auth = getAuth(app);
-        const db = getFirestore(app);
-        const functions = getFunctions(app, 'southamerica-east1');
 
-        const mainContent = document.getElementById('main-content');
-        const acessoNegado = document.getElementById('acesso-negado');
-        const btnConvidar = document.getElementById('btn-convidar');
-        const nomeInput = document.getElementById('nome');
-        const emailInput = document.getElementById('email');
-        const feedback = document.getElementById('feedback');
-        const tabelaDiretoria = document.getElementById('tabela-diretoria');
-        const tabelaLogs = document.getElementById('tabela-logs');
-        const btnFiltrarLogs = document.getElementById('btn-filtrar-logs');
-        const logDataInicio = document.getElementById('log-data-inicio');
-        const logDataFim = document.getElementById('log-data-fim');
-        
-        onAuthStateChanged(auth, (user) => {
-            if (user) {
-                user.getIdTokenResult(true).then((idTokenResult) => {
-                    if (idTokenResult.claims.role === 'super-admin') {
-                        mainContent.style.display = 'block';
-                        carregarDiretoria(user.uid);
-                        setupLogFilters();
-                    } else {
-                        acessoNegado.style.display = 'block';
-                    }
-                });
-            } else {
-                window.location.href = '/login.html';
-            }
-        });
-
-        function carregarDiretoria(uidLogado) {
-            const q = query(collection(db, "voluntarios"), where("role", "in", ["diretor", "super-admin", "tesoureiro"]));
-            onSnapshot(q, (snapshot) => {
-                tabelaDiretoria.innerHTML = "";
-                snapshot.forEach(doc => {
-                    const diretor = doc.data();
-                    const tr = document.createElement('tr');
-                    let acoesHtml = '';
-                    if (diretor.authUid !== uidLogado) { // Não pode alterar a si mesmo
-                        if (diretor.role === 'diretor') {
-                            acoesHtml += `<button class="btn-promover" data-uid="${diretor.authUid}" data-nome="${diretor.nome}">Promover p/ Tesoureiro</button> `;
-                        }
-                        acoesHtml += `<button class="btn-revogar" data-uid="${diretor.authUid}" data-nome="${diretor.nome}">Revogar Acesso</button>`;
-                    }
-                    tr.innerHTML = `<td>${diretor.nome}</td><td>${diretor.email || 'N/A'}</td><td>${diretor.role}</td><td>${acoesHtml}</td>`;
-                    tabelaDiretoria.appendChild(tr);
-                });
+        // ===================================================================
+        // LÓGICA DE PROTEÇÃO ATUALIZADA
+        // ===================================================================
+        protegerPagina(['super-admin', 'diretor', 'tesoureiro'])
+            .then(user => {
+                inicializarPagina(user);
+            })
+            .catch(error => {
+                console.log(error.message);
             });
-        }
 
-        tabelaDiretoria.addEventListener('click', async (e) => {
-            const uid = e.target.dataset.uid;
-            const nome = e.target.dataset.nome;
-            if (!uid) return;
+        function inicializarPagina(user) {
+            const db = getFirestore(app);
+            const functions = getFunctions(app, 'southamerica-east1');
+            const userRole = user.claims.role;
 
-            let acao, funcaoCallable, mensagemConfirmacao;
+            const formContainer = document.getElementById('form-convite-container');
+            const colunaAcoes = document.getElementById('coluna-acoes');
+            const listaDiretoria = document.getElementById('tabela-diretoria');
+            const btnConvidar = document.getElementById('btn-convidar');
+            const tabelaLogs = document.getElementById('tabela-logs');
+            const btnFiltrarLogs = document.getElementById('btn-filtrar-logs');
 
-            if (e.target.classList.contains('btn-promover')) {
-                mensagemConfirmacao = `Tem certeza que deseja promover ${nome} a Tesoureiro?`;
-                acao = "PROMOVEU_TESOUREIRO";
-                funcaoCallable = httpsCallable(functions, 'promoverParaTesoureiro');
-            } else if (e.target.classList.contains('btn-revogar')) {
-                mensagemConfirmacao = `Tem certeza que deseja revogar o acesso de diretor de ${nome}?`;
-                acao = "REVOGOU_DIRETOR";
-                funcaoCallable = httpsCallable(functions, 'revogarAcessoDiretor');
-            } else {
-                return;
+            // ===================================================================
+            // LÓGICA DE VISIBILIDADE DOS CONTROLES
+            // ===================================================================
+            if (userRole !== 'super-admin') {
+                formContainer.style.display = 'none'; // Esconde formulário de convite
+                colunaAcoes.style.display = 'none'; // Esconde a coluna de ações
             }
 
-            if (confirm(mensagemConfirmacao)) {
-                e.target.disabled = true;
+            carregarDiretoria(user.uid);
+            setupLogFilters();
+
+            function carregarDiretoria(uidLogado) {
+                const q = query(collection(db, "voluntarios"), where("role", "in", ["diretor", "super-admin", "tesoureiro", "conselheiro"]));
+                
+                onSnapshot(q, (snapshot) => {
+                    listaDiretoria.innerHTML = '';
+                    if (snapshot.empty) {
+                        listaDiretoria.innerHTML = '<tr><td colspan="4">Nenhum membro da gestão encontrado.</td></tr>';
+                        return;
+                    }
+                    snapshot.forEach(doc => {
+                        const v = doc.data();
+                        const tr = document.createElement('tr');
+                        tr.className = `item-diretor role-${v.role}`;
+                        
+                        let actionsHtml = '';
+                        if (userRole === 'super-admin' && v.authUid !== uidLogado) {
+                            if (v.role === 'diretor') {
+                                actionsHtml += `<button class="btn-promover-tesoureiro" data-uid="${v.authUid}">Promover a Tesoureiro</button>`;
+                            }
+                            if (v.role === 'diretor' || v.role === 'tesoureiro') {
+                                actionsHtml += `<button class="btn-revogar-acesso" data-uid="${v.authUid}" data-role="diretor">Revogar (p/ Voluntário)</button>`;
+                            } else if (v.role === 'conselheiro') {
+                                actionsHtml += `<button class="btn-revogar-acesso" data-uid="${v.authUid}" data-role="conselheiro">Revogar (p/ Voluntário)</button>`;
+                            }
+                        }
+
+                        tr.innerHTML = `
+                            <td>${v.nome}</td>
+                            <td>${v.email || 'N/A'}</td>
+                            <td>${v.role}</td>
+                            ${userRole === 'super-admin' ? `<td>${actionsHtml}</td>` : ''}
+                        `;
+                        listaDiretoria.appendChild(tr);
+                    });
+                });
+            }
+
+            listaDiretoria.addEventListener('click', async (e) => {
+                if (!e.target.dataset.uid || userRole !== 'super-admin') return;
+                const uid = e.target.dataset.uid;
+                const role = e.target.dataset.role;
+                
+                let funcaoCallable, mensagemConfirmacao;
+                
+                if (e.target.classList.contains('btn-promover-tesoureiro')) {
+                    funcaoCallable = httpsCallable(functions, 'promoverParaTesoureiro');
+                    mensagemConfirmacao = 'Tem certeza que deseja promover este diretor a tesoureiro?';
+                } else if (e.target.classList.contains('btn-revogar-acesso')) {
+                    if (role === 'conselheiro') {
+                        funcaoCallable = httpsCallable(functions, 'revogarAcessoConselheiro');
+                        mensagemConfirmacao = 'Tem certeza que deseja revogar o acesso de conselheiro? O usuário voltará a ser um voluntário padrão.';
+                    } else {
+                        funcaoCallable = httpsCallable(functions, 'revogarAcessoDiretor');
+                        mensagemConfirmacao = 'Tem certeza que deseja revogar o acesso deste membro?';
+                    }
+                } else {
+                    return;
+                }
+
+                if (confirm(mensagemConfirmacao)) {
+                    e.target.disabled = true;
+                    try {
+                        const resultado = await funcaoCallable({ uid });
+                        alert(resultado.data.message);
+                    } catch (error) {
+                        alert(`Erro: ${error.message}`);
+                        e.target.disabled = false;
+                    }
+                }
+            });
+
+            btnConvidar.addEventListener('click', async () => {
+                const nome = document.getElementById('nome').value;
+                const email = document.getElementById('email').value;
+                if (!nome || !email) return alert('Nome e Email são obrigatórios.');
+
+                btnConvidar.disabled = true;
+                btnConvidar.textContent = 'Enviando...';
                 try {
-                    await funcaoCallable({ uid: uid });
-                    alert('Ação realizada com sucesso! O usuário precisa fazer logout e login novamente para a mudança ter efeito.');
-                    await registrarLog(acao, { alvo: { nome, uid } });
+                    const convidarDiretor = httpsCallable(functions, 'convidarDiretor');
+                    const resultado = await convidarDiretor({ nome, email });
+                    alert(resultado.data.message);
                 } catch (error) {
                     alert(`Erro: ${error.message}`);
-                } finally {
-                    e.target.disabled = false;
                 }
-            }
-        });
-
-        async function registrarLog(acao, detalhes) {
-            const user = auth.currentUser;
-            if (!user) return;
-            await addDoc(collection(db, 'log_auditoria'), {
-                acao, autor: { uid: user.uid, nome: user.displayName || user.email },
-                timestamp: serverTimestamp(), detalhes
+                btnConvidar.disabled = false;
+                btnConvidar.textContent = 'Enviar Convite de Diretor';
             });
-        }
 
-        function setupLogFilters() {
-            const hoje = new Date();
-            const umaSemanaAtras = new Date();
-            umaSemanaAtras.setDate(hoje.getDate() - 7);
-            logDataFim.value = hoje.toISOString().split('T')[0];
-            logDataInicio.value = umaSemanaAtras.toISOString().split('T')[0];
-            btnFiltrarLogs.addEventListener('click', carregarLogsDeAuditoria);
-            carregarLogsDeAuditoria();
-        }
+            function setupLogFilters() {
+                const hoje = new Date();
+                const umaSemanaAtras = new Date();
+                umaSemanaAtras.setDate(hoje.getDate() - 7);
+                document.getElementById('log-data-fim').value = hoje.toISOString().split('T')[0];
+                document.getElementById('log-data-inicio').value = umaSemanaAtras.toISOString().split('T')[0];
+                btnFiltrarLogs.addEventListener('click', carregarLogsDeAuditoria);
+                carregarLogsDeAuditoria();
+            }
 
-        async function carregarLogsDeAuditoria() {
-            tabelaLogs.innerHTML = `<tr><td colspan="4">Carregando logs...</td></tr>`;
-            const dataInicio = new Date(logDataInicio.value); dataInicio.setUTCHours(0, 0, 0, 0);
-            const dataFim = new Date(logDataFim.value); dataFim.setUTCHours(23, 59, 59, 999);
-            const q = query(collection(db, "log_auditoria"), where("timestamp", ">=", Timestamp.fromDate(dataInicio)), where("timestamp", "<=", Timestamp.fromDate(dataFim)), orderBy("timestamp", "desc"));
-            try {
-                const snapshot = await getDocs(q);
-                tabelaLogs.innerHTML = "";
-                if (snapshot.empty) { tabelaLogs.innerHTML = `<tr><td colspan="4">Nenhum registro para este período.</td></tr>`; return; }
-                snapshot.forEach(doc => {
-                    const log = doc.data();
-                    const data = log.timestamp ? log.timestamp.toDate().toLocaleString('pt-BR') : 'N/A';
-                    const autor = log.autor ? log.autor.nome : 'Desconhecido';
-                    const acao = log.acao || 'N/A';
-                    const detalhes = log.detalhes ? JSON.stringify(log.detalhes, null, 2) : '{}';
-                    const tr = document.createElement('tr');
-                    tr.innerHTML = `<td>${data}</td><td>${autor}</td><td>${acao}</td><td><pre class="log-details">${detalhes}</pre></td>`;
-                    tabelaLogs.appendChild(tr);
-                });
-            } catch (error) { console.error("Erro ao buscar logs:", error); tabelaLogs.innerHTML = `<tr><td colspan="4" style="color: red;">Erro ao carregar. Verifique o console (F12).</td></tr>`; }
+            async function carregarLogsDeAuditoria() {
+                tabelaLogs.innerHTML = `<tr><td colspan="4">Carregando logs...</td></tr>`;
+                const dataInicio = new Date(document.getElementById('log-data-inicio').value);
+                const dataFim = new Date(document.getElementById('log-data-fim').value);
+                dataFim.setUTCHours(23, 59, 59, 999);
+                
+                const q = query(collection(db, "log_auditoria"), where("timestamp", ">=", Timestamp.fromDate(dataInicio)), where("timestamp", "<=", Timestamp.fromDate(dataFim)), orderBy("timestamp", "desc"));
+                try {
+                    const snapshot = await getDocs(q);
+                    tabelaLogs.innerHTML = "";
+                    if (snapshot.empty) { tabelaLogs.innerHTML = `<tr><td colspan="4">Nenhum registro para este período.</td></tr>`; return; }
+                    snapshot.forEach(doc => {
+                        const log = doc.data();
+                        const data = log.timestamp ? log.timestamp.toDate().toLocaleString('pt-BR') : 'N/A';
+                        const autor = log.autor ? log.autor.nome : 'Desconhecido';
+                        const acao = log.acao || 'N/A';
+                        const detalhes = log.detalhes ? JSON.stringify(log.detalhes, null, 2) : '{}';
+                        const tr = document.createElement('tr');
+                        tr.innerHTML = `<td>${data}</td><td>${autor}</td><td>${acao}</td><td><pre class="log-details">${detalhes}</pre></td>`;
+                        tabelaLogs.appendChild(tr);
+                    });
+                } catch (error) { console.error("Erro ao buscar logs:", error); tabelaLogs.innerHTML = `<tr><td colspan="4" style="color: red;">Erro ao carregar.</td></tr>`; }
+            }
         }
-
-        btnConvidar.addEventListener('click', async () => {
-            const nome = nomeInput.value.trim(), email = emailInput.value.trim();
-            if (!nome || !email) { return alert("Preencha o nome e o email."); }
-            btnConvidar.disabled = true;
-            feedback.textContent = "Convidando diretor...";
-            try {
-                const convidarDiretor = httpsCallable(functions, 'convidarDiretor');
-                const resultado = await convidarDiretor({ nome, email });
-                if(resultado.data.success) {
-                    await registrarLog("CONVIDOU_DIRETOR", { nomeConvidado: nome, emailConvidado: email });
-                    feedback.textContent = resultado.data.message;
-                    feedback.style.color = "green";
-                    nomeInput.value = ''; emailInput.value = '';
-                } else { throw new Error(resultado.data.message || 'Erro desconhecido.'); }
-            } catch (error) {
-                console.error("Erro ao convidar diretor:", error);
-                feedback.textContent = `Erro: ${error.message}`;
-                feedback.style.color = "red";
-            } finally { btnConvidar.disabled = false; }
-        });
     </script>
-    <script type="module" src="/logout.js"></script>
 </body>
 </html>
