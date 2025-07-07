@@ -4,7 +4,6 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Admin - Gerenciar Voluntários</title>
-    <script type="module" src="/auth-guard.js"></script>
     <style>
         body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background-color: #f4f6f9; display: flex; flex-direction: column; align-items: center; min-height: 100vh; margin: 0; padding: 20px; box-sizing: border-box; }
         .admin-nav { width: 100%; max-width: 900px; background-color: #fff; padding: 15px; margin-bottom: 30px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); text-align: center; display: flex; flex-wrap: wrap; justify-content: center; gap: 15px 25px; }
@@ -54,7 +53,6 @@
     <a href="/mural.html">Editar Mural</a>
     <a href="/atividades.html">Gerenciar Atividades</a>
     <a href="/notificacoes.html">Notificações</a>
-    <a href="/painel-vibracoes.html" target="_blank">Painel de Vibrações ↗</a>
     <a href="/tv.html" target="_blank" title="Abrir painel em uma nova aba">Ver Painel da TV ↗</a>
     <a href="#" id="btn-logout" style="color: #c62828;">Sair</a>
 </nav>
@@ -174,14 +172,10 @@
                     
                     let botaoPromoverConselheiro = '';
                     // ===================================================================
-                    // LÓGICA DO BOTÃO APRIMORADA
+                    // CONDIÇÃO CORRIGIDA: Mostra o botão se o usuário tem conta,
+                    // não é conselheiro e há vagas.
                     // ===================================================================
-                    // O botão só aparece se:
-                    // 1. O usuário logado for super-admin.
-                    // 2. O limite de 3 conselheiros não foi atingido.
-                    // 3. O voluntário listado tiver uma conta de acesso (v.authUid existe).
-                    // 4. O cargo atual do voluntário não for um cargo de gestão.
-                    if (userRole === 'super-admin' && totalConselheiros < 3 && v.authUid && (!v.role || v.role === 'voluntario')) {
+                    if (userRole === 'super-admin' && totalConselheiros < 3 && v.authUid && v.role !== 'conselheiro') {
                         botaoPromoverConselheiro = `<button data-id="${v.authUid}" data-nome="${v.nome}" class="btn-promover-conselheiro">Promover a Conselheiro</button>`;
                     }
 
