@@ -216,27 +216,32 @@ exports.verificarAprovacaoFinal = functions.region(REGIAO).firestore.document('b
     return null;
 });
 
+// ===================================================================
+// FUNÇÃO DE CÁLCULO DE CICLO CORRIGIDA
+// ===================================================================
 exports.calcularCicloVibracoes = functions.region(REGIAO).https.onCall((data, context) => {
     const agoraUTC = new Date();
-    const agoraSP = new Date(agoraUTC.toLocaleString("en-US", { timeZone: "America/Sao_Paulo" }));
 
-    const diaDaSemana = agoraSP.getDay();
-    const hora = agoraSP.getHours();
-    const minuto = agoraSP.getMinutes();
+    const encontrarUltimaQuinta = (d) => {
+        const data = new Date(d);
+        const dia = data.getUTCDay(); // 0 = Domingo, 4 = Quinta
+        const diff = (dia < 4) ? dia + 3 : dia - 4;
+        data.setUTCDate(data.getUTCDate() - diff);
+        return data;
+    };
 
-    let dataFimCiclo = new Date(agoraSP);
-    dataFimCiclo.setHours(19, 20, 0, 0);
+    const ultimaQuinta = encontrarUltimaQuinta(agoraUTC);
+    
+    let dataFimCiclo = new Date(ultimaQuinta);
+    dataFimCiclo.setUTCHours(22, 20, 0, 0); // 19:20 BRT = 22:20 UTC
 
-    const diasAteQuinta = (4 - diaDaSemana + 7) % 7;
-    dataFimCiclo.setDate(dataFimCiclo.getDate() + diasAteQuinta);
-
-    if (diaDaSemana === 4 && (hora > 19 || (hora === 19 && minuto >= 20))) {
-        dataFimCiclo.setDate(dataFimCiclo.getDate() + 7);
+    if (agoraUTC.getTime() > dataFimCiclo.getTime()) {
+        dataFimCiclo.setUTCDate(dataFimCiclo.getUTCDate() + 7);
     }
     
     let dataInicioCiclo = new Date(dataFimCiclo);
-    dataInicioCiclo.setDate(dataInicioCiclo.getDate() - 7);
-    dataInicioCiclo.setMinutes(dataInicioCiclo.getMinutes() + 1);
+    dataInicioCiclo.setUTCDate(dataInicioCiclo.getUTCDate() - 7);
+    dataInicioCiclo.setUTCMinutes(dataInicioCiclo.getUTCMinutes() + 1);
     
     return {
         inicio: admin.firestore.Timestamp.fromDate(dataInicioCiclo),
@@ -257,6 +262,9 @@ exports.enviarNotificacaoImediata = functions.region(REGIAO).https.onRequest((re
     });
 });
 
+// ===================================================================
+// FUNÇÃO DE VERIFICAÇÃO DE AGENDAMENTOS CORRIGIDA
+// ===================================================================
 exports.verificarAgendamentosAgendados = functions.region(REGIAO).pubsub.schedule('every 10 minutes').timeZone('America/Sao_Paulo').onRun(async (context) => {
     if (!configurarWebPush()) { return null; }
     
@@ -318,14 +326,11 @@ exports.resetarTasvAnual = functions.region(REGIAO).pubsub.schedule('0 4 1 1 *')
 exports.arquivarVibracoesSemanais = functions.region(REGIAO).pubsub.schedule('30 22 * * 4').timeZone('America/Sao_Paulo').onRun(async (context) => {
     console.log("Iniciando o arquivamento semanal dos pedidos de vibração.");
 
-    // Calcula o ciclo que acabou de fechar
     const agoraSP = new Date(new Date().toLocaleString("en-US", { timeZone: "America/Sao_Paulo" }));
     
-    // O fim do ciclo foi na quinta-feira desta semana, às 19:20
     let dataFimCiclo = new Date(agoraSP);
     dataFimCiclo.setHours(19, 20, 0, 0);
 
-    // O início do ciclo foi 7 dias antes, às 19:21
     let dataInicioCiclo = new Date(dataFimCiclo);
     dataInicioCiclo.setDate(dataInicioCiclo.getDate() - 7);
     dataInicioCiclo.setMinutes(dataInicioCiclo.getMinutes() + 1);
@@ -335,7 +340,6 @@ exports.arquivarVibracoesSemanais = functions.region(REGIAO).pubsub.schedule('30
     
     const semanaDeReferencia = new Intl.DateTimeFormat('en-CA', { year: 'numeric', month: '2-digit', day: '2-digit' }).format(dataFimCiclo);
 
-    // Função auxiliar para processar uma coleção
     const processarColecao = async (nomeColecao) => {
         const colecaoRef = db.collection(nomeColecao);
         const historicoRef = db.collection('historico_vibracoes');
@@ -352,14 +356,14 @@ exports.arquivarVibracoesSemanais = functions.region(REGIAO).pubsub.schedule('30
             const dados = doc.data();
             const dadosParaHistorico = {
                 ...dados,
-                tipo: nomeColecao.slice(0, -1), // 'encarnados' -> 'encarnado'
+                tipo: nomeColecao.slice(0, -1),
                 semanaDeReferencia: semanaDeReferencia,
                 arquivadoEm: admin.firestore.FieldValue.serverTimestamp()
             };
             
-            const novoHistoricoRef = historicoRef.doc(); // Cria um novo documento com ID aleatório
-            batch.set(novoHistoricoRef, dadosParaHistorico); // Copia para o histórico
-            batch.delete(doc.ref); // Deleta o original
+            const novoHistoricoRef = historicoRef.doc();
+            batch.set(novoHistoricoRef, dadosParaHistorico);
+            batch.delete(doc.ref);
         });
 
         await batch.commit();
