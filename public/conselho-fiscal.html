@@ -144,22 +144,29 @@
             appId: "1:66122858261:web:7fa21f1805463b5c08331c"
         };
         
-        // 1. Inicializa o Firebase
-        const app = initializeApp(firebaseConfig);
+        initializeApp(firebaseConfig);
         
-        // 2. Chama a função de proteção
+        // ===================================================================
+        // LÓGICA DE PROTEÇÃO E EXIBIÇÃO CORRIGIDA
+        // ===================================================================
         protegerPagina(['conselheiro', 'super-admin'])
             .then(user => {
-                // 3. Se o acesso for permitido, executa a lógica da página
+                // Acesso permitido! A página agora é responsável por se exibir.
+                document.getElementById('main-content').style.display = 'flex';
                 inicializarPagina(user); 
             })
             .catch(error => {
-                console.log(error.message); 
+                // Acesso negado! A página agora é responsável por mostrar a mensagem.
+                console.log(error.message);
+                if (error.message.includes('Acesso negado')) {
+                    document.getElementById('acesso-negado').style.display = 'block';
+                }
+                // Se o erro for de 'não autenticado', o auth.js já fez o redirecionamento.
             });
 
         function inicializarPagina(currentUser) {
-            const db = getFirestore(app);
-            const functions = getFunctions(app, 'southamerica-east1');
+            const db = getFirestore();
+            const functions = getFunctions();
             
             const seletorBalancete = document.getElementById('seletor-balancete');
             const balanceteContent = document.getElementById('balancete-content');
