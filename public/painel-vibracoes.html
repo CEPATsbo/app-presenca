@@ -13,6 +13,7 @@
             padding: 20px;
             box-sizing: border-box;
         }
+        .painel-container { display: none; } /* Começa escondido por padrão */
         .painel-container {
             width: 100%;
             max-width: 1200px;
@@ -74,14 +75,14 @@
             padding-left: 15px;
             font-style: italic;
         }
-        #loading-message {
-            text-align: center;
-            font-size: 1.5em;
+        #acesso-negado {
+             color: white; 
+             text-align: center;
         }
     </style>
 </head>
 <body>
-    <div class="painel-container">
+    <div id="main-content" class="painel-container">
         <header>
             <h1>Trabalho de Vibrações</h1>
             <h2 id="periodo-info">Calculando período do ciclo...</h2>
@@ -90,24 +91,33 @@
             <div class="lista-coluna">
                 <h3>Encarnados</h3>
                 <ul id="lista-encarnados" class="lista-nomes">
-                    <li id="loading-encarnados">Aguardando autenticação...</li>
+                    <li>Aguardando...</li>
                 </ul>
             </div>
             <div class="lista-coluna">
                 <h3>Desencarnados</h3>
                 <ul id="lista-desencarnados" class="lista-nomes">
-                    <li id="loading-desencarnados">Aguardando autenticação...</li>
+                    <li>Aguardando...</li>
                 </ul>
             </div>
         </div>
+    </div>
+    <div id="acesso-negado" style="display: none;">
+        <h1>Acesso Negado</h1>
+        <p>Você não tem permissão para ver esta página.</p>
     </div>
 
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
         import { getFirestore, collection, getDocs, query, where, orderBy, Timestamp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
-        import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-auth.js";
         import { getFunctions, httpsCallable } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-functions.js";
+        import { protegerPagina } from '/auth.js';
 
+        // ===================================================================
+        // LÓGICA DE INICIALIZAÇÃO CORRIGIDA
+        // ===================================================================
+
+        // 1. INICIALIZA O FIREBASE PRIMEIRO DE TUDO
         const firebaseConfig = {
             apiKey: "AIzaSyBV7RPjk3cFTqL-aIpflJcUojKg1ZXMLuU",
             authDomain: "voluntarios-ativos---cepat.firebaseapp.com",
@@ -116,94 +126,87 @@
             messagingSenderId: "66122858261",
             appId: "1:66122858261:web:7fa21f1805463b5c08331c"
         };
-        
-        const app = initializeApp(firebaseConfig, "painelVibracoesApp");
+        const app = initializeApp(firebaseConfig);
         const db = getFirestore(app);
-        const auth = getAuth(app);
         const functions = getFunctions(app, 'southamerica-east1');
 
-        // ===================================================================
-        // LÓGICA DE PROTEÇÃO CORRIGIDA E INTEGRADA
-        // ===================================================================
-        onAuthStateChanged(auth, (user) => {
-            if (user) {
-                // Usuário está logado, pode carregar os nomes.
-                carregarNomes();
-            } else {
-                // Usuário NÃO está logado, redireciona para a página de login.
-                console.log("Usuário não autenticado. Redirecionando para o login...");
-                window.location.href = '/login.html';
-            }
-        });
+        // 2. CHAMA A FUNÇÃO DE PROTEÇÃO
+        // Esta função agora vai usar a instância do Firebase que acabamos de inicializar.
+        protegerPagina(['diretor', 'tesoureiro', 'conselheiro', 'super-admin'])
+            .then(user => {
+                // 3. SE O ACESSO FOR PERMITIDO, EXECUTA A LÓGICA DA PÁGINA
+                inicializarPainel();
+            })
+            .catch(error => {
+                console.log(error.message);
+            });
 
-        async function carregarNomes() {
-            try {
-                const calcularCicloVibracoes = httpsCallable(functions, 'calcularCicloVibracoes');
-                const resultado = await calcularCicloVibracoes();
-                const ciclo = resultado.data;
+        // Todo o código que faz a página funcionar
+        function inicializarPainel() {
+            async function carregarNomes() {
+                try {
+                    const calcularCicloVibracoes = httpsCallable(functions, 'calcularCicloVibracoes');
+                    const resultado = await calcularCicloVibracoes();
+                    const ciclo = resultado.data;
 
-                const cicloInicio = new Timestamp(ciclo.inicio._seconds, ciclo.inicio._nanoseconds);
-                const cicloFim = new Timestamp(ciclo.fim._seconds, ciclo.fim._nanoseconds);
+                    const cicloInicio = new Timestamp(ciclo.inicio._seconds, ciclo.inicio._nanoseconds);
+                    const cicloFim = new Timestamp(ciclo.fim._seconds, ciclo.fim._nanoseconds);
 
-                const options = { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' };
-                const inicioFormatado = cicloInicio.toDate().toLocaleString('pt-BR', options);
-                const fimFormatado = cicloFim.toDate().toLocaleString('pt-BR', options);
-                document.getElementById('periodo-info').textContent = `Exibindo pedidos de ${inicioFormatado} até ${fimFormatado}`;
+                    const options = { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' };
+                    const inicioFormatado = cicloInicio.toDate().toLocaleString('pt-BR', options);
+                    const fimFormatado = cicloFim.toDate().toLocaleString('pt-BR', options);
+                    document.getElementById('periodo-info').textContent = `Exibindo pedidos de ${inicioFormatado} até ${fimFormatado}`;
 
-                renderizarLista('encarnados', 'lista-encarnados', 'loading-encarnados', cicloInicio, cicloFim);
-                renderizarLista('desencarnados', 'lista-desencarnados', 'loading-desencarnados', cicloInicio, cicloFim);
+                    renderizarLista('encarnados', 'lista-encarnados', cicloInicio, cicloFim);
+                    renderizarLista('desencarnados', 'lista-desencarnados', cicloInicio, cicloFim);
 
-            } catch (error) {
-                console.error("Erro ao obter ciclo de trabalho da Cloud Function:", error);
-                document.getElementById('periodo-info').textContent = "Erro ao calcular o período. Verifique o console.";
-                document.getElementById('loading-encarnados').textContent = "Falha.";
-                document.getElementById('loading-desencarnados').textContent = "Falha.";
-            }
-        }
-
-        async function renderizarLista(nomeColecao, idListaUl, idLoadingLi, cicloInicio, cicloFim) {
-            const listaUl = document.getElementById(idListaUl);
-            const loadingLi = document.getElementById(idLoadingLi);
-            loadingLi.textContent = "Buscando nomes...";
-
-            try {
-                const q = query(
-                    collection(db, nomeColecao),
-                    where("dataCriacao", ">=", cicloInicio),
-                    where("dataCriacao", "<=", cicloFim),
-                    orderBy("dataCriacao", "asc")
-                );
-
-                const snapshot = await getDocs(q);
-                loadingLi.style.display = 'none';
-
-                if (snapshot.empty) {
-                    const li = document.createElement('li');
-                    li.textContent = "Nenhum nome nesta lista para este período.";
-                    li.style.fontStyle = 'italic';
-                    listaUl.appendChild(li);
-                    return;
+                } catch (error) {
+                    console.error("Erro ao obter ciclo de trabalho:", error);
+                    document.getElementById('periodo-info').textContent = "Erro ao calcular o período.";
                 }
-
-                snapshot.forEach(doc => {
-                    const dados = doc.data();
-                    const li = document.createElement('li');
-                    li.textContent = dados.nome;
-                    listaUl.appendChild(li);
-
-                    if (dados.endereco) {
-                        const small = document.createElement('div');
-                        small.className = 'endereco';
-                        small.textContent = `(${dados.endereco})`;
-                        li.appendChild(small);
-                    }
-                });
-
-            } catch (error) {
-                console.error(`Erro ao carregar a lista de ${nomeColecao}:`, error);
-                loadingLi.textContent = "Erro ao carregar lista.";
-                loadingLi.style.color = "red";
             }
+
+            async function renderizarLista(nomeColecao, idListaUl, cicloInicio, cicloFim) {
+                const listaUl = document.getElementById(idListaUl);
+                listaUl.innerHTML = '<li>Buscando nomes...</li>';
+
+                try {
+                    const q = query(
+                        collection(db, nomeColecao),
+                        where("dataCriacao", ">=", cicloInicio),
+                        where("dataCriacao", "<=", cicloFim),
+                        orderBy("dataCriacao", "asc")
+                    );
+
+                    const snapshot = await getDocs(q);
+                    listaUl.innerHTML = ''; // Limpa a lista
+
+                    if (snapshot.empty) {
+                        listaUl.innerHTML = '<li>Nenhum nome nesta lista para este período.</li>';
+                        return;
+                    }
+                    
+                    snapshot.forEach(doc => {
+                        const dados = doc.data();
+                        const li = document.createElement('li');
+                        li.textContent = dados.nome;
+                        listaUl.appendChild(li);
+
+                        if (dados.endereco) {
+                            const small = document.createElement('div');
+                            small.className = 'endereco';
+                            small.textContent = `(${dados.endereco})`;
+                            li.appendChild(small);
+                        }
+                    });
+
+                } catch (error) {
+                    console.error(`Erro ao carregar a lista de ${nomeColecao}:`, error);
+                    listaUl.innerHTML = '<li style="color: red;">Erro ao carregar lista.</li>';
+                }
+            }
+            
+            carregarNomes();
         }
     </script>
 </body>
