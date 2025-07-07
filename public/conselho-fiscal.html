@@ -58,7 +58,7 @@
     <div id="acesso-negado" style="display: none;">
         <div class="container" style="text-align: center;">
             <h1>Acesso Negado</h1>
-            <p>Apenas membros do Conselho Fiscal e da Diretoria podem acessar esta página.</p>
+            <p>Apenas membros do Conselho Fiscal e Super Administradores podem acessar esta página.</p>
         </div>
     </div>
     
@@ -130,28 +130,43 @@
     </div>
     
     <script type="module">
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
-        import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-auth.js";
-        import { getFirestore, collection, query, where, onSnapshot, doc, getDoc, updateDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
-        import { getFunctions, httpsCallable } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-functions.js";
-        
-        const firebaseConfig = {
-            apiKey: "AIzaSyBV7RPjk3cFTqL-aIpflJcUojKg1ZXMLuU",
-            authDomain: "voluntarios-ativos---cepat.firebaseapp.com",
-            projectId: "voluntarios-ativos---cepat",
-            storageBucket: "voluntarios-ativos---cepat.firebasestorage.app",
-            messagingSenderId: "66122858261",
-            appId: "1:66122858261:web:7fa21f1805463b5c08331c"
-        };
-        
-        const app = initializeApp(firebaseConfig);
-        const db = getFirestore(app);
-        const auth = getAuth(app);
-        const functions = getFunctions(app, 'southamerica-east1');
+        // Importa o novo cérebro de segurança
+        import { protegerPagina } from '/auth.js'; 
 
-        document.addEventListener('DOMContentLoaded', () => {
-            const mainContent = document.getElementById('main-content');
-            const acessoNegado = document.getElementById('acesso-negado');
+        // Importa as funções do Firebase necessárias para a página
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
+        import { getFirestore, collection, query, where, onSnapshot, doc, updateDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
+        import { getFunctions, httpsCallable } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-functions.js";
+        import { getAuth } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-auth.js";
+
+        // ===================================================================
+        // NOVO PADRÃO DE SEGURANÇA APLICADO
+        // ===================================================================
+        protegerPagina(['conselheiro', 'super-admin'])
+            .then(user => {
+                // Se chegou aqui, o usuário está logado e tem permissão.
+                // A função `protegerPagina` já tornou o #main-content visível.
+                inicializarPagina(user); // Passa o objeto 'user' para a inicialização
+            })
+            .catch(error => {
+                console.log(error.message); // Apenas loga o erro, o redirecionamento já foi feito.
+            });
+
+        // Todo o código de funcionalidade da página agora fica dentro de uma função de inicialização.
+        function inicializarPagina(currentUser) {
+            const firebaseConfig = {
+                apiKey: "AIzaSyBV7RPjk3cFTqL-aIpflJcUojKg1ZXMLuU",
+                authDomain: "voluntarios-ativos---cepat.firebaseapp.com",
+                projectId: "voluntarios-ativos---cepat",
+                storageBucket: "voluntarios-ativos---cepat.firebasestorage.app",
+                messagingSenderId: "66122858261",
+                appId: "1:66122858261:web:7fa21f1805463b5c08331c"
+            };
+            
+            const app = initializeApp(firebaseConfig);
+            const db = getFirestore(app);
+            const functions = getFunctions(app, 'southamerica-east1');
+            
             const seletorBalancete = document.getElementById('seletor-balancete');
             const balanceteContent = document.getElementById('balancete-content');
             const mensagemInicial = document.getElementById('mensagem-inicial');
@@ -165,29 +180,13 @@
             const listaAprovacoes = document.getElementById('lista-aprovacoes');
             const listaMensagens = document.getElementById('lista-mensagens');
             
-            let currentUser = null;
             let unsubscribeBalancete = null;
-
-            onAuthStateChanged(auth, (user) => {
-                if (user) {
-                    currentUser = user;
-                    user.getIdTokenResult(true).then((idTokenResult) => {
-                        currentUser.claims = idTokenResult.claims;
-                        const userRole = currentUser.claims.role || '';
-                        if (['conselheiro', 'tesoureiro', 'diretor', 'super-admin'].includes(userRole)) {
-                            mainContent.style.display = 'flex';
-                            carregarListaDeBalancetes();
-                        } else {
-                            acessoNegado.style.display = 'block';
-                        }
-                    });
-                } else {
-                    window.location.href = window.location.origin + '/login.html';
-                }
-            });
+            
+            // A verificação de login já foi feita, então podemos carregar o conteúdo diretamente.
+            carregarListaDeBalancetes();
 
             function carregarListaDeBalancetes() {
-                const q = query(collection(db, "balancetes"), where("status", "in", ["em revisão", "aprovado"]));
+                const q = query(collection(db, "balancetes"), where("status", "in", ["em revisão", "aprovado", "com_ressalva"]));
                 onSnapshot(q, (snapshot) => {
                     const mesAnoSelecionado = seletorBalancete.value;
                     seletorBalancete.innerHTML = '<option value="">-- Selecione um período --</option>';
@@ -208,7 +207,7 @@
                 });
             }
 
-            async function carregarBalanceteSelecionado() {
+            function carregarBalanceteSelecionado() {
                 if (unsubscribeBalancete) unsubscribeBalancete();
                 const mesAno = seletorBalancete.value;
                 if (!mesAno) {
@@ -224,7 +223,7 @@
                         const balancete = docSnap.data();
                         renderizarBalancete(balancete, mesAno);
                         const status = balancete.status || 'em revisão';
-                        statusBar.textContent = `Status: ${status.replace('em revisão', 'Em Revisão').replace('aprovado', 'Aprovado')}`;
+                        statusBar.textContent = `Status: ${status.replace('em revisão', 'Em Revisão').replace('aprovado', 'Aprovado').replace('com_ressalva', 'Com Ressalva')}`;
                         statusBar.className = `status-bar status-${status.split(' ')[0]}`;
                         
                         const userRole = currentUser?.claims?.role;
@@ -242,7 +241,7 @@
             }
 
             function renderizarAprovacoes(aprovacoes) {
-                listaAprovacoes.innerHTML = '<h4>Aprovações Recebidas:</h4>';
+                listaAprovacoes.innerHTML = ''; // Limpa antes de renderizar
                 if (Object.keys(aprovacoes).length > 0) {
                     Object.values(aprovacoes).forEach(aprovacao => {
                         const dataAprovacao = aprovacao.data ? aprovacao.data.toDate().toLocaleDateString('pt-BR') : '';
@@ -265,11 +264,7 @@
                     const tipoClasse = msg.isResposta ? 'mensagem-tesouraria' : 'mensagem-conselho';
                     const li = document.createElement('li');
                     li.className = `mensagem ${tipoClasse}`;
-                    li.innerHTML = `
-                        <div class="mensagem-autor">${autor}</div>
-                        <div class="mensagem-data">${data}</div>
-                        <p>${msg.texto}</p>
-                    `;
+                    li.innerHTML = `<div class="mensagem-autor">${autor}</div><div class="mensagem-data">${data}</div><p>${msg.texto}</p>`;
                     listaMensagens.appendChild(li);
                 });
             }
@@ -352,8 +347,7 @@
                 }
             });
             seletorBalancete.addEventListener('change', carregarBalanceteSelecionado);
-        });
+        }
     </script>
-    <script type="module" src="/logout.js"></script>
-</body>
+    </body>
 </html>
