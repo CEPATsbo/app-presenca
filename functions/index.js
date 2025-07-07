@@ -237,7 +237,7 @@ exports.verificarAprovacaoFinal = functions.region(REGIAO).firestore.document('b
 
     if (Object.keys(aprovacoesNovas).length === Object.keys(aprovacoesAntigas).length) { return null; }
     
-    const NUMERO_DE_VOTOS_PARA_APROVAR = 3;
+    const NUMERO_DE_VOTOS_PARA_APROVAR = 1;
     const totalAprovacoes = Object.keys(aprovacoesNovas).length;
     
     if (totalAprovacoes >= NUMERO_DE_VOTOS_PARA_APROVAR) {

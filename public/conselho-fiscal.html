@@ -53,7 +53,7 @@
 </head>
 <body>
     <nav class="admin-nav">
-        </nav>
+    </nav>
 
     <div id="acesso-negado" style="display: none;">
         <div class="container" style="text-align: center;">
@@ -146,22 +146,16 @@
         
         initializeApp(firebaseConfig);
         
-        // ===================================================================
-        // LÓGICA DE PROTEÇÃO E EXIBIÇÃO CORRIGIDA
-        // ===================================================================
         protegerPagina(['conselheiro', 'super-admin'])
             .then(user => {
-                // Acesso permitido! A página agora é responsável por se exibir.
                 document.getElementById('main-content').style.display = 'flex';
                 inicializarPagina(user); 
             })
             .catch(error => {
-                // Acesso negado! A página agora é responsável por mostrar a mensagem.
                 console.log(error.message);
                 if (error.message.includes('Acesso negado')) {
                     document.getElementById('acesso-negado').style.display = 'block';
                 }
-                // Se o erro for de 'não autenticado', o auth.js já fez o redirecionamento.
             });
 
         function inicializarPagina(currentUser) {
