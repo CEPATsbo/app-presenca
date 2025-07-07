@@ -29,9 +29,11 @@
         .coluna { width: 100%; min-width: 450px; flex: 1; }
         .coluna h2 { background-color: #e0e0e0; padding: 8px; text-align: center; font-size: 1.2em; margin: 0; }
         .tabela-balancete { width: 100%; border-collapse: collapse; }
-        .tabela-balancete th, .tabela-balancete td { border: 1px solid #ccc; padding: 8px; font-size: 0.9em; }
+        /* AJUSTE 3: Aumentado o padding vertical para corrigir o corte no PDF */
+        .tabela-balancete th, .tabela-balancete td { border: 1px solid #ccc; padding: 12px 8px; font-size: 0.9em; }
         .tabela-balancete th { background-color: #f2f2f2; text-align: left; }
-        .tabela-balancete input[type="number"] { width: 100%; border: none; background: #fffde7; text-align: right; padding: 5px; box-sizing: border-box; font-size: 1em; -moz-appearance: textfield; appearance: textfield; }
+        /* AJUSTE 2: Valores centralizados */
+        .tabela-balancete input[type="number"] { width: 100%; border: none; background: #fffde7; text-align: center; padding: 5px; box-sizing: border-box; font-size: 1em; -moz-appearance: textfield; appearance: textfield; }
         .tabela-balancete input[type="number"]::-webkit-outer-spin-button, .tabela-balancete input[type="number"]::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
         .tabela-balancete input[type="number"]:focus { outline: 1px solid #007bff; }
         .tabela-balancete td[contenteditable="true"] { background-color: #e3f2fd; cursor: text; }
@@ -68,23 +70,12 @@
 </head>
 <body>
     <nav class="admin-nav">
-        <a href="/gerenciar-diretoria.html">Gerenciar Diretoria</a>
-        <a href="/tesouraria.html" class="active">Tesouraria</a>
-        <a href="/gerenciar-voluntarios.html">Gerenciar Voluntários</a>
-        <a href="/registro-manual.html">Registro Manual</a>
-        <a href="/relatorio.html">Gerar Relatório</a>
-        <a href="/mural.html">Editar Mural</a>
-        <a href="/atividades.html">Gerenciar Atividades</a>
-        <a href="/notificacoes.html">Notificações</a>
-        <a href="/painel-vibracoes.html" target="_blank">Painel de Vibrações ↗</a>
-        <a href="/tv.html" target="_blank">Ver Painel da TV ↗</a>
-        <a href="#" id="btn-logout" style="color: #c62828;">Sair</a>
-    </nav>
+        </nav>
     <div id="acesso-negado" style="display: none;">
         <h1>Acesso Negado</h1>
         <p>Você não tem permissão para acessar o módulo da tesouraria.</p>
     </div>
-    <div class="balancete-container" id="conteudo-pagina">
+    <div id="conteudo-pagina" class="balancete-container">
         <div class="cabecalho">
             <h1>C. E. PAULO DE TARSO</h1>
             <p>CNPJ Nº 12.253.749/0001-20</p>
@@ -146,42 +137,30 @@
         import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
         import { getFirestore, doc, setDoc, getDoc, updateDoc, collection, addDoc, serverTimestamp, query, where, getDocs } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
         import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-auth.js";
-        
-        const firebaseConfig = {
+        import { protegerPagina } from '/auth.js';
+
+        initializeApp({
             apiKey: "AIzaSyBV7RPjk3cFTqL-aIpflJcUojKg1ZXMLuU",
             authDomain: "voluntarios-ativos---cepat.firebaseapp.com",
             projectId: "voluntarios-ativos---cepat",
             storageBucket: "voluntarios-ativos---cepat.firebasestorage.app",
             messagingSenderId: "66122858261",
             appId: "1:66122858261:web:7fa21f1805463b5c08331c"
-        };
-        
-        const app = initializeApp(firebaseConfig);
-        const db = getFirestore(app);
-        const auth = getAuth(app);
-        
-        onAuthStateChanged(auth, (user) => {
-            if (user) {
-                user.getIdTokenResult(true).then(idTokenResult => {
-                    auth.currentUser.claims = idTokenResult.claims;
-                    document.dispatchEvent(new Event('authReady'));
-                });
-            } else {
-                window.location.href = window.location.origin + '/login.html';
-            }
         });
 
-        document.addEventListener('authReady', () => {
-            const userRole = auth.currentUser?.claims?.role || '';
-            if (!['diretor', 'tesoureiro', 'super-admin', 'conselheiro'].includes(userRole)) {
-                document.getElementById('acesso-negado').style.display = 'block';
-                return;
-            }
-            document.getElementById('conteudo-pagina').style.display = 'block';
-            inicializarPagina();
-        });
+        protegerPagina(['diretor', 'tesoureiro', 'super-admin'])
+            .then(user => {
+                inicializarPagina(user);
+            })
+            .catch(error => {
+                console.error(error.message);
+            });
 
-        function inicializarPagina() {
+
+        function inicializarPagina(user) {
+            const db = getFirestore();
+            const auth = getAuth();
+            
             const seletorMesAno = document.getElementById('mes-ano');
             const btnSalvar = document.getElementById('btn-salvar');
             const btnLiberar = document.getElementById('btn-liberar');
@@ -268,9 +247,9 @@
 
             function atualizarStatusUI(status) {
                 let texto, classe;
-                const userRole = auth.currentUser?.claims?.role;
+                const userRole = user.claims.role;
                 const podeEditar = userRole === 'tesoureiro' || userRole === 'super-admin';
-                btnGerarPdf.style.display = 'none';
+                btnGerarPdf.style.display = 'none'; 
                 
                 if (status === 'em revisão') {
                     texto = 'Status: Em Revisão pelo Conselho Fiscal';
@@ -435,10 +414,8 @@
                 const balanceteRef = doc(db, "balancetes", mesAno);
 
                 try {
-                    // Voltamos a usar setDoc com merge:true, que é mais simples e funcionará com a regra de segurança final
                     await setDoc(balanceteRef, dadosParaSalvar, { merge: true });
                     
-                    // Se for um balancete novo, precisamos garantir que o status seja salvo
                     if (!balanceteExisteNoDB) {
                         await updateDoc(balanceteRef, { status: 'em elaboração' });
                         balanceteExisteNoDB = true;
@@ -519,9 +496,6 @@
                 }
             });
             
-            // ===================================================================
-            // FUNÇÃO PDF ALTERADA COM O 'setTimeout'
-            // ===================================================================
             function gerarPDF() {
                 const mesAno = seletorMesAno.value;
                 const dataFormatada = new Date(`${mesAno}-02T00:00:00`).toLocaleString('pt-BR', { month: 'long', year: 'numeric' });
@@ -532,7 +506,6 @@
 
                 alert('Gerando o PDF... Por favor, aguarde.');
 
-                // Pausa para garantir que o DOM foi renderizado com os logs
                 setTimeout(async () => {
                     const { jsPDF } = window.jspdf;
                     const balanceteElement = document.getElementById('conteudo-pagina');
@@ -561,7 +534,6 @@
                         let newImgWidth = pdfWidth;
                         let newImgHeight = newImgWidth / ratio;
                         
-                        // Se a imagem for mais alta que a página, ajusta pela altura
                         if (newImgHeight > pdfHeight) {
                             newImgHeight = pdfHeight;
                             newImgWidth = newImgHeight * ratio;
@@ -578,7 +550,7 @@
                     } finally {
                         btnContainer.style.display = 'flex'; 
                     }
-                }, 200); // Atraso de 200ms
+                }, 200);
             }
             
             btnGerarPdf.addEventListener('click', gerarPDF);
@@ -588,7 +560,7 @@
                 const novaLinha = document.createElement('tr');
                 novaLinha.innerHTML = `<td contenteditable="true">${nome}</td><td><input type="number" step="0.01" class="${tipoClasse}" value="${valor || ''}"></td>`;
                 linhaHeader.insertAdjacentElement('afterend', novaLinha);
-                novaLinha.querySelector('input').addEventListener('input', calcularETotais);
+                vincularEventListenersInputs(); // Re-vincula os eventos para a nova linha
             }
 
             function adicionarCategoriaHeader(tabelaBody, nome = "NOVA CATEGORIA") {
@@ -600,7 +572,17 @@
             }
             
             function vincularEventListenersInputs() {
-                document.querySelectorAll('input[type="number"]').forEach(input => input.addEventListener('input', calcularETotais));
+                document.querySelectorAll('input[type="number"]').forEach(input => {
+                    const new_input = input.cloneNode(true);
+                    input.parentNode.replaceChild(new_input, input);
+                    
+                    new_input.addEventListener('input', calcularETotais);
+                    new_input.addEventListener('blur', (e) => {
+                        const valor = parseFloat(e.target.value) || 0;
+                        e.target.value = valor.toFixed(2);
+                    });
+                });
+                
                 document.querySelectorAll('.btn-add-row').forEach(btn => {
                     const newBtn = btn.cloneNode(true);
                     btn.parentNode.replaceChild(newBtn, btn);
@@ -621,6 +603,5 @@
             carregarDadosDoMes(mesAnoAtual);
         }
     </script>
-    <script type="module" src="/logout.js"></script>
 </body>
 </html>
