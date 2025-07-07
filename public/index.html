@@ -7,10 +7,16 @@
     <link rel="stylesheet" href="/style.css">
     <link rel="manifest" href="/manifest.json">
     <style>
-        .btn-transparencia {
+        .links-adicionais {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+            margin-top: 20px;
+            align-items: center;
+        }
+        .btn-portal {
             display: inline-block;
             padding: 12px 25px;
-            margin: 20px auto;
             background-color: #0277BD;
             color: white;
             text-decoration: none;
@@ -20,9 +26,10 @@
             text-align: center;
             box-shadow: 0 2px 5px rgba(0,0,0,0.2);
             transition: background-color 0.3s;
+            width: 80%;
+            max-width: 350px;
         }
-
-        .btn-transparencia:hover {
+        .btn-portal:hover {
             background-color: #01579B;
         }
     </style>
@@ -51,7 +58,8 @@
             <p id="status-text">Monitoramento de localização ativo.</p>
             <p id="feedback"></p>
             
-            <div id="portal-link-container"></div>
+            <div id="links-adicionais-container" class="links-adicionais">
+                </div>
 
             <button id="btn-ativar-notificacoes" class="botao-secundario">Ativar Notificações</button>
             
@@ -70,6 +78,7 @@
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
         import { getFirestore, doc, getDoc } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
+        import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-auth.js";
 
         const firebaseConfig = {
             apiKey: "AIzaSyBV7RPjk3cFTqL-aIpflJcUojKg1ZXMLuU",
@@ -80,46 +89,56 @@
             appId: "1:66122858261:web:7fa21f1805463b5c08331c"
         };
         
-        // Inicializa o Firebase sem um nome para usar a instância padrão, evitando conflitos.
-        const app = initializeApp(firebaseConfig);
+        const app = initializeApp(firebaseConfig, "botoesDinamicosApp");
         const db = getFirestore(app);
+        const auth = getAuth(app);
 
-        async function verificarEExibirBotaoPortal() {
+        async function carregarLinksDinamicos() {
             try {
                 const configRef = doc(db, "configuracoes", "geral");
                 const docSnap = await getDoc(configRef);
 
-                if (docSnap.exists() && docSnap.data().portalTransparenciaAtivo === true) {
-                    const container = document.getElementById('portal-link-container');
-                    if (container) {
-                        container.innerHTML = `<a href="/transparencia.html" class="btn-transparencia">Portal da Transparência</a>`;
+                if (docSnap.exists()) {
+                    const configData = docSnap.data();
+                    const container = document.getElementById('links-adicionais-container');
+                    container.innerHTML = ''; 
+
+                    // Verifica a chave do Portal da Transparência
+                    if (configData.portalTransparenciaAtivo === true) {
+                        const portalLink = document.createElement('a');
+                        portalLink.href = '/transparencia.html';
+                        portalLink.className = 'btn-portal';
+                        portalLink.textContent = 'Portal da Transparência';
+                        container.appendChild(portalLink);
+                    }
+
+                    // Verifica a chave do Módulo de Vibrações
+                    if (configData.vibracoesAtivo === true) {
+                        const vibracoesLink = document.createElement('a');
+                        vibracoesLink.href = '/vibracoes.html';
+                        vibracoesLink.className = 'btn-portal';
+                        vibracoesLink.textContent = 'Pedidos de Vibração';
+                        container.appendChild(vibracoesLink);
                     }
                 }
             } catch (error) {
-                console.error("Erro ao verificar configuração do portal:", error);
+                console.error("Erro ao verificar configurações:", error);
             }
         }
 
-        // Seleciona o alvo que o script.js modifica (a área de status)
-        const statusArea = document.getElementById('status-area');
-
-        // Cria um observador para vigiar mudanças nos atributos do alvo (especificamente, a classe 'hidden')
         const observer = new MutationObserver((mutationsList, observer) => {
             for(const mutation of mutationsList) {
                 if (mutation.type === 'attributes' && mutation.attributeName === 'class') {
-                    // Se a classe 'hidden' NÃO estiver mais presente, significa que a área ficou visível
+                    const statusArea = document.getElementById('status-area');
                     if (!statusArea.classList.contains('hidden')) {
-                        verificarEExibirBotaoPortal();
-                        // Uma vez que o botão foi exibido, não precisamos mais observar.
+                        carregarLinksDinamicos();
                         observer.disconnect();
                     }
                 }
             }
         });
 
-        // Inicia a observação no alvo, configurado para observar mudanças de atributos
-        observer.observe(statusArea, { attributes: true });
-
+        observer.observe(document.getElementById('status-area'), { attributes: true });
     </script>
 </body>
 </html>
