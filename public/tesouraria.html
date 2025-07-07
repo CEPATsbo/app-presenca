@@ -313,7 +313,7 @@
                 
                 const dataFormatada = new Date(`${mesAno}-02T00:00:00`).toLocaleString('pt-BR', { month: 'long', year: 'numeric' }).toUpperCase();
                 tituloBalancete.textContent = `BALANCETE REFERENTE A ${dataFormatada}`;
-                document.getElementById('saldo-valor-anterior').value = dados.saldoAnterior || '';
+                document.getElementById('saldo-valor-anterior').value = dados.saldoAnterior ? dados.saldoAnterior.toFixed(2) : '0.00';
                 document.getElementById('nome-saldo-anterior').textContent = dados.nomes?.['nome-saldo-anterior'] || 'SALDO ANTERIOR (PagBank+Sicoob+Espécie)';
                 
                 if (dados.receitas) Object.entries(dados.receitas).forEach(([catNome, itens]) => {
@@ -445,23 +445,130 @@
             btnSalvar.addEventListener('click', salvarBalancete);
             
             btnLiberar.addEventListener('click', async () => {
-                // ... (código mantido) ...
+                const mesAno = seletorMesAno.value;
+                if (!mesAno) return alert("Selecione um período.");
+                if (!confirm(`Tem certeza que deseja liberar o balancete de ${mesAno} para o Conselho Fiscal? Após a liberação, ele não poderá mais ser editado.`)) return;
+                
+                btnLiberar.disabled = true;
+                try {
+                    await salvarBalancete(); 
+                    
+                    const balanceteRef = doc(db, "balancetes", mesAno);
+                    await updateDoc(balanceteRef, { status: 'em revisão' });
+                    await registrarLog("LIBEROU_BALANCETE", { periodo: mesAno });
+                    
+                    atualizarStatusUI('em revisão');
+                    alert("Balancete liberado com sucesso!");
+                } catch (error) {
+                    console.error("Erro ao liberar balancete:", error);
+                    alert("Ocorreu um erro ao liberar o balancete. A operação foi cancelada.");
+                } finally {
+                    btnLiberar.disabled = false;
+                }
             });
             
             document.getElementById('btn-enviar-resposta').addEventListener('click', async () => {
-                // ... (código mantido) ...
+                const mesAno = seletorMesAno.value;
+                const texto = document.getElementById('texto-resposta').value.trim();
+                if (!mesAno || !texto) return alert("Escreva uma resposta.");
+
+                const user = auth.currentUser;
+                if (!user) {
+                    alert("Usuário não autenticado. Por favor, faça login novamente.");
+                    return;
+                }
+                
+                const novaMensagem = {
+                    autor: { uid: user.uid, nome: user.displayName || user.email },
+                    texto: texto,
+                    data: new Date()
+                };
+
+                const balanceteRef = doc(db, "balancetes", mesAno);
+                try {
+                    const docSnap = await getDoc(balanceteRef);
+                    const mensagensAtuais = docSnap.exists() && docSnap.data().mensagens ? docSnap.data().mensagens : [];
+                    mensagensAtuais.push(novaMensagem);
+
+                    await updateDoc(balanceteRef, {
+                        mensagens: mensagensAtuais,
+                        status: 'em revisão'
+                    });
+
+                    document.getElementById('texto-resposta').value = '';
+                    alert("Resposta enviada com sucesso! O balancete foi liberado novamente para o Conselho Fiscal.");
+                    
+                    carregarDadosDoMes(mesAno); 
+                    
+                } catch (error) {
+                    console.error("Erro ao enviar resposta:", error);
+                    alert("Ocorreu um erro ao enviar a resposta.");
+                }
             });
             
             function gerarPDF() {
-                // ... (código mantido) ...
+                const mesAno = seletorMesAno.value;
+                const dataFormatada = new Date(`${mesAno}-02T00:00:00`).toLocaleString('pt-BR', { month: 'long', year: 'numeric' });
+                const nomeArquivo = `balancete_${mesAno}_${dataFormatada.replace(/ de /g, '_')}.pdf`;
+                
+                const btnContainer = document.querySelector('.actions-container');
+                btnContainer.style.display = 'none'; 
+
+                alert('Gerando o PDF... Por favor, aguarde.');
+
+                setTimeout(async () => {
+                    const { jsPDF } = window.jspdf;
+                    const balanceteElement = document.getElementById('conteudo-pagina');
+
+                    try {
+                        const canvas = await html2canvas(balanceteElement, {
+                            scale: 2,
+                            useCORS: true,
+                            windowWidth: balanceteElement.scrollWidth,
+                            windowHeight: balanceteElement.scrollHeight
+                        });
+                        
+                        const imgData = canvas.toDataURL('image/png');
+                        
+                        const pdf = new jsPDF({
+                            orientation: 'portrait',
+                            unit: 'mm',
+                            format: 'a4'
+                        });
+
+                        const pdfWidth = pdf.internal.pageSize.getWidth();
+                        const pdfHeight = pdf.internal.pageSize.getHeight();
+                        const imgWidth = canvas.width;
+                        const imgHeight = canvas.height;
+                        const ratio = imgWidth / imgHeight;
+                        let newImgWidth = pdfWidth;
+                        let newImgHeight = newImgWidth / ratio;
+                        
+                        if (newImgHeight > pdfHeight) {
+                            newImgHeight = pdfHeight;
+                            newImgWidth = newImgHeight * ratio;
+                        }
+                        
+                        const xOffset = (pdfWidth - newImgWidth) / 2;
+                        
+                        pdf.addImage(imgData, 'PNG', xOffset, 0, newImgWidth, newImgHeight);
+                        pdf.save(nomeArquivo);
+
+                    } catch(error) {
+                        console.error("Erro ao gerar PDF:", error);
+                        alert("Ocorreu um erro ao gerar o PDF. Verifique o console.");
+                    } finally {
+                        btnContainer.style.display = 'flex'; 
+                    }
+                }, 200);
             }
             
             btnGerarPdf.addEventListener('click', gerarPDF);
 
-            function adicionarLinhaApos(linhaHeader, nome = "", valor = "") {
+            function adicionarLinhaApos(linhaHeader, nome = "", valor = 0) {
                 const tipoClasse = linhaHeader.parentElement.id.includes('receitas') ? 'input-receita' : 'input-despesa';
                 const novaLinha = document.createElement('tr');
-                novaLinha.innerHTML = `<td contenteditable="true">${nome}</td><td><input type="number" step="0.01" class="${tipoClasse}" value="${valor || ''}"></td>`;
+                novaLinha.innerHTML = `<td contenteditable="true">${nome}</td><td><input type="number" step="0.01" class="${tipoClasse}" value="${Number(valor).toFixed(2)}"></td>`;
                 linhaHeader.insertAdjacentElement('afterend', novaLinha);
             }
 
@@ -473,8 +580,9 @@
             }
             
             // ===================================================================
-            // LÓGICA DE EVENTOS CENTRALIZADA (DELEGAÇÃO DE EVENTOS)
+            // AJUSTE 1: LÓGICA DE EVENTOS CENTRALIZADA (DELEGAÇÃO DE EVENTOS)
             // ===================================================================
+            
             conteudoPagina.addEventListener('click', (e) => {
                 if (e.target.classList.contains('btn-add-row')) {
                     adicionarLinhaApos(e.target.closest('tr'));
@@ -496,7 +604,6 @@
                 }
             }, true);
             
-            // Lógica de inicialização da página
             const hoje = new Date();
             const mes = (hoje.getMonth() + 1).toString().padStart(2, '0');
             const ano = hoje.getFullYear();
