@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Super Admin - Gerenciar Diretoria</title>
+    <title>Admin - Gerenciar Gestão</title>
     <style>
         body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background-color: #f4f6f9; display: flex; flex-direction: column; align-items: center; min-height: 100vh; margin: 0; padding: 20px; box-sizing: border-box; }
         .admin-nav { width: 100%; max-width: 900px; background-color: #fff; padding: 15px; margin-bottom: 30px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); text-align: center; display: flex; flex-wrap: wrap; justify-content: center; gap: 15px 25px; }
@@ -17,17 +17,11 @@
         .form-item label { margin-bottom: 5px; font-weight: bold; color: #555; }
         .form-item input { padding: 10px; border-radius: 6px; border: 1px solid #ccc; font-size: 1em; }
         .invite-button { grid-column: 1 / -1; padding: 12px; background-color: #2e7d32; color: white; border: none; border-radius: 6px; font-size: 1.1em; font-weight: bold; cursor: pointer; margin-top: 10px; }
-        .lista-diretoria { list-style-type: none; padding: 0; margin-top: 30px; }
-        .item-diretor { display: flex; justify-content: space-between; align-items: center; padding: 15px; border-left: 5px solid #ccc; margin-bottom: 10px; background-color: #fafafa; }
-        .item-diretor.role-diretor { border-left-color: #1976d2; }
-        .item-diretor.role-tesoureiro { border-left-color: #fbc02d; }
-        .item-diretor.role-conselheiro { border-left-color: #8e24aa; }
-        .item-diretor.role-super-admin { border-left-color: #e53935; }
-        .diretor-info strong { font-size: 1.2em; }
-        .diretor-info small { color: #777; display: block; }
-        .actions button { padding: 8px 12px; border-radius: 4px; cursor: pointer; border: none; font-size: 0.9em; color: white; margin-top: 5px; }
+        table { width: 100%; border-collapse: collapse; margin-top: 15px; }
+        th, td { padding: 12px; border-bottom: 1px solid #eee; text-align: left; vertical-align: middle; }
+        th { background-color: #f2f2f2; }
+        .actions button { margin-top: 5px; margin-right: 8px; border: none; padding: 8px 12px; border-radius: 4px; cursor: pointer; color: white; }
         .btn-promover-tesoureiro { background-color: #fbc02d; color: #333; }
-        .btn-promover-conselheiro { background-color: #8e24aa; }
         .btn-revogar-acesso { background-color: #d32f2f; }
         .log-details { font-size: 0.8em; color: #666; white-space: pre-wrap; word-break: break-all; background-color: #f9f9f9; padding: 5px; border-radius: 4px; }
         .filtros-logs { display: flex; align-items: flex-end; gap: 15px; margin-bottom: 20px; flex-wrap: wrap; }
@@ -95,6 +89,7 @@
         import { getFunctions, httpsCallable } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-functions.js";
         import { protegerPagina } from '/auth.js'; 
 
+        // CONFIGURAÇÃO DO FIREBASE CORRIGIDA
         const firebaseConfig = {
             apiKey: "AIzaSyBV7RPjk3cFTqL-aIpflJcUojKg1ZXMLuU",
             authDomain: "voluntarios-ativos---cepat.firebaseapp.com",
@@ -105,9 +100,7 @@
         };
         const app = initializeApp(firebaseConfig);
 
-        // ===================================================================
-        // LÓGICA DE PROTEÇÃO ATUALIZADA
-        // ===================================================================
+        // PERMISSÕES ATUALIZADAS PARA INCLUIR DIRETOR E TESOUREIRO
         protegerPagina(['super-admin', 'diretor', 'tesoureiro'])
             .then(user => {
                 inicializarPagina(user);
@@ -123,17 +116,15 @@
 
             const formContainer = document.getElementById('form-convite-container');
             const colunaAcoes = document.getElementById('coluna-acoes');
-            const listaDiretoria = document.getElementById('tabela-diretoria');
+            const tabelaDiretoria = document.getElementById('tabela-diretoria');
             const btnConvidar = document.getElementById('btn-convidar');
             const tabelaLogs = document.getElementById('tabela-logs');
             const btnFiltrarLogs = document.getElementById('btn-filtrar-logs');
 
-            // ===================================================================
-            // LÓGICA DE VISIBILIDADE DOS CONTROLES
-            // ===================================================================
+            // CONTROLE DE VISIBILIDADE BASEADO NO CARGO
             if (userRole !== 'super-admin') {
-                formContainer.style.display = 'none'; // Esconde formulário de convite
-                colunaAcoes.style.display = 'none'; // Esconde a coluna de ações
+                if(formContainer) formContainer.style.display = 'none'; 
+                if(colunaAcoes) colunaAcoes.style.display = 'none'; 
             }
 
             carregarDiretoria(user.uid);
@@ -143,22 +134,22 @@
                 const q = query(collection(db, "voluntarios"), where("role", "in", ["diretor", "super-admin", "tesoureiro", "conselheiro"]));
                 
                 onSnapshot(q, (snapshot) => {
-                    listaDiretoria.innerHTML = '';
+                    tabelaDiretoria.innerHTML = '';
                     if (snapshot.empty) {
-                        listaDiretoria.innerHTML = '<tr><td colspan="4">Nenhum membro da gestão encontrado.</td></tr>';
+                        tabelaDiretoria.innerHTML = '<tr><td colspan="4">Nenhum membro da gestão encontrado.</td></tr>';
                         return;
                     }
                     snapshot.forEach(doc => {
                         const v = doc.data();
                         const tr = document.createElement('tr');
-                        tr.className = `item-diretor role-${v.role}`;
                         
                         let actionsHtml = '';
+                        // SÓ GERA OS BOTÕES SE O USUÁRIO FOR SUPER-ADMIN
                         if (userRole === 'super-admin' && v.authUid !== uidLogado) {
                             if (v.role === 'diretor') {
                                 actionsHtml += `<button class="btn-promover-tesoureiro" data-uid="${v.authUid}">Promover a Tesoureiro</button>`;
-                            }
-                            if (v.role === 'diretor' || v.role === 'tesoureiro') {
+                                actionsHtml += `<button class="btn-revogar-acesso" data-uid="${v.authUid}" data-role="diretor">Revogar (p/ Voluntário)</button>`;
+                            } else if (v.role === 'tesoureiro') {
                                 actionsHtml += `<button class="btn-revogar-acesso" data-uid="${v.authUid}" data-role="diretor">Revogar (p/ Voluntário)</button>`;
                             } else if (v.role === 'conselheiro') {
                                 actionsHtml += `<button class="btn-revogar-acesso" data-uid="${v.authUid}" data-role="conselheiro">Revogar (p/ Voluntário)</button>`;
@@ -171,7 +162,7 @@
                             <td>${v.role}</td>
                             ${userRole === 'super-admin' ? `<td>${actionsHtml}</td>` : ''}
                         `;
-                        listaDiretoria.appendChild(tr);
+                        tabelaDiretoria.appendChild(tr);
                     });
                 });
             }
