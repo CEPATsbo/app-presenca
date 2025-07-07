@@ -87,67 +87,12 @@
         <p>Você não tem permissão para acessar o módulo da tesouraria.</p>
     </div>
     <div id="conteudo-pagina" class="balancete-container">
-        <div class="cabecalho">
-            <h1>C. E. PAULO DE TARSO</h1>
-            <p>CNPJ Nº 12.253.749/0001-20</p>
-            <p>RUA DO CROMO, 782, VL. PANTANO II - SANTA BARBARA D'OESTE - SP</p>
-            <h3 id="titulo-balancete">BALANCETE</h3>
         </div>
-        <div class="seletor-periodo">
-            <label for="mes-ano">Período de Referência:</label>
-            <input type="month" id="mes-ano">
-        </div>
-        <div id="status-bar" class="status-bar"></div>
-        <div class="corpo-balancete">
-            <div class="coluna">
-                <h2>RECEITAS</h2>
-                <table class="tabela-balancete">
-                    <thead><tr><th style="width:70%;">RECEITAS</th><th>VALOR</th></tr></thead>
-                    <tbody id="corpo-tabela-receitas"></tbody>
-                    <tfoot><tr class="total-row"><td>TOTAL DE RECEITAS</td><td id="total-receitas">R$ 0,00</td></tr></tfoot>
-                </table>
-                <button class="btn-add-categoria" data-target="corpo-tabela-receitas">+ Adicionar Categoria de Receita</button>
-            </div>
-            <div class="coluna">
-                <h2>DESPESAS</h2>
-                <table class="tabela-balancete">
-                    <thead><tr><th style="width:70%;">DESPESAS</th><th>VALOR</th></tr></thead>
-                    <tbody id="corpo-tabela-despesas"></tbody>
-                    <tfoot><tr class="total-row"><td>TOTAL DE DESPESAS</td><td id="total-despesas">R$ 0,00</td></tr></tfoot>
-                </table>
-                <button class="btn-add-categoria" data-target="corpo-tabela-despesas">+ Adicionar Categoria de Despesa</button>
-            </div>
-        </div>
-        <div class="corpo-balancete" style="margin-top: 20px;">
-             <div class="coluna"><table class="tabela-balancete"><tr class="total-row"><td>SALDO NO PERÍODO (Receitas - Despesas)</td><td id="saldo-periodo">R$ 0,00</td></tr></table></div>
-             <div class="coluna"><table class="tabela-balancete">
-                    <tbody>
-                        <tr><td id="nome-saldo-anterior" contenteditable="true">SALDO ANTERIOR (PagBank+Sicoob+Espécie)</td><td><input type="number" id="saldo-valor-anterior"></td></tr>
-                    </tbody>
-                    <tfoot><tr class="total-row"><td>SALDO ATUAL</td><td id="saldo-atual">R$ 0,00</td></tr></tfoot>
-                </table></div>
-        </div>
-        <div class="actions-container">
-             <button id="btn-salvar">Salvar Balancete</button>
-             <button id="btn-liberar">Liberar para Conselho Fiscal</button>
-             <button id="btn-gerar-pdf" style="display: none;">Gerar PDF</button>
-        </div>
-        <div class="mensagens-container" id="mensagens-container" style="display: none;">
-            <h2>Comunicação com o Conselho Fiscal</h2>
-            <ul class="mensagens-lista" id="lista-mensagens"></ul>
-            <div id="form-resposta" style="margin-top: 20px;">
-                <textarea id="texto-resposta" placeholder="Digite sua resposta à ressalva aqui..."></textarea>
-                <button id="btn-enviar-resposta">Enviar Resposta</button>
-            </div>
-        </div>
-        <div class="rodape-assinaturas" id="assinaturas-section">
-            </div>
-    </div>
     
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
         import { getFirestore, doc, setDoc, getDoc, updateDoc, collection, addDoc, serverTimestamp, query, where, getDocs } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
-        import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-auth.js";
+        import { getAuth } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-auth.js";
         import { protegerPagina } from '/auth.js';
 
         initializeApp({
@@ -161,17 +106,76 @@
 
         protegerPagina(['diretor', 'tesoureiro', 'super-admin'])
             .then(user => {
+                document.getElementById('conteudo-pagina').style.display = 'block';
                 inicializarPagina(user);
             })
             .catch(error => {
+                document.getElementById('acesso-negado').style.display = 'block';
                 console.error(error.message);
             });
-
 
         function inicializarPagina(user) {
             const db = getFirestore();
             const auth = getAuth();
             const conteudoPagina = document.getElementById('conteudo-pagina');
+            
+            conteudoPagina.innerHTML = `
+                <div class="cabecalho">
+                    <h1>C. E. PAULO DE TARSO</h1>
+                    <p>CNPJ Nº 12.253.749/0001-20</p>
+                    <p>RUA DO CROMO, 782, VL. PANTANO II - SANTA BARBARA D'OESTE - SP</p>
+                    <h3 id="titulo-balancete">BALANCETE</h3>
+                </div>
+                <div class="seletor-periodo">
+                    <label for="mes-ano">Período de Referência:</label>
+                    <input type="month" id="mes-ano">
+                </div>
+                <div id="status-bar" class="status-bar"></div>
+                <div class="corpo-balancete">
+                    <div class="coluna">
+                        <h2>RECEITAS</h2>
+                        <table class="tabela-balancete">
+                            <thead><tr><th style="width:70%;">RECEITAS</th><th>VALOR</th></tr></thead>
+                            <tbody id="corpo-tabela-receitas"></tbody>
+                            <tfoot><tr class="total-row"><td>TOTAL DE RECEITAS</td><td id="total-receitas">R$ 0,00</td></tr></tfoot>
+                        </table>
+                        <button class="btn-add-categoria" data-target="corpo-tabela-receitas">+ Adicionar Categoria de Receita</button>
+                    </div>
+                    <div class="coluna">
+                        <h2>DESPESAS</h2>
+                        <table class="tabela-balancete">
+                            <thead><tr><th style="width:70%;">DESPESAS</th><th>VALOR</th></tr></thead>
+                            <tbody id="corpo-tabela-despesas"></tbody>
+                            <tfoot><tr class="total-row"><td>TOTAL DE DESPESAS</td><td id="total-despesas">R$ 0,00</td></tr></tfoot>
+                        </table>
+                        <button class="btn-add-categoria" data-target="corpo-tabela-despesas">+ Adicionar Categoria de Despesa</button>
+                    </div>
+                </div>
+                <div class="corpo-balancete" style="margin-top: 20px;">
+                    <div class="coluna"><table class="tabela-balancete"><tr class="total-row"><td>SALDO NO PERÍODO (Receitas - Despesas)</td><td id="saldo-periodo">R$ 0,00</td></tr></table></div>
+                    <div class="coluna"><table class="tabela-balancete">
+                        <tbody>
+                            <tr><td id="nome-saldo-anterior" contenteditable="true">SALDO ANTERIOR (PagBank+Sicoob+Espécie)</td><td><input type="number" id="saldo-valor-anterior"></td></tr>
+                        </tbody>
+                        <tfoot><tr class="total-row"><td>SALDO ATUAL</td><td id="saldo-atual">R$ 0,00</td></tr></tfoot>
+                    </table></div>
+                </div>
+                <div class="actions-container">
+                    <button id="btn-salvar">Salvar Balancete</button>
+                    <button id="btn-liberar">Liberar para Conselho Fiscal</button>
+                    <button id="btn-gerar-pdf" style="display: none;">Gerar PDF</button>
+                </div>
+                <div class="mensagens-container" id="mensagens-container" style="display: none;">
+                    <h2>Comunicação com o Conselho Fiscal</h2>
+                    <ul class="mensagens-lista" id="lista-mensagens"></ul>
+                    <div id="form-resposta" style="margin-top: 20px;">
+                        <textarea id="texto-resposta" placeholder="Digite sua resposta à ressalva aqui..."></textarea>
+                        <button id="btn-enviar-resposta">Enviar Resposta</button>
+                    </div>
+                </div>
+                <div class="rodape-assinaturas" id="assinaturas-section"></div>
+            `;
+
             const seletorMesAno = document.getElementById('mes-ano');
             const btnSalvar = document.getElementById('btn-salvar');
             const btnLiberar = document.getElementById('btn-liberar');
@@ -313,7 +317,7 @@
                 
                 const dataFormatada = new Date(`${mesAno}-02T00:00:00`).toLocaleString('pt-BR', { month: 'long', year: 'numeric' }).toUpperCase();
                 tituloBalancete.textContent = `BALANCETE REFERENTE A ${dataFormatada}`;
-                document.getElementById('saldo-valor-anterior').value = dados.saldoAnterior ? dados.saldoAnterior.toFixed(2) : '0.00';
+                document.getElementById('saldo-valor-anterior').value = dados.saldoAnterior ? Number(dados.saldoAnterior).toFixed(2) : '0.00';
                 document.getElementById('nome-saldo-anterior').textContent = dados.nomes?.['nome-saldo-anterior'] || 'SALDO ANTERIOR (PagBank+Sicoob+Espécie)';
                 
                 if (dados.receitas) Object.entries(dados.receitas).forEach(([catNome, itens]) => {
@@ -467,9 +471,9 @@
                 }
             });
             
-            document.getElementById('btn-enviar-resposta').addEventListener('click', async () => {
+            btnEnviarResposta.addEventListener('click', async () => {
                 const mesAno = seletorMesAno.value;
-                const texto = document.getElementById('texto-resposta').value.trim();
+                const texto = textoResposta.value.trim();
                 if (!mesAno || !texto) return alert("Escreva uma resposta.");
 
                 const user = auth.currentUser;
@@ -495,7 +499,7 @@
                         status: 'em revisão'
                     });
 
-                    document.getElementById('texto-resposta').value = '';
+                    textoResposta.value = '';
                     alert("Resposta enviada com sucesso! O balancete foi liberado novamente para o Conselho Fiscal.");
                     
                     carregarDadosDoMes(mesAno); 
@@ -506,7 +510,7 @@
                 }
             });
             
-            function gerarPDF() {
+            btnGerarPdf.addEventListener('click', () => {
                 const mesAno = seletorMesAno.value;
                 const dataFormatada = new Date(`${mesAno}-02T00:00:00`).toLocaleString('pt-BR', { month: 'long', year: 'numeric' });
                 const nomeArquivo = `balancete_${mesAno}_${dataFormatada.replace(/ de /g, '_')}.pdf`;
@@ -561,9 +565,7 @@
                         btnContainer.style.display = 'flex'; 
                     }
                 }, 200);
-            }
-            
-            btnGerarPdf.addEventListener('click', gerarPDF);
+            });
 
             function adicionarLinhaApos(linhaHeader, nome = "", valor = 0) {
                 const tipoClasse = linhaHeader.parentElement.id.includes('receitas') ? 'input-receita' : 'input-despesa';
@@ -578,10 +580,6 @@
                  novaLinha.innerHTML = `<th colspan="2"><span contenteditable="true">${nome}</span> <button class="btn-add-row" title="Adicionar linha">+</button></th>`;
                  return novaLinha;
             }
-            
-            // ===================================================================
-            // AJUSTE 1: LÓGICA DE EVENTOS CENTRALIZADA (DELEGAÇÃO DE EVENTOS)
-            // ===================================================================
             
             conteudoPagina.addEventListener('click', (e) => {
                 if (e.target.classList.contains('btn-add-row')) {
