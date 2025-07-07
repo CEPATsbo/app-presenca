@@ -133,7 +133,6 @@
         import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
         import { getFirestore, collection, query, where, onSnapshot, doc } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
         import { getFunctions, httpsCallable } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-functions.js";
-        // Importa o novo cérebro de segurança
         import { protegerPagina } from '/auth.js'; 
 
         const firebaseConfig = {
@@ -145,20 +144,19 @@
             appId: "1:66122858261:web:7fa21f1805463b5c08331c"
         };
         
-        // A inicialização do app é a primeira coisa a ser feita.
+        // 1. Inicializa o Firebase
         const app = initializeApp(firebaseConfig);
         
-        // Agora, protegemos a página.
+        // 2. Chama a função de proteção
         protegerPagina(['conselheiro', 'super-admin'])
             .then(user => {
-                // Se chegou aqui, o usuário está logado e tem permissão.
-                inicializarPagina(user); // Passa o objeto 'user' para a inicialização
+                // 3. Se o acesso for permitido, executa a lógica da página
+                inicializarPagina(user); 
             })
             .catch(error => {
-                console.log(error.message); // Apenas loga o erro, o redirecionamento já foi feito.
+                console.log(error.message); 
             });
 
-        // Todo o código de funcionalidade da página agora fica dentro de uma função.
         function inicializarPagina(currentUser) {
             const db = getFirestore(app);
             const functions = getFunctions(app, 'southamerica-east1');
