@@ -4,7 +4,6 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Estatísticas - Presença Voluntária</title>
-    <script type="module" src="/auth-guard.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
         body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background-color: #f4f6f9; color: #333; margin: 0; padding: 20px; }
@@ -29,20 +28,13 @@
 </head>
 <body>
     <nav class="admin-nav">
-    <a href="/gerenciar-diretoria.html">Gerenciar Diretoria</a>
-    <a href="/tesouraria.html">Tesouraria</a> 
-    <a href="/gerenciar-voluntarios.html">Gerenciar Voluntários</a>
-    <a href="/registro-manual.html">Registro Manual</a>
-    <a href="/relatorio.html">Gerar Relatório</a>
-    <a href="/estatisticas.html" class="active">Ver Estatísticas</a>
-    <a href="/mural.html">Editar Mural</a>
-    <a href="/atividades.html">Gerenciar Atividades</a>
-    <a href="/notificacoes.html">Notificações</a>
-    <a href="/painel-vibracoes.html" target="_blank">Painel de Vibrações ↗</a>
-    <a href="/tv.html" target="_blank" title="Abrir painel em uma nova aba">Ver Painel da TV ↗</a>
-    <a href="#" id="btn-logout" style="color: #c62828;">Sair</a>
-</nav>
-    <div class="dashboard-container">
+        </nav>
+
+    <div id="acesso-negado" style="display: none;">
+        <div class="container" style="text-align: center;"><h1>Acesso Negado</h1></div>
+    </div>
+
+    <div id="main-content" class="dashboard-container" style="display: none;">
         <div class="header"><h1>Dashboard de Estatísticas</h1></div>
         <div class="filtros-container">
             <div class="filtro-item"><label for="data-inicio">De:</label><input type="date" id="data-inicio"></div>
@@ -65,175 +57,191 @@
 
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
-        import { getFirestore, collection, getDocs, query, orderBy, where, Timestamp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
+        import { getFirestore, collection, getDocs, query, orderBy } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
+        import { protegerPagina } from '/auth.js';
 
         const firebaseConfig = {
-  apiKey: "AIzaSyBV7RPjk3cFTqL-aIpflJcUojKg1ZXMLuU",
-  authDomain: "voluntarios-ativos---cepat.firebaseapp.com",
-  projectId: "voluntarios-ativos---cepat",
-  storageBucket: "voluntarios-ativos---cepat.firebasestorage.app",
-  messagingSenderId: "66122858261",
-  appId: "1:66122858261:web:7fa21f1805463b5c08331c"
-};
-        
-        const app = initializeApp(firebaseConfig);
-        const db = getFirestore(app);
-
-        let todosOsDados = [];
-        let todasAsAtividades = new Map();
-        let graficoFrequencia, graficoAtividades;
-        let voluntariosOrdenadosGlobal = [];
-        let atividadeDestaqueFixo = null;
-
-        const ui = {
-            dataInicio: document.getElementById('data-inicio'),
-            dataFim: document.getElementById('data-fim'),
-            filtroAtividade: document.getElementById('filtro-atividade'),
-            descricaoFiltros: document.getElementById('descricao-filtros'),
-            loadingMessage: document.getElementById('loading-message'),
-            chartsGrid: document.getElementById('charts-grid'),
+            apiKey: "AIzaSyBV7RPjk3cFTqL-aIpflJcUojKg1ZXMLuU",
+            authDomain: "voluntarios-ativos---cepat.firebaseapp.com",
+            projectId: "voluntarios-ativos---cepat",
+            storageBucket: "voluntarios-ativos---cepat.firebasestorage.app",
+            messagingSenderId: "66122858261",
+            appId: "1:66122858261:web:7fa21f1805463b5c08331c"
         };
         
-        const COR_PADRAO_BARRAS = 'rgba(17, 122, 101, 0.4)';
-        const COR_DESTAQUE_FADE = 'rgba(200, 200, 200, 0.3)';
-        const COR_PADRAO_ATIVIDADE = '#a9a9a9';
+        initializeApp(firebaseConfig);
         
-        function destacarBarras(atividade, corDestaque) {
-            if (!graficoFrequencia || !voluntariosOrdenadosGlobal.length) return;
-            const novasCores = voluntariosOrdenadosGlobal.map(([nome]) => {
-                const dadosFiltrados = todosOsDados.filter(d => d.data >= ui.dataInicio.value && d.data <= ui.dataFim.value);
-                const participouDaAtividade = dadosFiltrados.some(p => p.nome === nome && p.atividade.includes(atividade));
-                return participouDaAtividade ? corDestaque : COR_DESTAQUE_FADE;
+        protegerPagina(['super-admin', 'diretor', 'tesoureiro'])
+            .then(user => {
+                // Acesso permitido, exibe o conteúdo principal
+                document.getElementById('main-content').style.display = 'block';
+                inicializar();
+            })
+            .catch(error => {
+                // Acesso negado, exibe a mensagem de erro
+                console.error(error.message);
+                const loadingMsg = document.getElementById('loading-message');
+                if (loadingMsg) loadingMsg.style.display = 'none';
+                document.getElementById('acesso-negado').style.display = 'block';
             });
-            graficoFrequencia.data.datasets[0].backgroundColor = novasCores;
-            graficoFrequencia.update('none');
-        }
 
-        function restaurarCoresBarras() {
-            if (!graficoFrequencia) return;
-            if (atividadeDestaqueFixo && graficoAtividades) {
-                const corDestaque = todasAsAtividades.get(atividadeDestaqueFixo) || COR_PADRAO_ATIVIDADE;
-                destacarBarras(atividadeDestaqueFixo, corDestaque);
-            } else {
-                graficoFrequencia.data.datasets[0].backgroundColor = COR_PADRAO_BARRAS;
+        function inicializar() {
+            const db = getFirestore();
+            let todosOsDados = [];
+            let todasAsAtividades = new Map();
+            let graficoFrequencia, graficoAtividades;
+            let voluntariosOrdenadosGlobal = [];
+            let atividadeDestaqueFixo = null;
+
+            const ui = {
+                dataInicio: document.getElementById('data-inicio'),
+                dataFim: document.getElementById('data-fim'),
+                filtroAtividade: document.getElementById('filtro-atividade'),
+                descricaoFiltros: document.getElementById('descricao-filtros'),
+                loadingMessage: document.getElementById('loading-message'),
+                chartsGrid: document.getElementById('charts-grid'),
+            };
+            
+            const COR_PADRAO_BARRAS = 'rgba(17, 122, 101, 0.4)';
+            const COR_DESTAQUE_FADE = 'rgba(200, 200, 200, 0.3)';
+            const COR_PADRAO_ATIVIDADE = '#a9a9a9';
+            
+            function destacarBarras(atividade, corDestaque) {
+                if (!graficoFrequencia || !voluntariosOrdenadosGlobal.length) return;
+                const novasCores = voluntariosOrdenadosGlobal.map(([nome]) => {
+                    const dadosFiltrados = todosOsDados.filter(d => d.data >= ui.dataInicio.value && d.data <= ui.dataFim.value);
+                    const participouDaAtividade = dadosFiltrados.some(p => p.nome === nome && (p.atividade || []).includes(atividade));
+                    return participouDaAtividade ? corDestaque : COR_DESTAQUE_FADE;
+                });
+                graficoFrequencia.data.datasets[0].backgroundColor = novasCores;
                 graficoFrequencia.update('none');
             }
-        }
 
-        const handleLegendClick = (evt, item, legend) => {
-            const atividadeClicada = legend.chart.data.labels[item.index];
-            atividadeDestaqueFixo = (atividadeClicada === atividadeDestaqueFixo) ? null : atividadeClicada;
-            restaurarCoresBarras();
-        };
+            function restaurarCoresBarras() {
+                if (!graficoFrequencia) return;
+                if (atividadeDestaqueFixo && graficoAtividades) {
+                    const corDestaque = todasAsAtividades.get(atividadeDestaqueFixo) || COR_PADRAO_ATIVIDADE;
+                    destacarBarras(atividadeDestaqueFixo, corDestaque);
+                } else {
+                    graficoFrequencia.data.datasets[0].backgroundColor = COR_PADRAO_BARRAS;
+                    graficoFrequencia.update('none');
+                }
+            }
 
-        const handleLegendHover = (evt, item, legend) => {
-            if (atividadeDestaqueFixo) return;
-            const atividadeHover = legend.chart.data.labels[item.index];
-            const corDestaque = todasAsAtividades.get(atividadeHover) || COR_PADRAO_ATIVIDADE;
-            destacarBarras(atividadeHover, corDestaque);
-        };
-        
-        const handleLegendLeave = (evt, item, legend) => {
-            if (!atividadeDestaqueFixo) {
+            const handleLegendClick = (evt, item, legend) => {
+                const atividadeClicada = legend.chart.data.labels[item.index];
+                atividadeDestaqueFixo = (atividadeClicada === atividadeDestaqueFixo) ? null : atividadeClicada;
                 restaurarCoresBarras();
-            }
-        };
+            };
 
-        function renderizarGraficos(dados) {
-            if (graficoFrequencia) graficoFrequencia.destroy();
-            if (graficoAtividades) graficoAtividades.destroy();
-            atividadeDestaqueFixo = null;
+            const handleLegendHover = (evt, item, legend) => {
+                if (atividadeDestaqueFixo) return;
+                const atividadeHover = legend.chart.data.labels[item.index];
+                const corDestaque = todasAsAtividades.get(atividadeHover) || COR_PADRAO_ATIVIDADE;
+                destacarBarras(atividadeHover, corDestaque);
+            };
             
-            const contagemVoluntarios = {};
-            dados.forEach(d => { contagemVoluntarios[d.nome] = (contagemVoluntarios[d.nome] || 0) + 1; });
-            voluntariosOrdenadosGlobal = Object.entries(contagemVoluntarios).sort(([,a],[,b]) => b-a);
-            
-            const canvasFrequencia = document.getElementById('grafico-frequencia');
-            canvasFrequencia.parentElement.style.height = `${Math.max(400, voluntariosOrdenadosGlobal.length * 40)}px`;
-            graficoFrequencia = new Chart(canvasFrequencia, { type: 'bar', data: { labels: voluntariosOrdenadosGlobal.map(item => item[0]), datasets: [{ label: 'Nº de Presenças', data: voluntariosOrdenadosGlobal.map(item => item[1]), backgroundColor: COR_PADRAO_BARRAS }] }, options: { indexAxis: 'y', maintainAspectRatio: false, scales: { x: { beginAtZero: true, ticks: { stepSize: 1 } } }, plugins: { legend: { display: false } } } });
-            
-            const contagemAtividades = {};
-            dados.forEach(dado => { dado.atividade.split(', ').forEach(a => { contagemAtividades[a] = (contagemAtividades[a] || 0) + 1; }); });
-            
-            const atividadesOrdenadas = Object.entries(contagemAtividades).sort(([a], [b]) => a.localeCompare(b));
-            
-            const labelsPizza = atividadesOrdenadas.map(item => item[0]);
-            const dadosPizza = atividadesOrdenadas.map(item => item[1]);
-            const coresPizza = labelsPizza.map(label => todasAsAtividades.get(label) || COR_PADRAO_ATIVIDADE);
+            const handleLegendLeave = (evt, item, legend) => {
+                if (!atividadeDestaqueFixo) {
+                    restaurarCoresBarras();
+                }
+            };
 
-            graficoAtividades = new Chart(document.getElementById('grafico-atividades'), {
-                type: 'doughnut',
-                data: { labels: labelsPizza, datasets: [{ data: dadosPizza, backgroundColor: coresPizza, hoverOffset: 4 }] },
-                options: { plugins: { legend: { position: 'bottom', onClick: handleLegendClick, onHover: handleLegendHover, onLeave: handleLegendLeave } } }
-            });
-        }
-        
-        function aplicarFiltros() {
-            let dadosFiltrados = todosOsDados.filter(d => (d.data >= ui.dataInicio.value) && (d.data <= ui.dataFim.value));
-            
-            const de = new Date(ui.dataInicio.value + 'T00:00:00').toLocaleDateString('pt-BR');
-            const ate = new Date(ui.dataFim.value + 'T00:00:00').toLocaleDateString('pt-BR');
-            const atividadeSelecionada = ui.filtroAtividade.value;
-            
-            ui.descricaoFiltros.textContent = `Exibindo dados de ${de} a ${ate}.`;
-
-            if (atividadeSelecionada !== 'todas') {
-                dadosFiltrados = dadosFiltrados.filter(dado => dado.atividade.includes(atividadeSelecionada));
-                 ui.descricaoFiltros.textContent += ` Atividade: "${atividadeSelecionada}".`;
-            }
-            
-            if (dadosFiltrados.length === 0) {
-                 ui.chartsGrid.style.display = 'none';
-                 ui.loadingMessage.style.display = 'block';
-                 ui.loadingMessage.textContent = "Nenhum dado encontrado para os filtros selecionados.";
-                 if (graficoFrequencia) graficoFrequencia.destroy();
-                 if (graficoAtividades) graficoAtividades.destroy();
-                 return;
-            }
-            
-            ui.chartsGrid.style.display = 'grid';
-            ui.loadingMessage.style.display = 'none';
-            renderizarGraficos(dadosFiltrados);
-        }
-
-        async function inicializar() {
-            ui.loadingMessage.style.display = 'block';
-            try {
-                const [presencasSnapshot, atividadesSnapshot] = await Promise.all([
-                    getDocs(query(collection(db, "presencas"))),
-                    getDocs(query(collection(db, "atividades"), orderBy("nome")))
-                ]);
+            function renderizarGraficos(dados) {
+                if (graficoFrequencia) graficoFrequencia.destroy();
+                if (graficoAtividades) graficoAtividades.destroy();
+                atividadeDestaqueFixo = null;
                 
-                todosOsDados = presencasSnapshot.docs.map(doc => doc.data());
+                const contagemVoluntarios = {};
+                dados.forEach(d => { contagemVoluntarios[d.nome] = (contagemVoluntarios[d.nome] || 0) + 1; });
+                voluntariosOrdenadosGlobal = Object.entries(contagemVoluntarios).sort(([,a],[,b]) => b-a);
                 
-                atividadesSnapshot.forEach(doc => {
-                    const atividade = doc.data();
-                    todasAsAtividades.set(atividade.nome, atividade.cor);
-                    const option = document.createElement('option');
-                    option.value = atividade.nome;
-                    option.textContent = atividade.nome;
-                    ui.filtroAtividade.appendChild(option);
+                const canvasFrequencia = document.getElementById('grafico-frequencia');
+                canvasFrequencia.parentElement.style.height = `${Math.max(400, voluntariosOrdenadosGlobal.length * 40)}px`;
+                graficoFrequencia = new Chart(canvasFrequencia, { type: 'bar', data: { labels: voluntariosOrdenadosGlobal.map(item => item[0]), datasets: [{ label: 'Nº de Presenças', data: voluntariosOrdenadosGlobal.map(item => item[1]), backgroundColor: COR_PADRAO_BARRAS }] }, options: { indexAxis: 'y', maintainAspectRatio: false, scales: { x: { beginAtZero: true, ticks: { stepSize: 1 } } }, plugins: { legend: { display: false } } } });
+                
+                const contagemAtividades = {};
+                dados.forEach(dado => { (dado.atividade || []).forEach(a => { contagemAtividades[a] = (contagemAtividades[a] || 0) + 1; }); });
+                
+                const atividadesOrdenadas = Object.entries(contagemAtividades).sort(([a], [b]) => a.localeCompare(b));
+                
+                const labelsPizza = atividadesOrdenadas.map(item => item[0]);
+                const dadosPizza = atividadesOrdenadas.map(item => item[1]);
+                const coresPizza = labelsPizza.map(label => todasAsAtividades.get(label) || COR_PADRAO_ATIVIDADE);
+
+                graficoAtividades = new Chart(document.getElementById('grafico-atividades'), {
+                    type: 'doughnut',
+                    data: { labels: labelsPizza, datasets: [{ data: dadosPizza, backgroundColor: coresPizza, hoverOffset: 4 }] },
+                    options: { plugins: { legend: { position: 'bottom', onClick: handleLegendClick, onHover: handleLegendHover, onLeave: handleLegendLeave } } }
                 });
-
-                const hoje = new Date();
-                const umMesAtras = new Date();
-                umMesAtras.setMonth(hoje.getMonth() - 1);
-                ui.dataFim.value = hoje.toISOString().split('T')[0];
-                ui.dataInicio.value = umMesAtras.toISOString().split('T')[0];
-                
-                aplicarFiltros();
-            } catch (error) {
-                console.error("Erro ao inicializar:", error);
-                ui.loadingMessage.textContent = "Erro ao carregar dados. Pode ser necessário criar um índice no Firebase.";
             }
             
-            ui.dataInicio.addEventListener('change', aplicarFiltros);
-            ui.dataFim.addEventListener('change', aplicarFiltros);
-            ui.filtroAtividade.addEventListener('change', aplicarFiltros);
+            function aplicarFiltros() {
+                let dadosFiltrados = todosOsDados.filter(d => (d.data >= ui.dataInicio.value) && (d.data <= ui.dataFim.value));
+                
+                const de = new Date(ui.dataInicio.value + 'T00:00:00').toLocaleDateString('pt-BR');
+                const ate = new Date(ui.dataFim.value + 'T00:00:00').toLocaleDateString('pt-BR');
+                const atividadeSelecionada = ui.filtroAtividade.value;
+                
+                ui.descricaoFiltros.textContent = `Exibindo dados de ${de} a ${ate}.`;
+
+                if (atividadeSelecionada !== 'todas') {
+                    dadosFiltrados = dadosFiltrados.filter(dado => (dado.atividade || []).includes(atividadeSelecionada));
+                     ui.descricaoFiltros.textContent += ` Atividade: "${atividadeSelecionada}".`;
+                }
+                
+                if (dadosFiltrados.length === 0) {
+                     ui.chartsGrid.style.display = 'none';
+                     ui.loadingMessage.style.display = 'block';
+                     ui.loadingMessage.textContent = "Nenhum dado encontrado para os filtros selecionados.";
+                     if (graficoFrequencia) graficoFrequencia.destroy();
+                     if (graficoAtividades) graficoAtividades.destroy();
+                     return;
+                }
+                
+                ui.chartsGrid.style.display = 'grid';
+                ui.loadingMessage.style.display = 'none';
+                renderizarGraficos(dadosFiltrados);
+            }
+
+            async function carregarDadosIniciais() {
+                ui.loadingMessage.style.display = 'block';
+                try {
+                    const [presencasSnapshot, atividadesSnapshot] = await Promise.all([
+                        getDocs(query(collection(db, "presencas"))),
+                        getDocs(query(collection(db, "atividades"), orderBy("nome")))
+                    ]);
+                    
+                    todosOsDados = presencasSnapshot.docs.map(doc => doc.data());
+                    
+                    atividadesSnapshot.forEach(doc => {
+                        const atividade = doc.data();
+                        todasAsAtividades.set(atividade.nome, atividade.cor);
+                        const option = document.createElement('option');
+                        option.value = atividade.nome;
+                        option.textContent = atividade.nome;
+                        ui.filtroAtividade.appendChild(option);
+                    });
+
+                    const hoje = new Date();
+                    const umMesAtras = new Date();
+                    umMesAtras.setMonth(hoje.getMonth() - 1);
+                    ui.dataFim.value = hoje.toISOString().split('T')[0];
+                    ui.dataInicio.value = umMesAtras.toISOString().split('T')[0];
+                    
+                    aplicarFiltros();
+                } catch (error) {
+                    console.error("Erro ao inicializar:", error);
+                    ui.loadingMessage.textContent = "Erro ao carregar dados. Pode ser necessário criar um índice no Firebase.";
+                }
+                
+                ui.dataInicio.addEventListener('change', aplicarFiltros);
+                ui.dataFim.addEventListener('change', aplicarFiltros);
+                ui.filtroAtividade.addEventListener('change', aplicarFiltros);
+            }
+            
+            carregarDadosIniciais();
         }
-        
-        inicializar();
     </script>
-    <script type="module" src="/logout.js"></script>
 </body>
 </html>
