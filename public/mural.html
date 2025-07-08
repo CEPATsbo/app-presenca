@@ -32,11 +32,14 @@
         <a href="/tv.html" target="_blank" title="Abrir painel em uma nova aba">Ver Painel da TV ↗</a>
         <a href="#" id="btn-logout" style="color: #c62828;">Sair</a>
     </nav>
-
-    <div id="acesso-negado" style="display: none;">
-        <div class="container"><h1>Acesso Negado</h1></div>
-    </div>
     
+    <div id="acesso-negado" style="display: none;">
+        <div class="container">
+            <h1>Acesso Negado</h1>
+            <p>Você não tem permissão para editar o mural.</p>
+        </div>
+    </div>
+
     <div id="main-content" class="container" style="display: none;">
         <h1>Mural de Recados</h1>
         <textarea id="texto-mural" placeholder="Digite a mensagem do dia aqui..."></textarea>
@@ -63,18 +66,19 @@
 
         protegerPagina(['diretor', 'tesoureiro', 'super-admin'])
             .then(user => {
+                // Acesso permitido, exibe o conteúdo principal
+                document.getElementById('main-content').style.display = 'block';
                 inicializarPagina(user);
             })
             .catch(error => {
+                // Acesso negado, exibe a mensagem de erro
                 console.error(error.message);
+                document.getElementById('acesso-negado').style.display = 'block';
             });
-
 
         function inicializarPagina(user) {
             const db = getFirestore();
-            const auth = getAuth(); 
             const logAuditoriaCollection = collection(db, 'log_auditoria');
-
             const txtMural = document.getElementById('texto-mural');
             const btnSalvar = document.getElementById('btn-salvar');
             const feedback = document.getElementById('feedback');
@@ -108,6 +112,7 @@
             btnSalvar.addEventListener('click', async () => {
                 const novaMensagem = txtMural.value;
                 feedback.textContent = "Salvando...";
+                btnSalvar.disabled = true;
 
                 try {
                     const docAntigo = await getDoc(muralRef);
@@ -123,6 +128,8 @@
                     console.error("Erro ao salvar mensagem: ", error);
                     feedback.textContent = "Erro ao salvar. Tente novamente.";
                     feedback.style.color = "red";
+                } finally {
+                    btnSalvar.disabled = false;
                 }
             });
 
