@@ -1,4 +1,4 @@
-// VERSÃO FINAL CORRIGIDA - FUNÇÃO RESTAURADA
+// VERSÃO FINAL CORRIGIDA - COM TRATAMENTO PARA ATIVIDADE EM ARRAY OU TEXTO
 
 import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
 import { getFirestore, collection, query, where, onSnapshot } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
@@ -6,13 +6,13 @@ import { getFirestore, collection, query, where, onSnapshot } from "https://www.
 document.addEventListener('DOMContentLoaded', () => {
 
     const firebaseConfig = {
-  apiKey: "AIzaSyBV7RPjk3cFTqL-aIpflJcUojKg1ZXMLuU",
-  authDomain: "voluntarios-ativos---cepat.firebaseapp.com",
-  projectId: "voluntarios-ativos---cepat",
-  storageBucket: "voluntarios-ativos---cepat.firebasestorage.app",
-  messagingSenderId: "66122858261",
-  appId: "1:66122858261:web:7fa21f1805463b5c08331c"
-};
+        apiKey: "AIzaSyBV7RPjk3cFTqL-aIpflJcUojKg1ZXMLuU",
+        authDomain: "voluntarios-ativos---cepat.firebaseapp.com",
+        projectId: "voluntarios-ativos---cepat",
+        storageBucket: "voluntarios-ativos---cepat.firebasestorage.app",
+        messagingSenderId: "66122858261",
+        appId: "1:66122858261:web:7fa21f1805463b5c08331c"
+    };
     const app = initializeApp(firebaseConfig);
     const db = getFirestore(app);
 
@@ -33,7 +33,6 @@ document.addEventListener('DOMContentLoaded', () => {
         return formatadorQuery.format(agora);
     }
 
-    // --- FUNÇÃO RESTAURADA ---
     function atualizarDataVisivel(dataString) {
         if (dataHojeSpan) {
             const [ano, mes, dia] = dataString.split('-');
@@ -41,11 +40,21 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
     
+    // ===================================================================
+    // FUNÇÃO CORRIGIDA PARA LIDAR COM OS DOIS TIPOS DE DADOS
+    // ===================================================================
     function renderizarLista(presentes) {
         if(!listaPresencaDiv) return;
 
         const porAtividade = presentes.reduce((acc, pessoa) => {
-            const atividadesIndividuais = pessoa.atividade.split(', ');
+            let atividadesIndividuais = [];
+            // Verifica se 'atividade' é um array ou uma string
+            if (Array.isArray(pessoa.atividade)) {
+                atividadesIndividuais = pessoa.atividade;
+            } else if (typeof pessoa.atividade === 'string') {
+                atividadesIndividuais = pessoa.atividade.split(', ');
+            }
+            
             atividadesIndividuais.forEach(atividade => {
                 if (!acc[atividade]) acc[atividade] = [];
                 if (!acc[atividade].includes(pessoa.nome)) acc[atividade].push(pessoa.nome);
@@ -152,7 +161,7 @@ document.addEventListener('DOMContentLoaded', () => {
     function carregarPresencas() {
         if (unsubscribe) unsubscribe();
         dataAtualParaConsulta = getDataDeHojeSP();
-        atualizarDataVisivel(dataAtualParaConsulta); // A chamada que estava falhando
+        atualizarDataVisivel(dataAtualParaConsulta);
         const q = query(
             collection(db, "presencas"), 
             where("data", "==", dataAtualParaConsulta),
