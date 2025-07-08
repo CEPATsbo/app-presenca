@@ -28,7 +28,19 @@
 </head>
 <body>
     <nav class="admin-nav">
-        </nav>
+    <a href="/gerenciar-diretoria.html">Gerenciar Diretoria</a>
+    <a href="/tesouraria.html">Tesouraria</a>
+    <a href="/gerenciar-voluntarios.html">Gerenciar Voluntários</a>
+    <a href="/registro-manual.html">Registro Manual</a>
+    <a href="/relatorio.html">Gerar Relatório</a>
+    <a href="/estatisticas.html"class="active">Ver Estatísticas</a>
+    <a href="/mural.html">Editar Mural</a>
+    <a href="/atividades.html">Gerenciar Atividades</a>
+    <a href="/notificacoes.html">Notificações</a>
+    <a href="/painel-vibracoes.html" target="_blank">Painel de Vibrações ↗</a>
+    <a href="/tv.html" target="_blank" title="Abrir painel em uma nova aba">Ver Painel da TV ↗</a>
+    <a href="#" id="btn-logout" style="color: #c62828;">Sair</a>
+</nav>
 
     <div id="acesso-negado" style="display: none;">
         <div class="container" style="text-align: center;"><h1>Acesso Negado</h1></div>
@@ -70,15 +82,13 @@
         };
         
         initializeApp(firebaseConfig);
-        
+
         protegerPagina(['super-admin', 'diretor', 'tesoureiro'])
             .then(user => {
-                // Acesso permitido, exibe o conteúdo principal
                 document.getElementById('main-content').style.display = 'block';
                 inicializar();
             })
             .catch(error => {
-                // Acesso negado, exibe a mensagem de erro
                 console.error(error.message);
                 const loadingMsg = document.getElementById('loading-message');
                 if (loadingMsg) loadingMsg.style.display = 'none';
@@ -87,6 +97,7 @@
 
         function inicializar() {
             const db = getFirestore();
+
             let todosOsDados = [];
             let todasAsAtividades = new Map();
             let graficoFrequencia, graficoAtividades;
@@ -106,11 +117,21 @@
             const COR_DESTAQUE_FADE = 'rgba(200, 200, 200, 0.3)';
             const COR_PADRAO_ATIVIDADE = '#a9a9a9';
             
+            function normalizarAtividades(atividade) {
+                if (Array.isArray(atividade)) {
+                    return atividade;
+                }
+                if (typeof atividade === 'string' && atividade.length > 0) {
+                    return atividade.split(',').map(a => a.trim());
+                }
+                return [];
+            }
+
             function destacarBarras(atividade, corDestaque) {
                 if (!graficoFrequencia || !voluntariosOrdenadosGlobal.length) return;
                 const novasCores = voluntariosOrdenadosGlobal.map(([nome]) => {
                     const dadosFiltrados = todosOsDados.filter(d => d.data >= ui.dataInicio.value && d.data <= ui.dataFim.value);
-                    const participouDaAtividade = dadosFiltrados.some(p => p.nome === nome && (p.atividade || []).includes(atividade));
+                    const participouDaAtividade = dadosFiltrados.some(p => p.nome === nome && normalizarAtividades(p.atividade).includes(atividade));
                     return participouDaAtividade ? corDestaque : COR_DESTAQUE_FADE;
                 });
                 graficoFrequencia.data.datasets[0].backgroundColor = novasCores;
@@ -160,8 +181,16 @@
                 canvasFrequencia.parentElement.style.height = `${Math.max(400, voluntariosOrdenadosGlobal.length * 40)}px`;
                 graficoFrequencia = new Chart(canvasFrequencia, { type: 'bar', data: { labels: voluntariosOrdenadosGlobal.map(item => item[0]), datasets: [{ label: 'Nº de Presenças', data: voluntariosOrdenadosGlobal.map(item => item[1]), backgroundColor: COR_PADRAO_BARRAS }] }, options: { indexAxis: 'y', maintainAspectRatio: false, scales: { x: { beginAtZero: true, ticks: { stepSize: 1 } } }, plugins: { legend: { display: false } } } });
                 
+                // ===================================================================
+                // LÓGICA CORRIGIDA AQUI
+                // ===================================================================
                 const contagemAtividades = {};
-                dados.forEach(dado => { (dado.atividade || []).forEach(a => { contagemAtividades[a] = (contagemAtividades[a] || 0) + 1; }); });
+                dados.forEach(dado => { 
+                    const atividadesArray = normalizarAtividades(dado.atividade);
+                    atividadesArray.forEach(a => { 
+                        contagemAtividades[a] = (contagemAtividades[a] || 0) + 1; 
+                    });
+                });
                 
                 const atividadesOrdenadas = Object.entries(contagemAtividades).sort(([a], [b]) => a.localeCompare(b));
                 
@@ -186,8 +215,8 @@
                 ui.descricaoFiltros.textContent = `Exibindo dados de ${de} a ${ate}.`;
 
                 if (atividadeSelecionada !== 'todas') {
-                    dadosFiltrados = dadosFiltrados.filter(dado => (dado.atividade || []).includes(atividadeSelecionada));
-                     ui.descricaoFiltros.textContent += ` Atividade: "${atividadeSelecionada}".`;
+                    dadosFiltrados = dadosFiltrados.filter(dado => normalizarAtividades(dado.atividade).includes(atividadeSelecionada));
+                    ui.descricaoFiltros.textContent += ` Atividade: "${atividadeSelecionada}".`;
                 }
                 
                 if (dadosFiltrados.length === 0) {
@@ -240,6 +269,7 @@
                 ui.filtroAtividade.addEventListener('change', aplicarFiltros);
             }
             
+            // A função 'inicializar' foi renomeada para 'carregarDadosIniciais' e é chamada aqui
             carregarDadosIniciais();
         }
     </script>
