@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Admin - Gerenciar Atividades</title>
-    <script type="module" src="/auth-guard.js"></script>
+   
     <style>
         body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background-color: #f4f6f9; display: flex; flex-direction: column; align-items: center; min-height: 100vh; margin: 0; padding: 20px; box-sizing: border-box; }
         .admin-nav { width: 100%; max-width: 900px; background-color: #fff; padding: 15px; margin-bottom: 30px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); text-align: center; display: flex; flex-wrap: wrap; justify-content: center; gap: 15px 25px; }
@@ -42,7 +42,13 @@
     <a href="/tv.html" target="_blank" title="Abrir painel em uma nova aba">Ver Painel da TV ↗</a>
     <a href="#" id="btn-logout" style="color: #c62828;">Sair</a>
 </nav>
-    <div class="container">
+<div id="acesso-negado" style="display: none;">
+        <div class="container" style="text-align: center;">
+            <h1>Acesso Negado</h1>
+            <p>Você não tem permissão para acessar esta página.</p>
+        </div>
+    </div>
+    <div id="main-content" class="container" style="display: none;">
         <h1>Gerenciar Atividades</h1>
         <p>Habilite, defina uma cor, apague ou crie novas atividades.</p>
         <ul id="lista-atividades"><li>Carregando atividades...</li></ul>
@@ -56,117 +62,125 @@
         import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
         import { getFirestore, collection, onSnapshot, addDoc, deleteDoc, doc, orderBy, query, updateDoc, serverTimestamp, getDoc } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
         import { getAuth } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-auth.js";
+        import { protegerPagina } from '/auth.js';
 
         const firebaseConfig = {
-  apiKey: "AIzaSyBV7RPjk3cFTqL-aIpflJcUojKg1ZXMLuU",
-  authDomain: "voluntarios-ativos---cepat.firebaseapp.com",
-  projectId: "voluntarios-ativos---cepat",
-  storageBucket: "voluntarios-ativos---cepat.firebasestorage.app",
-  messagingSenderId: "66122858261",
-  appId: "1:66122858261:web:7fa21f1805463b5c08331c"
-};
+            apiKey: "AIzaSyBV7RPjk3cFTqL-aIpflJcUojKg1ZXMLuU",
+            authDomain: "voluntarios-ativos---cepat.firebaseapp.com",
+            projectId: "voluntarios-ativos---cepat",
+            storageBucket: "voluntarios-ativos---cepat.firebasestorage.app",
+            messagingSenderId: "66122858261",
+            appId: "1:66122858261:web:7fa21f1805463b5c08331c"
+        };
         
-        const app = initializeApp(firebaseConfig);
-        const db = getFirestore(app);
-        const auth = getAuth(app);
-        const atividadesCollection = collection(db, 'atividades');
-        const logAuditoriaCollection = collection(db, 'log_auditoria');
+        initializeApp(firebaseConfig);
 
-        const listaUl = document.getElementById('lista-atividades');
-        const novaAtividadeInput = document.getElementById('nova-atividade-nome');
-        const btnAdicionar = document.getElementById('btn-adicionar');
-
-        function carregarAtividades() {
-            const q = query(atividadesCollection, orderBy("nome"));
-            onSnapshot(q, (snapshot) => {
-                listaUl.innerHTML = '';
-                if (snapshot.empty) {
-                    listaUl.innerHTML = '<li>Nenhuma atividade cadastrada ainda.</li>';
-                }
-                snapshot.forEach(docSnapshot => {
-                    const atividade = docSnapshot.data();
-                    const id = docSnapshot.id;
-                    const li = document.createElement('li');
-                    li.className = 'item-atividade';
-                    li.innerHTML = `
-                        <div class="atividade-info">
-                            <input type="checkbox" data-id="${id}" class="toggle-ativo" title="Habilitar/Desabilitar" ${atividade.ativo ? 'checked' : ''}>
-                            <input type="color" data-id="${id}" class="seletor-cor" title="Definir cor da atividade" value="${atividade.cor || '#cccccc'}">
-                            <span>${atividade.nome}</span>
-                        </div>
-                        <button data-id="${id}" class="btn-delete" title="Apagar atividade permanentemente">Apagar</button>
-                    `;
-                    listaUl.appendChild(li);
-                });
+        protegerPagina(['diretor', 'tesoureiro', 'super-admin'])
+            .then(user => {
+                // Se a proteção passou, inicializa a lógica da página
+                inicializarPagina(user);
+            })
+            .catch(error => {
+                // Se falhou, o auth.js já mostrou a tela de "acesso negado" ou redirecionou
+                console.log(error.message);
             });
-        }
 
-        btnAdicionar.addEventListener('click', async () => {
-            const nome = novaAtividadeInput.value.trim();
-            const user = auth.currentUser;
-            if (nome && user) {
-                try {
-                    const novaAtividade = { nome: nome, ativo: true, cor: '#808080' };
-                    await addDoc(atividadesCollection, novaAtividade);
-                    await addDoc(logAuditoriaCollection, {
-                        acao: "CRIOU_ATIVIDADE",
-                        autor: { uid: user.uid, nome: user.displayName || user.email },
-                        timestamp: serverTimestamp(),
-                        detalhes: novaAtividade
+        // Toda a lógica original da página, agora dentro desta função segura
+        function inicializarPagina(user) {
+            const db = getFirestore();
+            const auth = getAuth();
+            const atividadesCollection = collection(db, 'atividades');
+            const logAuditoriaCollection = collection(db, 'log_auditoria');
+
+            const listaUl = document.getElementById('lista-atividades');
+            const novaAtividadeInput = document.getElementById('nova-atividade-nome');
+            const btnAdicionar = document.getElementById('btn-adicionar');
+
+            function carregarAtividades() {
+                const q = query(atividadesCollection, orderBy("nome"));
+                onSnapshot(q, (snapshot) => {
+                    listaUl.innerHTML = '';
+                    if (snapshot.empty) {
+                        listaUl.innerHTML = '<li>Nenhuma atividade cadastrada ainda.</li>';
+                    }
+                    snapshot.forEach(docSnapshot => {
+                        const atividade = docSnapshot.data();
+                        const id = docSnapshot.id;
+                        const li = document.createElement('li');
+                        li.className = 'item-atividade';
+                        li.innerHTML = `
+                            <div class="atividade-info">
+                                <input type="checkbox" data-id="${id}" class="toggle-ativo" title="Habilitar/Desabilitar" ${atividade.ativo ? 'checked' : ''}>
+                                <input type="color" data-id="${id}" class="seletor-cor" title="Definir cor da atividade" value="${atividade.cor || '#cccccc'}">
+                                <span>${atividade.nome}</span>
+                            </div>
+                            <button data-id="${id}" data-nome="${atividade.nome}" class="btn-delete" title="Apagar atividade permanentemente">Apagar</button>
+                        `;
+                        listaUl.appendChild(li);
                     });
-                    novaAtividadeInput.value = '';
-                } catch (error) {
-                    console.error("Erro ao adicionar atividade: ", error);
-                    alert("Ocorreu um erro ao adicionar a atividade.");
-                }
+                });
             }
-        });
-        
-        listaUl.addEventListener('input', async (e) => {
-            const id = e.target.dataset.id;
-            if (!id) return;
-            const docRef = doc(db, 'atividades', id);
-            if (e.target.classList.contains('toggle-ativo')) {
-                await updateDoc(docRef, { ativo: e.target.checked });
-            } else if (e.target.classList.contains('seletor-cor')) {
-                await updateDoc(docRef, { cor: e.target.value });
-            }
-        });
 
-        listaUl.addEventListener('click', async (e) => {
-            if (e.target.classList.contains('btn-delete')) {
-                const id = e.target.dataset.id;
-                const user = auth.currentUser;
-                if (confirm('Tem certeza que deseja apagar esta atividade PERMANENTEMENTE?')) {
+            btnAdicionar.addEventListener('click', async () => {
+                const nome = novaAtividadeInput.value.trim();
+                if (nome && user) {
                     try {
-                        // --- NOVA LÓGICA DE AUDITORIA ---
-                        // 1. Pega os dados da atividade ANTES de apagar
-                        const docRef = doc(db, 'atividades', id);
-                        const docSnap = await getDoc(docRef);
-                        const atividadeApagada = docSnap.data();
-
-                        // 2. Apaga a atividade
-                        await deleteDoc(docRef);
-                        
-                        // 3. Registra a ação no "livro de ocorrências"
-                        if (user && atividadeApagada) {
-                            await addDoc(logAuditoriaCollection, {
-                                acao: "APAGOU_ATIVIDADE",
-                                autor: { uid: user.uid, nome: user.displayName || user.email },
-                                timestamp: serverTimestamp(),
-                                detalhes: atividadeApagada
-                            });
-                        }
+                        const novaAtividade = { nome: nome, ativo: true, cor: '#808080' };
+                        await addDoc(atividadesCollection, novaAtividade);
+                        await addDoc(logAuditoriaCollection, {
+                            acao: "CRIOU_ATIVIDADE",
+                            autor: { uid: user.uid, nome: user.displayName || user.email },
+                            timestamp: serverTimestamp(),
+                            detalhes: novaAtividade
+                        });
+                        novaAtividadeInput.value = '';
                     } catch (error) {
-                         console.error("Erro ao apagar atividade: ", error);
-                         alert("Ocorreu um erro ao apagar a atividade.");
+                        console.error("Erro ao adicionar atividade: ", error);
+                        alert("Ocorreu um erro ao adicionar a atividade.");
                     }
                 }
-            }
-        });
-        
-        carregarAtividades();
+            });
+            
+            listaUl.addEventListener('input', async (e) => {
+                const id = e.target.dataset.id;
+                if (!id) return;
+                const docRef = doc(db, 'atividades', id);
+                if (e.target.classList.contains('toggle-ativo')) {
+                    await updateDoc(docRef, { ativo: e.target.checked });
+                } else if (e.target.classList.contains('seletor-cor')) {
+                    await updateDoc(docRef, { cor: e.target.value });
+                }
+            });
+
+            listaUl.addEventListener('click', async (e) => {
+                if (e.target.classList.contains('btn-delete')) {
+                    const id = e.target.dataset.id;
+                    const nome = e.target.dataset.nome;
+                    if (confirm(`Tem certeza que deseja apagar a atividade "${nome}" PERMANENTEMENTE?`)) {
+                        try {
+                            const docRef = doc(db, 'atividades', id);
+                            const docSnap = await getDoc(docRef);
+                            const atividadeApagada = docSnap.data();
+                            await deleteDoc(docRef);
+                            if (user && atividadeApagada) {
+                                await addDoc(logAuditoriaCollection, {
+                                    acao: "APAGOU_ATIVIDADE",
+                                    autor: { uid: user.uid, nome: user.displayName || user.email },
+                                    timestamp: serverTimestamp(),
+                                    detalhes: atividadeApagada
+                                });
+                            }
+                        } catch (error) {
+                            console.error("Erro ao apagar atividade: ", error);
+                            alert("Ocorreu um erro ao apagar a atividade.");
+                        }
+                    }
+                }
+            });
+            
+            carregarAtividades();
+        }
     </script>
-    <script type="module" src="/logout.js"></script>
+ <script type="module" src="/logout.js"></script>
 </body>
 </html>
