@@ -43,7 +43,7 @@
         #area-aprovacao textarea { width: 100%; box-sizing: border-box; margin-top: 10px; height: 80px; padding: 8px; border: 1px solid #ccc; border-radius: 6px; }
         #lista-aprovacoes, #lista-mensagens { list-style-type: none; padding: 0; font-size: 0.9em; max-height: 150px; overflow-y: auto; }
         #lista-aprovacoes li, #lista-mensagens li { background-color: #f0f0f0; padding: 8px; border-radius: 4px; margin-bottom: 5px; }
-        .mensagem { border-left: 4px solid; }
+        .mensagem { border-left: 4px solid; padding-left: 10px; }
         .mensagem-conselho { border-color: #ff9800; }
         .mensagem-tesouraria { border-color: #4caf50; background-color: #f1f8e9; }
         .mensagem-autor { font-weight: bold; }
@@ -53,7 +53,7 @@
 </head>
 <body>
     <nav class="admin-nav">
-    </nav>
+        </nav>
 
     <div id="acesso-negado" style="display: none;">
         <div class="container" style="text-align: center;">
@@ -115,7 +115,7 @@
             <div id="status-balancete"></div>
             <div id="area-aprovacao" style="display: none;">
                 <h4>Aprovações Recebidas:</h4>
-                <div id="lista-aprovacoes"></div>
+                <ul id="lista-aprovacoes"></ul>
                 <div id="area-de-votacao" style="margin-top: 20px;">
                     <button id="btn-aprovar">Aprovar Balancete</button>
                     <button id="btn-reprovar">Reprovar com Ressalva</button>
@@ -130,7 +130,7 @@
     </div>
     
     <script type="module">
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
+        import { initializeApp, getApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
         import { getFirestore, collection, query, where, onSnapshot, doc } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
         import { getFunctions, httpsCallable } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-functions.js";
         import { protegerPagina } from '/auth.js'; 
@@ -160,7 +160,7 @@
 
         function inicializarPagina(currentUser) {
             const db = getFirestore();
-            const functions = getFunctions();
+            const functions = getFunctions(getApp(), 'southamerica-east1');
             
             const seletorBalancete = document.getElementById('seletor-balancete');
             const balanceteContent = document.getElementById('balancete-content');
@@ -217,7 +217,7 @@
                         const balancete = docSnap.data();
                         renderizarBalancete(balancete, mesAno);
                         const status = balancete.status || 'em revisão';
-                        statusBar.textContent = `Status: ${status.replace('em revisão', 'Em Revisão').replace('aprovado', 'Aprovado').replace('com_ressalva', 'Com Ressalva')}`;
+                        statusBar.textContent = `Status: ${status.replace(/_/g, ' ').replace('em elaboracao', 'Em Elaboração').replace('em revisao', 'Em Revisão').replace('aprovado', 'Aprovado').replace('com ressalva', 'Com Ressalva')}`;
                         statusBar.className = `status-bar status-${status.split(' ')[0]}`;
                         
                         const userRole = currentUser?.claims?.role;
@@ -255,7 +255,7 @@
                 mensagens.forEach(msg => {
                     const data = msg.data ? msg.data.toDate().toLocaleString('pt-BR') : 'Enviando...';
                     const autor = msg.autor.nome || 'Anônimo';
-                    const tipoClasse = msg.isResposta ? 'mensagem-tesouraria' : 'mensagem-conselho';
+                    const tipoClasse = (msg.autor.nome.toLowerCase().includes('tesour') || msg.autor.nome.toLowerCase().includes('diretor')) ? 'mensagem-tesouraria' : 'mensagem-conselho';
                     const li = document.createElement('li');
                     li.className = `mensagem ${tipoClasse}`;
                     li.innerHTML = `<div class="mensagem-autor">${autor}</div><div class="mensagem-data">${data}</div><p>${msg.texto}</p>`;
@@ -317,10 +317,10 @@
                     console.error("Erro ao registrar voto:", error);
                     alert(`Ocorreu um erro: ${error.message}`);
                 } finally {
-                    const botaoAprovar = document.getElementById('btn-aprovar');
-                    const botaoEnviarRessalva = document.getElementById('btn-enviar-ressalva');
-                    if(botaoAprovar) { botaoAprovar.disabled = false; botaoAprovar.textContent = 'Aprovar Balancete'; }
-                    if(botaoEnviarRessalva) { botaoEnviarRessalva.disabled = false; botaoEnviarRessalva.textContent = 'Enviar Ressalva'; }
+                    btnAprovar.disabled = false;
+                    btnAprovar.textContent = 'Aprovar Balancete';
+                    btnEnviarRessalva.disabled = false;
+                    btnEnviarRessalva.textContent = 'Enviar Ressalva';
                 }
             }
 

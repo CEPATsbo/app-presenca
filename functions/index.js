@@ -151,31 +151,20 @@ exports.revogarAcessoDiretor = functions.region(REGIAO).https.onCall(async (data
     } catch (error) { console.error("Erro ao revogar acesso de diretor:", error); throw new functions.https.HttpsError('internal', 'Erro interno ao tentar revogar o acesso.'); }
 });
 
-// ===================================================================
-// NOVA FUNÇÃO ADICIONADA PARA REVOGAR ACESSO DE CONSELHEIRO
-// ===================================================================
-
 exports.revogarAcessoConselheiro = functions.region(REGIAO).https.onCall(async (data, context) => {
-    // Apenas o Super Admin pode executar esta ação.
     if (context.auth.token.role !== 'super-admin') {
         throw new functions.https.HttpsError('permission-denied', 'Apenas o Super Admin pode revogar acesso de conselheiros.');
     }
-
     const uidParaRevogar = data.uid;
     if (!uidParaRevogar) {
         throw new functions.https.HttpsError('invalid-argument', 'O UID do conselheiro é necessário.');
     }
-
     try {
-        // Remove a permissão especial 'conselheiro' e o retorna para 'voluntario'
         await admin.auth().setCustomUserClaims(uidParaRevogar, { role: 'voluntario' });
-
-        // Atualiza o cargo também no banco de dados 'voluntarios'
         const userQuery = await db.collection('voluntarios').where('authUid', '==', uidParaRevogar).limit(1).get();
         if (!userQuery.empty) {
             await userQuery.docs[0].ref.update({ role: 'voluntario' });
         }
-
         return { success: true, message: 'Acesso de conselheiro revogado com sucesso. O usuário agora é um voluntário padrão.' };
     } catch (error) {
         console.error("Erro ao revogar acesso de conselheiro:", error);
@@ -183,15 +172,24 @@ exports.revogarAcessoConselheiro = functions.region(REGIAO).https.onCall(async (
     }
 });
 
+// ===================================================================
+// FUNÇÃO CORRIGIDA - REVERTIDA PARA onCall
+// ===================================================================
 exports.registrarVotoConselho = functions.region(REGIAO).https.onCall(async (data, context) => {
+    // A verificação de autenticação é feita automaticamente pelo onCall
+    if (!context.auth) {
+        throw new functions.https.HttpsError('unauthenticated', 'A função deve ser chamada por um usuário autenticado.');
+    }
     const userRole = context.auth.token.role;
     if (!['conselheiro', 'super-admin'].includes(userRole)) {
         throw new functions.https.HttpsError('permission-denied', 'Apenas membros do conselho ou super-admin podem votar.');
     }
+    
     const { balanceteId, voto, mensagem } = data;
     if (!balanceteId || !voto) {
         throw new functions.https.HttpsError('invalid-argument', 'ID do balancete e voto são obrigatórios.');
     }
+
     const balanceteRef = db.collection('balancetes').doc(balanceteId);
     const logAuditoriaCollection = db.collection('log_auditoria');
     const autor = { uid: context.auth.uid, nome: context.auth.token.name || context.auth.token.email };
@@ -199,6 +197,7 @@ exports.registrarVotoConselho = functions.region(REGIAO).https.onCall(async (dat
     try {
         const balanceteDoc = await balanceteRef.get();
         if (!balanceteDoc.exists) { throw new functions.https.HttpsError('not-found', 'Balancete não encontrado.'); }
+        
         const balanceteData = balanceteDoc.data();
         if (balanceteData.status !== 'em revisão') { throw new functions.https.HttpsError('failed-precondition', 'Este balancete não está mais aberto para revisão.'); }
         if (balanceteData.aprovacoes && balanceteData.aprovacoes[autor.uid]) { throw new functions.https.HttpsError('already-exists', 'Você já votou neste balancete.'); }
@@ -217,13 +216,12 @@ exports.registrarVotoConselho = functions.region(REGIAO).https.onCall(async (dat
         }
         
         await balanceteRef.update(updateData);
-        
         await logAuditoriaCollection.add({ acao: "VOTOU_BALANCETE", autor, timestamp: admin.firestore.FieldValue.serverTimestamp(), detalhes: logDetalhes });
         
         return { success: true, message: 'Ação registrada com sucesso!' };
     } catch (error) {
-        console.error("Erro ao registrar voto do conselho:", error);
-        throw error;
+        console.error("Erro interno ao registrar voto do conselho:", error);
+        throw new functions.https.HttpsError('internal', 'Ocorreu um erro interno ao processar seu voto.');
     }
 });
 
@@ -248,33 +246,24 @@ exports.verificarAprovacaoFinal = functions.region(REGIAO).firestore.document('b
     return null;
 });
 
-// ===================================================================
-// FUNÇÃO DE CÁLCULO DE CICLO CORRIGIDA
-// ===================================================================
 exports.calcularCicloVibracoes = functions.region(REGIAO).https.onCall((data, context) => {
     const agoraUTC = new Date();
-
     const encontrarUltimaQuinta = (d) => {
         const data = new Date(d);
-        const dia = data.getUTCDay(); // 0 = Domingo, 4 = Quinta
+        const dia = data.getUTCDay();
         const diff = (dia < 4) ? dia + 3 : dia - 4;
         data.setUTCDate(data.getUTCDate() - diff);
         return data;
     };
-
     const ultimaQuinta = encontrarUltimaQuinta(agoraUTC);
-    
     let dataFimCiclo = new Date(ultimaQuinta);
-    dataFimCiclo.setUTCHours(22, 20, 0, 0); // 19:20 BRT = 22:20 UTC
-
+    dataFimCiclo.setUTCHours(22, 20, 0, 0);
     if (agoraUTC.getTime() > dataFimCiclo.getTime()) {
         dataFimCiclo.setUTCDate(dataFimCiclo.getUTCDate() + 7);
     }
-    
     let dataInicioCiclo = new Date(dataFimCiclo);
     dataInicioCiclo.setUTCDate(dataInicioCiclo.getUTCDate() - 7);
     dataInicioCiclo.setUTCMinutes(dataInicioCiclo.getUTCMinutes() + 1);
-    
     return {
         inicio: admin.firestore.Timestamp.fromDate(dataInicioCiclo),
         fim: admin.firestore.Timestamp.fromDate(dataFimCiclo)
@@ -294,13 +283,10 @@ exports.enviarNotificacaoImediata = functions.region(REGIAO).https.onRequest((re
     });
 });
 
-// ===================================================================
-// FUNÇÃO DE VERIFICAÇÃO DE AGENDAMENTOS CORRIGIDA
-// ===================================================================
 exports.verificarAgendamentosAgendados = functions.region(REGIAO).pubsub.schedule('every 10 minutes').timeZone('America/Sao_Paulo').onRun(async (context) => {
     if (!configurarWebPush()) { return null; }
     
-    const agoraSP = new Date(new Date().toLocaleString("en-US", { timeZone: "America/Sao_Paulo" }));
+    const agoraSP = new Date();
     const agoraTimestamp = admin.firestore.Timestamp.fromDate(agoraSP);
     
     const agendamentosRef = db.collection('notificacoes_agendadas');
@@ -352,13 +338,10 @@ exports.resetarTasvAnual = functions.region(REGIAO).pubsub.schedule('0 4 1 1 *')
     return null;
 });
 
-// ===================================================================
-// NOVO ROBÔ DE ARQUIVAMENTO E LIMPEZA
-// ===================================================================
 exports.arquivarVibracoesSemanais = functions.region(REGIAO).pubsub.schedule('30 22 * * 4').timeZone('America/Sao_Paulo').onRun(async (context) => {
     console.log("Iniciando o arquivamento semanal dos pedidos de vibração.");
 
-    const agoraSP = new Date(new Date().toLocaleString("en-US", { timeZone: "America/Sao_Paulo" }));
+    const agoraSP = new Date();
     
     let dataFimCiclo = new Date(agoraSP);
     dataFimCiclo.setHours(19, 20, 0, 0);

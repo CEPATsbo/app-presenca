@@ -89,7 +89,6 @@
         import { getFunctions, httpsCallable } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-functions.js";
         import { protegerPagina } from '/auth.js'; 
 
-        // CONFIGURAÇÃO DO FIREBASE CORRIGIDA
         const firebaseConfig = {
             apiKey: "AIzaSyBV7RPjk3cFTqL-aIpflJcUojKg1ZXMLuU",
             authDomain: "voluntarios-ativos---cepat.firebaseapp.com",
@@ -98,10 +97,10 @@
             messagingSenderId: "66122858261",
             appId: "1:66122858261:web:7fa21f1805463b5c08331c"
         };
-        const app = initializeApp(firebaseConfig);
-
-        // PERMISSÕES ATUALIZADAS PARA INCLUIR DIRETOR E TESOUREIRO
-        protegerPagina(['super-admin', 'diretor', 'tesoureiro'])
+        initializeApp(firebaseConfig);
+        
+        // Permite que toda a gestão veja a página, mas os controles só aparecerão para o super-admin.
+        protegerPagina(['super-admin', 'diretor', 'tesoureiro', 'conselheiro'])
             .then(user => {
                 inicializarPagina(user);
             })
@@ -110,8 +109,8 @@
             });
 
         function inicializarPagina(user) {
-            const db = getFirestore(app);
-            const functions = getFunctions(app, 'southamerica-east1');
+            const db = getFirestore();
+            const functions = getFunctions(getApp(), 'southamerica-east1');
             const userRole = user.claims.role;
 
             const formContainer = document.getElementById('form-convite-container');
@@ -121,7 +120,7 @@
             const tabelaLogs = document.getElementById('tabela-logs');
             const btnFiltrarLogs = document.getElementById('btn-filtrar-logs');
 
-            // CONTROLE DE VISIBILIDADE BASEADO NO CARGO
+            // Lógica de visibilidade: apenas o super-admin vê os controles
             if (userRole !== 'super-admin') {
                 if(formContainer) formContainer.style.display = 'none'; 
                 if(colunaAcoes) colunaAcoes.style.display = 'none'; 
@@ -139,51 +138,53 @@
                         tabelaDiretoria.innerHTML = '<tr><td colspan="4">Nenhum membro da gestão encontrado.</td></tr>';
                         return;
                     }
-                    snapshot.forEach(doc => {
+                    snapshot.docs.sort((a, b) => a.data().nome.localeCompare(b.data().nome)).forEach(doc => {
                         const v = doc.data();
                         const tr = document.createElement('tr');
                         
                         let actionsHtml = '';
-                        // SÓ GERA OS BOTÕES SE O USUÁRIO FOR SUPER-ADMIN
                         if (userRole === 'super-admin' && v.authUid !== uidLogado) {
                             if (v.role === 'diretor') {
-                                actionsHtml += `<button class="btn-promover-tesoureiro" data-uid="${v.authUid}">Promover a Tesoureiro</button>`;
-                                actionsHtml += `<button class="btn-revogar-acesso" data-uid="${v.authUid}" data-role="diretor">Revogar (p/ Voluntário)</button>`;
-                            } else if (v.role === 'tesoureiro') {
-                                actionsHtml += `<button class="btn-revogar-acesso" data-uid="${v.authUid}" data-role="diretor">Revogar (p/ Voluntário)</button>`;
-                            } else if (v.role === 'conselheiro') {
-                                actionsHtml += `<button class="btn-revogar-acesso" data-uid="${v.authUid}" data-role="conselheiro">Revogar (p/ Voluntário)</button>`;
+                                actionsHtml += `<button class="btn-promover-tesoureiro" data-uid="${v.authUid}" data-nome="${v.nome}">Promover a Tesoureiro</button>`;
+                            }
+                            if (v.role === 'diretor' || v.role === 'tesoureiro' || v.role === 'conselheiro') {
+                                actionsHtml += `<button class="btn-revogar-acesso" data-uid="${v.authUid}" data-nome="${v.nome}" data-role="${v.role}">Revogar Acesso</button>`;
                             }
                         }
+
+                        // A célula de ações só é criada se o usuário for super-admin
+                        const acoesTd = userRole === 'super-admin' ? `<td>${actionsHtml}</td>` : '';
 
                         tr.innerHTML = `
                             <td>${v.nome}</td>
                             <td>${v.email || 'N/A'}</td>
                             <td>${v.role}</td>
-                            ${userRole === 'super-admin' ? `<td>${actionsHtml}</td>` : ''}
+                            ${acoesTd}
                         `;
                         tabelaDiretoria.appendChild(tr);
                     });
                 });
             }
 
-            listaDiretoria.addEventListener('click', async (e) => {
+            tabelaDiretoria.addEventListener('click', async (e) => {
                 if (!e.target.dataset.uid || userRole !== 'super-admin') return;
+                
                 const uid = e.target.dataset.uid;
+                const nome = e.target.dataset.nome;
                 const role = e.target.dataset.role;
                 
                 let funcaoCallable, mensagemConfirmacao;
                 
                 if (e.target.classList.contains('btn-promover-tesoureiro')) {
                     funcaoCallable = httpsCallable(functions, 'promoverParaTesoureiro');
-                    mensagemConfirmacao = 'Tem certeza que deseja promover este diretor a tesoureiro?';
+                    mensagemConfirmacao = `Tem certeza que deseja promover ${nome} a Tesoureiro?`;
                 } else if (e.target.classList.contains('btn-revogar-acesso')) {
                     if (role === 'conselheiro') {
                         funcaoCallable = httpsCallable(functions, 'revogarAcessoConselheiro');
-                        mensagemConfirmacao = 'Tem certeza que deseja revogar o acesso de conselheiro? O usuário voltará a ser um voluntário padrão.';
+                        mensagemConfirmacao = `Tem certeza que deseja revogar o acesso de conselheiro de ${nome}?`;
                     } else {
                         funcaoCallable = httpsCallable(functions, 'revogarAcessoDiretor');
-                        mensagemConfirmacao = 'Tem certeza que deseja revogar o acesso deste membro?';
+                        mensagemConfirmacao = `Tem certeza que deseja revogar o acesso deste membro?`;
                     }
                 } else {
                     return;
@@ -201,23 +202,27 @@
                 }
             });
 
-            btnConvidar.addEventListener('click', async () => {
-                const nome = document.getElementById('nome').value;
-                const email = document.getElementById('email').value;
-                if (!nome || !email) return alert('Nome e Email são obrigatórios.');
+            if (btnConvidar) {
+                btnConvidar.addEventListener('click', async () => {
+                    const nome = document.getElementById('nome').value.trim();
+                    const email = document.getElementById('email').value.trim();
+                    if (!nome || !email) return alert('Nome e Email são obrigatórios.');
 
-                btnConvidar.disabled = true;
-                btnConvidar.textContent = 'Enviando...';
-                try {
-                    const convidarDiretor = httpsCallable(functions, 'convidarDiretor');
-                    const resultado = await convidarDiretor({ nome, email });
-                    alert(resultado.data.message);
-                } catch (error) {
-                    alert(`Erro: ${error.message}`);
-                }
-                btnConvidar.disabled = false;
-                btnConvidar.textContent = 'Enviar Convite de Diretor';
-            });
+                    btnConvidar.disabled = true;
+                    btnConvidar.textContent = 'Enviando...';
+                    try {
+                        const convidarDiretor = httpsCallable(functions, 'convidarDiretor');
+                        const resultado = await convidarDiretor({ nome, email });
+                        alert(resultado.data.message);
+                        document.getElementById('nome').value = '';
+                        document.getElementById('email').value = '';
+                    } catch (error) {
+                        alert(`Erro: ${error.message}`);
+                    }
+                    btnConvidar.disabled = false;
+                    btnConvidar.textContent = 'Enviar Convite de Diretor';
+                });
+            }
 
             function setupLogFilters() {
                 const hoje = new Date();
