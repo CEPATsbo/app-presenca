@@ -16,7 +16,7 @@
         }
         .painel-container {
             width: 100%;
-            height: 100vh;
+            height: calc(100vh - 40px); /* Ajuste de altura */
             max-width: 100%;
             margin: 0 auto;
             display: flex;
@@ -27,6 +27,7 @@
             padding-bottom: 15px;
             border-bottom: 1px solid #1e3a5f;
             margin-bottom: 20px;
+            flex-shrink: 0; /* Impede que o header encolha */
         }
         header h1 { color: #88c0d0; margin: 0; font-size: 2.2em; }
         header h2 { color: #cdd6f4; margin: 5px 0 0 0; font-size: 1.1em; font-weight: normal; }
@@ -46,6 +47,7 @@
             padding: 25px;
             border-radius: 8px;
             border: 1px solid #1e3a5f;
+            min-width: 400px;
         }
         .lista-coluna h3 {
             text-align: center;
@@ -90,6 +92,7 @@
         #acesso-negado {
              color: white; 
              text-align: center;
+             padding: 40px;
         }
     </style>
 </head>
@@ -103,22 +106,20 @@
             <div class="lista-coluna">
                 <h3>Encarnados</h3>
                 <div id="carousel-encarnados" class="carousel-container">
-                    <div id="loading-encarnados">Aguardando...</div>
+                    <ul id="lista-encarnados" class="lista-nomes"><li>Aguardando...</li></ul>
                 </div>
             </div>
             <div class="lista-coluna">
                 <h3>Desencarnados</h3>
                 <div id="carousel-desencarnados" class="carousel-container">
-                    <div id="loading-desencarnados">Aguardando...</div>
+                    <ul id="lista-desencarnados" class="lista-nomes"><li>Aguardando...</li></ul>
                 </div>
             </div>
         </div>
     </div>
     <div id="acesso-negado" style="display: none;">
-        <div style="padding: 40px;">
-             <h1>Acesso Negado</h1>
-            <p>Você não tem permissão para ver esta página.</p>
-        </div>
+        <h1>Acesso Negado</h1>
+        <p>Você não tem permissão para ver esta página.</p>
     </div>
 
     <script type="module">
@@ -140,11 +141,15 @@
 
         protegerPagina(['diretor', 'tesoureiro', 'conselheiro', 'super-admin'])
             .then(user => {
+                // Acesso permitido! A página agora se exibe.
+                document.getElementById('main-content').style.display = 'flex';
                 inicializarPainel();
             })
             .catch(error => {
                 console.log(error.message);
-                // O auth.js já cuida de mostrar a div de acesso negado ou redirecionar
+                if (error.message.includes('Acesso negado')) {
+                    document.getElementById('acesso-negado').style.display = 'block';
+                }
             });
 
         function inicializarPainel() {
@@ -165,8 +170,8 @@
                     const fimFormatado = cicloFim.toDate().toLocaleString('pt-BR', options);
                     document.getElementById('periodo-info').textContent = `Exibindo pedidos de ${inicioFormatado} até ${fimFormatado}`;
 
-                    renderizarLista('encarnados', 'carousel-encarnados', 'loading-encarnados', cicloInicio, cicloFim);
-                    renderizarLista('desencarnados', 'carousel-desencarnados', 'loading-desencarnados', cicloInicio, cicloFim);
+                    renderizarLista('encarnados', 'carousel-encarnados', cicloInicio, cicloFim);
+                    renderizarLista('desencarnados', 'carousel-desencarnados', cicloInicio, cicloFim);
 
                 } catch (error) {
                     console.error("Erro ao obter ciclo de trabalho da Cloud Function:", error);
@@ -174,10 +179,9 @@
                 }
             }
 
-            async function renderizarLista(nomeColecao, idCarousel, idLoading, cicloInicio, cicloFim) {
+            async function renderizarLista(nomeColecao, idCarousel, cicloInicio, cicloFim) {
                 const carouselContainer = document.getElementById(idCarousel);
-                const loadingDiv = document.getElementById(idLoading);
-                loadingDiv.textContent = "Buscando nomes...";
+                carouselContainer.innerHTML = '<li>Buscando nomes...</li>';
 
                 try {
                     const q = query(
@@ -220,7 +224,7 @@
 
                 } catch (error) {
                     console.error(`Erro ao carregar a lista de ${nomeColecao}:`, error);
-                    loadingDiv.textContent = "Erro ao carregar lista.";
+                    carouselContainer.innerHTML = '<li style="color: red;">Erro ao carregar lista.</li>';
                 }
             }
 
@@ -229,17 +233,21 @@
                 const paginas = container.getElementsByClassName('lista-nomes');
                 if (paginas.length <= 1) {
                     if (paginas.length === 1) paginas[0].classList.add('active');
-                    return;
+                    return; 
                 }
 
                 let paginaAtual = 0;
                 paginas[paginaAtual].classList.add('active');
 
                 setInterval(() => {
-                    paginas[paginaAtual].classList.remove('active');
+                    if(paginas[paginaAtual]) {
+                       paginas[paginaAtual].classList.remove('active');
+                    }
                     paginaAtual = (paginaAtual + 1) % paginas.length;
-                    paginas[paginaAtual].classList.add('active');
-                }, 15000); // 15 segundos
+                    if(paginas[paginaAtual]) {
+                        paginas[paginaAtual].classList.add('active');
+                    }
+                }, 15000); 
             }
             
             carregarNomes();
