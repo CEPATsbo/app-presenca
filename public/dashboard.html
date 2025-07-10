@@ -34,7 +34,7 @@
             gap: 25px;
             width: 100%;
             max-width: 1000px;
-            display: none; /* Começa escondido */
+            display: none; 
         }
         .card {
             background-color: white;
@@ -47,7 +47,7 @@
             transition: transform 0.2s, box-shadow 0.2s;
         }
         .card.hidden {
-            display: none; /* Para esconder os cartões sem permissão */
+            display: none; 
         }
         .card:hover {
             transform: translateY(-5px);
@@ -62,7 +62,7 @@
             color: #576574;
             font-size: 0.95em;
             line-height: 1.5;
-            text-align: left; /* Garante que o texto dentro do card seja alinhado à esquerda */
+            text-align: left;
         }
         .logout-container {
             width: 100%;
@@ -134,6 +134,10 @@
             <h2>Gerar Relatório</h2>
             <p>Gerar o relatório de presenças de um dia específico para impressão.</p>
         </a>
+        <a href="/tv.html" target="_blank" class="card" data-role="diretor,tesoureiro,super-admin,conselheiro">
+            <h2>Painel da TV</h2>
+            <p>Abrir o painel de exibição de presenças em tempo real para a TV.</p>
+        </a>
     </div>
 
     <div class="logout-container">
@@ -158,18 +162,19 @@
 
         onAuthStateChanged(auth, (user) => {
             if (user) {
-                // CORREÇÃO: Usando 'true' para forçar a atualização do token
                 user.getIdTokenResult(true).then((idTokenResult) => {
                     const userRole = idTokenResult.claims.role || 'voluntario';
                     
                     document.querySelectorAll('.card').forEach(card => {
                         const rolesPermitidas = card.dataset.role.split(',');
-                        if (!rolesPermitidas.includes(userRole)) {
-                            card.classList.add('hidden'); // Esconde os não permitidos
+                        // Mostra o card se o cargo do usuário estiver na lista de permissões do card
+                        if (rolesPermitidas.includes(userRole)) {
+                            card.style.display = 'block'; 
+                        } else {
+                            card.style.display = 'none';
                         }
                     });
 
-                    // Mostra o container principal APÓS ter escondido os cartões sem permissão
                     document.getElementById('main-content').style.display = 'grid';
                 });
             } else {
