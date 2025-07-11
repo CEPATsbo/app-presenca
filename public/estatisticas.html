@@ -7,9 +7,11 @@
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
         body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background-color: #f4f6f9; color: #333; margin: 0; padding: 20px; }
-        .admin-nav { max-width: 1200px; margin: 0 auto 30px auto; background-color: #fff; padding: 15px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); text-align: center; display: flex; flex-wrap: wrap; justify-content: center; gap: 15px 25px; }
-        .admin-nav a { margin: 0; padding: 0; background-color: transparent; color: #1565c0; text-decoration: none; font-weight: bold; font-size: 1.1em; white-space: nowrap; }
-        .admin-nav a.active, .admin-nav a:hover { text-decoration: underline; background-color: transparent; color: #0d47a1; }
+        /* Estilo para o novo botão de voltar */
+        .nav-voltar { max-width: 1200px; margin: 0 auto 30px auto; text-align: left; }
+        .btn-voltar { background-color: #e9ecef; color: #495057; border: 1px solid #dee2e6; padding: 10px 20px; border-radius: 8px; font-weight: bold; font-size: 1em; text-decoration: none; transition: background-color 0.2s; }
+        .btn-voltar:hover { background-color: #dee2e6; }
+        
         .dashboard-container { max-width: 1200px; margin: auto; }
         .header { text-align: center; border-bottom: 1px solid #ddd; padding-bottom: 20px; margin-bottom: 20px; }
         .header h1 { color: #1b5e20; margin: 0; }
@@ -18,53 +20,59 @@
         .filtro-item label { font-size: 0.9em; color: #555; margin-bottom: 5px; text-align: left; }
         .filtro-item input, .filtro-item select { padding: 10px; border-radius: 6px; border: 1px solid #ccc; font-size: 1em; }
         .grid-container { display: grid; grid-template-columns: 2fr 1fr; gap: 40px; align-items: flex-start; }
-        .chart-card { background-color: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+        .full-width-grid { display: grid; grid-template-columns: 1fr; gap: 40px; margin-top: 40px; }
+        .chart-card { background-color: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); margin-bottom: 30px; }
         .chart-card.sticky { position: -webkit-sticky; position: sticky; top: 20px; }
-        .chart-card h2 { margin-top: 0; font-size: 1.3em; color: #444; }
+        .chart-card h2, .chart-card h3 { margin-top: 0; font-size: 1.3em; color: #444; }
         #loading-message { font-size: 1.5em; text-align: center; padding: 50px; }
         .chart-wrapper { position: relative; }
         #descricao-filtros { text-align: center; color: #555; font-style: italic; margin-bottom: 20px; min-height: 1.2em; }
     </style>
 </head>
 <body>
-    <nav class="admin-nav">
-    <a href="/gerenciar-diretoria.html">Gerenciar Diretoria</a>
-    <a href="/tesouraria.html">Tesouraria</a>
-    <a href="/gerenciar-voluntarios.html">Gerenciar Voluntários</a>
-    <a href="/registro-manual.html">Registro Manual</a>
-    <a href="/relatorio.html">Gerar Relatório</a>
-    <a href="/estatisticas.html"class="active">Ver Estatísticas</a>
-    <a href="/mural.html">Editar Mural</a>
-    <a href="/atividades.html">Gerenciar Atividades</a>
-    <a href="/notificacoes.html">Notificações</a>
-    <a href="/painel-vibracoes.html" target="_blank">Painel de Vibrações ↗</a>
-    <a href="/tv.html" target="_blank" title="Abrir painel em uma nova aba">Ver Painel da TV ↗</a>
-    <a href="#" id="btn-logout" style="color: #c62828;">Sair</a>
-</nav>
+    <nav class="nav-voltar">
+        <a href="/dashboard.html" class="btn-voltar">⬅ Voltar para o Dashboard</a>
+    </nav>
 
     <div id="acesso-negado" style="display: none;">
-        <div class="container" style="text-align: center;"><h1>Acesso Negado</h1></div>
+        <div class="container" style="text-align: center;"><h1>Acesso Negado</h1><p>Você não tem permissão para acessar esta página.</p></div>
     </div>
 
     <div id="main-content" class="dashboard-container" style="display: none;">
         <div class="header"><h1>Dashboard de Estatísticas</h1></div>
-        <div class="filtros-container">
-            <div class="filtro-item"><label for="data-inicio">De:</label><input type="date" id="data-inicio"></div>
-            <div class="filtro-item"><label for="data-fim">Até:</label><input type="date" id="data-fim"></div>
-            <div class="filtro-item"><label for="filtro-atividade">Filtrar Atividade:</label><select id="filtro-atividade"><option value="todas">-- Todas --</option></select></div>
+        
+        <div class="chart-card">
+            <h2>Análise de Presença dos Voluntários</h2>
+            <div class="filtros-container">
+                <div class="filtro-item"><label for="data-inicio">De:</label><input type="date" id="data-inicio"></div>
+                <div class="filtro-item"><label for="data-fim">Até:</label><input type="date" id="data-fim"></div>
+                <div class="filtro-item"><label for="filtro-atividade">Filtrar Atividade de Presença:</label><select id="filtro-atividade"><option value="todas">-- Todas --</option></select></div>
+            </div>
+            <div id="descricao-filtros"></div>
         </div>
-        <div id="descricao-filtros"></div>
-        <div id="loading-message">Carregando dados...</div>
         <div id="charts-grid" class="grid-container" style="display: none;">
             <div class="chart-card">
-                <h2>Frequência dos Voluntários</h2>
+                <h3>Frequência dos Voluntários</h3>
                 <div class="chart-wrapper"><canvas id="grafico-frequencia"></canvas></div>
             </div>
             <div class="chart-card sticky">
-                <h2>Atividades Realizadas no Período</h2>
+                <h3>Atividades Realizadas no Período</h3>
                 <canvas id="grafico-atividades"></canvas>
             </div>
         </div>
+
+        <div id="novos-graficos-container" class="full-width-grid">
+             <div class="chart-card">
+                <h2>Evolução Financeira (Receitas vs. Despesas)</h2>
+                <canvas id="grafico-financeiro"></canvas>
+            </div>
+             <div class="chart-card">
+                <h2>Evolução dos Pedidos de Vibração</h2>
+                <canvas id="grafico-vibracoes"></canvas>
+            </div>
+        </div>
+
+        <div id="loading-message">Carregando dados...</div>
     </div>
 
     <script type="module">
@@ -83,7 +91,7 @@
         
         initializeApp(firebaseConfig);
 
-        protegerPagina(['super-admin', 'diretor', 'tesoureiro'])
+        protegerPagina(['super-admin', 'diretor', 'tesoureiro', 'conselheiro'])
             .then(user => {
                 document.getElementById('main-content').style.display = 'block';
                 inicializar();
@@ -181,11 +189,8 @@
                 canvasFrequencia.parentElement.style.height = `${Math.max(400, voluntariosOrdenadosGlobal.length * 40)}px`;
                 graficoFrequencia = new Chart(canvasFrequencia, { type: 'bar', data: { labels: voluntariosOrdenadosGlobal.map(item => item[0]), datasets: [{ label: 'Nº de Presenças', data: voluntariosOrdenadosGlobal.map(item => item[1]), backgroundColor: COR_PADRAO_BARRAS }] }, options: { indexAxis: 'y', maintainAspectRatio: false, scales: { x: { beginAtZero: true, ticks: { stepSize: 1 } } }, plugins: { legend: { display: false } } } });
                 
-                // ===================================================================
-                // LÓGICA CORRIGIDA AQUI
-                // ===================================================================
                 const contagemAtividades = {};
-                dados.forEach(dado => { 
+                dados.forEach(dado => {
                     const atividadesArray = normalizarAtividades(dado.atividade);
                     atividadesArray.forEach(a => { 
                         contagemAtividades[a] = (contagemAtividades[a] || 0) + 1; 
@@ -269,7 +274,6 @@
                 ui.filtroAtividade.addEventListener('change', aplicarFiltros);
             }
             
-            // A função 'inicializar' foi renomeada para 'carregarDadosIniciais' e é chamada aqui
             carregarDadosIniciais();
         }
     </script>
