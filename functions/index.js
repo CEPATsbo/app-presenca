@@ -3,10 +3,13 @@ const admin = require("firebase-admin");
 const webpush = require("web-push");
 const cors = require("cors")({ origin: true });
 const Fuse = require("fuse.js");
+const { google } = require("googleapis");
+const stream = require('stream');
 
 admin.initializeApp();
 const db = admin.firestore();
 const REGIAO = 'southamerica-east1';
+
 
 function configurarWebPush() {
     try {
@@ -394,5 +397,72 @@ exports.arquivarVibracoesSemanais = functions.region(REGIAO).pubsub.schedule('30
     } catch (error) {
         console.error("ERRO GRAVE durante o arquivamento das vibrações:", error);
         return null;
+    }
+});
+
+// ===================================================================
+// NOVA FUNÇÃO PARA UPLOAD DE ATAS
+// ===================================================================
+exports.uploadAtaParaDrive = functions.region(REGIAO).https.onCall(async (data, context) => {
+    if (!context.auth) {
+        throw new functions.https.HttpsError('unauthenticated', 'A função deve ser chamada por um usuário autenticado.');
+    }
+    // Futuramente, podemos adicionar o cargo 'secretaria' aqui.
+    if (!['super-admin'].includes(context.auth.token.role)) {
+        throw new functions.https.HttpsError('permission-denied', 'Permissão negada.');
+    }
+
+    const { fileName, fileType, fileData, tituloAta, dataReuniao } = data;
+    if (!fileName || !fileType || !fileData || !tituloAta || !dataReuniao) {
+        throw new functions.https.HttpsError('invalid-argument', 'Dados incompletos para o upload.');
+    }
+
+    const auth = new google.auth.GoogleAuth({
+        keyFile: './google-credentials.json',
+        scopes: ['https://www.googleapis.com/auth/drive'],
+    });
+
+    const drive = google.drive({ version: 'v3', auth });
+    const FOLDER_ID = '1rQCcelPB8i2jH7kBa8lRG2GWdEfQnwPT'; // ID da sua pasta
+
+    // Converte o dado Base64 em um buffer
+    const buffer = Buffer.from(fileData.split(',')[1], 'base64');
+    const bufferStream = new stream.PassThrough();
+    bufferStream.end(buffer);
+
+    try {
+        const response = await drive.files.create({
+            requestBody: {
+                name: fileName,
+                parents: [FOLDER_ID],
+            },
+            media: {
+                mimeType: fileType,
+                body: bufferStream,
+            },
+            fields: 'id, webViewLink' // Pede para a API retornar o ID e o link do arquivo
+        });
+
+        const fileId = response.data.id;
+        const fileLink = response.data.webViewLink;
+
+        // Salva os metadados no Firestore
+        await db.collection('atas').add({
+            titulo: tituloAta,
+            dataReuniao: new Date(dataReuniao),
+            driveFileId: fileId,
+            driveFileLink: fileLink,
+            enviadoPor: {
+                uid: context.auth.uid,
+                nome: context.auth.token.name || context.auth.token.email
+            },
+            criadoEm: admin.firestore.FieldValue.serverTimestamp()
+        });
+        
+        return { success: true, message: 'Ata enviada com sucesso!', fileLink: fileLink };
+
+    } catch (error) {
+        console.error("Erro ao fazer upload para o Google Drive:", error);
+        throw new functions.https.HttpsError('internal', 'Não foi possível enviar o arquivo para o Drive.');
     }
 });
