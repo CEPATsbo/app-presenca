@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Estatísticas - Presença Voluntária</title>
+    <title>Estatísticas - C.E. Paulo de Tarso</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
         body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background-color: #f4f6f9; color: #333; margin: 0; padding: 20px; }
@@ -78,7 +78,7 @@
 
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
-        import { getFirestore, collection, getDocs, query, orderBy, where, documentId } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
+        import { getFirestore, collection, getDocs, query, orderBy, where, documentId, Timestamp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
         import { protegerPagina } from '/auth.js';
 
         const firebaseConfig = {
@@ -261,8 +261,8 @@
                     ui.dataInicio.value = umMesAtras.toISOString().split('T')[0];
                     
                     aplicarFiltrosPresenca();
-                    // Chama a nova função para o gráfico financeiro
                     carregarGraficoFinanceiro();
+                    carregarGraficoVibracoes(); // Chama a nova função
                 } catch (error) {
                     console.error("Erro ao inicializar:", error);
                     ui.loadingMessage.textContent = "Erro ao carregar dados. Verifique o console.";
@@ -273,9 +273,6 @@
                 ui.filtroAtividade.addEventListener('change', aplicarFiltrosPresenca);
             }
             
-            // ===================================================================
-            // NOVA FUNÇÃO PARA O GRÁFICO FINANCEIRO
-            // ===================================================================
             async function carregarGraficoFinanceiro() {
                 const feedbackDiv = document.getElementById('financeiro-feedback');
                 const canvas = document.getElementById('grafico-financeiro');
@@ -298,7 +295,7 @@
                     const dadosMensais = {};
 
                     snapshot.forEach(doc => {
-                        const mesAno = doc.id; // ex: "2024-05"
+                        const mesAno = doc.id;
                         const dados = doc.data();
                         let totalReceitas = 0;
                         let totalDespesas = 0;
@@ -344,20 +341,92 @@
                                 }
                             ]
                         },
-                        options: {
-                            scales: {
-                                y: {
-                                    beginAtZero: true,
-                                    ticks: {
-                                        callback: function(value) { return 'R$ ' + value.toLocaleString('pt-BR'); }
-                                    }
-                                }
-                            }
-                        }
+                        options: { scales: { y: { beginAtZero: true, ticks: { callback: function(value) { return 'R$ ' + value.toLocaleString('pt-BR'); } } } } }
                     });
                 } catch (error) {
                     console.error("Erro ao gerar gráfico financeiro:", error);
                     feedbackDiv.textContent = "Erro ao carregar dados financeiros.";
+                    feedbackDiv.style.color = 'red';
+                }
+            }
+
+            // ===================================================================
+            // NOVA FUNÇÃO PARA O GRÁFICO DE VIBRAÇÕES
+            // ===================================================================
+            async function carregarGraficoVibracoes() {
+                const feedbackDiv = document.getElementById('vibracoes-feedback');
+                const canvas = document.getElementById('grafico-vibracoes');
+                feedbackDiv.textContent = 'Buscando histórico de vibrações...';
+
+                try {
+                    const historicoRef = collection(db, "historico_vibracoes");
+                    const q = query(historicoRef, orderBy("semanaDeReferencia", "desc"));
+                    const snapshot = await getDocs(q);
+
+                    if (snapshot.empty) {
+                        feedbackDiv.textContent = "Nenhum histórico de vibrações encontrado para gerar o gráfico.";
+                        canvas.style.display = 'none';
+                        return;
+                    }
+
+                    feedbackDiv.style.display = 'none';
+                    canvas.style.display = 'block';
+
+                    const dadosSemanais = {};
+                    snapshot.forEach(doc => {
+                        const dados = doc.data();
+                        const semana = dados.semanaDeReferencia;
+                        if (!semana) return;
+
+                        if (!dadosSemanais[semana]) {
+                            dadosSemanais[semana] = { encarnados: 0, desencarnados: 0 };
+                        }
+                        if (dados.tipo === 'encarnado') {
+                            dadosSemanais[semana].encarnados++;
+                        } else if (dados.tipo === 'desencarnado') {
+                            dadosSemanais[semana].desencarnados++;
+                        }
+                    });
+                    
+                    const semanasOrdenadas = Object.keys(dadosSemanais).sort();
+                    
+                    const labels = semanasOrdenadas.map(semana => {
+                        const [ano, mes, dia] = semana.split('-');
+                        return `${dia}/${mes}`;
+                    });
+                    const dadosEncarnados = semanasOrdenadas.map(semana => dadosSemanais[semana].encarnados);
+                    const dadosDesencarnados = semanasOrdenadas.map(semana => dadosSemanais[semana].desencarnados);
+
+                    new Chart(canvas, {
+                        type: 'bar',
+                        data: {
+                            labels: labels,
+                            datasets: [
+                                {
+                                    label: 'Encarnados',
+                                    data: dadosEncarnados,
+                                    backgroundColor: 'rgba(75, 192, 192, 0.7)', // VERDE
+                                    borderColor: 'rgba(75, 192, 192, 1)',
+                                    borderWidth: 1
+                                },
+                                {
+                                    label: 'Desencarnados',
+                                    data: dadosDesencarnados,
+                                    backgroundColor: 'rgba(54, 162, 235, 0.7)', // AZUL
+                                    borderColor: 'rgba(54, 162, 235, 1)',
+                                    borderWidth: 1
+                                }
+                            ]
+                        },
+                        options: {
+                            scales: {
+                                y: { beginAtZero: true, ticks: { stepSize: 5 } } // Ajusta o eixo Y
+                            }
+                        }
+                    });
+                } catch (error) {
+                    console.error("Erro ao gerar gráfico de vibrações:", error);
+                    feedbackDiv.textContent = "Erro ao carregar dados de vibrações.";
                     feedbackDiv.style.color = 'red';
                 }
             }
