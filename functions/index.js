@@ -283,7 +283,7 @@ exports.enviarNotificacaoImediata = functions.region(REGIAO).https.onRequest((re
     });
 });
 
-exports.verificarAgendamentosAgendados = functions.region(REGIAO).pubsub.schedule('every 10 minutes').timeZone('America/Sao_Paulo').onRun(async (context) => {
+exports.verificarAgendamentosAgendados = functions.region(REGIAO).pubsub.schedule('every 1 hours').timeZone('America/Sao_Paulo').onRun(async (context) => {
     if (!configurarWebPush()) { return null; }
     
     const agoraSP = new Date();
