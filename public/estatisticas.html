@@ -25,6 +25,7 @@
         #loading-message { font-size: 1.5em; text-align: center; padding: 50px; }
         .chart-wrapper { position: relative; }
         #descricao-filtros { text-align: center; color: #555; font-style: italic; margin-bottom: 20px; min-height: 1.2em; }
+        .feedback-grafico { text-align: center; padding: 20px; font-style: italic; color: #666; }
     </style>
 </head>
 <body>
@@ -62,10 +63,12 @@
         <div id="novos-graficos-container" class="full-width-grid">
              <div class="chart-card">
                 <h2>Evolução Financeira (Receitas vs. Despesas)</h2>
+                <div id="financeiro-feedback" class="feedback-grafico"></div>
                 <canvas id="grafico-financeiro"></canvas>
             </div>
              <div class="chart-card">
                 <h2>Evolução dos Pedidos de Vibração</h2>
+                <div id="vibracoes-feedback" class="feedback-grafico"></div>
                 <canvas id="grafico-vibracoes"></canvas>
             </div>
         </div>
@@ -75,7 +78,7 @@
 
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
-        import { getFirestore, collection, getDocs, query, orderBy, where } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
+        import { getFirestore, collection, getDocs, query, orderBy, where, documentId } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
         import { protegerPagina } from '/auth.js';
 
         const firebaseConfig = {
@@ -104,7 +107,7 @@
         function inicializar() {
             const db = getFirestore();
 
-            // Lógica para os gráficos existentes
+            // Lógica para os gráficos existentes (Presença)
             let todosOsDados = [];
             let todasAsAtividades = new Map();
             let graficoFrequencia, graficoAtividades;
@@ -258,7 +261,8 @@
                     ui.dataInicio.value = umMesAtras.toISOString().split('T')[0];
                     
                     aplicarFiltrosPresenca();
-                    carregarGraficoFinanceiro(); // Chama a nova função
+                    // Chama a nova função para o gráfico financeiro
+                    carregarGraficoFinanceiro();
                 } catch (error) {
                     console.error("Erro ao inicializar:", error);
                     ui.loadingMessage.textContent = "Erro ao carregar dados. Verifique o console.";
@@ -268,80 +272,94 @@
                 ui.dataFim.addEventListener('change', aplicarFiltrosPresenca);
                 ui.filtroAtividade.addEventListener('change', aplicarFiltrosPresenca);
             }
-
+            
             // ===================================================================
             // NOVA FUNÇÃO PARA O GRÁFICO FINANCEIRO
             // ===================================================================
             async function carregarGraficoFinanceiro() {
-                const balancetesRef = collection(db, "balancetes");
-                const q = query(balancetesRef, where("status", "==", "aprovado"), orderBy(document.id()));
-                const snapshot = await getDocs(q);
+                const feedbackDiv = document.getElementById('financeiro-feedback');
+                const canvas = document.getElementById('grafico-financeiro');
+                feedbackDiv.textContent = 'Buscando dados financeiros...';
 
-                if (snapshot.empty) {
-                    return; // Sem dados, não renderiza o gráfico
-                }
+                try {
+                    const balancetesRef = collection(db, "balancetes");
+                    const q = query(balancetesRef, where("status", "==", "aprovado"), orderBy(documentId()));
+                    const snapshot = await getDocs(q);
 
-                const dadosMensais = {};
+                    if (snapshot.empty) {
+                        feedbackDiv.textContent = "Nenhum balancete aprovado encontrado para gerar o gráfico.";
+                        canvas.style.display = 'none';
+                        return;
+                    }
 
-                snapshot.forEach(doc => {
-                    const mesAno = doc.id; // ex: "2024-05"
-                    const dados = doc.data();
-                    let totalReceitas = 0;
-                    let totalDespesas = 0;
+                    feedbackDiv.style.display = 'none';
+                    canvas.style.display = 'block';
 
-                    Object.values(dados.receitas || {}).flat().forEach(item => totalReceitas += item.valor || 0);
-                    Object.values(dados.despesas || {}).flat().forEach(item => totalDespesas += item.valor || 0);
+                    const dadosMensais = {};
+
+                    snapshot.forEach(doc => {
+                        const mesAno = doc.id; // ex: "2024-05"
+                        const dados = doc.data();
+                        let totalReceitas = 0;
+                        let totalDespesas = 0;
+
+                        Object.values(dados.receitas || {}).flat().forEach(item => totalReceitas += item.valor || 0);
+                        Object.values(dados.despesas || {}).flat().forEach(item => totalDespesas += item.valor || 0);
+                        
+                        dadosMensais[mesAno] = {
+                            receitas: totalReceitas,
+                            despesas: totalDespesas
+                        };
+                    });
                     
-                    dadosMensais[mesAno] = {
-                        receitas: totalReceitas,
-                        despesas: totalDespesas
-                    };
-                });
-                
-                const mesesOrdenados = Object.keys(dadosMensais).sort();
-                
-                const labels = mesesOrdenados.map(mes => {
-                    const [ano, mesNum] = mes.split('-');
-                    return `${mesNum}/${ano.slice(2)}`;
-                });
-                const dadosReceitas = mesesOrdenados.map(mes => dadosMensais[mes].receitas);
-                const dadosDespesas = mesesOrdenados.map(mes => dadosMensais[mes].despesas);
+                    const mesesOrdenados = Object.keys(dadosMensais).sort();
+                    
+                    const labels = mesesOrdenados.map(mes => {
+                        const [ano, mesNum] = mes.split('-');
+                        return `${mesNum}/${ano.slice(2)}`;
+                    });
+                    const dadosReceitas = mesesOrdenados.map(mes => dadosMensais[mes].receitas);
+                    const dadosDespesas = mesesOrdenados.map(mes => dadosMensais[mes].despesas);
 
-                const ctx = document.getElementById('grafico-financeiro').getContext('2d');
-                new Chart(ctx, {
-                    type: 'line',
-                    data: {
-                        labels: labels,
-                        datasets: [
-                            {
-                                label: 'Receitas',
-                                data: dadosReceitas,
-                                borderColor: 'rgba(75, 192, 192, 1)',
-                                backgroundColor: 'rgba(75, 192, 192, 0.2)',
-                                fill: true,
-                                tension: 0.1
-                            },
-                            {
-                                label: 'Despesas',
-                                data: dadosDespesas,
-                                borderColor: 'rgba(255, 99, 132, 1)',
-                                backgroundColor: 'rgba(255, 99, 132, 0.2)',
-                                fill: true,
-                                tension: 0.1
-                            }
-                        ]
-                    },
-                    options: {
-                        scales: {
-                            y: {
-                                beginAtZero: true,
-                                ticks: {
-                                    callback: function(value) { return 'R$ ' + value.toLocaleString('pt-BR'); }
+                    new Chart(canvas, {
+                        type: 'line',
+                        data: {
+                            labels: labels,
+                            datasets: [
+                                {
+                                    label: 'Receitas',
+                                    data: dadosReceitas,
+                                    borderColor: 'rgba(75, 192, 192, 1)',
+                                    backgroundColor: 'rgba(75, 192, 192, 0.2)',
+                                    fill: true,
+                                    tension: 0.1
+                                },
+                                {
+                                    label: 'Despesas',
+                                    data: dadosDespesas,
+                                    borderColor: 'rgba(255, 99, 132, 1)',
+                                    backgroundColor: 'rgba(255, 99, 132, 0.2)',
+                                    fill: true,
+                                    tension: 0.1
+                                }
+                            ]
+                        },
+                        options: {
+                            scales: {
+                                y: {
+                                    beginAtZero: true,
+                                    ticks: {
+                                        callback: function(value) { return 'R$ ' + value.toLocaleString('pt-BR'); }
+                                    }
                                 }
                             }
                         }
-                    }
-                });
+                    });
+                } catch (error) {
+                    console.error("Erro ao gerar gráfico financeiro:", error);
+                    feedbackDiv.textContent = "Erro ao carregar dados financeiros.";
+                    feedbackDiv.style.color = 'red';
+                }
             }
             
             carregarDadosIniciais();
