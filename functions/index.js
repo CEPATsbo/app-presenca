@@ -3,13 +3,12 @@ const admin = require("firebase-admin");
 const webpush = require("web-push");
 const cors = require("cors")({ origin: true });
 const Fuse = require("fuse.js");
-const { google } = require("googleapis");
-const stream = require('stream');
+
 
 admin.initializeApp();
 const db = admin.firestore();
+const storage = admin.storage(); // Adiciona o serviço de Storage
 const REGIAO = 'southamerica-east1';
-
 
 function configurarWebPush() {
     try {
@@ -175,11 +174,7 @@ exports.revogarAcessoConselheiro = functions.region(REGIAO).https.onCall(async (
     }
 });
 
-// ===================================================================
-// FUNÇÃO CORRIGIDA - REVERTIDA PARA onCall
-// ===================================================================
 exports.registrarVotoConselho = functions.region(REGIAO).https.onCall(async (data, context) => {
-    // A verificação de autenticação é feita automaticamente pelo onCall
     if (!context.auth) {
         throw new functions.https.HttpsError('unauthenticated', 'A função deve ser chamada por um usuário autenticado.');
     }
@@ -401,14 +396,15 @@ exports.arquivarVibracoesSemanais = functions.region(REGIAO).pubsub.schedule('30
 });
 
 // ===================================================================
-// NOVA FUNÇÃO PARA UPLOAD DE ATAS
+// NOVA FUNÇÃO PARA UPLOAD DE ATAS NO FIREBASE STORAGE
 // ===================================================================
-exports.uploadAtaParaDrive = functions.region(REGIAO).https.onCall(async (data, context) => {
+exports.uploadAtaParaStorage = functions.region(REGIAO).https.onCall(async (data, context) => {
     if (!context.auth) {
         throw new functions.https.HttpsError('unauthenticated', 'A função deve ser chamada por um usuário autenticado.');
     }
-    // Futuramente, podemos adicionar o cargo 'secretaria' aqui.
-    if (!['super-admin'].includes(context.auth.token.role)) {
+    
+    const permissoes = ['super-admin', 'diretor', 'tesoureiro']; 
+    if (!permissoes.includes(context.auth.token.role)) {
         throw new functions.https.HttpsError('permission-denied', 'Permissão negada.');
     }
 
@@ -417,41 +413,28 @@ exports.uploadAtaParaDrive = functions.region(REGIAO).https.onCall(async (data, 
         throw new functions.https.HttpsError('invalid-argument', 'Dados incompletos para o upload.');
     }
 
-    const auth = new google.auth.GoogleAuth({
-        keyFile: './google-credentials.json',
-        scopes: ['https://www.googleapis.com/auth/drive'],
-    });
-
-    const drive = google.drive({ version: 'v3', auth });
-    const FOLDER_ID = '1rQCcelPB8i2jH7kBa8lRG2GWdEfQnwPT'; // ID da sua pasta
-
-    // Converte o dado Base64 em um buffer
-    const buffer = Buffer.from(fileData.split(',')[1], 'base64');
-    const bufferStream = new stream.PassThrough();
-    bufferStream.end(buffer);
-
     try {
-        const response = await drive.files.create({
-            requestBody: {
-                name: fileName,
-                parents: [FOLDER_ID],
-            },
-            media: {
-                mimeType: fileType,
-                body: bufferStream,
-            },
-            fields: 'id, webViewLink' // Pede para a API retornar o ID e o link do arquivo
+        const bucket = storage.bucket();
+        const filePath = `atas/${Date.now()}-${fileName}`;
+        const file = bucket.file(filePath);
+
+        // Converte o dado Base64 (que vem do site) em um buffer de arquivo
+        const buffer = Buffer.from(fileData.split(',')[1], 'base64');
+
+        // Salva o buffer no Firebase Storage
+        await file.save(buffer, {
+            metadata: { contentType: fileType },
+            public: true // Torna o arquivo publicamente legível para o link funcionar
         });
 
-        const fileId = response.data.id;
-        const fileLink = response.data.webViewLink;
+        const publicUrl = file.publicUrl();
 
-        // Salva os metadados no Firestore
+        // Salva as informações da ata no banco de dados Firestore
         await db.collection('atas').add({
             titulo: tituloAta,
             dataReuniao: new Date(dataReuniao),
-            driveFileId: fileId,
-            driveFileLink: fileLink,
+            storagePath: filePath,
+            fileUrl: publicUrl,
             enviadoPor: {
                 uid: context.auth.uid,
                 nome: context.auth.token.name || context.auth.token.email
@@ -459,50 +442,10 @@ exports.uploadAtaParaDrive = functions.region(REGIAO).https.onCall(async (data, 
             criadoEm: admin.firestore.FieldValue.serverTimestamp()
         });
         
-        return { success: true, message: 'Ata enviada com sucesso!', fileLink: fileLink };
+        return { success: true, message: 'Ata arquivada com sucesso!' };
 
     } catch (error) {
-        console.error("Erro ao fazer upload para o Google Drive:", error);
-        throw new functions.https.HttpsError('internal', 'Não foi possível enviar o arquivo para o Drive.');
-    }
-});
-
-// ===================================================================
-// NOVA FUNÇÃO PARA APENAS SALVAR OS METADADOS DA ATA
-// ===================================================================
-exports.salvarMetadadosDaAta = functions.region(REGIAO).https.onCall(async (data, context) => {
-    if (!context.auth) {
-        throw new functions.https.HttpsError('unauthenticated', 'A função deve ser chamada por um usuário autenticado.');
-    }
-    
-    // Define os cargos que podem registrar atas
-    const permissoes = ['super-admin', 'diretor', 'tesoureiro']; 
-    if (!permissoes.includes(context.auth.token.role)) {
-        throw new functions.https.HttpsError('permission-denied', 'Permissão negada.');
-    }
-
-    const { tituloAta, dataReuniao, driveFileId, driveFileLink } = data;
-    if (!tituloAta || !dataReuniao || !driveFileId || !driveFileLink) {
-        throw new functions.https.HttpsError('invalid-argument', 'Dados incompletos para salvar os metadados da ata.');
-    }
-
-    try {
-        await db.collection('atas').add({
-            titulo: tituloAta,
-            dataReuniao: new Date(dataReuniao),
-            driveFileId: driveFileId,
-            driveFileLink: driveFileLink,
-            enviadoPor: {
-                uid: context.auth.uid,
-                nome: context.auth.token.name || context.auth.token.email
-            },
-            criadoEm: admin.firestore.FieldValue.serverTimestamp()
-        });
-        
-        return { success: true, message: 'Metadados da ata salvos com sucesso!' };
-
-    } catch (error) {
-        console.error("Erro ao salvar metadados no Firestore:", error);
-        throw new functions.https.HttpsError('internal', 'Não foi possível salvar os dados da ata.');
+        console.error("Erro ao fazer upload para o Firebase Storage:", error);
+        throw new functions.https.HttpsError('internal', 'Não foi possível enviar o arquivo.');
     }
 });
