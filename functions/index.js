@@ -466,3 +466,43 @@ exports.uploadAtaParaDrive = functions.region(REGIAO).https.onCall(async (data, 
         throw new functions.https.HttpsError('internal', 'Não foi possível enviar o arquivo para o Drive.');
     }
 });
+
+// ===================================================================
+// NOVA FUNÇÃO PARA APENAS SALVAR OS METADADOS DA ATA
+// ===================================================================
+exports.salvarMetadadosDaAta = functions.region(REGIAO).https.onCall(async (data, context) => {
+    if (!context.auth) {
+        throw new functions.https.HttpsError('unauthenticated', 'A função deve ser chamada por um usuário autenticado.');
+    }
+    
+    // Define os cargos que podem registrar atas
+    const permissoes = ['super-admin', 'diretor', 'tesoureiro']; 
+    if (!permissoes.includes(context.auth.token.role)) {
+        throw new functions.https.HttpsError('permission-denied', 'Permissão negada.');
+    }
+
+    const { tituloAta, dataReuniao, driveFileId, driveFileLink } = data;
+    if (!tituloAta || !dataReuniao || !driveFileId || !driveFileLink) {
+        throw new functions.https.HttpsError('invalid-argument', 'Dados incompletos para salvar os metadados da ata.');
+    }
+
+    try {
+        await db.collection('atas').add({
+            titulo: tituloAta,
+            dataReuniao: new Date(dataReuniao),
+            driveFileId: driveFileId,
+            driveFileLink: driveFileLink,
+            enviadoPor: {
+                uid: context.auth.uid,
+                nome: context.auth.token.name || context.auth.token.email
+            },
+            criadoEm: admin.firestore.FieldValue.serverTimestamp()
+        });
+        
+        return { success: true, message: 'Metadados da ata salvos com sucesso!' };
+
+    } catch (error) {
+        console.error("Erro ao salvar metadados no Firestore:", error);
+        throw new functions.https.HttpsError('internal', 'Não foi possível salvar os dados da ata.');
+    }
+});
