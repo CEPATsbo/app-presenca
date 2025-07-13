@@ -83,7 +83,7 @@
         </div>
     
     <script type="module">
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
+        import { initializeApp, getApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
         import { getFirestore, doc, setDoc, getDoc, updateDoc, collection, addDoc, serverTimestamp, query, where, getDocs, onSnapshot, orderBy, documentId } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
         import { getAuth } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-auth.js";
         import { protegerPagina } from '/auth.js';
@@ -136,34 +136,36 @@
                     </div>
                 </div>
                 <div id="status-bar" class="status-bar"></div>
-                <div class="corpo-balancete">
-                    <div class="coluna">
-                        <h2>RECEITAS</h2>
-                        <table class="tabela-balancete">
-                            <thead><tr><th style="width:70%;">RECEITAS</th><th>VALOR</th></tr></thead>
-                            <tbody id="corpo-tabela-receitas"></tbody>
-                            <tfoot><tr class="total-row"><td>TOTAL DE RECEITAS</td><td id="total-receitas">R$ 0,00</td></tr></tfoot>
-                        </table>
-                        <button class="btn-add-categoria" data-target="corpo-tabela-receitas">+ Adicionar Categoria</button>
+                <div id="balancete-corpo-wrapper">
+                    <div class="corpo-balancete">
+                        <div class="coluna">
+                            <h2>RECEITAS</h2>
+                            <table class="tabela-balancete">
+                                <thead><tr><th style="width:70%;">RECEITAS</th><th>VALOR</th></tr></thead>
+                                <tbody id="corpo-tabela-receitas"></tbody>
+                                <tfoot><tr class="total-row"><td>TOTAL DE RECEITAS</td><td id="total-receitas">R$ 0,00</td></tr></tfoot>
+                            </table>
+                            <button class="btn-add-categoria" data-target="corpo-tabela-receitas">+ Adicionar Categoria</button>
+                        </div>
+                        <div class="coluna">
+                            <h2>DESPESAS</h2>
+                            <table class="tabela-balancete">
+                                <thead><tr><th style="width:70%;">DESPESAS</th><th>VALOR</th></tr></thead>
+                                <tbody id="corpo-tabela-despesas"></tbody>
+                                <tfoot><tr class="total-row"><td>TOTAL DE DESPESAS</td><td id="total-despesas">R$ 0,00</td></tr></tfoot>
+                            </table>
+                            <button class="btn-add-categoria" data-target="corpo-tabela-despesas">+ Adicionar Categoria</button>
+                        </div>
                     </div>
-                    <div class="coluna">
-                        <h2>DESPESAS</h2>
-                        <table class="tabela-balancete">
-                            <thead><tr><th style="width:70%;">DESPESAS</th><th>VALOR</th></tr></thead>
-                            <tbody id="corpo-tabela-despesas"></tbody>
-                            <tfoot><tr class="total-row"><td>TOTAL DE DESPESAS</td><td id="total-despesas">R$ 0,00</td></tr></tfoot>
-                        </table>
-                        <button class="btn-add-categoria" data-target="corpo-tabela-despesas">+ Adicionar Categoria</button>
+                    <div class="corpo-balancete" style="margin-top: 20px;">
+                        <div class="coluna"><table class="tabela-balancete"><tr class="total-row"><td>SALDO NO PERÍODO</td><td id="saldo-periodo">R$ 0,00</td></tr></table></div>
+                        <div class="coluna"><table class="tabela-balancete">
+                            <tbody>
+                                <tr><td id="nome-saldo-anterior" contenteditable="true">SALDO ANTERIOR (PagBank+Sicoob+Espécie)</td><td><input type="number" id="saldo-valor-anterior"></td></tr>
+                            </tbody>
+                            <tfoot><tr class="total-row"><td>SALDO ATUAL</td><td id="saldo-atual">R$ 0,00</td></tr></tfoot>
+                        </table></div>
                     </div>
-                </div>
-                <div class="corpo-balancete" style="margin-top: 20px;">
-                    <div class="coluna"><table class="tabela-balancete"><tr class="total-row"><td>SALDO NO PERÍODO</td><td id="saldo-periodo">R$ 0,00</td></tr></table></div>
-                    <div class="coluna"><table class="tabela-balancete">
-                        <tbody>
-                            <tr><td id="nome-saldo-anterior" contenteditable="true">SALDO ANTERIOR (PagBank+Sicoob+Espécie)</td><td><input type="number" id="saldo-valor-anterior"></td></tr>
-                        </tbody>
-                        <tfoot><tr class="total-row"><td>SALDO ATUAL</td><td id="saldo-atual">R$ 0,00</td></tr></tfoot>
-                    </table></div>
                 </div>
                 <div class="actions-container">
                     <button id="btn-salvar">Salvar Balancete</button>
@@ -184,20 +186,18 @@
             const seletorInicio = document.getElementById('mes-ano-inicio');
             const seletorFim = document.getElementById('mes-ano-fim');
             const seletorSalvos = document.getElementById('seletor-balancetes-salvos');
-            const btnSalvar = document.getElementById('btn-salvar');
-            const btnLiberar = document.getElementById('btn-liberar');
-            const btnGerarPdf = document.getElementById('btn-gerar-pdf');
-            const statusBar = document.getElementById('status-bar');
-            const tituloBalancete = document.getElementById('titulo-balancete');
-            const logAuditoriaCollection = collection(db, 'log_auditoria');
-            const mensagensContainer = document.getElementById('mensagens-container');
-            const listaMensagens = document.getElementById('lista-mensagens');
-            const btnEnviarResposta = document.getElementById('btn-enviar-resposta');
-            const textoResposta = document.getElementById('texto-resposta');
-            const assinaturasSection = document.getElementById('assinaturas-section');
+            const balanceteCorpoWrapper = document.getElementById('balancete-corpo-wrapper');
+            
+            // Estas referências são buscadas dinamicamente quando o balancete é renderizado
+            let btnSalvar, btnLiberar, btnGerarPdf, statusBar, tituloBalancete, 
+                mensagensContainer, listaMensagens, btnEnviarResposta, 
+                textoResposta, assinaturasSection;
+
             let balanceteAtual = {};
             let balanceteExisteNoDB = false;
-            
+            let mesesBloqueados = new Set();
+            let ultimoPeriodoValido = { inicio: '', fim: '' };
+
             const balancetePadrao = {
                 saldoAnterior: 0, status: 'em elaboração',
                 nomes: { "nome-saldo-anterior": "SALDO ANTERIOR (PagBank+Sicoob+Espécie)"},
@@ -252,6 +252,7 @@
 
             async function registrarLog(acao, detalhes) {
                 if (!user) return;
+                const logAuditoriaCollection = collection(db, 'log_auditoria');
                 await addDoc(logAuditoriaCollection, {
                     acao, autor: { uid: user.uid, nome: user.displayName || user.email },
                     timestamp: serverTimestamp(), detalhes
@@ -262,11 +263,13 @@
                 document.querySelectorAll('.balancete-container input[type="number"]').forEach(input => input.disabled = !podeEditar);
                 document.querySelectorAll('.balancete-container [contenteditable]').forEach(el => el.setAttribute('contenteditable', podeEditar));
                 document.querySelectorAll('.btn-add-row, .btn-add-categoria').forEach(btn => btn.style.visibility = podeEditar ? 'visible' : 'hidden');
-                btnSalvar.disabled = !podeEditar;
-                btnLiberar.disabled = !podeEditar;
+                document.getElementById('btn-salvar').disabled = !podeEditar;
+                document.getElementById('btn-liberar').disabled = !podeEditar;
             }
 
             function atualizarStatusUI(status) {
+                statusBar = document.getElementById('status-bar');
+                btnGerarPdf = document.getElementById('btn-gerar-pdf');
                 let texto, classe;
                 const userRole = user.claims.role;
                 const podeEditar = userRole === 'tesoureiro' || userRole === 'super-admin';
@@ -295,6 +298,8 @@
             }
             
             function renderizarMensagens(mensagens) {
+                mensagensContainer = document.getElementById('mensagens-container');
+                listaMensagens = document.getElementById('lista-mensagens');
                 if (mensagens && mensagens.length > 0) {
                     mensagensContainer.style.display = 'block';
                     listaMensagens.innerHTML = '';
@@ -328,9 +333,10 @@
             }
 
             function renderizarTabela(dados, periodoId) {
+                renderizarCorpoBalancete();
+                tituloBalancete = document.getElementById('titulo-balancete');
                 const corpoReceitas = document.getElementById('corpo-tabela-receitas');
                 const corpoDespesas = document.getElementById('corpo-tabela-despesas');
-                corpoReceitas.innerHTML = ''; corpoDespesas.innerHTML = '';
                 
                 tituloBalancete.textContent = formatarNomeOpcao(periodoId, true);
 
@@ -353,47 +359,50 @@
                 const mesFim = seletorFim.value;
 
                 if (!mesInicio || !mesFim) return;
-                if (mesFim < mesInicio) {
-                    alert("O mês final não pode ser anterior ao mês inicial.");
-                    seletorFim.value = mesInicio;
-                    return;
-                }
 
-                const periodoId = `${mesInicio}_${mesFim}`;
-                const balanceteRef = doc(db, "balancetes", periodoId);
-                const docSnap = await getDoc(balanceteRef);
+                if (validarPeriodo(mesInicio, mesFim)) {
+                    const periodoId = `${mesInicio}_${mesFim}`;
+                    const balanceteRef = doc(db, "balancetes", periodoId);
+                    const docSnap = await getDoc(balanceteRef);
 
-                if (docSnap.exists()) {
-                    balanceteExisteNoDB = true;
-                    balanceteAtual = docSnap.data();
-                    renderizarTabela(balanceteAtual, periodoId);
-                    atualizarStatusUI(balanceteAtual.status || 'em elaboração');
-                    renderizarMensagens(balanceteAtual.mensagens || []);
+                    if (docSnap.exists()) {
+                        balanceteExisteNoDB = true;
+                        balanceteAtual = docSnap.data();
+                        renderizarTabela(balanceteAtual, periodoId);
+                        atualizarStatusUI(balanceteAtual.status || 'em elaboração');
+                        renderizarMensagens(balanceteAtual.mensagens || []);
 
-                    if (balanceteAtual.status === 'aprovado') {
-                        const logsQuery = query(collection(db, "log_auditoria"), where("detalhes.periodo", "==", periodoId));
-                        const logsSnapshot = await getDocs(logsQuery);
-                        let liberacaoLog = null;
-                        const aprovacaoLogs = [];
-                        logsSnapshot.forEach(logDoc => {
-                            const logData = logDoc.data();
-                            if (logData.acao === 'LIBEROU_BALANCETE') liberacaoLog = logData;
-                            else if (logData.acao === 'VOTOU_BALANCETE' && logData.detalhes?.voto === 'APROVADO') aprovacaoLogs.push(logData);
-                        });
-                        renderizarAssinaturas(true, liberacaoLog, aprovacaoLogs);
+                        if (balanceteAtual.status === 'aprovado') {
+                            const logsQuery = query(collection(db, "log_auditoria"), where("detalhes.periodo", "==", periodoId));
+                            const logsSnapshot = await getDocs(logsQuery);
+                            let liberacaoLog = null;
+                            const aprovacaoLogs = [];
+                            logsSnapshot.forEach(logDoc => {
+                                const logData = logDoc.data();
+                                if (logData.acao === 'LIBEROU_BALANCETE') liberacaoLog = logData;
+                                else if (logData.acao === 'VOTOU_BALANCETE' && logData.detalhes?.voto === 'APROVADO') aprovacaoLogs.push(logData);
+                            });
+                            renderizarAssinaturas(true, liberacaoLog, aprovacaoLogs);
+                        } else {
+                            renderizarAssinaturas(false);
+                        }
                     } else {
+                        balanceteExisteNoDB = false;
+                        balanceteAtual = JSON.parse(JSON.stringify(balancetePadrao));
+                        renderizarTabela(balanceteAtual, periodoId);
+                        atualizarStatusUI('em elaboração');
                         renderizarAssinaturas(false);
                     }
+                    ultimoPeriodoValido = { inicio: mesInicio, fim: mesFim };
                 } else {
-                    balanceteExisteNoDB = false;
-                    balanceteAtual = JSON.parse(JSON.stringify(balancetePadrao));
-                    renderizarTabela(balanceteAtual, periodoId);
-                    atualizarStatusUI('em elaboração');
-                    renderizarAssinaturas(false);
+                    alert("O período selecionado inclui meses que já pertencem a um balancete existente. Por favor, escolha um período livre.");
+                    seletorInicio.value = ultimoPeriodoValido.inicio;
+                    seletorFim.value = ultimoPeriodoValido.fim;
                 }
             }
             
             function renderizarAssinaturas(isAprovado, logLiberacao, logsAprovacao) {
+                assinaturasSection = document.getElementById('assinaturas-section');
                 assinaturasSection.innerHTML = ''; 
                 let html = '';
                 if (isAprovado) {
