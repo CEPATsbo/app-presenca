@@ -6,9 +6,9 @@
     <title>Admin - Conselho Fiscal</title>
     <style>
         body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background-color: #f4f6f9; display: flex; flex-direction: column; align-items: center; margin: 0; padding: 20px; box-sizing: border-box; }
-        .admin-nav { width: 100%; max-width: 1100px; background-color: #fff; padding: 15px; margin-bottom: 30px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); text-align: center; display: flex; flex-wrap: wrap; justify-content: center; gap: 15px 25px; }
-        .admin-nav a { color: #1565c0; text-decoration: none; font-weight: bold; font-size: 1.1em; }
-        .admin-nav a.active, .admin-nav a:hover { text-decoration: underline; color: #0d47a1; }
+        .nav-voltar { max-width: 1200px; margin: 0 auto 30px auto; text-align: left; }
+        .btn-voltar { background-color: #e9ecef; color: #495057; border: 1px solid #dee2e6; padding: 10px 20px; border-radius: 8px; font-weight: bold; font-size: 1em; text-decoration: none; transition: background-color 0.2s; }
+        .btn-voltar:hover { background-color: #dee2e6; }
         .main-container { display: flex; gap: 30px; width: 100%; max-width: 1600px; align-items: flex-start; }
         .balancete-container { background-color: white; padding: 40px; border-radius: 8px; box-shadow: 0 4px 20px rgba(0,0,0,0.1); flex-grow: 1; }
         .controles-container { background-color: white; padding: 20px; border-radius: 8px; box-shadow: 0 4px 20px rgba(0,0,0,0.1); width: 100%; max-width: 350px; position: -webkit-sticky; position: sticky; top: 20px; }
@@ -49,9 +49,6 @@
         .mensagem-autor { font-weight: bold; }
         .mensagem-data { font-size: 0.8em; color: #777; }
         .hidden { display: none; }
-        .nav-voltar { max-width: 1200px; margin: 0 auto 30px auto; text-align: left; }
-.btn-voltar { background-color: #e9ecef; color: #495057; border: 1px solid #dee2e6; padding: 10px 20px; border-radius: 8px; font-weight: bold; font-size: 1em; text-decoration: none; transition: background-color 0.2s; }
-.btn-voltar:hover { background-color: #dee2e6; }
     </style>
 </head>
 <body>
@@ -183,6 +180,22 @@
 
             carregarListaDeBalancetes();
 
+            function formatarNomeOpcao(periodoId) {
+                const [inicio, fim] = periodoId.split('_');
+                const dataInicio = new Date(`${inicio}-02T00:00:00`);
+                const dataFim = new Date(`${fim}-02T00:00:00`);
+                
+                const formatarData = (data) => new Intl.DateTimeFormat('pt-BR', { month: 'long', year: 'numeric', timeZone: 'UTC' }).format(data);
+
+                const textoInicio = formatarData(dataInicio);
+                if (inicio === fim) {
+                    return textoInicio.charAt(0).toUpperCase() + textoInicio.slice(1);
+                } else {
+                    const textoFim = formatarData(dataFim);
+                    return `De ${textoInicio} a ${textoFim}`;
+                }
+            }
+
             function carregarListaDeBalancetes() {
                 const q = query(collection(db, "balancetes"), where("status", "in", ["em revisão", "aprovado", "com_ressalva"]));
                 onSnapshot(q, (snapshot) => {
@@ -195,8 +208,7 @@
                     snapshot.docs.sort((a, b) => b.id.localeCompare(a.id)).forEach(doc => {
                         const option = document.createElement('option');
                         option.value = doc.id;
-                        const dataFormatada = new Date(`${doc.id}-02T00:00:00`).toLocaleString('pt-BR', { month: 'long', year: 'numeric' });
-                        option.textContent = dataFormatada.charAt(0).toUpperCase() + dataFormatada.slice(1);
+                        option.textContent = formatarNomeOpcao(doc.id);
                         seletorBalancete.appendChild(option);
                     });
                     if (mesAnoSelecionado) { seletorBalancete.value = mesAnoSelecionado; }
@@ -207,21 +219,21 @@
 
             function carregarBalanceteSelecionado() {
                 if (unsubscribeBalancete) unsubscribeBalancete();
-                const mesAno = seletorBalancete.value;
-                if (!mesAno) {
+                const periodoId = seletorBalancete.value;
+                if (!periodoId) {
                     balanceteContent.style.display = 'none';
                     mensagemInicial.style.display = 'block';
                     statusBar.innerHTML = '';
                     areaAprovacao.style.display = 'none';
                     return;
                 }
-                const balanceteRef = doc(db, "balancetes", mesAno);
+                const balanceteRef = doc(db, "balancetes", periodoId);
                 unsubscribeBalancete = onSnapshot(balanceteRef, (docSnap) => {
                     if (docSnap.exists()) {
                         const balancete = docSnap.data();
-                        renderizarBalancete(balancete, mesAno);
+                        renderizarBalancete(balancete, periodoId);
                         const status = balancete.status || 'em revisão';
-                        statusBar.textContent = `Status: ${status.replace(/_/g, ' ').replace('em elaboracao', 'Em Elaboração').replace('em revisao', 'Em Revisão').replace('aprovado', 'Aprovado').replace('com ressalva', 'Com Ressalva')}`;
+                        statusBar.textContent = `Status: ${status.replace(/_/g, ' ').replace(/(^\w{1})|(\s+\w{1})/g, letra => letra.toUpperCase())}`;
                         statusBar.className = `status-bar status-${status.split(' ')[0]}`;
                         
                         const userRole = currentUser?.claims?.role;
@@ -259,7 +271,7 @@
                 mensagens.forEach(msg => {
                     const data = msg.data ? msg.data.toDate().toLocaleString('pt-BR') : 'Enviando...';
                     const autor = msg.autor.nome || 'Anônimo';
-                    const tipoClasse = (msg.autor.nome.toLowerCase().includes('tesour') || msg.autor.nome.toLowerCase().includes('diretor')) ? 'mensagem-tesouraria' : 'mensagem-conselho';
+                    const tipoClasse = msg.isResposta ? 'mensagem-tesouraria' : 'mensagem-conselho';
                     const li = document.createElement('li');
                     li.className = `mensagem ${tipoClasse}`;
                     li.innerHTML = `<div class="mensagem-autor">${autor}</div><div class="mensagem-data">${data}</div><p>${msg.texto}</p>`;
@@ -267,9 +279,9 @@
                 });
             }
 
-            function renderizarBalancete(dados, mesAno) {
-                const dataFormatada = new Date(`${mesAno}-02T00:00:00`).toLocaleString('pt-BR', { month: 'long', year: 'numeric' }).toUpperCase();
-                tituloBalancete.textContent = `BALANCETE REFERENTE A ${dataFormatada}`;
+            function renderizarBalancete(dados, periodoId) {
+                tituloBalancete.textContent = formatarNomeOpcao(periodoId).replace('De', 'BALANCETE REFERENTE AO PERÍODO DE');
+                
                 let totalReceitas = 0, totalDespesas = 0;
                 const corpoReceitas = document.getElementById('corpo-tabela-receitas');
                 const corpoDespesas = document.getElementById('corpo-tabela-despesas');
@@ -305,14 +317,14 @@
             function formatarMoeda(valor) { return (valor || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }); }
 
             async function registrarVoto(voto, mensagem = null) {
-                const mesAno = seletorBalancete.value;
-                if (!mesAno || !currentUser) return;
+                const periodoId = seletorBalancete.value;
+                if (!periodoId || !currentUser) return;
                 const registrarVotoConselho = httpsCallable(functions, 'registrarVotoConselho');
                 try {
                     const botao = voto === 'aprovado' ? btnAprovar : btnEnviarRessalva;
                     botao.disabled = true;
                     botao.textContent = 'Enviando...';
-                    await registrarVotoConselho({ balanceteId: mesAno, voto, mensagem });
+                    await registrarVotoConselho({ balanceteId: periodoId, voto, mensagem });
                     alert('Sua ação foi registrada com sucesso!');
                     textoRessalva.value = '';
                     textoRessalva.classList.add('hidden');
