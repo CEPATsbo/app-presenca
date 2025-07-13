@@ -88,14 +88,16 @@
         import { getAuth } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-auth.js";
         import { protegerPagina } from '/auth.js';
 
-        initializeApp({
+        const firebaseConfig = {
             apiKey: "AIzaSyBV7RPjk3cFTqL-aIpflJcUojKg1ZXMLuU",
             authDomain: "voluntarios-ativos---cepat.firebaseapp.com",
             projectId: "voluntarios-ativos---cepat",
             storageBucket: "voluntarios-ativos---cepat.firebasestorage.app",
             messagingSenderId: "66122858261",
             appId: "1:66122858261:web:7fa21f1805463b5c08331c"
-        });
+        };
+        
+        initializeApp(firebaseConfig);
 
         protegerPagina(['diretor', 'tesoureiro', 'super-admin'])
             .then(user => {
@@ -172,7 +174,6 @@
             function formatarMoeda(valor) { return (valor || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }); }
 
             function renderizarCorpoBalancete() {
-                if (!balanceteCorpoWrapper) return;
                 balanceteCorpoWrapper.innerHTML = `
                     <div class="corpo-balancete">
                         <div class="coluna">
@@ -205,7 +206,7 @@
                     </div>
                 `;
             }
-            
+
             function calcularETotais() {
                 let totalReceitas = 0, totalDespesas = 0;
                 document.querySelectorAll('.input-receita').forEach(input => { totalReceitas += parseFloat(input.value) || 0; });
@@ -374,11 +375,15 @@
                     seletorFim.value = mesInicio;
                     return;
                 }
-
+                
                 if (!ignorarValidacao && !validarPeriodo(mesInicio, mesFim)) {
                     alert("O período selecionado inclui meses que já pertencem a um balancete existente. Por favor, escolha um período livre.");
                     seletorInicio.value = ultimoPeriodoValido.inicio || '';
                     seletorFim.value = ultimoPeriodoValido.fim || '';
+                    // Recarrega o estado anterior para não deixar a tela em um estado inconsistente
+                    if (ultimoPeriodoValido.inicio && ultimoPeriodoValido.fim) {
+                        carregarDadosDoPeriodo(true);
+                    }
                     return;
                 }
 
@@ -394,7 +399,7 @@
                     renderizarMensagens(balanceteAtual.mensagens || []);
 
                     if (balanceteAtual.status === 'aprovado') {
-                        const logsQuery = query(collection(db, "log_auditoria"), where("detalhes.periodo", "==", periodoId));
+                        const logsQuery = query(collection(db, "log_auditoria"), where("detalhes.balanceteId", "==", periodoId));
                         const logsSnapshot = await getDocs(logsQuery);
                         let liberacaoLog = null;
                         const aprovacaoLogs = [];
@@ -517,7 +522,7 @@
                     await updateDoc(balanceteRef, { mensagens: mensagensAtuais, status: 'em revisão' });
                     document.getElementById('texto-resposta').value = '';
                     alert("Resposta enviada com sucesso!");
-                    carregarDadosDoPeriodo(); 
+                    carregarDadosDoPeriodo(true); 
                     await carregarBalancetesSalvos();
                 } catch (error) {
                     console.error("Erro ao enviar resposta:", error);
@@ -641,7 +646,7 @@
                     const [inicio, fim] = periodoId.split('_');
                     seletorInicio.value = inicio;
                     seletorFim.value = fim;
-                    carregarDadosDoPeriodo(true); // Ignora a validação ao carregar um salvo
+                    carregarDadosDoPeriodo(true);
                 }
             });
             
@@ -651,9 +656,10 @@
             const mesAnoAtual = `${ano}-${mes}`;
             seletorInicio.value = mesAnoAtual;
             seletorFim.value = mesAnoAtual;
+            ultimoPeriodoValido = { inicio: mesAnoAtual, fim: mesAnoAtual };
             
             carregarBalancetesSalvos().then(() => {
-                carregarDadosDoPeriodo();
+                carregarDadosDoPeriodo(true); // Carrega dados iniciais sem validar
             });
         }
     </script>
