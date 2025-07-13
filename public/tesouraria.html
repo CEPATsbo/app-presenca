@@ -6,7 +6,6 @@
     <title>Admin - Tesouraria</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-
     <style>
         body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background-color: #f4f6f9; display: flex; flex-direction: column; align-items: center; margin: 0; padding: 20px; box-sizing: border-box; }
         .balancete-container { display: none; background-color: white; padding: 40px; border-radius: 8px; box-shadow: 0 4px 20px rgba(0,0,0,0.1); width: 100%; max-width: 1100px; margin-bottom: 30px; }
@@ -83,21 +82,19 @@
         </div>
     
     <script type="module">
-        import { initializeApp, getApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
         import { getFirestore, doc, setDoc, getDoc, updateDoc, collection, addDoc, serverTimestamp, query, where, getDocs, onSnapshot, orderBy, documentId } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
         import { getAuth } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-auth.js";
         import { protegerPagina } from '/auth.js';
 
-        const firebaseConfig = {
+        initializeApp({
             apiKey: "AIzaSyBV7RPjk3cFTqL-aIpflJcUojKg1ZXMLuU",
             authDomain: "voluntarios-ativos---cepat.firebaseapp.com",
             projectId: "voluntarios-ativos---cepat",
             storageBucket: "voluntarios-ativos---cepat.firebasestorage.app",
             messagingSenderId: "66122858261",
             appId: "1:66122858261:web:7fa21f1805463b5c08331c"
-        };
-        
-        initializeApp(firebaseConfig);
+        });
 
         protegerPagina(['diretor', 'tesoureiro', 'super-admin'])
             .then(user => {
@@ -380,9 +377,8 @@
                     alert("O período selecionado inclui meses que já pertencem a um balancete existente. Por favor, escolha um período livre.");
                     seletorInicio.value = ultimoPeriodoValido.inicio || '';
                     seletorFim.value = ultimoPeriodoValido.fim || '';
-                    // Recarrega o estado anterior para não deixar a tela em um estado inconsistente
                     if (ultimoPeriodoValido.inicio && ultimoPeriodoValido.fim) {
-                        carregarDadosDoPeriodo(true);
+                        await carregarDadosDoPeriodo(true);
                     }
                     return;
                 }
@@ -399,6 +395,7 @@
                     renderizarMensagens(balanceteAtual.mensagens || []);
 
                     if (balanceteAtual.status === 'aprovado') {
+                        // CORREÇÃO: A busca agora usa 'balanceteId' no log
                         const logsQuery = query(collection(db, "log_auditoria"), where("detalhes.balanceteId", "==", periodoId));
                         const logsSnapshot = await getDocs(logsQuery);
                         let liberacaoLog = null;
@@ -489,7 +486,7 @@
                     await salvarBalancete(); 
                     const balanceteRef = doc(db, "balancetes", periodoId);
                     await updateDoc(balanceteRef, { status: 'em revisão' });
-                    await registrarLog("LIBEROU_BALANCETE", { periodo: periodoId });
+                    await registrarLog("LIBEROU_BALANCETE", { balanceteId: periodoId });
                     atualizarStatusUI('em revisão');
                     await carregarBalancetesSalvos();
                     alert("Balancete liberado com sucesso!");
@@ -631,7 +628,25 @@
             document.getElementById('btn-liberar').addEventListener('click', liberarBalancete);
             document.getElementById('btn-enviar-resposta').addEventListener('click', enviarResposta);
             document.getElementById('btn-gerar-pdf').addEventListener('click', gerarPdf);
-
+            conteudoPagina.addEventListener('click', (e) => {
+                if (e.target.classList.contains('btn-add-row')) {
+                    adicionarLinhaApos(e.target.closest('tr'));
+                } else if (e.target.classList.contains('btn-add-categoria')) {
+                    adicionarCategoriaHeader(document.getElementById(e.target.dataset.target));
+                }
+            });
+            conteudoPagina.addEventListener('input', (e) => {
+                if (e.target.matches('input[type="number"]')) {
+                    calcularETotais();
+                }
+            });
+            conteudoPagina.addEventListener('blur', (e) => {
+                if (e.target.matches('input[type="number"]')) {
+                    const valor = parseFloat(e.target.value) || 0;
+                    e.target.value = valor.toFixed(2);
+                }
+            }, true);
+            
             seletorInicio.addEventListener('change', () => { 
                 seletorSalvos.value = ''; 
                 carregarDadosDoPeriodo(); 
@@ -646,20 +661,20 @@
                     const [inicio, fim] = periodoId.split('_');
                     seletorInicio.value = inicio;
                     seletorFim.value = fim;
-                    carregarDadosDoPeriodo(true);
+                    carregarDadosDoPeriodo(true); // Ignora a validação ao carregar
                 }
             });
             
+            // --- Carga Inicial ---
             const hoje = new Date();
             const mes = (hoje.getMonth() + 1).toString().padStart(2, '0');
             const ano = hoje.getFullYear();
             const mesAnoAtual = `${ano}-${mes}`;
             seletorInicio.value = mesAnoAtual;
             seletorFim.value = mesAnoAtual;
-            ultimoPeriodoValido = { inicio: mesAnoAtual, fim: mesAnoAtual };
             
             carregarBalancetesSalvos().then(() => {
-                carregarDadosDoPeriodo(true); // Carrega dados iniciais sem validar
+                carregarDadosDoPeriodo(true);
             });
         }
     </script>
