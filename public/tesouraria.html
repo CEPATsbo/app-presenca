@@ -83,8 +83,8 @@
         </div>
     
     <script type="module">
-        import { initializeApp, getApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
-        import { getFirestore, doc, setDoc, getDoc, updateDoc, collection, addDoc, serverTimestamp, query, where, getDocs, onSnapshot } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
+        import { getFirestore, doc, setDoc, getDoc, updateDoc, collection, addDoc, serverTimestamp, query, where, getDocs, onSnapshot, orderBy, documentId } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
         import { getAuth } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-auth.js";
         import { protegerPagina } from '/auth.js';
 
@@ -197,12 +197,12 @@
             const assinaturasSection = document.getElementById('assinaturas-section');
             let balanceteAtual = {};
             let balanceteExisteNoDB = false;
-
+            
             const balancetePadrao = {
                 saldoAnterior: 0, status: 'em elaboração',
                 nomes: { "nome-saldo-anterior": "SALDO ANTERIOR (PagBank+Sicoob+Espécie)"},
-                receitas: { '1-CONTRIBUIÇÕES E TRANSFERÊNCIAS': [ { nome: 'Doações Voluntários/Espontênea', valor: 0 } ] },
-                despesas: { '1-MANUTENÇÃO BANCÁRIA': [ { nome: 'Taxa bancária', valor: 0 } ] }
+                receitas: { '1-CONTRIBUIÇÕES E TRANSFERÊNCIAS': [ { nome: 'Doações Voluntários/Espontênea', valor: 0 }, { nome: 'Rendimento Conta Pagbank', valor: 0 }, { nome: 'Transferência Sicoob para Pagbank', valor: 0 } ], '2-EVENTOS DIVERSOS': [ { nome: 'Cantina Palestra', valor: 0 }, { nome: 'Feijoada', valor: 0 }, { nome: 'Bazar', valor: 0 }, { nome: 'Rifa', valor: 0 }, { nome: 'Pizza', valor: 0 }, { nome: 'Camiseta', valor: 0 }, { nome: 'Baile', valor: 0 } ], '3-BIBLIOTECA': [ { nome: 'Vendas de livros', valor: 0 } ] },
+                despesas: { '1-MANUTENÇÃO BANCÁRIA': [ { nome: 'Seguro Pix', valor: 0 }, { nome: 'Taxa bancária', valor: 0 } ], '2-EVENTOS DIVERSOS': [ { nome: 'Cantina Palestra', valor: 0 }, { nome: 'Prêmio da Rifa', valor: 0 }, { nome: 'Doação EGM 2025', valor: 0 }, { nome: 'Pizza Pagamento', valor: 0 }, { nome: 'Camiseta Parcela 2/2', valor: 0 } ], '4-IMPOSTOS PREFEITURA': [ { nome: 'IPTU (1/10)', valor: 0 }, { nome: 'Conselho de Engenharia', valor: 0 } ], '5-MANUTENÇÃO ESTABELECIMENTO': [ { nome: 'Claro Móvel', valor: 0 }, { nome: 'DAE', valor: 0 }, { nome: 'Internet Claro', valor: 0 }, { nome: 'Faxineira', valor: 0 }, { nome: 'Galão de água', valor: 0 }, { nome: 'CPFL', valor: 0 }, { nome: 'Gás Mollon', valor: 0 }, { nome: 'Parcela do terreno (DEZ a ABR)', valor: 0 }, { nome: 'Produtos de limpeza', valor: 0 }, { nome: 'Cartório', valor: 0 }, { nome: 'Conserto diversos casa', valor: 0 } ], '6-DIVERSOS': [ { nome: 'Evangelização Infantil (Materiais)', valor: 0 }, { nome: 'Homenagem diretoria', valor: 0 } ] }
             };
             
             function formatarMoeda(valor) { return (valor || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }); }
@@ -304,15 +304,26 @@
                         const tipoClasse = msg.isResposta ? 'mensagem-tesouraria' : 'mensagem-conselho';
                         const li = document.createElement('li');
                         li.className = `mensagem ${tipoClasse}`;
-                        li.innerHTML = `
-                            <div class="mensagem-autor">${autor}</div>
-                            <div class="mensagem-data">${data}</div>
-                            <p>${msg.texto}</p>
-                        `;
+                        li.innerHTML = `<div class="mensagem-autor">${autor}</div><div class="mensagem-data">${data}</div><p>${msg.texto}</p>`;
                         listaMensagens.appendChild(li);
                     });
                 } else {
                     mensagensContainer.style.display = 'none';
+                }
+            }
+
+            function formatarNomeOpcao(periodoId, paraTitulo = false) {
+                const [inicio, fim] = periodoId.split('_');
+                const dataInicio = new Date(`${inicio}-02T00:00:00`);
+                const formatarData = (data) => new Intl.DateTimeFormat('pt-BR', { month: 'long', year: 'numeric', timeZone: 'UTC' }).format(data);
+                const textoInicio = formatarData(dataInicio);
+
+                if (inicio === fim) {
+                    return paraTitulo ? `BALANCETE REFERENTE A ${textoInicio.toUpperCase()}` : textoInicio.charAt(0).toUpperCase() + textoInicio.slice(1);
+                } else {
+                    const dataFim = new Date(`${fim}-02T00:00:00`);
+                    const textoFim = formatarData(dataFim);
+                    return paraTitulo ? `BALANCETE REFERENTE AO PERÍODO DE ${textoInicio.toUpperCase()} A ${textoFim.toUpperCase()}` : `De ${textoInicio} a ${textoFim}`;
                 }
             }
 
@@ -341,17 +352,7 @@
                 const mesInicio = seletorInicio.value;
                 const mesFim = seletorFim.value;
 
-                if (!mesInicio || !mesFim) {
-                    const hoje = new Date();
-                    const mes = (hoje.getMonth() + 1).toString().padStart(2, '0');
-                    const ano = hoje.getFullYear();
-                    const mesAnoAtual = `${ano}-${mes}`;
-                    renderizarTabela(JSON.parse(JSON.stringify(balancetePadrao)), `${mesAnoAtual}_${mesAnoAtual}`);
-                    atualizarStatusUI('em elaboração');
-                    renderizarAssinaturas(false);
-                    return;
-                };
-
+                if (!mesInicio || !mesFim) return;
                 if (mesFim < mesInicio) {
                     alert("O mês final não pode ser anterior ao mês inicial.");
                     seletorFim.value = mesInicio;
@@ -436,7 +437,7 @@
                         balanceteExisteNoDB = true; 
                     }
                     await registrarLog("SALVOU_BALANCETE", { periodo: periodoId });
-                    await carregarBalancetesSalvos(); // Recarrega a lista
+                    await carregarBalancetesSalvos();
                 } catch (error) {
                     console.error("Erro ao salvar balancete:", error);
                     alert("Ocorreu um erro ao salvar.");
@@ -450,7 +451,8 @@
             async function liberarBalancete() {
                 const periodoId = `${seletorInicio.value}_${seletorFim.value}`;
                 if (!seletorInicio.value || !seletorFim.value) return alert("Selecione um período.");
-                if (!confirm(`Tem certeza que deseja liberar o balancete do período para o Conselho Fiscal? Após a liberação, ele não poderá mais ser editado.`)) return;
+                const nomeAmigavel = formatarNomeOpcao(periodoId);
+                if (!confirm(`Tem certeza que deseja liberar o balancete de ${nomeAmigavel} para o Conselho Fiscal? Após a liberação, ele não poderá mais ser editado.`)) return;
                 
                 btnLiberar.disabled = true;
                 try {
@@ -473,10 +475,7 @@
                 const periodoId = `${seletorInicio.value}_${seletorFim.value}`;
                 const texto = textoResposta.value.trim();
                 if (!periodoId || !texto) return alert("Escreva uma resposta.");
-                if (!user) {
-                    alert("Usuário não autenticado. Por favor, faça login novamente.");
-                    return;
-                }
+                if (!user) { return alert("Usuário não autenticado."); }
                 
                 const novaMensagem = {
                     autor: { uid: user.uid, nome: user.displayName || user.email },
@@ -490,12 +489,7 @@
                     const docSnap = await getDoc(balanceteRef);
                     const mensagensAtuais = docSnap.exists() && docSnap.data().mensagens ? docSnap.data().mensagens : [];
                     mensagensAtuais.push(novaMensagem);
-
-                    await updateDoc(balanceteRef, {
-                        mensagens: mensagensAtuais,
-                        status: 'em revisão'
-                    });
-
+                    await updateDoc(balanceteRef, { mensagens: mensagensAtuais, status: 'em revisão' });
                     textoResposta.value = '';
                     alert("Resposta enviada com sucesso!");
                     carregarDadosDoPeriodo(); 
@@ -594,7 +588,7 @@
             }
 
             async function carregarBalancetesSalvos() {
-                const q = query(collection(db, "balancetes"), orderBy(doc(db, "balancetes", "_").__name__, "desc"));
+                const q = query(collection(db, "balancetes"), orderBy(documentId(), "desc"));
                 const snapshot = await getDocs(q);
                 seletorSalvos.innerHTML = '<option value="">-- Selecione para carregar --</option>';
                 snapshot.forEach(doc => {
@@ -605,8 +599,8 @@
                     seletorSalvos.appendChild(option);
                 });
             }
-
-            // Event Listeners Finais
+            
+            // Event Listeners
             btnSalvar.addEventListener('click', salvarBalancete);
             btnLiberar.addEventListener('click', liberarBalancete);
             btnEnviarResposta.addEventListener('click', enviarResposta);
@@ -630,7 +624,6 @@
                 }
             });
             
-            // Carga Inicial
             const hoje = new Date();
             const mes = (hoje.getMonth() + 1).toString().padStart(2, '0');
             const ano = hoje.getFullYear();
