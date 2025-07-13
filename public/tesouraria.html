@@ -9,9 +9,6 @@
 
     <style>
         body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background-color: #f4f6f9; display: flex; flex-direction: column; align-items: center; margin: 0; padding: 20px; box-sizing: border-box; }
-        .admin-nav { width: 100%; max-width: 1100px; background-color: #fff; padding: 15px; margin-bottom: 30px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); text-align: center; display: flex; flex-wrap: wrap; justify-content: center; gap: 15px 25px; }
-        .admin-nav a { color: #1565c0; text-decoration: none; font-weight: bold; font-size: 1.1em; }
-        .admin-nav a.active, .admin-nav a:hover { text-decoration: underline; color: #0d47a1; }
         .balancete-container { display: none; background-color: white; padding: 40px; border-radius: 8px; box-shadow: 0 4px 20px rgba(0,0,0,0.1); width: 100%; max-width: 1100px; margin-bottom: 30px; }
         #acesso-negado { text-align: center; }
         .cabecalho { text-align: center; margin-bottom: 20px; }
@@ -22,17 +19,15 @@
         .status-elaboracao, .status-com_ressalva { background-color: #FFF9C4; color: #795548; }
         .status-revisao { background-color: #E1F5FE; color: #0277BD; }
         .status-aprovado { background-color: #C8E6C9; color: #2E7D32; }
-        .seletor-periodo { display: flex; justify-content: center; align-items: center; gap: 10px; margin-bottom: 20px; border-bottom: 1px solid #ddd; padding-bottom: 20px; }
+        .seletor-periodo { display: flex; justify-content: center; align-items: center; gap: 15px; margin-bottom: 20px; border-bottom: 1px solid #ddd; padding-bottom: 20px; flex-wrap: wrap; }
         .seletor-periodo label { font-weight: bold; }
         .seletor-periodo input[type="month"] { font-size: 1.1em; padding: 8px; border: 1px solid #ccc; border-radius: 6px;}
         .corpo-balancete { display: flex; justify-content: space-between; gap: 40px; flex-wrap: wrap;}
         .coluna { width: 100%; min-width: 450px; flex: 1; }
         .coluna h2 { background-color: #e0e0e0; padding: 8px; text-align: center; font-size: 1.2em; margin: 0; }
         .tabela-balancete { width: 100%; border-collapse: collapse; }
-        /* AJUSTE 3: Aumentado o padding vertical para corrigir o corte no PDF */
         .tabela-balancete th, .tabela-balancete td { border: 1px solid #ccc; padding: 12px 8px; font-size: 0.9em; }
         .tabela-balancete th { background-color: #f2f2f2; text-align: left; }
-        /* AJUSTE 2: Valores centralizados */
         .tabela-balancete input[type="number"] { width: 100%; border: none; background: #fffde7; text-align: center; padding: 5px; box-sizing: border-box; font-size: 1em; -moz-appearance: textfield; appearance: textfield; }
         .tabela-balancete input[type="number"]::-webkit-outer-spin-button, .tabela-balancete input[type="number"]::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
         .tabela-balancete input[type="number"]:focus { outline: 1px solid #007bff; }
@@ -66,9 +61,9 @@
         .mensagem-data { font-size: 0.8em; color: #777; }
         #form-resposta textarea { width: 100%; box-sizing: border-box; height: 80px; margin-top: 10px; padding: 8px; border: 1px solid #ccc; border-radius: 6px; }
         #form-resposta button { width: auto; font-size: 1em; padding: 10px 20px; background-color: #0d47a1; margin-top: 5px; color: white; border: none; border-radius: 6px; cursor: pointer; }
-    .nav-voltar { max-width: 1200px; margin: 0 auto 30px auto; text-align: left; }
-.btn-voltar { background-color: #e9ecef; color: #495057; border: 1px solid #dee2e6; padding: 10px 20px; border-radius: 8px; font-weight: bold; font-size: 1em; text-decoration: none; transition: background-color 0.2s; }
-.btn-voltar:hover { background-color: #dee2e6; }
+        .nav-voltar { max-width: 1200px; margin: 0 auto 30px auto; text-align: left; }
+        .btn-voltar { background-color: #e9ecef; color: #495057; border: 1px solid #dee2e6; padding: 10px 20px; border-radius: 8px; font-weight: bold; font-size: 1em; text-decoration: none; transition: background-color 0.2s; }
+        .btn-voltar:hover { background-color: #dee2e6; }
     </style>
 </head>
 <body>
@@ -120,8 +115,10 @@
                     <h3 id="titulo-balancete">BALANCETE</h3>
                 </div>
                 <div class="seletor-periodo">
-                    <label for="mes-ano">Período de Referência:</label>
-                    <input type="month" id="mes-ano">
+                    <label for="mes-ano-inicio">Período de Referência:</label>
+                    <input type="month" id="mes-ano-inicio" title="Mês de início">
+                    <span>até</span>
+                    <input type="month" id="mes-ano-fim" title="Mês de fim">
                 </div>
                 <div id="status-bar" class="status-bar"></div>
                 <div class="corpo-balancete">
@@ -169,7 +166,8 @@
                 <div class="rodape-assinaturas" id="assinaturas-section"></div>
             `;
 
-            const seletorMesAno = document.getElementById('mes-ano');
+            const seletorInicio = document.getElementById('mes-ano-inicio');
+            const seletorFim = document.getElementById('mes-ano-fim');
             const btnSalvar = document.getElementById('btn-salvar');
             const btnLiberar = document.getElementById('btn-liberar');
             const btnGerarPdf = document.getElementById('btn-gerar-pdf');
@@ -303,13 +301,23 @@
                 }
             }
 
-            function renderizarTabela(dados, mesAno) {
+            function renderizarTabela(dados, periodoId) {
                 const corpoReceitas = document.getElementById('corpo-tabela-receitas');
                 const corpoDespesas = document.getElementById('corpo-tabela-despesas');
                 corpoReceitas.innerHTML = ''; corpoDespesas.innerHTML = '';
                 
-                const dataFormatada = new Date(`${mesAno}-02T00:00:00`).toLocaleString('pt-BR', { month: 'long', year: 'numeric' }).toUpperCase();
-                tituloBalancete.textContent = `BALANCETE REFERENTE A ${dataFormatada}`;
+                const [inicio, fim] = periodoId.split('_');
+                const dataInicio = new Date(`${inicio}-02T00:00:00`);
+                const dataFim = new Date(`${fim}-02T00:00:00`);
+                
+                const formatarData = (data) => data.toLocaleString('pt-BR', { month: 'long', year: 'numeric' }).toUpperCase();
+                
+                let titulo = `BALANCETE REFERENTE A ${formatarData(dataInicio)}`;
+                if (inicio !== fim) {
+                    titulo = `BALANCETE REFERENTE AO PERÍODO DE ${formatarData(dataInicio)} A ${formatarData(dataFim)}`;
+                }
+                tituloBalancete.textContent = titulo;
+
                 document.getElementById('saldo-valor-anterior').value = dados.saldoAnterior ? Number(dados.saldoAnterior).toFixed(2) : '0.00';
                 document.getElementById('nome-saldo-anterior').textContent = dados.nomes?.['nome-saldo-anterior'] || 'SALDO ANTERIOR (PagBank+Sicoob+Espécie)';
                 
@@ -324,22 +332,32 @@
                 calcularETotais();
             }
 
-            async function carregarDadosDoMes(mesAno) {
-                if (!mesAno) return;
-                const balanceteRef = doc(db, "balancetes", mesAno);
+            async function carregarDadosDoPeriodo() {
+                const mesInicio = seletorInicio.value;
+                const mesFim = seletorFim.value;
+
+                if (!mesInicio || !mesFim) return;
+                if (mesFim < mesInicio) {
+                    alert("O mês final não pode ser anterior ao mês inicial.");
+                    seletorFim.value = mesInicio;
+                    return;
+                }
+
+                const periodoId = `${mesInicio}_${mesFim}`;
+                const balanceteRef = doc(db, "balancetes", periodoId);
                 const docSnap = await getDoc(balanceteRef);
 
                 if (docSnap.exists()) {
                     balanceteExisteNoDB = true;
                     balanceteAtual = docSnap.data();
-                    renderizarTabela(balanceteAtual, mesAno);
+                    renderizarTabela(balanceteAtual, periodoId);
                     atualizarStatusUI(balanceteAtual.status || 'em elaboração');
                     renderizarMensagens(balanceteAtual.mensagens || []);
 
                     if (balanceteAtual.status === 'aprovado') {
                         const logsQuery = query(
                             collection(db, "log_auditoria"),
-                            where("detalhes.balanceteId", "==", mesAno)
+                            where("detalhes.periodo", "==", periodoId)
                         );
                         const logsSnapshot = await getDocs(logsQuery);
                         
@@ -357,7 +375,7 @@
                 } else {
                     balanceteExisteNoDB = false;
                     balanceteAtual = JSON.parse(JSON.stringify(balancetePadrao));
-                    renderizarTabela(balanceteAtual, mesAno);
+                    renderizarTabela(balanceteAtual, periodoId);
                     atualizarStatusUI('em elaboração');
                     renderizarAssinaturas(false);
                 }
@@ -409,16 +427,16 @@
             }
 
             async function salvarBalancete() {
-                const mesAno = seletorMesAno.value;
-                if (!mesAno) {
-                    alert("Por favor, selecione um período.");
+                const periodoId = `${seletorInicio.value}_${seletorFim.value}`;
+                if (!seletorInicio.value || !seletorFim.value) {
+                    alert("Por favor, selecione um período de início e fim.");
                     throw new Error("Período não selecionado");
                 }
                 btnSalvar.disabled = true;
                 btnSalvar.textContent = "Salvando...";
                 
                 const dadosParaSalvar = getDadosAtuaisDaTela();
-                const balanceteRef = doc(db, "balancetes", mesAno);
+                const balanceteRef = doc(db, "balancetes", periodoId);
 
                 try {
                     if (balanceteExisteNoDB) {
@@ -428,7 +446,7 @@
                         await setDoc(balanceteRef, dadosParaSalvar);
                         balanceteExisteNoDB = true; 
                     }
-                    await registrarLog("SALVOU_BALANCETE", { periodo: mesAno });
+                    await registrarLog("SALVOU_BALANCETE", { periodo: periodoId });
                 } catch (error) {
                     console.error("Erro ao salvar balancete:", error);
                     alert("Ocorreu um erro ao salvar.");
@@ -442,17 +460,17 @@
             btnSalvar.addEventListener('click', salvarBalancete);
             
             btnLiberar.addEventListener('click', async () => {
-                const mesAno = seletorMesAno.value;
-                if (!mesAno) return alert("Selecione um período.");
-                if (!confirm(`Tem certeza que deseja liberar o balancete de ${mesAno} para o Conselho Fiscal? Após a liberação, ele não poderá mais ser editado.`)) return;
+                const periodoId = `${seletorInicio.value}_${seletorFim.value}`;
+                if (!seletorInicio.value || !seletorFim.value) return alert("Selecione um período.");
+                if (!confirm(`Tem certeza que deseja liberar o balancete do período ${periodoId.replace('_', ' a ')} para o Conselho Fiscal? Após a liberação, ele não poderá mais ser editado.`)) return;
                 
                 btnLiberar.disabled = true;
                 try {
                     await salvarBalancete(); 
                     
-                    const balanceteRef = doc(db, "balancetes", mesAno);
+                    const balanceteRef = doc(db, "balancetes", periodoId);
                     await updateDoc(balanceteRef, { status: 'em revisão' });
-                    await registrarLog("LIBEROU_BALANCETE", { periodo: mesAno });
+                    await registrarLog("LIBEROU_BALANCETE", { periodo: periodoId });
                     
                     atualizarStatusUI('em revisão');
                     alert("Balancete liberado com sucesso!");
@@ -465,9 +483,9 @@
             });
             
             btnEnviarResposta.addEventListener('click', async () => {
-                const mesAno = seletorMesAno.value;
+                const periodoId = `${seletorInicio.value}_${seletorFim.value}`;
                 const texto = textoResposta.value.trim();
-                if (!mesAno || !texto) return alert("Escreva uma resposta.");
+                if (!periodoId || !texto) return alert("Escreva uma resposta.");
 
                 const user = auth.currentUser;
                 if (!user) {
@@ -481,7 +499,7 @@
                     data: new Date()
                 };
 
-                const balanceteRef = doc(db, "balancetes", mesAno);
+                const balanceteRef = doc(db, "balancetes", periodoId);
                 try {
                     const docSnap = await getDoc(balanceteRef);
                     const mensagensAtuais = docSnap.exists() && docSnap.data().mensagens ? docSnap.data().mensagens : [];
@@ -495,7 +513,7 @@
                     textoResposta.value = '';
                     alert("Resposta enviada com sucesso! O balancete foi liberado novamente para o Conselho Fiscal.");
                     
-                    carregarDadosDoMes(mesAno); 
+                    carregarDadosDoPeriodo(); 
                     
                 } catch (error) {
                     console.error("Erro ao enviar resposta:", error);
@@ -504,9 +522,8 @@
             });
             
             btnGerarPdf.addEventListener('click', () => {
-                const mesAno = seletorMesAno.value;
-                const dataFormatada = new Date(`${mesAno}-02T00:00:00`).toLocaleString('pt-BR', { month: 'long', year: 'numeric' });
-                const nomeArquivo = `balancete_${mesAno}_${dataFormatada.replace(/ de /g, '_')}.pdf`;
+                const periodoId = `${seletorInicio.value}_${seletorFim.value}`;
+                const nomeArquivo = `balancete_${periodoId}.pdf`;
                 
                 const btnContainer = document.querySelector('.actions-container');
                 btnContainer.style.display = 'none'; 
@@ -568,10 +585,10 @@
             }
 
             function adicionarCategoriaHeader(tabelaBody, nome = "NOVA CATEGORIA") {
-                 const novaLinha = tabelaBody.insertRow(-1);
-                 novaLinha.className = 'categoria-header';
-                 novaLinha.innerHTML = `<th colspan="2"><span contenteditable="true">${nome}</span> <button class="btn-add-row" title="Adicionar linha">+</button></th>`;
-                 return novaLinha;
+                const novaLinha = tabelaBody.insertRow(-1);
+                novaLinha.className = 'categoria-header';
+                novaLinha.innerHTML = `<th colspan="2"><span contenteditable="true">${nome}</span> <button class="btn-add-row" title="Adicionar linha">+</button></th>`;
+                return novaLinha;
             }
             
             conteudoPagina.addEventListener('click', (e) => {
@@ -599,9 +616,13 @@
             const mes = (hoje.getMonth() + 1).toString().padStart(2, '0');
             const ano = hoje.getFullYear();
             const mesAnoAtual = `${ano}-${mes}`;
-            seletorMesAno.value = mesAnoAtual;
-            seletorMesAno.addEventListener('change', () => carregarDadosDoMes(seletorMesAno.value));
-            carregarDadosDoMes(mesAnoAtual);
+            seletorInicio.value = mesAnoAtual;
+            seletorFim.value = mesAnoAtual;
+            
+            seletorInicio.addEventListener('change', carregarDadosDoPeriodo);
+            seletorFim.addEventListener('change', carregarDadosDoPeriodo);
+            
+            carregarDadosDoPeriodo();
         }
     </script>
 </body>
