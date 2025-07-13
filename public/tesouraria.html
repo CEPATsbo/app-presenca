@@ -136,8 +136,7 @@
                     </div>
                 </div>
                 <div id="status-bar" class="status-bar"></div>
-                <div id="balancete-corpo-wrapper">
-                    </div>
+                <div id="balancete-corpo-wrapper"></div>
                 <div class="actions-container">
                     <button id="btn-salvar">Salvar Balancete</button>
                     <button id="btn-liberar">Liberar para Conselho Fiscal</button>
@@ -157,6 +156,7 @@
             const seletorInicio = document.getElementById('mes-ano-inicio');
             const seletorFim = document.getElementById('mes-ano-fim');
             const seletorSalvos = document.getElementById('seletor-balancetes-salvos');
+            const balanceteCorpoWrapper = document.getElementById('balancete-corpo-wrapper');
             let balanceteAtual = {};
             let balanceteExisteNoDB = false;
             let mesesBloqueados = new Set();
@@ -172,7 +172,6 @@
             function formatarMoeda(valor) { return (valor || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }); }
 
             function renderizarCorpoBalancete() {
-                const balanceteCorpoWrapper = document.getElementById('balancete-corpo-wrapper');
                 if (!balanceteCorpoWrapper) return;
                 balanceteCorpoWrapper.innerHTML = `
                     <div class="corpo-balancete">
@@ -208,9 +207,8 @@
             }
             
             function calcularETotais() {
-                let totalReceitas = 0;
+                let totalReceitas = 0, totalDespesas = 0;
                 document.querySelectorAll('.input-receita').forEach(input => { totalReceitas += parseFloat(input.value) || 0; });
-                let totalDespesas = 0;
                 document.querySelectorAll('.input-despesa').forEach(input => { totalDespesas += parseFloat(input.value) || 0; });
                 const saldoAnterior = parseFloat(document.getElementById('saldo-valor-anterior').value) || 0;
                 const saldoPeriodo = totalReceitas - totalDespesas;
@@ -366,22 +364,21 @@
                 return true;
             }
 
-            async function carregarDadosDoPeriodo() {
+            async function carregarDadosDoPeriodo(ignorarValidacao = false) {
                 const mesInicio = seletorInicio.value;
                 const mesFim = seletorFim.value;
 
                 if (!mesInicio || !mesFim) return;
-
                 if (mesFim < mesInicio) {
                     alert("O mês final não pode ser anterior ao mês inicial.");
                     seletorFim.value = mesInicio;
                     return;
                 }
-                
-                if (!validarPeriodo(mesInicio, mesFim)) {
+
+                if (!ignorarValidacao && !validarPeriodo(mesInicio, mesFim)) {
                     alert("O período selecionado inclui meses que já pertencem a um balancete existente. Por favor, escolha um período livre.");
-                    seletorInicio.value = ultimoPeriodoValido.inicio || seletorInicio.value;
-                    seletorFim.value = ultimoPeriodoValido.fim || seletorFim.value;
+                    seletorInicio.value = ultimoPeriodoValido.inicio || '';
+                    seletorFim.value = ultimoPeriodoValido.fim || '';
                     return;
                 }
 
@@ -629,7 +626,7 @@
             document.getElementById('btn-liberar').addEventListener('click', liberarBalancete);
             document.getElementById('btn-enviar-resposta').addEventListener('click', enviarResposta);
             document.getElementById('btn-gerar-pdf').addEventListener('click', gerarPdf);
-            
+
             seletorInicio.addEventListener('change', () => { 
                 seletorSalvos.value = ''; 
                 carregarDadosDoPeriodo(); 
@@ -644,7 +641,7 @@
                     const [inicio, fim] = periodoId.split('_');
                     seletorInicio.value = inicio;
                     seletorFim.value = fim;
-                    carregarDadosDoPeriodo();
+                    carregarDadosDoPeriodo(true); // Ignora a validação ao carregar um salvo
                 }
             });
             
