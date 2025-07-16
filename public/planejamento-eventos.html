@@ -9,7 +9,8 @@
     <style>
         body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background-color: #f0f2f5; color: #333; margin: 0; padding: 20px; }
         .nav-voltar { max-width: 1400px; margin: 0 auto 30px auto; text-align: left; }
-        .btn-voltar { background-color: #e9ecef; color: #495057; border: 1px solid #dee2e6; padding: 10px 20px; border-radius: 8px; font-weight: bold; font-size: 1em; text-decoration: none; }
+        .btn-voltar { background-color: #e9ecef; color: #495057; border: 1px solid #dee2e6; padding: 10px 20px; border-radius: 8px; font-weight: bold; font-size: 1em; text-decoration: none; transition: background-color 0.2s; }
+        .btn-voltar:hover { background-color: #dee2e6; }
         .page-container { max-width: 1400px; margin: auto; }
         .card { background-color: white; padding: 30px; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.08); margin-bottom: 30px; }
         h1, h2, h3 { text-align: center; color: #333; margin-top: 0; }
@@ -25,30 +26,36 @@
         #lista-eventos-gerenciamento table { width: 100%; border-collapse: collapse; margin-top: 20px; }
         #lista-eventos-gerenciamento th, #lista-eventos-gerenciamento td { padding: 12px; border-bottom: 1px solid #eee; text-align: left; }
         #lista-eventos-gerenciamento th { background-color: #f8f9fa; }
-        .btn-tabela { padding: 6px 10px; font-size: 0.9em; margin-right: 5px; }
-        .status-cancelado { text-decoration: line-through; color: #999; }
+        .btn-tabela { padding: 6px 10px; font-size: 0.9em; margin-right: 5px; cursor: pointer; border-radius: 4px; border: 1px solid #ccc;}
+        .btn-edit { background-color: #1976d2; color: white; border-color: #1976d2;}
+        .btn-cancel { background-color: #c62828; color: white; border-color: #c62828;}
+        .status-cancelado td { text-decoration: line-through; color: #999; }
         
         /* Estilos do Cronograma Visual */
         #cronograma-visual { padding: 20px; }
         .semestre { margin-bottom: 50px; }
         .semestre h2 { background-color: #34495e; color: white; padding: 10px; border-radius: 8px; }
-        .timeline { display: flex; position: relative; height: 350px; border-top: 4px solid #7f8c8d; border-bottom: 4px solid #7f8c8d; }
-        .month { flex: 1; text-align: center; font-weight: bold; color: #34495e; padding-top: 10px; border-left: 1px solid #ddd; position: relative; }
-        .month:first-child { border-left: none; }
-        .event-node { position: absolute; width: 150px; text-align: center; transform: translateX(-50%); }
-        .event-node .line { width: 2px; background-color: #8e44ad; margin: 0 auto; }
-        .event-node .diamond { width: 20px; height: 20px; background-color: #8e44ad; transform: rotate(45deg); margin: 0 auto; }
-        .event-node .details { margin-top: 10px; font-size: 0.85em; background: #fff; padding: 5px; border-radius: 4px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
-        .event-node.feriado .diamond { background-color: #7f8c8d; }
-        .event-node.feriado .line { background-color: #7f8c8d; }
-        .event-node.cancelado .details { text-decoration: line-through; background-color: #f1f2f6; color: #a4b0be; }
-        .event-node.cancelado .diamond { background-color: #a4b0be; }
-        .event-node.cancelado .line { background-color: #a4b0be; }
-        .event-node[data-position="top"] { bottom: 50%; margin-bottom: 25px; }
-        .event-node[data-position="top"] .line { height: 50px; }
-        .event-node[data-position="bottom"] { top: 50%; margin-top: 25px; }
-        .event-node[data-position="bottom"] .line { height: 50px; }
-        .feriados-lista { padding: 10px; text-align: left; font-size: 0.9em; color: #555; }
+        .timeline { display: flex; position: relative; height: 250px; align-items: center; border: 2px solid #7f8c8d; border-left: none; border-right: none; }
+        .month { flex: 1; text-align: center; font-weight: bold; color: #34495e; position: relative; height: 100%; border-right: 1px dotted #ccc; }
+        .month:last-child { border-right: none; }
+        .month-label { position: absolute; top: -25px; left: 50%; transform: translateX(-50%); background-color: #f0f2f5; padding: 0 5px; }
+        .event-node { position: absolute; width: 120px; text-align: center; transform: translateX(-50%); cursor: help; }
+        .event-node .line { width: 2px; margin: 0 auto; }
+        .event-node .diamond { width: 20px; height: 20px; transform: rotate(45deg); margin: 0 auto; }
+        .event-node .details { margin-top: 8px; margin-bottom: 8px; font-size: 0.8em; background: #fff; padding: 5px; border-radius: 4px; box-shadow: 0 1px 4px rgba(0,0,0,0.1); line-height: 1.3; }
+        .event-node .details strong { display: block; }
+
+        .event-node[data-position="top"] { bottom: 50%; margin-bottom: 12px; }
+        .event-node[data-position="top"] .line { height: 30px; }
+        .event-node[data-position="bottom"] { top: 50%; margin-top: 12px; }
+        .event-node[data-position="bottom"] .line { height: 30px; }
+
+        .event-node.evento .diamond, .event-node.evento .line { background-color: #2E7D32; } /* Verde */
+        .event-node.palestra .diamond, .event-node.palestra .line { background-color: #0277BD; } /* Azul */
+        .event-node.feriado .diamond, .event-node.feriado .line { background-color: #7f8c8d; } /* Cinza */
+        .event-node.cancelado { opacity: 0.5; }
+        .event-node.cancelado .details { text-decoration: line-through; }
+        .feriados-lista { margin-top: 15px; padding: 10px; text-align: left; font-size: 0.9em; color: #555; border-top: 1px dashed #ccc; }
     </style>
 </head>
 <body>
@@ -93,7 +100,7 @@
 
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
-        import { getFirestore, collection, onSnapshot, addDoc, doc, setDoc, deleteDoc, query, orderBy, serverTimestamp, Timestamp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
+        import { getFirestore, collection, onSnapshot, addDoc, doc, setDoc, deleteDoc, query, orderBy, serverTimestamp, Timestamp, getDoc, updateDoc } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
         import { protegerPagina } from '/auth.js';
 
         const firebaseConfig = {
@@ -123,9 +130,10 @@
             const btnCancelarEdicao = document.getElementById('btn-cancelar-edicao');
             let editandoId = null;
 
-            onSnapshot(query(eventosCollection, orderBy("dataInicio", "desc")), (snapshot) => {
-                renderizarListaGerenciamento(snapshot.docs);
-                renderizarCronograma(snapshot.docs);
+            onSnapshot(query(eventosCollection, orderBy("dataInicio", "asc")), (snapshot) => {
+                const eventos = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                renderizarListaGerenciamento(eventos);
+                renderizarCronograma(eventos);
             });
 
             form.addEventListener('submit', async (e) => {
@@ -140,7 +148,7 @@
                 };
 
                 if (editandoId) {
-                    await setDoc(doc(db, 'eventos', editandoId), evento);
+                    await setDoc(doc(db, 'eventos', editandoId), evento, { merge: true });
                     alert('Evento atualizado com sucesso!');
                 } else {
                     evento.criadoEm = serverTimestamp();
@@ -160,7 +168,9 @@
             });
 
             document.getElementById('lista-eventos-gerenciamento').addEventListener('click', async (e) => {
-                const target = e.target;
+                const target = e.target.closest('button');
+                if (!target) return;
+                
                 const id = target.dataset.id;
                 if (!id) return;
                 const eventoRef = doc(db, 'eventos', id);
@@ -193,43 +203,34 @@
                     const { jsPDF } = window.jspdf;
                     const pdf = new jsPDF('landscape', 'mm', 'a4');
                     const pdfWidth = pdf.internal.pageSize.getWidth();
-                    const pdfHeight = pdf.internal.pageSize.getHeight();
-                    const imgWidth = canvas.width;
-                    const imgHeight = canvas.height;
-                    const ratio = imgWidth / imgHeight;
-                    let newWidth = pdfWidth;
-                    let newHeight = newWidth / ratio;
-                    if (newHeight > pdfHeight) {
-                        newHeight = pdfHeight;
-                        newWidth = newHeight * ratio;
-                    }
-                    pdf.addImage(imgData, 'PNG', 0, 0, newWidth, newHeight);
-                    pdf.save(`cronograma-eventos.pdf`);
+                    pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, 0);
+                    pdf.save(`cronograma-eventos-${new Date().getFullYear()}.pdf`);
                 });
             });
 
-            function renderizarListaGerenciamento(docs) {
+            function renderizarListaGerenciamento(eventos) {
                 const container = document.getElementById('lista-eventos-gerenciamento');
-                if (docs.empty) {
+                if (!eventos || eventos.length === 0) {
                     container.innerHTML = '<p>Nenhum evento cadastrado.</p>';
                     return;
                 }
                 const table = document.createElement('table');
                 table.innerHTML = `<thead><tr><th>Data</th><th>Evento</th><th>Tipo</th><th>Status</th><th>Ações</th></tr></thead><tbody></tbody>`;
                 const tbody = table.querySelector('tbody');
-                docs.forEach(doc => {
-                    const evento = doc.data();
+                eventos.forEach(evento => {
                     const tr = document.createElement('tr');
+                    tr.className = evento.status === 'cancelado' ? 'status-cancelado' : '';
                     const hoje = new Date();
+                    hoje.setHours(0,0,0,0);
                     const eventoPassou = evento.dataInicio.toDate() < hoje;
                     tr.innerHTML = `
                         <td>${evento.dataInicio.toDate().toLocaleDateString('pt-BR')}</td>
                         <td>${evento.titulo}</td>
                         <td>${evento.tipo}</td>
-                        <td class="${evento.status === 'cancelado' ? 'status-cancelado' : ''}">${evento.status}</td>
+                        <td>${evento.status}</td>
                         <td>
-                            <button class="btn-tabela btn-edit" data-id="${doc.id}" ${eventoPassou ? 'disabled title="Não é possível editar eventos passados"' : ''}>Editar</button>
-                            <button class="btn-tabela btn-cancel" data-id="${doc.id}" ${evento.status === 'cancelado' || eventoPassou ? 'disabled' : ''}>Cancelar</button>
+                            <button class="btn-tabela btn-edit" data-id="${evento.id}" ${eventoPassou ? 'disabled title="Não é possível editar eventos passados"' : ''}>Editar</button>
+                            <button class="btn-tabela btn-cancel" data-id="${evento.id}" ${evento.status === 'cancelado' || eventoPassou ? 'disabled' : ''}>Cancelar</button>
                         </td>
                     `;
                     tbody.appendChild(tr);
@@ -238,77 +239,83 @@
                 container.appendChild(table);
             }
 
-            function renderizarCronograma(docs) {
+            function renderizarCronograma(eventos) {
                 const container = document.getElementById('cronograma-visual');
                 container.innerHTML = '';
-                const eventos = docs.map(doc => ({...doc.data(), id: doc.id}));
                 
                 const semestres = { 1: [], 2: [] };
                 eventos.forEach(e => {
-                    const mes = e.dataInicio.toDate().getMonth();
+                    const mes = e.dataInicio.toDate().getUTCMonth();
                     if(mes < 6) semestres[1].push(e);
                     else semestres[2].push(e);
                 });
 
                 [1, 2].forEach(s => {
-                    if (semestres[s].length > 0) {
-                        const semestreDiv = document.createElement('div');
-                        semestreDiv.className = 'semestre';
-                        semestreDiv.innerHTML = `<h2>${s}º SEMESTRE</h2><div class="timeline" id="timeline-${s}"></div><div class="feriados-lista" id="feriados-${s}"></div>`;
-                        container.appendChild(semestreDiv);
+                    const eventosSemestre = semestres[s];
+                    if (eventosSemestre.length === 0) return;
+
+                    const semestreDiv = document.createElement('div');
+                    semestreDiv.className = 'semestre';
+                    semestreDiv.innerHTML = `<h2>${s}º SEMESTRE</h2><div class="timeline" id="timeline-${s}"></div><div class="feriados-lista" id="feriados-${s}"></div>`;
+                    container.appendChild(semestreDiv);
+                    
+                    const timeline = document.getElementById(`timeline-${s}`);
+                    const feriadosLista = document.getElementById(`feriados-${s}`);
+                    const mesesDoSemestre = s === 1 ? [0,1,2,3,4,5] : [6,7,8,9,10,11];
+                    
+                    mesesDoSemestre.forEach(mesIndex => {
+                        const mesNome = new Date(2000, mesIndex).toLocaleString('pt-BR', { month: 'long' }).toUpperCase();
+                        const monthDiv = document.createElement('div');
+                        monthDiv.className = 'month';
+                        monthDiv.innerHTML = `<span class="month-label">${mesNome}</span>`;
+                        timeline.appendChild(monthDiv);
+                    });
+
+                    let feriadosAdicionados = [];
+                    let lastPosition = "bottom"; 
+
+                    eventosSemestre.forEach(evento => {
+                        const dataEvento = evento.dataInicio.toDate();
+                        const mesDoEvento = dataEvento.getUTCMonth();
                         
-                        const timeline = document.getElementById(`timeline-${s}`);
-                        const feriadosLista = document.getElementById(`feriados-${s}`);
-                        const mesesDoSemestre = s === 1 ? [0,1,2,3,4,5] : [6,7,8,9,10,11];
+                        if(evento.tipo === 'feriado') {
+                            feriadosAdicionados.push(`${dataEvento.getUTCDate()}/${mesDoEvento + 1} - ${evento.titulo}`);
+                            return;
+                        }
+
+                        const diaDoEvento = dataEvento.getUTCDate();
+                        const diasNoMes = new Date(dataEvento.getUTCFullYear(), mesDoEvento + 1, 0).getDate();
                         
-                        mesesDoSemestre.forEach(mesIndex => {
-                            const mesNome = new Date(2000, mesIndex).toLocaleString('pt-BR', { month: 'long' }).toUpperCase();
-                            const monthDiv = document.createElement('div');
-                            monthDiv.className = 'month';
-                            monthDiv.textContent = mesNome;
-                            timeline.appendChild(monthDiv);
-                        });
+                        const offsetMes = mesesDoSemestre.indexOf(mesDoEvento) * (100 / 6);
+                        const offsetDia = (diaDoEvento / diasNoMes) * (100 / 6);
+                        const totalOffset = offsetMes + offsetDia;
+                        
+                        const node = document.createElement('div');
+                        node.className = `event-node ${evento.tipo} ${evento.status === 'cancelado' ? 'cancelado' : ''}`;
+                        node.style.left = `${totalOffset}%`;
+                        
+                        lastPosition = lastPosition === "top" ? "bottom" : "top";
+                        node.dataset.position = lastPosition;
+                        
+                        let dataTexto = dataEvento.toLocaleDateString('pt-BR', {day:'2-digit', month:'2-digit', timeZone: 'UTC'});
+                        if (evento.dataFim && evento.dataFim.toDate().getUTCDate() !== dataEvento.getUTCDate()) {
+                            dataTexto += ` e ${evento.dataFim.toDate().toLocaleDateString('pt-BR', {day:'2-digit', month:'2-digit', timeZone: 'UTC'})}`;
+                        }
 
-                        let feriadosHtml = '<strong>Feriados do período:</strong> ';
-                        let feriadosAdicionados = [];
+                        node.title = `${evento.titulo}${evento.detalhes ? ': ' + evento.detalhes : ''}`;
+                        node.innerHTML = `
+                            <div class="line"></div>
+                            <div class="diamond"></div>
+                            <div class="details">
+                                <strong>${dataTexto}</strong>
+                                ${evento.titulo}
+                            </div>
+                        `;
+                        timeline.appendChild(node);
+                    });
 
-                        semestres[s].sort((a,b) => a.dataInicio.toDate() - b.dataInicio.toDate()).forEach((evento, index) => {
-                            if (evento.tipo === 'feriado') {
-                                feriadosAdicionados.push(`${evento.dataInicio.toDate().getDate()}/${evento.dataInicio.toDate().getMonth() + 1} - ${evento.titulo}`);
-                                return;
-                            }
-
-                            const dataEvento = evento.dataInicio.toDate();
-                            const mesDoEvento = dataEvento.getMonth();
-                            const diaDoEvento = dataEvento.getDate();
-                            const diasNoMes = new Date(dataEvento.getFullYear(), mesDoEvento + 1, 0).getDate();
-                            
-                            const offsetMes = mesesDoSemestre.indexOf(mesDoEvento) * (100 / 6);
-                            const offsetDia = (diaDoEvento / diasNoMes) * (100 / 6);
-                            const totalOffset = offsetMes + offsetDia;
-                            
-                            const node = document.createElement('div');
-                            node.className = `event-node ${evento.status === 'cancelado' ? 'cancelado' : ''}`;
-                            node.style.left = `${totalOffset}%`;
-                            node.dataset.position = index % 2 === 0 ? 'top' : 'bottom';
-                            
-                            let dataTexto = dataEvento.toLocaleDateString('pt-BR', {day:'2-digit', month:'2-digit'});
-                            if (evento.dataFim && evento.dataFim.toDate().getDate() !== dataEvento.getDate()) {
-                                dataTexto += ` e ${evento.dataFim.toDate().toLocaleDateString('pt-BR', {day:'2-digit', month:'2-digit'})}`;
-                            }
-
-                            node.innerHTML = `
-                                <div class="line"></div>
-                                <div class="diamond"></div>
-                                <div class="details">
-                                    <strong>${dataTexto}</strong><br>
-                                    ${evento.titulo}
-                                </div>
-                            `;
-                            timeline.appendChild(node);
-                        });
-
-                        feriadosLista.innerHTML = feriadosAdicionados.join(' | ');
+                    if(feriadosAdicionados.length > 0) {
+                        feriadosLista.innerHTML = `<strong>Feriados do período:</strong> ${feriadosAdicionados.join(' | ')}`;
                     }
                 });
             }
