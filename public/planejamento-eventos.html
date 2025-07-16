@@ -31,27 +31,26 @@
         .btn-cancel { background-color: #c62828; color: white; border-color: #c62828;}
         .status-cancelado td { text-decoration: line-through; color: #999; }
         
-        /* Estilos do Cronograma Visual Aprimorado */
-        #cronograma-visual { padding: 20px; overflow-x: auto; } /* Permite rolagem se a tela for pequena */
+        /* Estilos do Cronograma Visual */
+        #cronograma-visual { padding: 20px; overflow-x: auto; }
         .semestre { margin-bottom: 50px; }
         .semestre h2 { background-color: #34495e; color: white; padding: 10px; border-radius: 8px; }
         .timeline { display: flex; position: relative; min-height: 350px; align-items: center; border-top: 4px solid #7f8c8d; border-bottom: 4px solid #7f8c8d; }
         .month { flex: 1; text-align: center; font-weight: bold; color: #34495e; position: relative; height: 100%; border-right: 1px dotted #ccc; min-width: 200px; }
         .month:last-child { border-right: none; }
-        .month-label { position: absolute; width: 100%; top: calc(50% - 12px); transform: translateY(-50%); font-size: 1.1em; }
-        
-        .event-node { position: absolute; width: 120px; text-align: center; transform: translateX(-50%); cursor: help; z-index: 10; }
+        .month-label { position: absolute; width: 100%; top: 50%; transform: translateY(-50%); font-size: 1.1em; color: #bdc3c7; }
+        .event-node { position: absolute; width: 120px; text-align: center; transform: translateX(-50%); cursor: help; z-index: 10; display: flex; flex-direction: column; }
         .event-node .line { width: 2px; margin: 0 auto; background-color: #2E7D32; }
-        .event-node .diamond { width: 20px; height: 20px; background-color: #2E7D32; transform: rotate(45deg); margin: 0 auto; border: 2px solid white; }
+        .event-node .diamond { width: 20px; height: 20px; background-color: #2E7D32; transform: rotate(45deg); margin: 0 auto; border: 2px solid white; flex-shrink: 0; }
         .event-node .details { font-size: 0.8em; background: #fff; padding: 5px; border-radius: 4px; box-shadow: 0 1px 4px rgba(0,0,0,0.1); line-height: 1.3; }
         .event-node .details strong { display: block; }
         
-        /* Posicionamento e linhas com base no nível */
-        .event-node[data-position="top"] { bottom: 50%; }
+        .event-node[data-position="top"] { top: 50%; transform: translate(-50%, -100%); }
         .event-node[data-position="top"] .details { margin-bottom: 8px; }
-        .event-node[data-position="bottom"] { top: 50%; }
+        .event-node[data-position="bottom"] { top: 50%; transform: translateX(-50%); }
         .event-node[data-position="bottom"] .details { margin-top: 8px; }
 
+        .event-node.palestra .diamond, .event-node.palestra .line { background-color: #0277BD; }
         .event-node.cancelado { opacity: 0.6; }
         .event-node.cancelado .details { text-decoration: line-through; }
         .event-node.cancelado .diamond, .event-node.cancelado .line { background-color: #a4b0be; }
@@ -65,6 +64,26 @@
     </nav>
     <div id="acesso-negado" style="display: none;"><h1>Acesso Negado</h1></div>
     <div id="main-content" class="page-container" style="display: none;">
+        <div class="card">
+            <h2>Gestão de Eventos</h2>
+            <form id="form-evento">
+                <div class="form-grid">
+                    <div class="form-item" style="grid-column: 1 / -1;"><label for="titulo">Título do Evento</label><input type="text" id="titulo" required></div>
+                    <div class="form-item"><label for="dataInicio">Data de Início</label><input type="date" id="dataInicio" required></div>
+                    <div class="form-item"><label for="dataFim">Data de Fim (opcional)</label><input type="date" id="dataFim"></div>
+                    <div class="form-item"><label for="tipo">Tipo de Evento</label><select id="tipo"><option value="evento">Evento</option><option value="palestra">Palestra</option><option value="feriado">Feriado</option></select></div>
+                    <div class="form-item" style="grid-column: 1 / -1;"><label for="detalhes">Detalhes (ex: Palestrante, local, etc.)</label><textarea id="detalhes" rows="2"></textarea></div>
+                </div>
+                <div class="form-actions">
+                    <button type="button" id="btn-cancelar-edicao" class="btn-secondary" style="display: none;">Cancelar Edição</button>
+                    <button type="submit" id="btn-salvar" class="btn-primary">Salvar Evento</button>
+                </div>
+            </form>
+        </div>
+        <div class="card">
+            <h2>Eventos Cadastrados</h2>
+            <div id="lista-eventos-gerenciamento"></div>
+        </div>
         <div class="card">
             <div style="display: flex; justify-content: space-between; align-items: center;">
                 <h2>Cronograma Visual</h2>
@@ -80,13 +99,13 @@
         import { protegerPagina } from '/auth.js';
 
         const firebaseConfig = {
-        apiKey: "AIzaSyBV7RPjk3cFTqL-aIpflJcUojKg1ZXMLuU",
-        authDomain: "voluntarios-ativos---cepat.firebaseapp.com",
-        projectId: "voluntarios-ativos---cepat",
-        storageBucket: "voluntarios-ativos---cepat.firebasestorage.app",
-        messagingSenderId: "66122858261",
-        appId: "1:66122858261:web:7fa21f1805463b5c08331c"
-    };
+            apiKey: "AIzaSyBV7RPjk3cFTqL-aIpflJcUojKg1ZXMLuU",
+            authDomain: "voluntarios-ativos---cepat.firebaseapp.com",
+            projectId: "voluntarios-ativos---cepat",
+            storageBucket: "voluntarios-ativos---cepat.firebasestorage.app",
+            messagingSenderId: "66122858261",
+            appId: "1:66122858261:web:7fa21f1805463b5c08331c"
+        };
         initializeApp(firebaseConfig);
 
         protegerPagina(['super-admin', 'diretor', 'tesoureiro', 'conselheiro', 'produtor-evento'])
@@ -103,19 +122,119 @@
             const db = getFirestore();
             const eventosCollection = collection(db, 'eventos');
             const form = document.getElementById('form-evento');
-            // ... (resto do seu código de inicialização) ...
-            
+            const btnCancelarEdicao = document.getElementById('btn-cancelar-edicao');
+            let editandoId = null;
+
             onSnapshot(query(eventosCollection, orderBy("dataInicio", "asc")), (snapshot) => {
                 const eventos = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
                 renderizarListaGerenciamento(eventos);
                 renderizarCronograma(eventos);
             });
-            
-            // ... (todas as suas outras funções como form.addEventListener, etc., permanecem intactas) ...
+
+            form.addEventListener('submit', async (e) => {
+                e.preventDefault();
+                const evento = {
+                    titulo: document.getElementById('titulo').value,
+                    detalhes: document.getElementById('detalhes').value,
+                    dataInicio: Timestamp.fromDate(new Date(document.getElementById('dataInicio').value + 'T12:00:00Z')),
+                    dataFim: document.getElementById('dataFim').value ? Timestamp.fromDate(new Date(document.getElementById('dataFim').value + 'T12:00:00Z')) : null,
+                    tipo: document.getElementById('tipo').value,
+                    status: 'ativo'
+                };
+                if (editandoId) {
+                    await setDoc(doc(db, 'eventos', editandoId), evento, { merge: true });
+                    alert('Evento atualizado com sucesso!');
+                } else {
+                    evento.criadoEm = serverTimestamp();
+                    evento.criadoPor = user.displayName || user.email;
+                    await addDoc(eventosCollection, evento);
+                    alert('Evento salvo com sucesso!');
+                }
+                form.reset();
+                editandoId = null;
+                btnCancelarEdicao.style.display = 'none';
+            });
+
+            btnCancelarEdicao.addEventListener('click', () => {
+                form.reset();
+                editandoId = null;
+                btnCancelarEdicao.style.display = 'none';
+            });
+
+            document.getElementById('lista-eventos-gerenciamento').addEventListener('click', async (e) => {
+                const target = e.target.closest('button');
+                if (!target) return;
+                const id = target.dataset.id;
+                if (!id) return;
+                const eventoRef = doc(db, 'eventos', id);
+
+                if (target.classList.contains('btn-edit')) {
+                    const docSnap = await getDoc(eventoRef);
+                    if (docSnap.exists()) {
+                        const data = docSnap.data();
+                        document.getElementById('titulo').value = data.titulo;
+                        document.getElementById('detalhes').value = data.detalhes;
+                        document.getElementById('dataInicio').value = data.dataInicio.toDate().toISOString().split('T')[0];
+                        document.getElementById('dataFim').value = data.dataFim ? data.dataFim.toDate().toISOString().split('T')[0] : '';
+                        document.getElementById('tipo').value = data.tipo;
+                        editandoId = id;
+                        btnCancelarEdicao.style.display = 'inline-block';
+                        window.scrollTo({ top: 0, behavior: 'smooth' });
+                    }
+                } else if (target.classList.contains('btn-cancel')) {
+                    if (confirm('Tem certeza que deseja cancelar este evento?')) {
+                        await updateDoc(eventoRef, { status: 'cancelado' });
+                    }
+                }
+            });
+
+            document.getElementById('btn-gerar-pdf').addEventListener('click', () => {
+                const cronogramaElement = document.getElementById('cronograma-visual');
+                alert('Gerando PDF do cronograma...');
+                html2canvas(cronogramaElement, { scale: 2 }).then(canvas => {
+                    const imgData = canvas.toDataURL('image/png');
+                    const { jsPDF } = window.jspdf;
+                    const pdf = new jsPDF('landscape', 'mm', 'a4');
+                    const pdfWidth = pdf.internal.pageSize.getWidth();
+                    pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, 0);
+                    pdf.save(`cronograma-eventos-${new Date().getFullYear()}.pdf`);
+                });
+            });
 
             // ===================================================================
-            // NOVA LÓGICA DE RENDERIZAÇÃO DO CRONOGRAMA
+            // FUNÇÃO QUE ESTAVA FALTANDO
             // ===================================================================
+            function renderizarListaGerenciamento(eventos) {
+                const container = document.getElementById('lista-eventos-gerenciamento');
+                if (!eventos || eventos.length === 0) {
+                    container.innerHTML = '<p>Nenhum evento cadastrado.</p>';
+                    return;
+                }
+                const table = document.createElement('table');
+                table.innerHTML = `<thead><tr><th>Data</th><th>Evento</th><th>Tipo</th><th>Status</th><th>Ações</th></tr></thead><tbody></tbody>`;
+                const tbody = table.querySelector('tbody');
+                eventos.forEach(evento => {
+                    const tr = document.createElement('tr');
+                    tr.className = evento.status === 'cancelado' ? 'status-cancelado' : '';
+                    const hoje = new Date();
+                    hoje.setHours(0,0,0,0);
+                    const eventoPassou = evento.dataInicio.toDate() < hoje;
+                    tr.innerHTML = `
+                        <td>${evento.dataInicio.toDate().toLocaleDateString('pt-BR')}</td>
+                        <td>${evento.titulo}</td>
+                        <td>${evento.tipo}</td>
+                        <td>${evento.status}</td>
+                        <td>
+                            <button class="btn-tabela btn-edit" data-id="${evento.id}" ${eventoPassou ? 'disabled title="Não é possível editar eventos passados"' : ''}>Editar</button>
+                            <button class="btn-tabela btn-cancel" data-id="${evento.id}" ${evento.status === 'cancelado' || eventoPassou ? 'disabled' : ''}>Cancelar</button>
+                        </td>
+                    `;
+                    tbody.appendChild(tr);
+                });
+                container.innerHTML = '';
+                container.appendChild(table);
+            }
+
             function renderizarCronograma(eventos) {
                 const container = document.getElementById('cronograma-visual');
                 container.innerHTML = '';
@@ -149,25 +268,24 @@
                     });
 
                     let feriadosAdicionados = [];
-                    const placement = {}; // Objeto para controlar o posicionamento e evitar sobreposição
+                    const placement = {}; 
 
                     eventosSemestre.forEach(evento => {
+                        const dataEvento = evento.dataInicio.toDate();
+                        const mesDoEvento = dataEvento.getUTCMonth();
+                        
                         if(evento.tipo === 'feriado') {
-                            const dataEvento = evento.dataInicio.toDate();
-                            feriadosAdicionados.push(`${dataEvento.getUTCDate()}/${dataEvento.getUTCMonth() + 1} - ${evento.titulo}`);
+                            feriadosAdicionados.push(`${dataEvento.getUTCDate()}/${mesDoEvento + 1} - ${evento.titulo}`);
                             return;
                         }
 
-                        const dataEvento = evento.dataInicio.toDate();
                         const diaDoEvento = dataEvento.getUTCDate();
-                        const mesDoEvento = dataEvento.getUTCMonth();
                         const diasNoMes = new Date(dataEvento.getUTCFullYear(), mesDoEvento + 1, 0).getDate();
                         
                         const offsetMes = mesesDoSemestre.indexOf(mesDoEvento) * (100 / 6);
                         const offsetDia = (diaDoEvento / diasNoMes) * (100 / 6);
                         const totalOffset = offsetMes + offsetDia;
                         
-                        // Lógica de níveis para evitar sobreposição
                         let nivel = 0;
                         let posicao = 'top';
                         let colisao = true;
@@ -177,7 +295,7 @@
                             if(placement[chavePosicao]) {
                                 const ultimaPosicao = placement[chavePosicao];
                                 const distancia = totalOffset - ultimaPosicao;
-                                if(distancia < 10) { // Se estiver a menos de 10% de distância, há colisão
+                                if(distancia < 10) { 
                                     colisao = true;
                                     if(posicao === 'top') {
                                         posicao = 'bottom';
@@ -194,18 +312,20 @@
                         node.className = `event-node ${evento.tipo} ${evento.status === 'cancelado' ? 'cancelado' : ''}`;
                         node.style.left = `${totalOffset}%`;
                         
-                        const alturaBase = 40; // Altura da caixa de detalhes + margem
+                        const alturaBase = 45; 
                         const alturaLinha = 30 + (nivel * alturaBase);
                         
+                        let nodeHTML = '';
                         if (posicao === 'top') {
+                            node.style.paddingBottom = `${alturaLinha}px`;
                             node.style.bottom = '50%';
-                            node.style.marginBottom = `${12 + (nivel * alturaBase)}px`;
-                            node.innerHTML = `<div class="details"><strong>...</strong>...</div><div class="diamond"></div><div class="line" style="height: ${alturaLinha}px;"></div>`;
+                            nodeHTML = `<div class="details"><strong></strong></div><div class="diamond"></div><div class="line" style="height: ${alturaLinha}px;"></div>`;
                         } else {
+                            node.style.paddingTop = `${alturaLinha}px`;
                             node.style.top = '50%';
-                            node.style.marginTop = `${12 + (nivel * alturaBase)}px`;
-                            node.innerHTML = `<div class="line" style="height: ${alturaLinha}px;"></div><div class="diamond"></div><div class="details"><strong>...</strong>...</div>`;
+                            nodeHTML = `<div class="line" style="height: ${alturaLinha}px;"></div><div class="diamond"></div><div class="details"><strong></strong></div>`;
                         }
+                        node.innerHTML = nodeHTML;
 
                         let dataTexto = dataEvento.toLocaleDateString('pt-BR', {day:'2-digit', month:'2-digit', timeZone: 'UTC'});
                         if (evento.dataFim && evento.dataFim.toDate().getUTCDate() !== dataEvento.getUTCDate()) {
