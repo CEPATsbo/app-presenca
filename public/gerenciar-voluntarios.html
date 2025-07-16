@@ -6,9 +6,8 @@
     <title>Admin - Gerenciar Voluntários</title>
     <style>
         body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background-color: #f4f6f9; display: flex; flex-direction: column; align-items: center; min-height: 100vh; margin: 0; padding: 20px; box-sizing: border-box; }
-        .admin-nav { width: 100%; max-width: 900px; background-color: #fff; padding: 15px; margin-bottom: 30px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); text-align: center; display: flex; flex-wrap: wrap; justify-content: center; gap: 15px 25px; }
-        .admin-nav a { margin: 0; padding: 0; background-color: transparent; color: #1565c0; text-decoration: none; font-weight: bold; font-size: 1.1em; white-space: nowrap; }
-        .admin-nav a.active, .admin-nav a:hover { text-decoration: underline; background-color: transparent; color: #0d47a1; }
+        .nav-voltar { max-width: 900px; width:100%; margin: 0 auto 30px auto; text-align: left; }
+        .btn-voltar { background-color: #e9ecef; color: #495057; border: 1px solid #dee2e6; padding: 10px 20px; border-radius: 8px; font-weight: bold; font-size: 1em; text-decoration: none; }
         .container { background-color: white; padding: 40px; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.15); width: 100%; max-width: 900px; margin-bottom: 30px; }
         h1, h2 { text-align: center; color: #333; margin-top: 0; }
         p { color: #666; text-align: center; margin-top: -15px; margin-bottom: 30px; }
@@ -33,48 +32,54 @@
         .btn-toggle { background-color: #ffb300; }
         .btn-delete { background-color: #c62828; color: white; border-color: #c62828; }
         .btn-promover-conselheiro { background-color: #0277BD; color: white; border-color: #0277BD; }
+        .btn-promover-produtor { background-color: #6a1b9a; color: white; border-color: #6a1b9a; }
         .tasv-container { text-align: center; }
         .tasv-container label { font-size: 0.8em; font-weight: bold; }
-        .tasv-checkbox { transform: scale(1.5); cursor: pointer; }
+        .tasv-checkbox { transform: scale(1.5); cursor: pointer; flex-shrink: 0; }
         .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.6); display: none; justify-content: center; align-items: center; z-index: 1000; }
         .modal-content { background-color: white; padding: 30px; border-radius: 10px; width: 90%; max-width: 600px; }
         .modal-content h2 { margin-top: 0; }
         .modal-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 20px; }
         .nav-voltar { max-width: 1200px; margin: 0 auto 30px auto; text-align: left; }
-.btn-voltar { background-color: #e9ecef; color: #495057; border: 1px solid #dee2e6; padding: 10px 20px; border-radius: 8px; font-weight: bold; font-size: 1em; text-decoration: none; transition: background-color 0.2s; }
-.btn-voltar:hover { background-color: #dee2e6; }
+        .btn-voltar { background-color: #e9ecef; color: #495057; border: 1px solid #dee2e6; padding: 10px 20px; border-radius: 8px; font-weight: bold; font-size: 1em; text-decoration: none; transition: background-color 0.2s; }
+        .btn-voltar:hover { background-color: #dee2e6; }
     </style>
 </head>
 <body>
     <nav class="nav-voltar">
         <a href="/dashboard.html" class="btn-voltar">⬅ Voltar para o Dashboard</a>
     </nav>
-    <div class="container form-container">
-        <h1>Adicionar Novo Voluntário</h1>
-        <div class="form-grid">
-            <div class="form-item"><label for="nome">Nome Completo:</label><input type="text" id="nome" required></div>
-            <div class="form-item"><label for="endereco">Endereço:</label><input type="text" id="endereco"></div>
-            <div class="form-item"><label for="telefone">Telefone:</label><input type="tel" id="telefone" maxlength="15"></div>
-            <div class="form-item"><label for="aniversario">Aniversário (DD/MM):</label><input type="text" id="aniversario" placeholder="Ex: 25/12"></div>
-        </div>
-        <button id="btn-adicionar" class="add-button">Adicionar Voluntário</button>
+    <div id="acesso-negado" style="display: none;">
+        <h1>Acesso Negado</h1>
     </div>
-    <div class="container lista-container">
-        <h2 id="titulo-lista">Lista de Voluntários Cadastrados</h2>
-        <ul id="lista-voluntarios"><li>Carregando...</li></ul>
-    </div>
-    <div id="edit-modal" class="modal-overlay">
-        <div class="modal-content">
-            <h2>Editar Voluntário</h2>
+    <div id="main-content" style="display: none;">
+        <div class="container form-container">
+            <h1>Adicionar Novo Voluntário</h1>
             <div class="form-grid">
-                <div class="form-item"><label for="edit-nome">Nome Completo:</label><input type="text" id="edit-nome" required></div>
-                <div class="form-item"><label for="edit-endereco">Endereço:</label><input type="text" id="edit-endereco"></div>
-                <div class="form-item"><label for="edit-telefone">Telefone:</label><input type="tel" id="edit-telefone" maxlength="15"></div>
-                <div class="form-item"><label for="edit-aniversario">Aniversário (DD/MM):</label><input type="text" id="edit-aniversario"></div>
+                <div class="form-item"><label for="nome">Nome Completo:</label><input type="text" id="nome" required></div>
+                <div class="form-item"><label for="endereco">Endereço:</label><input type="text" id="endereco"></div>
+                <div class="form-item"><label for="telefone">Telefone:</label><input type="tel" id="telefone" maxlength="15"></div>
+                <div class="form-item"><label for="aniversario">Aniversário (DD/MM):</label><input type="text" id="aniversario" placeholder="Ex: 25/12"></div>
             </div>
-            <div class="modal-actions">
-                <button id="btn-cancelar-edicao" class="btn-delete">Cancelar</button>
-                <button id="btn-salvar-edicao" class="add-button">Salvar Alterações</button>
+            <button id="btn-adicionar" class="add-button">Adicionar Voluntário</button>
+        </div>
+        <div class="container lista-container">
+            <h2 id="titulo-lista">Lista de Voluntários Cadastrados</h2>
+            <ul id="lista-voluntarios"><li>Carregando...</li></ul>
+        </div>
+        <div id="edit-modal" class="modal-overlay">
+            <div class="modal-content">
+                <h2>Editar Voluntário</h2>
+                <div class="form-grid">
+                    <div class="form-item"><label for="edit-nome">Nome Completo:</label><input type="text" id="edit-nome" required></div>
+                    <div class="form-item"><label for="edit-endereco">Endereço:</label><input type="text" id="edit-endereco"></div>
+                    <div class="form-item"><label for="edit-telefone">Telefone:</label><input type="tel" id="edit-telefone" maxlength="15"></div>
+                    <div class="form-item"><label for="edit-aniversario">Aniversário (DD/MM):</label><input type="text" id="edit-aniversario"></div>
+                </div>
+                <div class="modal-actions">
+                    <button id="btn-cancelar-edicao" class="btn-delete">Cancelar</button>
+                    <button id="btn-salvar-edicao" class="add-button">Salvar Alterações</button>
+                </div>
             </div>
         </div>
     </div>
@@ -82,8 +87,9 @@
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
         import { getFirestore, collection, onSnapshot, addDoc, deleteDoc, doc, getDoc, getDocs, orderBy, query, serverTimestamp, updateDoc, where } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
-        import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-auth.js";
+        import { getAuth } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-auth.js";
         import { getFunctions, httpsCallable } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-functions.js";
+        import { protegerPagina } from '/auth.js';
         
         const firebaseConfig = {
             apiKey: "AIzaSyBV7RPjk3cFTqL-aIpflJcUojKg1ZXMLuU",
@@ -94,224 +100,241 @@
             appId: "1:66122858261:web:7fa21f1805463b5c08331c"
         };
         
-        const app = initializeApp(firebaseConfig);
-        const db = getFirestore(app);
-        const auth = getAuth(app);
-        const functions = getFunctions(app, 'southamerica-east1');
-        
-        const voluntariosCollection = collection(db, 'voluntarios');
-        const logAuditoriaCollection = collection(db, 'log_auditoria');
-        
-        const ui = {
-            nome: document.getElementById('nome'),
-            endereco: document.getElementById('endereco'),
-            telefone: document.getElementById('telefone'),
-            aniversario: document.getElementById('aniversario'),
-            btnAdd: document.getElementById('btn-adicionar'),
-            listaUl: document.getElementById('lista-voluntarios'),
-            tituloLista: document.getElementById('titulo-lista'),
-            editModal: document.getElementById('edit-modal'),
-            editNome: document.getElementById('edit-nome'),
-            editEndereco: document.getElementById('edit-endereco'),
-            editTelefone: document.getElementById('edit-telefone'),
-            editAniversario: document.getElementById('edit-aniversario'),
-            btnSalvar: document.getElementById('btn-salvar-edicao'),
-            btnCancelar: document.getElementById('btn-cancelar-edicao'),
-        };
-        let currentEditingId = null;
-        let userRole = '';
+        initializeApp(firebaseConfig);
 
-        document.addEventListener('authReady', () => {
-             userRole = auth.currentUser?.claims?.role || '';
-        });
+        protegerPagina(['super-admin', 'diretor', 'tesoureiro'])
+            .then(user => {
+                document.getElementById('main-content').style.display = 'block';
+                inicializarPagina(user);
+            })
+            .catch(error => {
+                document.getElementById('acesso-negado').style.display = 'block';
+                console.error(error.message);
+            });
 
-        async function registrarLog(acao, detalhes) {
-            const user = auth.currentUser;
-            if (!user) return;
-            try {
-                await addDoc(logAuditoriaCollection, {
-                    acao: acao,
-                    autor: { uid: user.uid, nome: user.displayName || user.email },
-                    timestamp: serverTimestamp(),
-                    detalhes: detalhes
-                });
-            } catch (error) {
-                console.error("Erro ao registrar log:", error);
-            }
-        }
-        
-        async function carregarVoluntarios() {
-            const anoVigente = new Date().getFullYear();
+        function inicializarPagina(user) {
+            const db = getFirestore();
+            const auth = getAuth();
+            const functions = getFunctions(undefined, 'southamerica-east1');
             
-            const queryConselheiros = query(voluntariosCollection, where("role", "==", "conselheiro"));
-            const conselheirosSnapshot = await getDocs(queryConselheiros);
-            const totalConselheiros = conselheirosSnapshot.size;
+            const voluntariosCollection = collection(db, 'voluntarios');
+            const logAuditoriaCollection = collection(db, 'log_auditoria');
+            
+            const ui = {
+                nome: document.getElementById('nome'),
+                endereco: document.getElementById('endereco'),
+                telefone: document.getElementById('telefone'),
+                aniversario: document.getElementById('aniversario'),
+                btnAdd: document.getElementById('btn-adicionar'),
+                listaUl: document.getElementById('lista-voluntarios'),
+                tituloLista: document.getElementById('titulo-lista'),
+                editModal: document.getElementById('edit-modal'),
+                editNome: document.getElementById('edit-nome'),
+                editEndereco: document.getElementById('edit-endereco'),
+                editTelefone: document.getElementById('edit-telefone'),
+                editAniversario: document.getElementById('edit-aniversario'),
+                btnSalvar: document.getElementById('btn-salvar-edicao'),
+                btnCancelar: document.getElementById('btn-cancelar-edicao'),
+            };
+            let currentEditingId = null;
+            const userRole = user.claims.role;
 
-            const q = query(voluntariosCollection, orderBy("nome"));
-            onSnapshot(q, (snapshot) => {
-                ui.tituloLista.textContent = `Lista de Voluntários Cadastrados (TOTAL = ${snapshot.size}) | Conselheiros Ativos: ${totalConselheiros}/3`;
-                ui.listaUl.innerHTML = '';
-                if (snapshot.empty) { ui.listaUl.innerHTML = '<li>Nenhum voluntário cadastrado.</li>'; return; }
-                
-                snapshot.forEach(docSnapshot => {
-                    const v = docSnapshot.data();
-                    const id = docSnapshot.id;
-                    let statusClasse = 'status-pendente';
-                    if (v.statusVoluntario === 'inativo') { statusClasse = 'status-inativo'; } 
-                    else if (v.tasvAssinadoAno === anoVigente) { statusClasse = 'status-ativo'; }
-                    
-                    const li = document.createElement('li');
-                    li.className = `item-voluntario ${statusClasse}`;
-                    
-                    let botaoPromoverConselheiro = '';
-                    // ===================================================================
-                    // CONDIÇÃO CORRIGIDA: Mostra o botão se o usuário tem conta,
-                    // não é conselheiro e há vagas.
-                    // ===================================================================
-                    if (userRole === 'super-admin' && totalConselheiros < 5 && v.authUid && v.role !== 'conselheiro') {
-                        botaoPromoverConselheiro = `<button data-id="${v.authUid}" data-nome="${v.nome}" class="btn-promover-conselheiro">Promover a Conselheiro</button>`;
-                    }
-
-                    li.innerHTML = `
-                        <div class="voluntario-info">
-                            <strong>${v.nome}</strong>
-                            <small>${v.endereco || 'N/A'} | ${v.telefone || 'N/A'} | Aniversário: ${v.aniversario || 'N/A'} | Cargo: ${v.role || 'voluntario'}</small>
-                        </div>
-                        <div class="tasv-container">
-                            <label for="tasv-${id}">TASV ${anoVigente}</label>
-                            <input type="checkbox" id="tasv-${id}" data-id="${id}" class="tasv-checkbox" ${v.tasvAssinadoAno === anoVigente ? 'checked' : ''}>
-                        </div>
-                        <div class="actions">
-                            <div class="actions-buttons">
-                                <button data-id="${id}" class="btn-edit">Editar</button>
-                                <button data-id="${id}" data-nome="${v.nome}" class="btn-delete">Apagar</button>
-                                ${botaoPromoverConselheiro}
-                            </div>
-                            <button data-id="${id}" data-status="${v.statusVoluntario || 'ativo'}" class="btn-toggle">Tornar ${v.statusVoluntario === 'ativo' ? 'Inativo' : 'Ativo'}</button>
-                        </div>
-                    `;
-                    ui.listaUl.appendChild(li);
-                });
-            });
-        }
-
-        const handlePhone = (event) => { event.target.value = phoneMask(event.target.value); };
-        const phoneMask = (value) => {
-            if (!value) return "";
-            value = value.replace(/\D/g,'');
-            value = value.replace(/(\d{2})(\d)/,"($1) $2");
-            value = value.replace(/(\d)(\d{4})$/,"$1-$2");
-            return value;
-        };
-
-        function setupEventListeners() {
-            ui.telefone.addEventListener('input', handlePhone);
-            ui.editTelefone.addEventListener('input', handlePhone);
-
-            ui.btnAdd.addEventListener('click', async () => {
-                const novoVoluntario = { nome: ui.nome.value.trim(), endereco: ui.endereco.value.trim(), telefone: ui.telefone.value.trim(), aniversario: ui.aniversario.value.trim(), statusVoluntario: 'ativo', ultimaPresenca: null, tasvAssinadoAno: null, criadoEm: serverTimestamp() };
-                if (!novoVoluntario.nome) return alert("O campo 'Nome Completo' é obrigatório.");
+            async function registrarLog(acao, detalhes) {
+                if (!user) return;
                 try {
-                    await addDoc(voluntariosCollection, novoVoluntario);
-                    await registrarLog("CRIOU_VOLUNTARIO", { nome: novoVoluntario.nome });
-                    ui.nome.value = ''; ui.endereco.value = ''; ui.telefone.value = ''; ui.aniversario.value = '';
-                } catch (error) { console.error("Erro ao adicionar voluntário:", error); }
-            });
-
-            ui.listaUl.addEventListener('change', async (e) => {
-                if (e.target.classList.contains('tasv-checkbox')) {
-                    const id = e.target.dataset.id;
-                    const novoValor = e.target.checked ? new Date().getFullYear() : null;
-                    await updateDoc(doc(db, 'voluntarios', id), { tasvAssinadoAno: novoValor });
-                    await registrarLog("ATUALIZOU_TASV", { voluntarioId: id, tasvParaAno: novoValor });
+                    await addDoc(logAuditoriaCollection, {
+                        acao: acao,
+                        autor: { uid: user.uid, nome: user.displayName || user.email },
+                        timestamp: serverTimestamp(),
+                        detalhes: detalhes
+                    });
+                } catch (error) {
+                    console.error("Erro ao registrar log:", error);
                 }
-            });
+            }
+            
+            async function carregarVoluntarios() {
+                const anoVigente = new Date().getFullYear();
+                
+                const queryConselheiros = query(voluntariosCollection, where("role", "==", "conselheiro"));
+                const conselheirosSnapshot = await getDocs(queryConselheiros);
+                const totalConselheiros = conselheirosSnapshot.size;
 
-            ui.listaUl.addEventListener('click', async (e) => {
-                const id = e.target.dataset.id;
-                if (!id) return;
-                
-                const docRef = e.target.classList.contains('btn-promover-conselheiro') ? null : doc(db, 'voluntarios', id);
-                
-                if (e.target.classList.contains('btn-delete')) {
-                    const nome = e.target.dataset.nome;
-                    if (confirm(`Tem certeza que deseja apagar ${nome}?`)) {
-                        const docSnap = await getDoc(docRef);
-                        await registrarLog("APAGOU_VOLUNTARIO", { voluntarioId: id, dadosAntigos: docSnap.data() });
-                        await deleteDoc(docRef);
-                    }
-                } else if (e.target.classList.contains('btn-toggle')) {
-                    const novoStatus = e.target.dataset.status === 'ativo' ? 'inativo' : 'ativo';
-                    await updateDoc(docRef, { statusVoluntario: novoStatus });
-                    await registrarLog("ALTEROU_STATUS_VOLUNTARIO", { voluntarioId: id, novoStatus: novoStatus });
-                } else if (e.target.classList.contains('btn-edit')) {
-                    const docSnap = await getDoc(docRef);
-                    if (docSnap.exists()) {
-                        const data = docSnap.data();
-                        currentEditingId = id;
-                        ui.editNome.value = data.nome || '';
-                        ui.editEndereco.value = data.endereco || '';
-                        ui.editTelefone.value = phoneMask(data.telefone || '');
-                        ui.editAniversario.value = data.aniversario || '';
-                        ui.editModal.style.display = 'flex';
-                    }
-                } else if (e.target.classList.contains('btn-promover-conselheiro')) {
-                    const nome = e.target.dataset.nome;
-                    const uidParaPromover = e.target.dataset.id;
+                const q = query(voluntariosCollection, orderBy("nome"));
+                onSnapshot(q, (snapshot) => {
+                    ui.tituloLista.textContent = `Lista de Voluntários Cadastrados (TOTAL = ${snapshot.size}) | Conselheiros Ativos: ${totalConselheiros}/5`;
+                    ui.listaUl.innerHTML = '';
+                    if (snapshot.empty) { ui.listaUl.innerHTML = '<li>Nenhum voluntário cadastrado.</li>'; return; }
                     
-                    if (!uidParaPromover) return alert('Erro: UID do usuário não encontrado. O voluntário precisa ter uma conta de login para ser promovido.');
-
-                    if (confirm(`Tem certeza que deseja promover ${nome} a Conselheiro Fiscal?`)) {
-                        e.target.disabled = true;
-                        e.target.textContent = "Promovendo...";
+                    snapshot.forEach(docSnapshot => {
+                        const v = docSnapshot.data();
+                        const id = docSnapshot.id;
+                        let statusClasse = 'status-pendente';
+                        if (v.statusVoluntario === 'inativo') { statusClasse = 'status-inativo'; } 
+                        else if (v.tasvAssinadoAno === anoVigente) { statusClasse = 'status-ativo'; }
                         
-                        try {
-                            const promoverParaConselheiro = httpsCallable(functions, 'promoverParaConselheiro');
-                            const resultado = await promoverParaConselheiro({ uid: uidParaPromover });
-                            alert(resultado.data.message);
-                            await registrarLog("PROMOVEU_CONSELHEIRO", { alvo: { nome, uid: uidParaPromover } });
-                        } catch (error) {
-                            console.error("Erro ao promover para conselheiro:", error);
-                            alert(`Erro: ${error.message}`);
-                            e.target.disabled = false;
-                            e.target.textContent = "Promover a Conselheiro";
+                        const li = document.createElement('li');
+                        li.className = `item-voluntario ${statusClasse}`;
+                        
+                        let botaoPromoverConselheiro = '';
+                        if (userRole === 'super-admin' && totalConselheiros < 5 && v.authUid && v.role !== 'conselheiro') {
+                            botaoPromoverConselheiro = `<button data-id="${v.authUid}" data-nome="${v.nome}" class="btn-promover-conselheiro">Promover a Conselheiro</button>`;
+                        }
+
+                        let botaoPromoverProdutor = '';
+                        if (userRole === 'super-admin' && v.authUid && v.role !== 'produtor-evento') {
+                             botaoPromoverProdutor = `<button data-id="${v.authUid}" data-nome="${v.nome}" class="btn-promover-produtor">Promover a Produtor de Evento</button>`;
+                        }
+
+                        li.innerHTML = `
+                            <div class="voluntario-info">
+                                <strong>${v.nome}</strong>
+                                <small>${v.endereco || 'N/A'} | ${v.telefone || 'N/A'} | Aniversário: ${v.aniversario || 'N/A'} | Cargo: ${v.role || 'voluntario'}</small>
+                            </div>
+                            <div class="tasv-container">
+                                <label for="tasv-${id}">TASV ${anoVigente}</label>
+                                <input type="checkbox" id="tasv-${id}" data-id="${id}" class="tasv-checkbox" ${v.tasvAssinadoAno === anoVigente ? 'checked' : ''}>
+                            </div>
+                            <div class="actions">
+                                <div class="actions-buttons">
+                                    <button data-id="${id}" class="btn-edit">Editar</button>
+                                    <button data-id="${id}" data-nome="${v.nome}" class="btn-delete">Apagar</button>
+                                    ${botaoPromoverConselheiro}
+                                    ${botaoPromoverProdutor}
+                                </div>
+                                <button data-id="${id}" data-status="${v.statusVoluntario || 'ativo'}" class="btn-toggle">Tornar ${v.statusVoluntario === 'ativo' ? 'Inativo' : 'Ativo'}</button>
+                            </div>
+                        `;
+                        ui.listaUl.appendChild(li);
+                    });
+                });
+            }
+
+            const handlePhone = (event) => { event.target.value = phoneMask(event.target.value); };
+            const phoneMask = (value) => {
+                if (!value) return "";
+                value = value.replace(/\D/g,'');
+                value = value.replace(/(\d{2})(\d)/,"($1) $2");
+                value = value.replace(/(\d)(\d{4})$/,"$1-$2");
+                return value;
+            };
+
+            function setupEventListeners() {
+                ui.telefone.addEventListener('input', handlePhone);
+                ui.editTelefone.addEventListener('input', handlePhone);
+
+                ui.btnAdd.addEventListener('click', async () => {
+                    const novoVoluntario = { nome: ui.nome.value.trim(), endereco: ui.endereco.value.trim(), telefone: ui.telefone.value.trim(), aniversario: ui.aniversario.value.trim(), statusVoluntario: 'ativo', ultimaPresenca: null, tasvAssinadoAno: null, criadoEm: serverTimestamp() };
+                    if (!novoVoluntario.nome) return alert("O campo 'Nome Completo' é obrigatório.");
+                    try {
+                        await addDoc(voluntariosCollection, novoVoluntario);
+                        await registrarLog("CRIOU_VOLUNTARIO", { nome: novoVoluntario.nome });
+                        ui.nome.value = ''; ui.endereco.value = ''; ui.telefone.value = ''; ui.aniversario.value = '';
+                    } catch (error) { console.error("Erro ao adicionar voluntário:", error); }
+                });
+
+                ui.listaUl.addEventListener('change', async (e) => {
+                    if (e.target.classList.contains('tasv-checkbox')) {
+                        const id = e.target.dataset.id;
+                        const novoValor = e.target.checked ? new Date().getFullYear() : null;
+                        await updateDoc(doc(db, 'voluntarios', id), { tasvAssinadoAno: novoValor });
+                        await registrarLog("ATUALIZOU_TASV", { voluntarioId: id, tasvParaAno: novoValor });
+                    }
+                });
+
+                ui.listaUl.addEventListener('click', async (e) => {
+                    const id = e.target.dataset.id;
+                    if (!id) return;
+                    
+                    const isPromotionButton = e.target.classList.contains('btn-promover-conselheiro') || e.target.classList.contains('btn-promover-produtor');
+                    const docRef = isPromotionButton ? null : doc(db, 'voluntarios', id);
+                    
+                    if (e.target.classList.contains('btn-delete')) {
+                        const nome = e.target.dataset.nome;
+                        if (confirm(`Tem certeza que deseja apagar ${nome}?`)) {
+                            const docSnap = await getDoc(docRef);
+                            await registrarLog("APAGOU_VOLUNTARIO", { voluntarioId: id, dadosAntigos: docSnap.data() });
+                            await deleteDoc(docRef);
+                        }
+                    } else if (e.target.classList.contains('btn-toggle')) {
+                        const novoStatus = e.target.dataset.status === 'ativo' ? 'inativo' : 'ativo';
+                        await updateDoc(docRef, { statusVoluntario: novoStatus });
+                        await registrarLog("ALTEROU_STATUS_VOLUNTARIO", { voluntarioId: id, novoStatus: novoStatus });
+                    } else if (e.target.classList.contains('btn-edit')) {
+                        const docSnap = await getDoc(docRef);
+                        if (docSnap.exists()) {
+                            const data = docSnap.data();
+                            currentEditingId = id;
+                            ui.editNome.value = data.nome || '';
+                            ui.editEndereco.value = data.endereco || '';
+                            ui.editTelefone.value = phoneMask(data.telefone || '');
+                            ui.editAniversario.value = data.aniversario || '';
+                            ui.editModal.style.display = 'flex';
+                        }
+                    } else if (e.target.classList.contains('btn-promover-conselheiro')) {
+                        const nome = e.target.dataset.nome;
+                        const uidParaPromover = e.target.dataset.id;
+                        if (!uidParaPromover) return alert('Erro: UID do usuário não encontrado. O voluntário precisa ter uma conta de login para ser promovido.');
+                        if (confirm(`Tem certeza que deseja promover ${nome} a Conselheiro Fiscal?`)) {
+                            e.target.disabled = true;
+                            e.target.textContent = "Promovendo...";
+                            try {
+                                const promoverParaConselheiro = httpsCallable(functions, 'promoverParaConselheiro');
+                                const resultado = await promoverParaConselheiro({ uid: uidParaPromover });
+                                alert(resultado.data.message);
+                                await registrarLog("PROMOVEU_CONSELHEIRO", { alvo: { nome, uid: uidParaPromover } });
+                            } catch (error) {
+                                console.error("Erro ao promover para conselheiro:", error);
+                                alert(`Erro: ${error.message}`);
+                                e.target.disabled = false;
+                                e.target.textContent = "Promover a Conselheiro";
+                            }
+                        }
+                    } else if (e.target.classList.contains('btn-promover-produtor')) {
+                        const nome = e.target.dataset.nome;
+                        const uidParaPromover = e.target.dataset.id;
+                        
+                        if (!uidParaPromover) return alert('Erro: UID do usuário não encontrado. O voluntário precisa ter uma conta de login para ser promovido.');
+
+                        if (confirm(`Tem certeza que deseja promover ${nome} a Produtor de Evento?`)) {
+                            e.target.disabled = true;
+                            e.target.textContent = "Promovendo...";
+                            
+                            try {
+                                const promoverParaProdutorEvento = httpsCallable(functions, 'promoverParaProdutorEvento');
+                                const resultado = await promoverParaProdutorEvento({ uid: uidParaPromover });
+                                alert(resultado.data.message);
+                                await registrarLog("PROMOVEU_PRODUTOR_EVENTO", { alvo: { nome, uid: uidParaPromover } });
+                            } catch (error) {
+                                console.error("Erro ao promover para produtor:", error);
+                                alert(`Erro: ${error.message}`);
+                                e.target.disabled = false;
+                                e.target.textContent = "Promover a Produtor de Evento";
+                            }
                         }
                     }
-                }
-            });
-            
-            ui.btnSalvar.addEventListener('click', async () => {
-                if (!currentEditingId) return;
-                const docRef = doc(db, 'voluntarios', currentEditingId);
-                const docSnap = await getDoc(docRef);
-                const dadosAntigos = docSnap.data();
-                const dadosNovos = { nome: ui.editNome.value.trim(), endereco: ui.editEndereco.value.trim(), telefone: ui.editTelefone.value.trim(), aniversario: ui.editAniversario.value.trim() };
-                try {
-                    await updateDoc(docRef, dadosNovos);
-                    await registrarLog("EDITOU_VOLUNTARIO", { voluntarioId: currentEditingId, dadosAntigos, dadosNovos });
-                    ui.editModal.style.display = 'none';
-                    currentEditingId = null;
-                } catch (error) { console.error("Erro ao salvar:", error); }
-            });
-
-            ui.btnCancelar.addEventListener('click', () => { ui.editModal.style.display = 'none'; currentEditingId = null; });
-        }
-        
-        onAuthStateChanged(auth, (user) => {
-            if (user) {
-                user.getIdTokenResult(true).then((idTokenResult) => {
-                    auth.currentUser.claims = idTokenResult.claims;
-                    document.dispatchEvent(new Event('authReady'));
-                    
-                    setupEventListeners();
-                    carregarVoluntarios();
                 });
-            } else {
-                window.location.href = '/login.html';
-            }
-        });
+                
+                ui.btnSalvar.addEventListener('click', async () => {
+                    if (!currentEditingId) return;
+                    const docRef = doc(db, 'voluntarios', currentEditingId);
+                    const docSnap = await getDoc(docRef);
+                    const dadosAntigos = docSnap.data();
+                    const dadosNovos = { nome: ui.editNome.value.trim(), endereco: ui.editEndereco.value.trim(), telefone: ui.editTelefone.value.trim(), aniversario: ui.editAniversario.value.trim() };
+                    try {
+                        await updateDoc(docRef, dadosNovos);
+                        await registrarLog("EDITOU_VOLUNTARIO", { voluntarioId: currentEditingId, dadosAntigos, dadosNovos });
+                        ui.editModal.style.display = 'none';
+                        currentEditingId = null;
+                    } catch (error) { console.error("Erro ao salvar:", error); }
+                });
 
+                ui.btnCancelar.addEventListener('click', () => { ui.editModal.style.display = 'none'; currentEditingId = null; });
+            }
+            
+            setupEventListeners();
+            carregarVoluntarios();
+        }
     </script>
-    <script type="module" src="/logout.js"></script>
 </body>
 </html>

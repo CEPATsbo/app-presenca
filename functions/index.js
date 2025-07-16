@@ -3,11 +3,11 @@ const admin = require("firebase-admin");
 const webpush = require("web-push");
 const cors = require("cors")({ origin: true });
 const Fuse = require("fuse.js");
-
+const stream = require('stream');
 
 admin.initializeApp();
 const db = admin.firestore();
-const storage = admin.storage(); // Adiciona o serviço de Storage
+const storage = admin.storage();
 const REGIAO = 'southamerica-east1';
 
 function configurarWebPush() {
@@ -140,6 +140,31 @@ exports.promoverParaConselheiro = functions.region(REGIAO).https.onCall(async (d
         throw new functions.https.HttpsError('internal', 'Erro interno ao tentar promover o usuário.'); 
     }
 });
+
+// ===================================================================
+// NOVA FUNÇÃO ADICIONADA
+// ===================================================================
+exports.promoverParaProdutorEvento = functions.region(REGIAO).https.onCall(async (data, context) => {
+    if (context.auth.token.role !== 'super-admin') { 
+        throw new functions.https.HttpsError('permission-denied', 'Apenas o Super Admin pode promover usuários.'); 
+    }
+    const uidParaPromover = data.uid;
+    if (!uidParaPromover) { 
+        throw new functions.https.HttpsError('invalid-argument', 'O UID do usuário é necessário.'); 
+    }
+    try {
+        await admin.auth().setCustomUserClaims(uidParaPromover, { role: 'produtor-evento' });
+        const userQuery = await db.collection('voluntarios').where('authUid', '==', uidParaPromover).limit(1).get();
+        if (!userQuery.empty) { 
+            await userQuery.docs[0].ref.update({ role: 'produtor-evento' }); 
+        }
+        return { success: true, message: 'Usuário promovido a Produtor de Evento com sucesso.' };
+    } catch (error) { 
+        console.error("Erro ao promover para Produtor de Evento:", error); 
+        throw new functions.https.HttpsError('internal', 'Erro interno ao tentar promover o usuário.'); 
+    }
+});
+
 
 exports.revogarAcessoDiretor = functions.region(REGIAO).https.onCall(async (data, context) => {
     if (context.auth.token.role !== 'super-admin') { throw new functions.https.HttpsError('permission-denied', 'Apenas o Super Admin pode revogar acesso.'); }
