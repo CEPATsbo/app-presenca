@@ -132,8 +132,13 @@
                 const dataEvento = e.dataInicio.toDate();
                 if(dataEvento.getFullYear() !== anoAtual) return;
                 const mes = dataEvento.getUTCMonth();
-                if(mes < 6) semestres[1].eventos.push(e);
-                else semestres[2].eventos.push(e);
+                
+                // A correção está aqui: verifica se o semestre existe antes de adicionar
+                if(mes < 6 && semestres[1]) {
+                    semestres[1].eventos.push(e);
+                } else if (mes >= 6 && semestres[2]) {
+                    semestres[2].eventos.push(e);
+                }
             });
 
             for (const s in semestres) {
