@@ -31,34 +31,33 @@
         .btn-cancel { background-color: #c62828; color: white; border-color: #c62828;}
         .status-cancelado td { text-decoration: line-through; color: #999; }
         
-        /* ESTILOS DO CRONOGRAMA VISUAL REFEITOS */
+        /* ESTILOS DO NOVO CRONOGRAMA VISUAL */
         #cronograma-visual { padding: 40px 20px; overflow-x: auto; }
         .semestre { margin-bottom: 60px; }
         .semestre h2 { background-color: #34495e; color: white; padding: 10px; border-radius: 8px; font-size: 1.5em; }
-        .timeline { display: flex; position: relative; padding: 150px 0; }
-        .timeline::before { content: ''; position: absolute; top: 50%; left: 0; right: 0; height: 6px; background-color: #7f8c8d; transform: translateY(-50%); z-index: 1; }
+        .timeline { display: grid; position: relative; padding: 150px 0; }
+        .timeline-axis { position: absolute; top: 50%; left: 0; right: 0; height: 6px; background-color: #7f8c8d; transform: translateY(-50%); z-index: 1; }
+        .month-grid { display: contents; }
+        .month { text-align: center; font-weight: bold; color: #34495e; position: relative; border-right: 1px dotted #ccc; display: flex; justify-content: center; align-items: center;}
+        .month:last-child { border-right: none; }
+        .month::before { content: ''; position: absolute; top: 50%; right: 0; width: 2px; height: 16px; background-color: #bdc3c7; transform: translateY(-50%); z-index: 2;}
+        .month-label { background-color: #f0f2f5; padding: 0 15px; font-size: 1.2em; z-index: 2; }
         
-        .month { flex: 1; position: relative; min-width: 200px; }
-        .month::before { content: ''; position: absolute; top: 50%; left: 0; width: 2px; height: 16px; background-color: #bdc3c7; transform: translateY(-50%); }
-        .month:first-child::before { display: none; }
-        .month-label { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background-color: #f0f2f5; padding: 0 15px; font-size: 1.2em; z-index: 2; color: #34495e; font-weight: bold; }
-        
-        .event-node { position: absolute; width: 130px; z-index: 5; display: flex; flex-direction: column; align-items: center; }
+        .event-node { grid-row: 1; position: relative; width: 130px; z-index: 5; display: flex; flex-direction: column; align-items: center; }
+        .event-node:hover .tooltip-text { visibility: visible; opacity: 1; }
         .event-node .details { order: 1; font-size: 0.85em; background: #fff; padding: 5px 8px; border-radius: 4px; box-shadow: 0 2px 5px rgba(0,0,0,0.15); line-height: 1.4; text-align: center; }
         .event-node .diamond { order: 2; width: 20px; height: 20px; transform: rotate(45deg); margin: 0 auto; border: 3px solid white; box-shadow: 0 0 0 2px #2E7D32; background-color: #2E7D32; }
         .event-node .line { order: 3; width: 2px; background-color: #2E7D32; }
         .event-node .details strong { display: block; font-size: 1.1em; }
         
-        .event-node[data-position="top"] { bottom: 50%; margin-bottom: 10px; }
-        .event-node[data-position="bottom"] { top: 50%; margin-top: 10px; flex-direction: column-reverse; }
+        .event-node[data-position="top"] { align-self: end; padding-bottom: 10px; }
+        .event-node[data-position="bottom"] { align-self: start; padding-top: 10px; flex-direction: column-reverse; }
 
         .event-node.cancelado { opacity: 0.6; }
         .event-node.cancelado .details { text-decoration: line-through; }
         .event-node.cancelado .diamond, .event-node.cancelado .line { background-color: #a4b0be; box-shadow: 0 0 0 2px #a4b0be; }
-
-        /* Novo Tooltip */
-        .event-node .tooltip-text { visibility: hidden; width: 180px; background-color: #333; color: #fff; text-align: center; border-radius: 6px; padding: 8px; position: absolute; z-index: 100; bottom: 110%; left: 50%; transform: translateX(-50%); opacity: 0; transition: opacity 0.3s; pointer-events: none; }
-        .event-node:hover .tooltip-text { visibility: visible; opacity: 1; }
+        
+        .tooltip-text { visibility: hidden; width: 180px; background-color: #333; color: #fff; text-align: center; border-radius: 6px; padding: 8px; position: absolute; z-index: 100; bottom: 125%; left: 50%; transform: translateX(-50%); opacity: 0; transition: opacity 0.3s; pointer-events: none; }
 
         .feriados-lista { margin-top: 20px; padding-top: 15px; text-align: center; font-size: 0.9em; color: #555; border-top: 1px dashed #ccc; }
     </style>
@@ -201,7 +200,19 @@
                     const { jsPDF } = window.jspdf;
                     const pdf = new jsPDF('landscape', 'mm', 'a4');
                     const pdfWidth = pdf.internal.pageSize.getWidth();
-                    pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, 0);
+                    const pdfHeight = pdf.internal.pageSize.getHeight();
+                    const imgWidth = canvas.width;
+                    const imgHeight = canvas.height;
+                    const ratio = imgWidth / imgHeight;
+                    let newWidth = pdfWidth;
+                    let newHeight = newWidth / ratio;
+                    if (newHeight > pdfHeight) {
+                        newHeight = pdfHeight;
+                        newWidth = newHeight * ratio;
+                    }
+                    const xOffset = (pdfWidth - newWidth) / 2;
+                    const yOffset = (pdfHeight - newHeight) / 2;
+                    pdf.addImage(imgData, 'PNG', xOffset, yOffset, newWidth, newHeight);
                     pdf.save(`cronograma-eventos-${new Date().getFullYear()}.pdf`);
                 });
             });
@@ -222,7 +233,7 @@
                     hoje.setHours(0,0,0,0);
                     const eventoPassou = evento.dataInicio.toDate() < hoje;
                     tr.innerHTML = `
-                        <td>${evento.dataInicio.toDate().toLocaleDateString('pt-BR')}</td>
+                        <td>${evento.dataInicio.toDate().toLocaleDateString('pt-BR', {timeZone: 'UTC'})}</td>
                         <td>${evento.titulo}</td>
                         <td>${evento.tipo}</td>
                         <td>${evento.status}</td>
@@ -241,60 +252,68 @@
                 const container = document.getElementById('cronograma-visual');
                 container.innerHTML = '';
                 
-                const semestres = { 1: [], 2: [] };
+                const anoAtual = new Date().getFullYear();
+                const semestres = {
+                    1: { de: new Date(anoAtual, 0, 1), ate: new Date(anoAtual, 5, 30), eventos: [] },
+                    2: { de: new Date(anoAtual, 6, 1), ate: new Date(anoAtual, 11, 31), eventos: [] }
+                };
+
                 eventos.forEach(e => {
                     const mes = e.dataInicio.toDate().getUTCMonth();
-                    if(mes < 6) semestres[1].push(e);
-                    else semestres[2].push(e);
+                    if(mes < 6) semestres[1].eventos.push(e);
+                    else semestres[2].eventos.push(e);
                 });
 
-                [1, 2].forEach(s => {
-                    const eventosSemestre = semestres[s];
+                for (const s in semestres) {
+                    const semestre = semestres[s];
                     const semestreDiv = document.createElement('div');
                     semestreDiv.className = 'semestre';
                     semestreDiv.innerHTML = `<h2>${s}º SEMESTRE</h2><div class="timeline" id="timeline-${s}"></div><div class="feriados-lista" id="feriados-${s}"></div>`;
                     container.appendChild(semestreDiv);
-                    
+
                     const timeline = document.getElementById(`timeline-${s}`);
                     const feriadosLista = document.getElementById(`feriados-${s}`);
-                    const mesesDoSemestre = s === 1 ? [0,1,2,3,4,5] : [6,7,8,9,10,11];
                     
-                    mesesDoSemestre.forEach(mesIndex => {
-                        const mesNome = new Date(2000, mesIndex).toLocaleString('pt-BR', { month: 'long' }).toUpperCase();
-                        const monthDiv = document.createElement('div');
-                        monthDiv.className = 'month';
-                        monthDiv.innerHTML = `<span class="month-label">${mesNome}</span>`;
-                        monthDiv.id = `month-${s}-${mesIndex}`;
-                        timeline.appendChild(monthDiv);
-                    });
+                    const totalDiasSemestre = (semestre.ate - semestre.de) / (1000 * 60 * 60 * 24);
+                    timeline.style.gridTemplateColumns = `repeat(${Math.ceil(totalDiasSemestre)}, 1fr)`;
 
-                    if (eventosSemestre.length === 0) return;
+                    let diaAtual = new Date(semestre.de);
+                    let diaCount = 1;
+                    while (diaAtual <= semestre.ate) {
+                        if (diaAtual.getUTCDate() === 1) {
+                            const mesNome = diaAtual.toLocaleString('pt-BR', { month: 'long' }).toUpperCase();
+                            const diasNoMes = new Date(diaAtual.getUTCFullYear(), diaAtual.getUTCMonth() + 1, 0).getDate();
+                            const monthDiv = document.createElement('div');
+                            monthDiv.className = 'month';
+                            monthDiv.style.gridColumn = `${diaCount} / span ${diasNoMes}`;
+                            monthDiv.innerHTML = `<span class="month-label">${mesNome}</span>`;
+                            timeline.querySelector('.month-grid').appendChild(monthDiv);
+                        }
+                        diaAtual.setUTCDate(diaAtual.getUTCDate() + 1);
+                        diaCount++;
+                    }
                     
+                    (timeline.querySelector('.month-grid') || timeline).innerHTML += `<div class="timeline-axis"></div>`;
+
                     let feriadosAdicionados = [];
                     const placement = {}; 
 
-                    eventosSemestre.forEach(evento => {
+                    semestre.eventos.forEach(evento => {
                         const dataEvento = evento.dataInicio.toDate();
-                        const mesDoEvento = dataEvento.getUTCMonth();
-                        
-                        if(evento.tipo === 'feriado') {
-                            feriadosAdicionados.push(`${dataEvento.getUTCDate()}/${mesDoEvento + 1} - ${evento.titulo}`);
+                        if (evento.tipo === 'feriado') {
+                            feriadosAdicionados.push(`${dataEvento.getUTCDate()}/${dataEvento.getUTCMonth() + 1} - ${evento.titulo}`);
                             return;
                         }
                         
-                        const diaDoEvento = dataEvento.getUTCDate();
-                        const diasNoMes = new Date(dataEvento.getUTCFullYear(), mesDoEvento + 1, 0).getDate();
-                        const monthContainer = document.getElementById(`month-${s}-${mesDoEvento}`);
-                        if (!monthContainer) return;
-
-                        const leftPosition = (diaDoEvento / diasNoMes) * 100;
+                        const diaNoSemestre = Math.floor((dataEvento - semestre.de) / (1000 * 60 * 60 * 24)) + 1;
                         
                         let nivel = 0;
                         let posicao = 'top'; 
                         while (true) {
                             const chavePosicao = `${posicao}-${nivel}`;
-                            if (!placement[chavePosicao] || Math.abs(leftPosition - placement[chavePosicao]) > 12) { // 12% de espaçamento
-                                placement[chavePosicao] = leftPosition;
+                            const posHorizontal = diaNoSemestre;
+                            if (!placement[chavePosicao] || Math.abs(posHorizontal - placement[chavePosicao]) > 5) {
+                                placement[chavePosicao] = posHorizontal;
                                 break;
                             }
                             posicao = (posicao === 'top') ? 'bottom' : 'top';
@@ -303,19 +322,19 @@
                         
                         const node = document.createElement('div');
                         node.className = `event-node ${evento.status === 'cancelado' ? 'cancelado' : ''}`;
-                        node.style.left = `${leftPosition}%`;
+                        node.style.gridColumnStart = diaNoSemestre;
                         node.dataset.position = posicao;
                         
-                        const alturaBase = 50; 
-                        const alturaLinha = 20 + (nivel * alturaBase);
+                        const alturaBase = 60; 
+                        const alturaLinha = 30 + (nivel * alturaBase);
                         
                         let nodeHTML;
                         if (posicao === 'top') {
                             node.style.paddingBottom = `${alturaLinha}px`;
-                            nodeHTML = `<div class="details"></div><div class="diamond"></div><div class="line" style="height: ${alturaLinha}px;"></div>`;
+                            nodeHTML = `<div class="details"></div><div class="diamond"></div><div class="line" style="height: ${alturaLinha}px;"></div><span class="tooltip-text"></span>`;
                         } else {
                             node.style.paddingTop = `${alturaLinha}px`;
-                            nodeHTML = `<div class="line" style="height: ${alturaLinha}px;"></div><div class="diamond"></div><div class="details"></div>`;
+                            nodeHTML = `<div class="line" style="height: ${alturaLinha}px;"></div><div class="diamond"></div><div class="details"></div><span class="tooltip-text"></span>`;
                         }
                         node.innerHTML = nodeHTML;
 
@@ -324,23 +343,18 @@
                             dataTexto += ` a ${evento.dataFim.toDate().toLocaleDateString('pt-BR', {day:'2-digit', month:'2-digit', timeZone: 'UTC'})}`;
                         }
                         
-                        const detailsDiv = node.querySelector('.details');
-                        detailsDiv.innerHTML = `<strong>${dataTexto}</strong>${evento.titulo}`;
-
-                        const tooltipSpan = document.createElement('span');
-                        tooltipSpan.className = 'tooltip-text';
-                        tooltipSpan.textContent = evento.detalhes || 'Sem detalhes.';
-                        node.appendChild(tooltipSpan);
+                        node.querySelector('.details').innerHTML = `<strong>${dataTexto}</strong>${evento.titulo}`;
+                        node.querySelector('.tooltip-text').textContent = evento.detalhes || 'Sem detalhes.';
                         
-                        monthContainer.appendChild(node);
+                        timeline.appendChild(node);
                     });
 
                     if(feriadosAdicionados.length > 0) {
-                        feriadosLista.innerHTML = `<strong>Feriados do período:</strong> ${feriadosAdicionados.join(' | ')}`;
+                        feriadosLista.innerHTML = `<strong>Feriados do período:</strong> ${feriadosAdicionados.sort().join(' | ')}`;
                     } else {
-                         feriadosLista.style.display = 'none';
+                        feriadosLista.style.display = 'none';
                     }
-                });
+                }
             }
         }
     </script>
