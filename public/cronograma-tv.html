@@ -48,7 +48,7 @@
             opacity: 0;
             visibility: hidden;
             transition: opacity 1s ease-in-out;
-            padding: 2vh 2vw;
+            padding: 1vh 2vw;
             box-sizing: border-box;
             display: flex;
             flex-direction: column;
@@ -60,7 +60,7 @@
         .semestre h2 { background-color: #34495e; color: white; padding: 1vh; border-radius: 8px; font-size: 3vh; text-align: center; margin-bottom: 2vh; }
         .timeline { display: grid; position: relative; height: 100%; padding: 14vh 0; box-sizing: border-box; }
         .timeline-axis { position: absolute; top: 50%; left: 0; right: 0; height: 6px; background-color: #7f8c8d; transform: translateY(-50%); z-index: 1; }
-        .month-grid-container { display: contents; } 
+        .month-grid-container { display: contents; }
         .month { text-align: center; font-weight: bold; color: #34495e; position: relative; border-right: 1px dotted #ccc; display: flex; justify-content: center; align-items: center;}
         .month:last-child { border-right: none; }
         .month::before { content: ''; position: absolute; top: 50%; left: 0; width: 2px; height: 20px; background-color: #bdc3c7; transform: translateY(-50%); }
@@ -95,16 +95,16 @@
 
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
-        import { getFirestore, collection, onSnapshot, query, orderBy, Timestamp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
+        import { getFirestore, collection, onSnapshot, query, orderBy } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
 
         const firebaseConfig = {
-        apiKey: "AIzaSyBV7RPjk3cFTqL-aIpflJcUojKg1ZXMLuU",
-        authDomain: "voluntarios-ativos---cepat.firebaseapp.com",
-        projectId: "voluntarios-ativos---cepat",
-        storageBucket: "voluntarios-ativos---cepat.firebasestorage.app",
-        messagingSenderId: "66122858261",
-        appId: "1:66122858261:web:7fa21f1805463b5c08331c"
-    };
+            apiKey: "AIzaSyBV7RPjk3cFTqL-aIpflJcUojKg1ZXMLuU",
+            authDomain: "voluntarios-ativos---cepat.firebaseapp.com",
+            projectId: "voluntarios-ativos---cepat",
+            storageBucket: "voluntarios-ativos---cepat.firebasestorage.app",
+            messagingSenderId: "66122858261",
+            appId: "1:66122858261:web:7fa21f1805463b5c08331c"
+        };
         initializeApp(firebaseConfig);
 
         const db = getFirestore();
@@ -122,8 +122,8 @@
             
             const anoAtual = new Date().getFullYear();
             const semestres = {
-                1: { de: new Date(anoAtual, 0, 1), ate: new Date(anoAtual, 5, 30, 23, 59, 59), eventos: [] },
-                2: { de: new Date(anoAtual, 6, 1), ate: new Date(anoAtual, 11, 31, 23, 59, 59), eventos: [] }
+                1: { de: new Date(Date.UTC(anoAtual, 0, 1)), ate: new Date(Date.UTC(anoAtual, 5, 30, 23, 59, 59)), eventos: [] },
+                2: { de: new Date(Date.UTC(anoAtual, 6, 1)), ate: new Date(Date.UTC(anoAtual, 11, 31, 23, 59, 59)), eventos: [] }
             };
 
             eventos.forEach(e => {
@@ -145,13 +145,13 @@
                 const timeline = document.getElementById(`timeline-${s}`);
                 const feriadosLista = document.getElementById(`feriados-${s}`);
                 
-                const totalDiasSemestre = Math.round((semestre.ate - semestre.de) / (1000 * 60 * 60 * 24)) + 1;
+                const totalDiasSemestre = Math.round((semestre.ate - semestre.de) / (1000 * 60 * 60 * 24));
                 timeline.style.gridTemplateColumns = `repeat(${totalDiasSemestre}, 1fr)`;
                 timeline.innerHTML = '<div class="month-grid-container"></div><div class="timeline-axis"></div>';
                 const monthGridContainer = timeline.querySelector('.month-grid-container');
                 
                 let diaCount = 1;
-                for(let mesIndex = semestre.de.getMonth(); mesIndex <= semestre.ate.getMonth(); mesIndex++) {
+                for(let mesIndex = semestre.de.getUTCMonth(); mesIndex <= semestre.ate.getUTCMonth(); mesIndex++) {
                     const mesNome = new Date(anoAtual, mesIndex).toLocaleString('pt-BR', { month: 'long' }).toUpperCase();
                     const diasNoMes = new Date(anoAtual, mesIndex + 1, 0).getDate();
                     const monthDiv = document.createElement('div');
@@ -179,7 +179,10 @@
                         return;
                     }
                     
-                    const diaNoSemestre = Math.floor((dataEvento - semestre.de) / (1000 * 60 * 60 * 24)) + 1;
+                    const diaDoAno = (Date.UTC(dataEvento.getUTCFullYear(), dataEvento.getUTCMonth(), dataEvento.getUTCDate()) - Date.UTC(dataEvento.getUTCFullYear(), 0, 0)) / (1000 * 60 * 60 * 24);
+                    const diaInicioSemestre = (semestre.de - new Date(Date.UTC(anoAtual, 0, 0))) / (1000 * 60 * 60 * 24);
+                    const diaNoSemestre = Math.round(diaDoAno - diaInicioSemestre);
+
                     if(diaNoSemestre < 1 || diaNoSemestre > totalDiasSemestre) return;
                     
                     let nivel = 0;
