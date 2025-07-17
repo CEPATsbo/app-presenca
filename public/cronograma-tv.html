@@ -45,10 +45,8 @@
             flex-direction: column;
         }
         .semestre { 
-            width: 100%;
-            height: 100%;
             position: absolute;
-            top: 0; left: 0;
+            top: 0; left: 0; right: 0; bottom: 0;
             opacity: 0;
             visibility: hidden;
             transition: opacity 1s ease-in-out;
@@ -71,7 +69,7 @@
         .month:first-child::before { display: none; }
         .month-label { background-color: white; padding: 0 15px; font-size: 2.2vh; z-index: 2; }
         
-        .event-node { position: absolute; width: 10vw; max-width: 150px; min-width: 120px; z-index: 5; display: flex; flex-direction: column; align-items: center; }
+        .event-node { position: absolute; width: 10vw; max-width: 160px; min-width: 120px; z-index: 5; display: flex; flex-direction: column; align-items: center; }
         .event-node .details { order: 1; font-size: 1.6vh; background: #e9ecef; color: #333; padding: 0.8vh 0.8vw; border-radius: 6px; line-height: 1.3; text-align: center; border: 1px solid #dee2e6; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
         .event-node .diamond { order: 2; width: 2.2vh; height: 2.2vh; transform: rotate(45deg); margin: 0.5vh auto; border: 0.3vh solid white; box-shadow: 0 0 0 2px #2E7D32; background-color: #2E7D32; }
         .event-node .line { order: 3; width: 3px; background-color: #2E7D32; }
@@ -125,14 +123,17 @@
             if(loadingMessage) loadingMessage.remove();
             
             const anoAtual = new Date().getFullYear();
-            const semestres = { 1: [], 2: [] };
+            const semestres = {
+                1: { eventos: [] },
+                2: { eventos: [] }
+            };
 
             eventos.forEach(e => {
                 const dataEvento = e.dataInicio.toDate();
                 if(dataEvento.getFullYear() !== anoAtual) return;
                 const mes = dataEvento.getUTCMonth();
-                if(mes < 6) semestres[1].push(e);
-                else semestres[2].push(e);
+                if(mes < 6) semestres[1].eventos.push(e);
+                else semestres[2].eventos.push(e);
             });
 
             for (const s in semestres) {
@@ -203,7 +204,7 @@
                     node.dataset.position = posicao;
                     
                     const alturaBase = 7; 
-                    const alturaLinha = 4 + (nivel * alturaBase);
+                    const alturaLinha = 3 + (nivel * alturaBase);
                     
                     let nodeHTML;
                     if (posicao === 'top') {
