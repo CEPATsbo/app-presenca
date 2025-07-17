@@ -16,7 +16,7 @@
         }
         .painel-container {
             width: 100%;
-            height: calc(100vh - 40px); /* Ajuste de altura */
+            height: calc(100vh - 40px); /* Ajuste para caber na tela */
             max-width: 100%;
             margin: 0 auto;
             display: flex;
@@ -27,7 +27,7 @@
             padding-bottom: 15px;
             border-bottom: 1px solid #1e3a5f;
             margin-bottom: 20px;
-            flex-shrink: 0; /* Impede que o header encolha */
+            flex-shrink: 0;
         }
         header h1 { color: #88c0d0; margin: 0; font-size: 2.2em; }
         header h2 { color: #cdd6f4; margin: 5px 0 0 0; font-size: 1.1em; font-weight: normal; }
@@ -106,13 +106,13 @@
             <div class="lista-coluna">
                 <h3>Encarnados</h3>
                 <div id="carousel-encarnados" class="carousel-container">
-                    <ul id="lista-encarnados" class="lista-nomes"><li>Aguardando...</li></ul>
+                    <div id="loading-encarnados">Aguardando...</div>
                 </div>
             </div>
             <div class="lista-coluna">
                 <h3>Desencarnados</h3>
                 <div id="carousel-desencarnados" class="carousel-container">
-                    <ul id="lista-desencarnados" class="lista-nomes"><li>Aguardando...</li></ul>
+                    <div id="loading-desencarnados">Aguardando...</div>
                 </div>
             </div>
         </div>
@@ -123,8 +123,8 @@
     </div>
 
     <script type="module">
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
-        import { getFirestore, collection, onSnapshot, query, where, orderBy, Timestamp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
+        import { initializeApp, getApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
+        import { getFirestore, collection, query, where, onSnapshot, Timestamp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
         import { getFunctions, httpsCallable } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-functions.js";
         import { protegerPagina } from '/auth.js';
 
@@ -141,20 +141,19 @@
 
         protegerPagina(['diretor', 'tesoureiro', 'conselheiro', 'super-admin'])
             .then(user => {
-                // Acesso permitido! A página agora se exibe.
                 document.getElementById('main-content').style.display = 'flex';
                 inicializarPainel();
             })
             .catch(error => {
                 console.log(error.message);
-                if (error.message.includes('Acesso negado')) {
-                    document.getElementById('acesso-negado').style.display = 'block';
-                }
+                document.getElementById('acesso-negado').style.display = 'block';
             });
 
         function inicializarPainel() {
             const db = getFirestore(app);
             const functions = getFunctions(app, 'southamerica-east1');
+
+            let unsubEncarnados, unsubDesencarnados;
 
             async function carregarNomes() {
                 try {
@@ -170,8 +169,13 @@
                     const fimFormatado = cicloFim.toDate().toLocaleString('pt-BR', options);
                     document.getElementById('periodo-info').textContent = `Exibindo pedidos de ${inicioFormatado} até ${fimFormatado}`;
 
-                    renderizarLista('encarnados', 'carousel-encarnados', cicloInicio, cicloFim);
-                    renderizarLista('desencarnados', 'carousel-desencarnados', cicloInicio, cicloFim);
+                    // Cancela listeners antigos se existirem
+                    if (unsubEncarnados) unsubEncarnados();
+                    if (unsubDesencarnados) unsubDesencarnados();
+
+                    // Inicia novos listeners em tempo real
+                    escutarLista('encarnados', 'carousel-encarnados', 'loading-encarnados', cicloInicio, cicloFim);
+                    escutarLista('desencarnados', 'carousel-desencarnados', 'loading-desencarnados', cicloInicio, cicloFim);
 
                 } catch (error) {
                     console.error("Erro ao obter ciclo de trabalho da Cloud Function:", error);
@@ -179,53 +183,54 @@
                 }
             }
 
-            async function renderizarLista(nomeColecao, idCarousel, cicloInicio, cicloFim) {
-                const carouselContainer = document.getElementById(idCarousel);
-                carouselContainer.innerHTML = '<li>Buscando nomes...</li>';
+            function escutarLista(nomeColecao, idCarousel, idLoading, cicloInicio, cicloFim) {
+                const q = query(
+                    collection(db, nomeColecao),
+                    where("dataCriacao", ">=", cicloInicio),
+                    where("dataCriacao", "<=", cicloFim)
+                );
 
-                try {
-                    const q = query(
-                        collection(db, nomeColecao),
-                        where("dataCriacao", ">=", cicloInicio),
-                        where("dataCriacao", "<=", cicloFim),
-                        orderBy("dataCriacao", "asc")
-                    );
-
-                    const snapshot = await getDocs(q);
-                    carouselContainer.innerHTML = ''; 
-
-                    if (snapshot.empty) {
-                        carouselContainer.innerHTML = '<ul class="lista-nomes active"><li>Nenhum nome nesta lista para este período.</li></ul>';
-                        return;
-                    }
-                    
-                    const NOMES_POR_PAGINA = 8;
+                const unsubscribe = onSnapshot(q, (snapshot) => {
                     const nomes = snapshot.docs.map(doc => doc.data());
+                    renderizarLista(nomes, idCarousel, idLoading);
+                });
 
-                    for (let i = 0; i < nomes.length; i += NOMES_POR_PAGINA) {
-                        const chunk = nomes.slice(i, i + NOMES_POR_PAGINA);
-                        const ul = document.createElement('ul');
-                        ul.className = 'lista-nomes';
-                        chunk.forEach(dados => {
-                            const li = document.createElement('li');
-                            li.textContent = dados.nome;
-                            if (dados.endereco) {
-                                const small = document.createElement('div');
-                                small.className = 'endereco';
-                                small.textContent = `(${dados.endereco})`;
-                                li.appendChild(small);
-                            }
-                            ul.appendChild(li);
-                        });
-                        carouselContainer.appendChild(ul);
-                    }
-                    
-                    iniciarCarousel(idCarousel);
+                if (nomeColecao === 'encarnados') unsubEncarnados = unsubscribe;
+                else unsubDesencarnados = unsubscribe;
+            }
 
-                } catch (error) {
-                    console.error(`Erro ao carregar a lista de ${nomeColecao}:`, error);
-                    carouselContainer.innerHTML = '<li style="color: red;">Erro ao carregar lista.</li>';
+            function renderizarLista(nomes, idCarousel, idLoading) {
+                const carouselContainer = document.getElementById(idCarousel);
+                const loadingDiv = document.getElementById(idLoading);
+                carouselContainer.innerHTML = ''; 
+
+                if (nomes.length === 0) {
+                    carouselContainer.innerHTML = '<ul class="lista-nomes active"><li>Aguardando novos pedidos...</li></ul>';
+                    return;
                 }
+                
+                const NOMES_POR_PAGINA = 8;
+                nomes.sort((a, b) => a.nome.localeCompare(b.nome));
+
+                for (let i = 0; i < nomes.length; i += NOMES_POR_PAGINA) {
+                    const chunk = nomes.slice(i, i + NOMES_POR_PAGINA);
+                    const ul = document.createElement('ul');
+                    ul.className = 'lista-nomes';
+                    chunk.forEach(dados => {
+                        const li = document.createElement('li');
+                        li.textContent = dados.nome;
+                        if (dados.endereco) {
+                            const small = document.createElement('div');
+                            small.className = 'endereco';
+                            small.textContent = `(${dados.endereco})`;
+                            li.appendChild(small);
+                        }
+                        ul.appendChild(li);
+                    });
+                    carouselContainer.appendChild(ul);
+                }
+                
+                iniciarCarousel(idCarousel);
             }
 
             function iniciarCarousel(carouselId) {
