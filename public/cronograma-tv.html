@@ -132,17 +132,19 @@
                 const dataEvento = e.dataInicio.toDate();
                 if(dataEvento.getFullYear() !== anoAtual) return;
                 const mes = dataEvento.getUTCMonth();
-                
-                // A correção está aqui: verifica se o semestre existe antes de adicionar
-                if(mes < 6 && semestres[1]) {
+                if(mes < 6) {
                     semestres[1].eventos.push(e);
-                } else if (mes >= 6 && semestres[2]) {
+                } else {
                     semestres[2].eventos.push(e);
                 }
             });
 
+            // Itera sobre os semestres para renderização
             for (const s in semestres) {
-                const eventosSemestre = semestres[s];
+                const semestreData = semestres[s];
+                // Certifica que 'semestreData.eventos' é sempre um array
+                const eventosSemestre = Array.isArray(semestreData.eventos) ? semestreData.eventos : [];
+
                 const semestreDiv = document.createElement('div');
                 semestreDiv.className = 'semestre';
                 semestreDiv.id = `semestre-${s}`;
@@ -153,7 +155,7 @@
                 const feriadosLista = document.getElementById(`feriados-${s}`);
                 
                 timeline.innerHTML = '<div class="timeline-axis"></div>';
-                const mesesDoSemestre = s === 1 ? [0,1,2,3,4,5] : [6,7,8,9,10,11];
+                const mesesDoSemestre = s === '1' ? [0,1,2,3,4,5] : [6,7,8,9,10,11];
                 
                 mesesDoSemestre.forEach(mesIndex => {
                     const mesNome = new Date(anoAtual, mesIndex).toLocaleString('pt-BR', { month: 'long' }).toUpperCase();
@@ -208,7 +210,7 @@
                     node.style.left = `${leftPosition}%`;
                     node.dataset.position = posicao;
                     
-                    const alturaBase = 7; 
+                    const alturaBase = 6; 
                     const alturaLinha = 3 + (nivel * alturaBase);
                     
                     let nodeHTML;
