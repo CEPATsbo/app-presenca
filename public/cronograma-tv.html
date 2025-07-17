@@ -34,6 +34,9 @@
             flex-grow: 1;
             overflow: hidden;
             position: relative;
+            border: 1px solid #ddd;
+            background-color: white;
+            border-radius: 8px;
         }
         #cronograma-visual { 
             height: 100%;
@@ -45,7 +48,7 @@
             opacity: 0;
             visibility: hidden;
             transition: opacity 1s ease-in-out;
-            padding: 1vh 2vw;
+            padding: 2vh 2vw;
             box-sizing: border-box;
             display: flex;
             flex-direction: column;
@@ -55,18 +58,18 @@
             visibility: visible;
         }
         .semestre h2 { background-color: #34495e; color: white; padding: 1vh; border-radius: 8px; font-size: 3vh; text-align: center; margin-bottom: 2vh; }
-        .timeline { display: grid; position: relative; padding: 14vh 0; box-sizing: border-box; flex-grow: 1; }
+        .timeline { display: grid; position: relative; height: 100%; padding: 14vh 0; box-sizing: border-box; }
         .timeline-axis { position: absolute; top: 50%; left: 0; right: 0; height: 6px; background-color: #7f8c8d; transform: translateY(-50%); z-index: 1; }
-        .month-grid-container { display: contents; }
+        .month-grid-container { display: contents; } 
         .month { text-align: center; font-weight: bold; color: #34495e; position: relative; border-right: 1px dotted #ccc; display: flex; justify-content: center; align-items: center;}
         .month:last-child { border-right: none; }
         .month::before { content: ''; position: absolute; top: 50%; left: 0; width: 2px; height: 20px; background-color: #bdc3c7; transform: translateY(-50%); }
         .month:first-child::before { display: none; }
-        .month-label { background-color: #f4f6f9; padding: 0 15px; font-size: 2.2vh; z-index: 2; }
+        .month-label { background-color: white; padding: 0 15px; font-size: 2.2vh; z-index: 2; }
         
         .event-node { grid-row: 1; position: relative; width: 14vw; max-width: 180px; z-index: 5; display: flex; flex-direction: column; align-items: center; }
-        .event-node .details { order: 1; font-size: 1.6vh; background: #fff; color: #333; padding: 0.8vh 0.8vw; border-radius: 6px; line-height: 1.3; text-align: center; border: 1px solid #ddd; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
-        .event-node .diamond { order: 2; width: 2.2vh; height: 2.2vh; transform: rotate(45deg); margin: 0.5vh auto; border: 0.3vh solid #f4f6f9; box-shadow: 0 0 0 2px #2E7D32; background-color: #2E7D32; }
+        .event-node .details { order: 1; font-size: 1.6vh; background: #e9ecef; color: #333; padding: 0.8vh 0.8vw; border-radius: 6px; line-height: 1.3; text-align: center; border: 1px solid #dee2e6; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+        .event-node .diamond { order: 2; width: 2.2vh; height: 2.2vh; transform: rotate(45deg); margin: 0.5vh auto; border: 0.3vh solid white; box-shadow: 0 0 0 2px #2E7D32; background-color: #2E7D32; }
         .event-node .line { order: 3; width: 3px; background-color: #2E7D32; }
         .event-node .details strong { display: block; font-size: 1em; font-weight: bold; }
         
@@ -76,9 +79,6 @@
         .event-node.cancelado { opacity: 0.6; }
         .event-node.cancelado .details { text-decoration: line-through; background-color: #e9ecef; }
         .event-node.cancelado .diamond, .event-node.cancelado .line { background-color: #777; box-shadow: 0 0 0 2px #777; }
-        
-        .tooltip-text { visibility: hidden; width: 180px; background-color: #333; color: #fff; text-align: center; border-radius: 6px; padding: 8px; position: absolute; z-index: 100; bottom: 125%; left: 50%; transform: translateX(-50%); opacity: 0; transition: opacity 0.3s; pointer-events: none; }
-        .event-node:hover .tooltip-text { visibility: visible; opacity: 1; }
 
         .feriados-lista { position: absolute; bottom: 0; left:0; right: 0; padding: 1.5vh; text-align: center; font-size: 1.6vh; color: #6c757d; }
     </style>
@@ -89,7 +89,7 @@
     </div>
     <div id="main-content" class="page-container">
         <div id="cronograma-visual">
-            <h2 id="loading-message">Carregando cronograma...</h2>
+            <h2 id="loading-message" style="text-align: center;">Carregando cronograma...</h2>
         </div>
     </div>
 
@@ -98,13 +98,13 @@
         import { getFirestore, collection, onSnapshot, query, orderBy, Timestamp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
 
         const firebaseConfig = {
-            apiKey: "AIzaSyBV7RPjk3cFTqL-aIpflJcUojKg1ZXMLuU",
-            authDomain: "voluntarios-ativos---cepat.firebaseapp.com",
-            projectId: "voluntarios-ativos---cepat",
-            storageBucket: "voluntarios-ativos---cepat.firebasestorage.app",
-            messagingSenderId: "66122858261",
-            appId: "1:66122858261:web:7fa21f1805463b5c08331c"
-        };
+        apiKey: "AIzaSyBV7RPjk3cFTqL-aIpflJcUojKg1ZXMLuU",
+        authDomain: "voluntarios-ativos---cepat.firebaseapp.com",
+        projectId: "voluntarios-ativos---cepat",
+        storageBucket: "voluntarios-ativos---cepat.firebasestorage.app",
+        messagingSenderId: "66122858261",
+        appId: "1:66122858261:web:7fa21f1805463b5c08331c"
+    };
         initializeApp(firebaseConfig);
 
         const db = getFirestore();
@@ -145,7 +145,7 @@
                 const timeline = document.getElementById(`timeline-${s}`);
                 const feriadosLista = document.getElementById(`feriados-${s}`);
                 
-                const totalDiasSemestre = Math.round((semestre.ate - semestre.de) / (1000 * 60 * 60 * 24));
+                const totalDiasSemestre = Math.round((semestre.ate - semestre.de) / (1000 * 60 * 60 * 24)) + 1;
                 timeline.style.gridTemplateColumns = `repeat(${totalDiasSemestre}, 1fr)`;
                 timeline.innerHTML = '<div class="month-grid-container"></div><div class="timeline-axis"></div>';
                 const monthGridContainer = timeline.querySelector('.month-grid-container');
@@ -162,11 +162,11 @@
                     diaCount += diasNoMes;
                 }
                 
-                if (semestre.eventos.length === 0 && feriadosLista) {
+                if (semestre.eventos.length === 0) {
                      const p = document.createElement('p');
                      p.textContent = 'Nenhum evento agendado para este semestre.';
                      p.style.textAlign = 'center';
-                     feriadosLista.parentNode.insertBefore(p, feriadosLista);
+                     timeline.parentElement.insertBefore(p, feriadosLista);
                 }
                 
                 let feriadosAdicionados = [];
@@ -180,7 +180,7 @@
                     }
                     
                     const diaNoSemestre = Math.floor((dataEvento - semestre.de) / (1000 * 60 * 60 * 24)) + 1;
-                    if(diaNoSemestre < 1) return;
+                    if(diaNoSemestre < 1 || diaNoSemestre > totalDiasSemestre) return;
                     
                     let nivel = 0;
                     let posicao = 'top'; 
@@ -220,11 +220,6 @@
                     
                     node.querySelector('.details').innerHTML = `<strong>${dataTexto}</strong>${evento.titulo}`;
                     
-                    const tooltipSpan = document.createElement('span');
-                    tooltipSpan.className = 'tooltip-text';
-                    tooltipSpan.textContent = evento.detalhes || 'Sem detalhes.';
-                    node.appendChild(tooltipSpan);
-                    
                     timeline.appendChild(node);
                 });
 
@@ -241,7 +236,6 @@
             const semestres = document.querySelectorAll('.semestre');
             if (semestres.length === 0) return;
 
-            // Garante que apenas um semestre esteja ativo se houver apenas um com eventos
             const semestresComEventos = Array.from(semestres).filter(s => s.querySelector('.event-node'));
             if (semestresComEventos.length <= 1) {
                 if (semestresComEventos.length === 1) semestresComEventos[0].classList.add('active');
