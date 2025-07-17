@@ -5,158 +5,78 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Cronograma de Eventos - C.E. Paulo de Tarso</title>
     <style>
-    body { 
-        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; 
-        background-color: #1e1e1e; 
-        color: #f1f1f1; 
-        margin: 0; 
-        padding: 20px;
-        overflow: hidden; 
-        display: flex;
-        flex-direction: column;
-        height: 100vh;
-        box-sizing: border-box;
-    }
-    .header-tv {
-        text-align: center;
-        padding-bottom: 2vh;
-        flex-shrink: 0;
-    }
-    .header-tv h1 {
-        font-size: 4vh;
-        margin: 0;
-        color: #ffffff;
-        text-transform: uppercase;
-        letter-spacing: 2px;
-    }
-    .page-container { 
-        width: 100%;
-        flex-grow: 1;
-        overflow: hidden;
-    }
-    #cronograma-visual { 
-        padding: 1vh 0; 
-        display: flex; 
-        flex-direction: column; 
-        height: 100%; 
-        box-sizing: border-box; 
-    }
-    .semestre { 
-        margin-bottom: 3vh; 
-        flex-shrink: 0;
-        border: 1px solid #444;
-        border-radius: 10px;
-        padding: 2vh;
-    }
-    .semestre h2 { 
-        background-color: #34495e; 
-        color: white; 
-        padding: 1vh; 
-        border-radius: 8px; 
-        font-size: 3vh; 
-        text-align: center; 
-        margin-bottom: 2vh; 
-    }
-    .timeline { 
-        display: grid; 
-        position: relative; 
-        padding: 14vh 0; 
-        box-sizing: border-box; 
-        flex-grow: 1; 
-    }
-    .timeline-axis { 
-        position: absolute; 
-        top: 50%; 
-        left: 0; 
-        right: 0; 
-        height: 0.6vh; 
-        background-color: #7f8c8d; 
-        transform: translateY(-50%); 
-        z-index: 1; 
-    }
-    .month-grid-container { 
-        display: contents; 
-    }
-    .month { 
-        text-align: center; 
-        font-weight: bold; 
-        color: #f1f1f1; 
-        position: relative; 
-        border-right: 0.2vh dotted #555; 
-        display: flex; 
-        justify-content: center; 
-        align-items: center;
-    }
-    .month:last-child { border-right: none; }
-    .month::before { content: ''; position: absolute; top: 50%; left: 0; width: 0.2vh; height: 2vh; background-color: #555; transform: translateY(-50%); }
-    .month:first-child::before { display: none; }
-    .month-label { 
-        background-color: #1e1e1e; 
-        padding: 0 1vw; 
-        font-size: 2.2vh; 
-        z-index: 2; 
-    }
-    .event-node { 
-        grid-row: 1; 
-        position: relative; 
-        width: 14vw; 
-        z-index: 5; 
-        display: flex; 
-        flex-direction: column; 
-        align-items: center; 
-    }
-    .event-node .details { 
-        order: 1; 
-        font-size: 1.6vh; 
-        background: #2c3e50; 
-        padding: 0.8vh 0.8vw; 
-        border-radius: 0.5vh; 
-        line-height: 1.3; 
-        text-align: center; 
-        border: 0.1vh solid #4a6fa5; 
-        box-sizing: border-box; 
-    }
-    .event-node .diamond { 
-        order: 2; 
-        width: 2vh; 
-        height: 2vh; 
-        transform: rotate(45deg); 
-        margin: 0.5vh auto; 
-        border: 0.3vh solid #1e1e1e; 
-        box-shadow: 0 0 0 0.2vh #2E7D32; 
-        background-color: #2E7D32; 
-    }
-    .event-node .line { 
-        order: 3; 
-        width: 0.3vh; 
-        background-color: #2E7D32; 
-    }
-    .event-node .details strong { 
-        display: block; 
-        font-size: 1em; 
-        font-weight: bold; 
-    }
-    .event-node[data-position="top"] { 
-        align-self: end; 
-        padding-bottom: 1vh; 
-    }
-    .event-node[data-position="bottom"] { 
-        align-self: start; 
-        padding-top: 1vh; 
-        flex-direction: column-reverse; 
-    }
-    .event-node.cancelado { opacity: 0.6; }
-    .event-node.cancelado .details { text-decoration: line-through; background-color: #444; }
-    .event-node.cancelado .diamond, .event-node.cancelado .line { background-color: #777; box-shadow: 0 0 0 0.2vh #777; }
-    .feriados-lista { 
-        margin-top: 2vh; 
-        padding-top: 1.5vh; 
-        text-align: center; 
-        font-size: 1.6vh; 
-        color: #aaa; 
-        border-top: 0.1vh dashed #555; 
-    }
-</style>
+        body { 
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; 
+            background-color: #1e1e1e; 
+            color: #f1f1f1; 
+            margin: 0; 
+            padding: 20px;
+            overflow: hidden; 
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+            box-sizing: border-box;
+        }
+        .header-tv {
+            text-align: center;
+            padding-bottom: 2vh;
+            flex-shrink: 0;
+        }
+        .header-tv h1 {
+            font-size: 4vh;
+            margin: 0;
+            color: #ffffff;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+        }
+        .page-container { 
+            width: 100%;
+            flex-grow: 1;
+            overflow: hidden;
+            position: relative; /* Necessário para o carrossel */
+        }
+        #cronograma-visual { 
+            height: 100%;
+            width: 100%;
+        }
+        .semestre { 
+            position: absolute;
+            top: 0; left: 0; right: 0; bottom: 0;
+            opacity: 0;
+            visibility: hidden;
+            transition: opacity 1s ease-in-out;
+            padding: 1vh 2vw;
+            box-sizing: border-box;
+        }
+        .semestre.active {
+            opacity: 1;
+            visibility: visible;
+        }
+        .semestre h2 { background-color: #34495e; color: white; padding: 1vh; border-radius: 8px; font-size: 3vh; text-align: center; margin-bottom: 2vh; }
+        .timeline { display: grid; position: relative; height: 100%; padding: 14vh 0; box-sizing: border-box; }
+        .timeline-axis { position: absolute; top: 50%; left: 0; right: 0; height: 0.6vh; background-color: #7f8c8d; transform: translateY(-50%); z-index: 1; }
+        .month-grid-container { display: contents; }
+        .month { text-align: center; font-weight: bold; color: #f1f1f1; position: relative; border-right: 0.2vh dotted #555; display: flex; justify-content: center; align-items: center;}
+        .month:last-child { border-right: none; }
+        .month::before { content: ''; position: absolute; top: 50%; left: 0; width: 0.2vh; height: 2vh; background-color: #555; transform: translateY(-50%); }
+        .month:first-child::before { display: none; }
+        .month-label { background-color: #1e1e1e; padding: 0 1vw; font-size: 2.2vh; z-index: 2; }
+        
+        .event-node { grid-row: 1; position: relative; width: 14vw; z-index: 5; display: flex; flex-direction: column; align-items: center; }
+        .event-node .details { order: 1; font-size: 1.6vh; background: #2c3e50; padding: 0.8vh 0.8vw; border-radius: 0.5vh; line-height: 1.3; text-align: center; border: 0.1vh solid #4a6fa5; box-sizing: border-box; }
+        .event-node .diamond { order: 2; width: 2vh; height: 2vh; transform: rotate(45deg); margin: 0.5vh auto; border: 0.3vh solid #1e1e1e; box-shadow: 0 0 0 0.2vh #2E7D32; background-color: #2E7D32; }
+        .event-node .line { order: 3; width: 0.3vh; background-color: #2E7D32; }
+        .event-node .details strong { display: block; font-size: 1em; font-weight: bold; }
+        
+        .event-node[data-position="top"] { align-self: end; padding-bottom: 1vh; }
+        .event-node[data-position="bottom"] { align-self: start; padding-top: 1vh; flex-direction: column-reverse; }
+
+        .event-node.cancelado { opacity: 0.6; }
+        .event-node.cancelado .details { text-decoration: line-through; background-color: #444; }
+        .event-node.cancelado .diamond, .event-node.cancelado .line { background-color: #777; box-shadow: 0 0 0 0.2vh #777; }
+
+        .feriados-lista { position: absolute; bottom: 0; left:0; right: 0; padding: 1.5vh; text-align: center; font-size: 1.6vh; color: #aaa; }
+    </style>
 </head>
 <body>
     <div class="header-tv">
@@ -164,7 +84,7 @@
     </div>
     <div id="main-content" class="page-container">
         <div id="cronograma-visual">
-            <h2>Carregando cronograma...</h2>
+            <h2 id="loading-message">Carregando cronograma...</h2>
         </div>
     </div>
 
@@ -173,21 +93,26 @@
         import { getFirestore, collection, onSnapshot, query, orderBy, Timestamp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
 
         const firebaseConfig = {
-        apiKey: "AIzaSyBV7RPjk3cFTqL-aIpflJcUojKg1ZXMLuU",
-        authDomain: "voluntarios-ativos---cepat.firebaseapp.com",
-        projectId: "voluntarios-ativos---cepat",
-        storageBucket: "voluntarios-ativos---cepat.firebasestorage.app",
-        messagingSenderId: "66122858261",
-        appId: "1:66122858261:web:7fa21f1805463b5c08331c"
-    };
+            apiKey: "AIzaSyBV7RPjk3cFTqL-aIpflJcUojKg1ZXMLuU",
+            authDomain: "voluntarios-ativos---cepat.firebaseapp.com",
+            projectId: "voluntarios-ativos---cepat",
+            storageBucket: "voluntarios-ativos---cepat.firebasestorage.app",
+            messagingSenderId: "66122858261",
+            appId: "1:66122858261:web:7fa21f1805463b5c08331c"
+        };
         initializeApp(firebaseConfig);
 
         const db = getFirestore();
-        const eventosCollection = collection(db, 'eventos');
+        
+        onSnapshot(query(collection(db, "eventos"), orderBy("dataInicio", "asc")), (snapshot) => {
+            const eventos = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+            renderizarCronograma(eventos);
+        });
 
         function renderizarCronograma(eventos) {
             const container = document.getElementById('cronograma-visual');
             container.innerHTML = '';
+            document.getElementById('loading-message')?.remove();
             
             const anoAtual = new Date().getFullYear();
             const semestres = {
@@ -207,6 +132,7 @@
                 const semestre = semestres[s];
                 const semestreDiv = document.createElement('div');
                 semestreDiv.className = 'semestre';
+                semestreDiv.id = `semestre-${s}`;
                 semestreDiv.innerHTML = `<h2>${s}º SEMESTRE</h2><div class="timeline" id="timeline-${s}"></div><div class="feriados-lista" id="feriados-${s}"></div>`;
                 container.appendChild(semestreDiv);
                 
@@ -267,7 +193,7 @@
                     node.style.gridColumn = `${diaNoSemestre} / span 1`;
                     node.dataset.position = posicao;
                     
-                    const alturaBase = 7; 
+                    const alturaBase = 6; 
                     const alturaLinha = 3 + (nivel * alturaBase);
                     
                     let nodeHTML;
@@ -296,14 +222,30 @@
                      feriadosLista.style.display = 'none';
                 }
             }
+            iniciarCarrosselTV();
         }
 
-        onSnapshot(query(collection(db, "eventos"), orderBy("dataInicio", "asc")), (snapshot) => {
-            const eventos = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-            renderizarCronograma(eventos);
-        });
+        function iniciarCarrosselTV() {
+            const semestres = document.querySelectorAll('.semestre');
+            if (semestres.length <= 1) {
+                if (semestres.length === 1) semestres[0].classList.add('active');
+                return;
+            }
 
-        // Atualiza a página a cada 30 minutos
+            let index = 0;
+            semestres.forEach((s, i) => {
+                if (i !== index) s.classList.remove('active');
+            });
+            semestres[index].classList.add('active');
+
+            setInterval(() => {
+                semestres[index].classList.remove('active');
+                index = (index + 1) % semestres.length;
+                semestres[index].classList.add('active');
+            }, 30000); // Alterna a cada 30 segundos
+        }
+
+        // Atualiza a página a cada 30 minutos para buscar novos dados
         setInterval(() => {
             window.location.reload();
         }, 1000 * 60 * 30);
