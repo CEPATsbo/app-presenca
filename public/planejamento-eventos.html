@@ -31,20 +31,18 @@
         .btn-cancel { background-color: #c62828; color: white; border-color: #c62828;}
         .status-cancelado td { text-decoration: line-through; color: #999; }
         
-        /* ESTILOS DO NOVO CRONOGRAMA VISUAL */
-        #cronograma-visual { padding: 40px 20px; overflow-x: auto; }
+        /* ESTILOS DO CRONOGRAMA VISUAL CORRIGIDO */
+        #cronograma-visual { padding: 40px 0; overflow-x: auto; }
         .semestre { margin-bottom: 60px; }
         .semestre h2 { background-color: #34495e; color: white; padding: 10px; border-radius: 8px; font-size: 1.5em; }
         .timeline { display: grid; position: relative; padding: 150px 0; }
         .timeline-axis { position: absolute; top: 50%; left: 0; right: 0; height: 6px; background-color: #7f8c8d; transform: translateY(-50%); z-index: 1; }
-        .month-grid { display: contents; }
+        .month-grid-container { display: contents; } /* Container para os meses e eventos */
         .month { text-align: center; font-weight: bold; color: #34495e; position: relative; border-right: 1px dotted #ccc; display: flex; justify-content: center; align-items: center;}
         .month:last-child { border-right: none; }
-        .month::before { content: ''; position: absolute; top: 50%; right: 0; width: 2px; height: 16px; background-color: #bdc3c7; transform: translateY(-50%); z-index: 2;}
         .month-label { background-color: #f0f2f5; padding: 0 15px; font-size: 1.2em; z-index: 2; }
         
         .event-node { grid-row: 1; position: relative; width: 130px; z-index: 5; display: flex; flex-direction: column; align-items: center; }
-        .event-node:hover .tooltip-text { visibility: visible; opacity: 1; }
         .event-node .details { order: 1; font-size: 0.85em; background: #fff; padding: 5px 8px; border-radius: 4px; box-shadow: 0 2px 5px rgba(0,0,0,0.15); line-height: 1.4; text-align: center; }
         .event-node .diamond { order: 2; width: 20px; height: 20px; transform: rotate(45deg); margin: 0 auto; border: 3px solid white; box-shadow: 0 0 0 2px #2E7D32; background-color: #2E7D32; }
         .event-node .line { order: 3; width: 2px; background-color: #2E7D32; }
@@ -58,6 +56,7 @@
         .event-node.cancelado .diamond, .event-node.cancelado .line { background-color: #a4b0be; box-shadow: 0 0 0 2px #a4b0be; }
         
         .tooltip-text { visibility: hidden; width: 180px; background-color: #333; color: #fff; text-align: center; border-radius: 6px; padding: 8px; position: absolute; z-index: 100; bottom: 125%; left: 50%; transform: translateX(-50%); opacity: 0; transition: opacity 0.3s; pointer-events: none; }
+        .event-node:hover .tooltip-text { visibility: visible; opacity: 1; }
 
         .feriados-lista { margin-top: 20px; padding-top: 15px; text-align: center; font-size: 0.9em; color: #555; border-top: 1px dashed #ccc; }
     </style>
@@ -233,7 +232,7 @@
                     hoje.setHours(0,0,0,0);
                     const eventoPassou = evento.dataInicio.toDate() < hoje;
                     tr.innerHTML = `
-                        <td>${evento.dataInicio.toDate().toLocaleDateString('pt-BR', {timeZone: 'UTC'})}</td>
+                        <td>${evento.dataInicio.toDate().toLocaleDateString('pt-BR')}</td>
                         <td>${evento.titulo}</td>
                         <td>${evento.tipo}</td>
                         <td>${evento.status}</td>
@@ -259,7 +258,9 @@
                 };
 
                 eventos.forEach(e => {
-                    const mes = e.dataInicio.toDate().getUTCMonth();
+                    const dataEvento = e.dataInicio.toDate();
+                    if(dataEvento.getFullYear() !== anoAtual) return;
+                    const mes = dataEvento.getUTCMonth();
                     if(mes < 6) semestres[1].eventos.push(e);
                     else semestres[2].eventos.push(e);
                 });
@@ -268,33 +269,28 @@
                     const semestre = semestres[s];
                     const semestreDiv = document.createElement('div');
                     semestreDiv.className = 'semestre';
-                    semestreDiv.innerHTML = `<h2>${s}º SEMESTRE</h2><div class="timeline" id="timeline-${s}"></div><div class="feriados-lista" id="feriados-${s}"></div>`;
+                    semestreDiv.innerHTML = `<h2>${s}º SEMESTRE</h2><div class="timeline" id="timeline-${s}"><div class="month-grid-container"></div><div class="timeline-axis"></div></div><div class="feriados-lista" id="feriados-${s}"></div>`;
                     container.appendChild(semestreDiv);
-
+                    
                     const timeline = document.getElementById(`timeline-${s}`);
+                    const monthGridContainer = timeline.querySelector('.month-grid-container');
                     const feriadosLista = document.getElementById(`feriados-${s}`);
                     
-                    const totalDiasSemestre = (semestre.ate - semestre.de) / (1000 * 60 * 60 * 24);
-                    timeline.style.gridTemplateColumns = `repeat(${Math.ceil(totalDiasSemestre)}, 1fr)`;
+                    const totalDiasSemestre = Math.round((semestre.ate - semestre.de) / (1000 * 60 * 60 * 24)) + 1;
+                    timeline.style.gridTemplateColumns = `repeat(${totalDiasSemestre}, 1fr)`;
 
-                    let diaAtual = new Date(semestre.de);
                     let diaCount = 1;
-                    while (diaAtual <= semestre.ate) {
-                        if (diaAtual.getUTCDate() === 1) {
-                            const mesNome = diaAtual.toLocaleString('pt-BR', { month: 'long' }).toUpperCase();
-                            const diasNoMes = new Date(diaAtual.getUTCFullYear(), diaAtual.getUTCMonth() + 1, 0).getDate();
-                            const monthDiv = document.createElement('div');
-                            monthDiv.className = 'month';
-                            monthDiv.style.gridColumn = `${diaCount} / span ${diasNoMes}`;
-                            monthDiv.innerHTML = `<span class="month-label">${mesNome}</span>`;
-                            timeline.querySelector('.month-grid').appendChild(monthDiv);
-                        }
-                        diaAtual.setUTCDate(diaAtual.getUTCDate() + 1);
-                        diaCount++;
+                    for(let mesIndex = semestre.de.getMonth(); mesIndex <= semestre.ate.getMonth(); mesIndex++) {
+                        const mesNome = new Date(anoAtual, mesIndex).toLocaleString('pt-BR', { month: 'long' }).toUpperCase();
+                        const diasNoMes = new Date(anoAtual, mesIndex + 1, 0).getDate();
+                        const monthDiv = document.createElement('div');
+                        monthDiv.className = 'month';
+                        monthDiv.style.gridColumn = `${diaCount} / span ${diasNoMes}`;
+                        monthDiv.innerHTML = `<span class="month-label">${mesNome}</span>`;
+                        monthGridContainer.appendChild(monthDiv);
+                        diaCount += diasNoMes;
                     }
                     
-                    (timeline.querySelector('.month-grid') || timeline).innerHTML += `<div class="timeline-axis"></div>`;
-
                     let feriadosAdicionados = [];
                     const placement = {}; 
 
@@ -312,7 +308,7 @@
                         while (true) {
                             const chavePosicao = `${posicao}-${nivel}`;
                             const posHorizontal = diaNoSemestre;
-                            if (!placement[chavePosicao] || Math.abs(posHorizontal - placement[chavePosicao]) > 5) {
+                            if (!placement[chavePosicao] || Math.abs(posHorizontal - placement[chavePosicao]) > 10) {
                                 placement[chavePosicao] = posHorizontal;
                                 break;
                             }
@@ -322,7 +318,7 @@
                         
                         const node = document.createElement('div');
                         node.className = `event-node ${evento.status === 'cancelado' ? 'cancelado' : ''}`;
-                        node.style.gridColumnStart = diaNoSemestre;
+                        node.style.gridColumn = `${diaNoSemestre} / span 1`;
                         node.dataset.position = posicao;
                         
                         const alturaBase = 60; 
@@ -331,28 +327,33 @@
                         let nodeHTML;
                         if (posicao === 'top') {
                             node.style.paddingBottom = `${alturaLinha}px`;
-                            nodeHTML = `<div class="details"></div><div class="diamond"></div><div class="line" style="height: ${alturaLinha}px;"></div><span class="tooltip-text"></span>`;
+                            nodeHTML = `<div class="details"></div><div class="diamond"></div><div class="line" style="height: ${alturaLinha}px;"></div>`;
                         } else {
                             node.style.paddingTop = `${alturaLinha}px`;
-                            nodeHTML = `<div class="line" style="height: ${alturaLinha}px;"></div><div class="diamond"></div><div class="details"></div><span class="tooltip-text"></span>`;
+                            nodeHTML = `<div class="line" style="height: ${alturaLinha}px;"></div><div class="diamond"></div><div class="details"></div>`;
                         }
                         node.innerHTML = nodeHTML;
 
                         let dataTexto = dataEvento.toLocaleDateString('pt-BR', {day:'2-digit', month:'2-digit', timeZone: 'UTC'});
-                        if (evento.dataFim && evento.dataFim.toDate().getUTCDate() !== dataEvento.getUTCDate()) {
+                        if (evento.dataFim && evento.dataFim.toDate().getTime() !== dataEvento.getTime()) {
                             dataTexto += ` a ${evento.dataFim.toDate().toLocaleDateString('pt-BR', {day:'2-digit', month:'2-digit', timeZone: 'UTC'})}`;
                         }
                         
-                        node.querySelector('.details').innerHTML = `<strong>${dataTexto}</strong>${evento.titulo}`;
-                        node.querySelector('.tooltip-text').textContent = evento.detalhes || 'Sem detalhes.';
+                        const detailsDiv = node.querySelector('.details');
+                        detailsDiv.innerHTML = `<strong>${dataTexto}</strong>${evento.titulo}`;
+                        
+                        const tooltipSpan = document.createElement('span');
+                        tooltipSpan.className = 'tooltip-text';
+                        tooltipSpan.textContent = evento.detalhes || 'Sem detalhes.';
+                        node.appendChild(tooltipSpan);
                         
                         timeline.appendChild(node);
                     });
 
                     if(feriadosAdicionados.length > 0) {
-                        feriadosLista.innerHTML = `<strong>Feriados do período:</strong> ${feriadosAdicionados.sort().join(' | ')}`;
+                        feriadosLista.innerHTML = `<strong>Feriados do período:</strong> ${feriadosAdicionados.sort((a,b) => new Date(a.split(' - ')[0].split('/').reverse().join('-')) - new Date(b.split(' - ')[0].split('/').reverse().join('-'))).join(' | ')}`;
                     } else {
-                        feriadosLista.style.display = 'none';
+                         feriadosLista.style.display = 'none';
                     }
                 }
             }
