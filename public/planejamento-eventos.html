@@ -31,13 +31,13 @@
         .btn-cancel { background-color: #c62828; color: white; border-color: #c62828;}
         .status-cancelado td { text-decoration: line-through; color: #999; }
         
-        /* ESTILOS DO CRONOGRAMA VISUAL CORRIGIDO */
+        /* Estilos do Cronograma Visual */
         #cronograma-visual { padding: 40px 0; overflow-x: auto; }
         .semestre { margin-bottom: 60px; }
         .semestre h2 { background-color: #34495e; color: white; padding: 10px; border-radius: 8px; font-size: 1.5em; }
         .timeline { display: grid; position: relative; padding: 150px 0; }
         .timeline-axis { position: absolute; top: 50%; left: 0; right: 0; height: 6px; background-color: #7f8c8d; transform: translateY(-50%); z-index: 1; }
-        .month-grid-container { display: contents; } /* Container para os meses e eventos */
+        .month-grid-container { display: contents; }
         .month { text-align: center; font-weight: bold; color: #34495e; position: relative; border-right: 1px dotted #ccc; display: flex; justify-content: center; align-items: center;}
         .month:last-child { border-right: none; }
         .month-label { background-color: #f0f2f5; padding: 0 15px; font-size: 1.2em; z-index: 2; }
@@ -124,9 +124,24 @@
         function inicializarPagina(user) {
             const db = getFirestore();
             const eventosCollection = collection(db, 'eventos');
+            const logAuditoriaCollection = collection(db, 'log_auditoria'); // Adicionado para logs
             const form = document.getElementById('form-evento');
             const btnCancelarEdicao = document.getElementById('btn-cancelar-edicao');
             let editandoId = null;
+
+            async function registrarLog(acao, detalhes) {
+                if (!user) return;
+                try {
+                    await addDoc(logAuditoriaCollection, {
+                        acao: acao,
+                        autor: { uid: user.uid, nome: user.displayName || user.email },
+                        timestamp: serverTimestamp(),
+                        detalhes: detalhes
+                    });
+                } catch (error) {
+                    console.error("Erro ao registrar log:", error);
+                }
+            }
 
             onSnapshot(query(eventosCollection, orderBy("dataInicio", "asc")), (snapshot) => {
                 const eventos = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
@@ -144,13 +159,20 @@
                     tipo: document.getElementById('tipo').value,
                     status: 'ativo'
                 };
+
                 if (editandoId) {
-                    await setDoc(doc(db, 'eventos', editandoId), evento, { merge: true });
+                    const docRef = doc(db, 'eventos', editandoId);
+                    const docSnap = await getDoc(docRef);
+                    const dadosAntigos = docSnap.data();
+
+                    await setDoc(docRef, evento, { merge: true });
+                    await registrarLog("EDITOU_EVENTO", { eventoId: editandoId, dadosAntigos, dadosNovos: evento });
                     alert('Evento atualizado com sucesso!');
                 } else {
                     evento.criadoEm = serverTimestamp();
                     evento.criadoPor = user.displayName || user.email;
-                    await addDoc(eventosCollection, evento);
+                    const docRef = await addDoc(eventosCollection, evento);
+                    await registrarLog("CRIOU_EVENTO", { eventoId: docRef.id, ...evento });
                     alert('Evento salvo com sucesso!');
                 }
                 form.reset();
@@ -186,7 +208,10 @@
                     }
                 } else if (target.classList.contains('btn-cancel')) {
                     if (confirm('Tem certeza que deseja cancelar este evento?')) {
+                        const docSnap = await getDoc(eventoRef);
+                        const dadosAntigos = docSnap.data();
                         await updateDoc(eventoRef, { status: 'cancelado' });
+                        await registrarLog("CANCELOU_EVENTO", { eventoId: id, titulo: dadosAntigos.titulo });
                     }
                 }
             });
@@ -360,4 +385,4 @@
         }
     </script>
 </body>
-</html>
+</html> 
