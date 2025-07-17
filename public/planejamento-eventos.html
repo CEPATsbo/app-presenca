@@ -9,7 +9,8 @@
     <style>
         body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background-color: #f0f2f5; color: #333; margin: 0; padding: 20px; }
         .nav-voltar { max-width: 1400px; margin: 0 auto 30px auto; text-align: left; }
-        .btn-voltar { background-color: #e9ecef; color: #495057; border: 1px solid #dee2e6; padding: 10px 20px; border-radius: 8px; font-weight: bold; font-size: 1em; text-decoration: none; }
+        .btn-voltar { background-color: #e9ecef; color: #495057; border: 1px solid #dee2e6; padding: 10px 20px; border-radius: 8px; font-weight: bold; font-size: 1em; text-decoration: none; transition: background-color 0.2s; }
+        .btn-voltar:hover { background-color: #dee2e6; }
         .page-container { max-width: 1400px; margin: auto; }
         .card { background-color: white; padding: 30px; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.08); margin-bottom: 30px; }
         h1, h2, h3 { text-align: center; color: #333; margin-top: 0; }
@@ -30,20 +31,20 @@
         .btn-cancel { background-color: #c62828; color: white; border-color: #c62828;}
         .status-cancelado td { text-decoration: line-through; color: #999; }
         
-        /* ESTILOS DO NOVO CRONOGRAMA VISUAL */
+        /* ESTILOS DO CRONOGRAMA VISUAL REFEITOS */
         #cronograma-visual { padding: 40px 20px; overflow-x: auto; }
         .semestre { margin-bottom: 60px; }
         .semestre h2 { background-color: #34495e; color: white; padding: 10px; border-radius: 8px; font-size: 1.5em; }
-        .timeline { display: flex; position: relative; padding: 150px 0; /* Aumenta o espaço vertical */ }
+        .timeline { display: flex; position: relative; padding: 150px 0; }
         .timeline::before { content: ''; position: absolute; top: 50%; left: 0; right: 0; height: 6px; background-color: #7f8c8d; transform: translateY(-50%); z-index: 1; }
         
-        .month { flex: 1; text-align: center; font-weight: bold; color: #34495e; position: relative; min-width: 200px; }
-        .month::after { content: ''; position: absolute; top: 50%; left: 0; width: 1px; height: 20px; background-color: #bdc3c7; transform: translateY(-50%); }
-        .month:first-child::after { display: none; }
-        .month-label { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background-color: #f0f2f5; padding: 0 10px; font-size: 1.2em; z-index: 2; }
+        .month { flex: 1; position: relative; min-width: 200px; }
+        .month::before { content: ''; position: absolute; top: 50%; left: 0; width: 2px; height: 16px; background-color: #bdc3c7; transform: translateY(-50%); }
+        .month:first-child::before { display: none; }
+        .month-label { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background-color: #f0f2f5; padding: 0 15px; font-size: 1.2em; z-index: 2; color: #34495e; font-weight: bold; }
         
-        .event-node { position: absolute; width: 130px; text-align: center; z-index: 5; display: flex; flex-direction: column; align-items: center; }
-        .event-node .details { order: 1; font-size: 0.85em; background: #fff; padding: 5px 8px; border-radius: 4px; box-shadow: 0 2px 5px rgba(0,0,0,0.15); line-height: 1.4; }
+        .event-node { position: absolute; width: 130px; z-index: 5; display: flex; flex-direction: column; align-items: center; }
+        .event-node .details { order: 1; font-size: 0.85em; background: #fff; padding: 5px 8px; border-radius: 4px; box-shadow: 0 2px 5px rgba(0,0,0,0.15); line-height: 1.4; text-align: center; }
         .event-node .diamond { order: 2; width: 20px; height: 20px; transform: rotate(45deg); margin: 0 auto; border: 3px solid white; box-shadow: 0 0 0 2px #2E7D32; background-color: #2E7D32; }
         .event-node .line { order: 3; width: 2px; background-color: #2E7D32; }
         .event-node .details strong { display: block; font-size: 1.1em; }
@@ -51,9 +52,13 @@
         .event-node[data-position="top"] { bottom: 50%; margin-bottom: 10px; }
         .event-node[data-position="bottom"] { top: 50%; margin-top: 10px; flex-direction: column-reverse; }
 
-        .event-node.cancelado { opacity: 0.5; }
+        .event-node.cancelado { opacity: 0.6; }
         .event-node.cancelado .details { text-decoration: line-through; }
         .event-node.cancelado .diamond, .event-node.cancelado .line { background-color: #a4b0be; box-shadow: 0 0 0 2px #a4b0be; }
+
+        /* Novo Tooltip */
+        .event-node .tooltip-text { visibility: hidden; width: 180px; background-color: #333; color: #fff; text-align: center; border-radius: 6px; padding: 8px; position: absolute; z-index: 100; bottom: 110%; left: 50%; transform: translateX(-50%); opacity: 0; transition: opacity 0.3s; pointer-events: none; }
+        .event-node:hover .tooltip-text { visibility: visible; opacity: 1; }
 
         .feriados-lista { margin-top: 20px; padding-top: 15px; text-align: center; font-size: 0.9em; color: #555; border-top: 1px dashed #ccc; }
     </style>
@@ -99,13 +104,13 @@
         import { protegerPagina } from '/auth.js';
 
         const firebaseConfig = {
-        apiKey: "AIzaSyBV7RPjk3cFTqL-aIpflJcUojKg1ZXMLuU",
-        authDomain: "voluntarios-ativos---cepat.firebaseapp.com",
-        projectId: "voluntarios-ativos---cepat",
-        storageBucket: "voluntarios-ativos---cepat.firebasestorage.app",
-        messagingSenderId: "66122858261",
-        appId: "1:66122858261:web:7fa21f1805463b5c08331c"
-    };
+            apiKey: "AIzaSyBV7RPjk3cFTqL-aIpflJcUojKg1ZXMLuU",
+            authDomain: "voluntarios-ativos---cepat.firebaseapp.com",
+            projectId: "voluntarios-ativos---cepat",
+            storageBucket: "voluntarios-ativos---cepat.firebasestorage.app",
+            messagingSenderId: "66122858261",
+            appId: "1:66122858261:web:7fa21f1805463b5c08331c"
+        };
         initializeApp(firebaseConfig);
 
         protegerPagina(['super-admin', 'diretor', 'tesoureiro', 'conselheiro', 'produtor-evento'])
@@ -196,19 +201,7 @@
                     const { jsPDF } = window.jspdf;
                     const pdf = new jsPDF('landscape', 'mm', 'a4');
                     const pdfWidth = pdf.internal.pageSize.getWidth();
-                    const pdfHeight = pdf.internal.pageSize.getHeight();
-                    const imgWidth = canvas.width;
-                    const imgHeight = canvas.height;
-                    const ratio = imgWidth / imgHeight;
-                    let newWidth = pdfWidth;
-                    let newHeight = newWidth / ratio;
-                    if (newHeight > pdfHeight) {
-                        newHeight = pdfHeight;
-                        newWidth = newHeight * ratio;
-                    }
-                    const xOffset = (pdfWidth - newWidth) / 2;
-                    const yOffset = (pdfHeight - newHeight) / 2;
-                    pdf.addImage(imgData, 'PNG', xOffset, yOffset, newWidth, newHeight);
+                    pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, 0);
                     pdf.save(`cronograma-eventos-${new Date().getFullYear()}.pdf`);
                 });
             });
@@ -222,7 +215,6 @@
                 const table = document.createElement('table');
                 table.innerHTML = `<thead><tr><th>Data</th><th>Evento</th><th>Tipo</th><th>Status</th><th>Ações</th></tr></thead><tbody></tbody>`;
                 const tbody = table.querySelector('tbody');
-                // Mostra os mais recentes primeiro na lista de gerenciamento
                 [...eventos].reverse().forEach(evento => {
                     const tr = document.createElement('tr');
                     tr.className = evento.status === 'cancelado' ? 'status-cancelado' : '';
@@ -258,14 +250,6 @@
 
                 [1, 2].forEach(s => {
                     const eventosSemestre = semestres[s];
-                    if (eventosSemestre.length === 0 && s === 1) {
-                         container.innerHTML += '<div class="semestre"><h2>1º SEMESTRE</h2><p>Nenhum evento planejado para este semestre.</p></div>';
-                    }
-                    if (eventosSemestre.length === 0 && s === 2) {
-                        container.innerHTML += '<div class="semestre"><h2>2º SEMESTRE</h2><p>Nenhum evento planejado para este semestre.</p></div>';
-                    }
-                    if (eventosSemestre.length === 0) return;
-
                     const semestreDiv = document.createElement('div');
                     semestreDiv.className = 'semestre';
                     semestreDiv.innerHTML = `<h2>${s}º SEMESTRE</h2><div class="timeline" id="timeline-${s}"></div><div class="feriados-lista" id="feriados-${s}"></div>`;
@@ -280,11 +264,14 @@
                         const monthDiv = document.createElement('div');
                         monthDiv.className = 'month';
                         monthDiv.innerHTML = `<span class="month-label">${mesNome}</span>`;
+                        monthDiv.id = `month-${s}-${mesIndex}`;
                         timeline.appendChild(monthDiv);
                     });
 
+                    if (eventosSemestre.length === 0) return;
+                    
                     let feriadosAdicionados = [];
-                    const placement = {}; // Controla os níveis para evitar sobreposição
+                    const placement = {}; 
 
                     eventosSemestre.forEach(evento => {
                         const dataEvento = evento.dataInicio.toDate();
@@ -294,19 +281,20 @@
                             feriadosAdicionados.push(`${dataEvento.getUTCDate()}/${mesDoEvento + 1} - ${evento.titulo}`);
                             return;
                         }
-
+                        
                         const diaDoEvento = dataEvento.getUTCDate();
                         const diasNoMes = new Date(dataEvento.getUTCFullYear(), mesDoEvento + 1, 0).getDate();
-                        const offsetMes = mesesDoSemestre.indexOf(mesDoEvento) * (100 / 6);
-                        const offsetDia = (diaDoEvento / diasNoMes) * (100 / 6);
-                        const totalOffset = offsetMes + offsetDia;
+                        const monthContainer = document.getElementById(`month-${s}-${mesDoEvento}`);
+                        if (!monthContainer) return;
+
+                        const leftPosition = (diaDoEvento / diasNoMes) * 100;
                         
                         let nivel = 0;
                         let posicao = 'top'; 
                         while (true) {
                             const chavePosicao = `${posicao}-${nivel}`;
-                            if (!placement[chavePosicao] || Math.abs(totalOffset - placement[chavePosicao]) > 10) {
-                                placement[chavePosicao] = totalOffset;
+                            if (!placement[chavePosicao] || Math.abs(leftPosition - placement[chavePosicao]) > 12) { // 12% de espaçamento
+                                placement[chavePosicao] = leftPosition;
                                 break;
                             }
                             posicao = (posicao === 'top') ? 'bottom' : 'top';
@@ -315,16 +303,18 @@
                         
                         const node = document.createElement('div');
                         node.className = `event-node ${evento.status === 'cancelado' ? 'cancelado' : ''}`;
-                        node.style.left = `${totalOffset}%`;
+                        node.style.left = `${leftPosition}%`;
                         node.dataset.position = posicao;
                         
-                        const alturaBase = 60; 
+                        const alturaBase = 50; 
                         const alturaLinha = 20 + (nivel * alturaBase);
                         
                         let nodeHTML;
                         if (posicao === 'top') {
+                            node.style.paddingBottom = `${alturaLinha}px`;
                             nodeHTML = `<div class="details"></div><div class="diamond"></div><div class="line" style="height: ${alturaLinha}px;"></div>`;
                         } else {
+                            node.style.paddingTop = `${alturaLinha}px`;
                             nodeHTML = `<div class="line" style="height: ${alturaLinha}px;"></div><div class="diamond"></div><div class="details"></div>`;
                         }
                         node.innerHTML = nodeHTML;
@@ -336,13 +326,19 @@
                         
                         const detailsDiv = node.querySelector('.details');
                         detailsDiv.innerHTML = `<strong>${dataTexto}</strong>${evento.titulo}`;
-                        node.title = `${evento.titulo}${evento.detalhes ? ': ' + evento.detalhes : ''}`;
+
+                        const tooltipSpan = document.createElement('span');
+                        tooltipSpan.className = 'tooltip-text';
+                        tooltipSpan.textContent = evento.detalhes || 'Sem detalhes.';
+                        node.appendChild(tooltipSpan);
                         
-                        timeline.appendChild(node);
+                        monthContainer.appendChild(node);
                     });
 
                     if(feriadosAdicionados.length > 0) {
                         feriadosLista.innerHTML = `<strong>Feriados do período:</strong> ${feriadosAdicionados.join(' | ')}`;
+                    } else {
+                         feriadosLista.style.display = 'none';
                     }
                 });
             }
