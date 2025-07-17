@@ -16,7 +16,7 @@
         }
         .painel-container {
             width: 100%;
-            height: calc(100vh - 40px); /* Ajuste para caber na tela */
+            height: calc(100vh - 40px);
             max-width: 100%;
             margin: 0 auto;
             display: flex;
@@ -100,7 +100,7 @@
     <div id="main-content" class="painel-container" style="display: none;">
         <header>
             <h1>Trabalho de Vibrações</h1>
-            <h2 id="periodo-info">Calculando período do ciclo...</h2>
+            <h2 id="periodo-info">Exibindo todos os pedidos ativos</h2>
         </header>
         <div class="listas-container">
             <div class="lista-coluna">
@@ -124,8 +124,7 @@
 
     <script type="module">
         import { initializeApp, getApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
-        import { getFirestore, collection, query, where, onSnapshot, Timestamp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
-        import { getFunctions, httpsCallable } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-functions.js";
+        import { getFirestore, collection, query, where, onSnapshot } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
         import { protegerPagina } from '/auth.js';
 
         const firebaseConfig = {
@@ -151,57 +150,27 @@
 
         function inicializarPainel() {
             const db = getFirestore(app);
-            const functions = getFunctions(app, 'southamerica-east1');
+            
+            escutarLista('encarnados', 'carousel-encarnados');
+            escutarLista('desencarnados', 'carousel-desencarnados');
 
-            let unsubEncarnados, unsubDesencarnados;
-
-            async function carregarNomes() {
-                try {
-                    const calcularCicloVibracoes = httpsCallable(functions, 'calcularCicloVibracoes');
-                    const resultado = await calcularCicloVibracoes();
-                    const ciclo = resultado.data;
-
-                    const cicloInicio = new Timestamp(ciclo.inicio._seconds, ciclo.inicio._nanoseconds);
-                    const cicloFim = new Timestamp(ciclo.fim._seconds, ciclo.fim._nanoseconds);
-
-                    const options = { timeZone: 'America/Sao_Paulo', day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' };
-                    const inicioFormatado = cicloInicio.toDate().toLocaleString('pt-BR', options);
-                    const fimFormatado = cicloFim.toDate().toLocaleString('pt-BR', options);
-                    document.getElementById('periodo-info').textContent = `Exibindo pedidos de ${inicioFormatado} até ${fimFormatado}`;
-
-                    // Cancela listeners antigos se existirem
-                    if (unsubEncarnados) unsubEncarnados();
-                    if (unsubDesencarnados) unsubDesencarnados();
-
-                    // Inicia novos listeners em tempo real
-                    escutarLista('encarnados', 'carousel-encarnados', 'loading-encarnados', cicloInicio, cicloFim);
-                    escutarLista('desencarnados', 'carousel-desencarnados', 'loading-desencarnados', cicloInicio, cicloFim);
-
-                } catch (error) {
-                    console.error("Erro ao obter ciclo de trabalho da Cloud Function:", error);
-                    document.getElementById('periodo-info').textContent = "Erro ao calcular o período. Verifique o console.";
-                }
-            }
-
-            function escutarLista(nomeColecao, idCarousel, idLoading, cicloInicio, cicloFim) {
+            function escutarLista(nomeColecao, idCarousel) {
                 const q = query(
                     collection(db, nomeColecao),
-                    where("dataCriacao", ">=", cicloInicio),
-                    where("dataCriacao", "<=", cicloFim)
+                    where("status", "==", "ativo")
                 );
 
-                const unsubscribe = onSnapshot(q, (snapshot) => {
+                onSnapshot(q, (snapshot) => {
                     const nomes = snapshot.docs.map(doc => doc.data());
-                    renderizarLista(nomes, idCarousel, idLoading);
+                    renderizarLista(nomes, idCarousel);
+                }, (error) => {
+                    console.error(`Erro ao escutar ${nomeColecao}: `, error);
+                    document.getElementById(idCarousel).innerHTML = `<div style="color:red;">Erro ao carregar lista.</div>`;
                 });
-
-                if (nomeColecao === 'encarnados') unsubEncarnados = unsubscribe;
-                else unsubDesencarnados = unsubscribe;
             }
 
-            function renderizarLista(nomes, idCarousel, idLoading) {
+            function renderizarLista(nomes, idCarousel) {
                 const carouselContainer = document.getElementById(idCarousel);
-                const loadingDiv = document.getElementById(idLoading);
                 carouselContainer.innerHTML = ''; 
 
                 if (nomes.length === 0) {
@@ -244,7 +213,12 @@
                 let paginaAtual = 0;
                 paginas[paginaAtual].classList.add('active');
 
-                setInterval(() => {
+                // Limpa qualquer intervalo antigo para evitar múltiplos carrosséis rodando
+                if (container.dataset.carouselIntervalId) {
+                    clearInterval(parseInt(container.dataset.carouselIntervalId));
+                }
+
+                const intervalId = setInterval(() => {
                     if(paginas[paginaAtual]) {
                        paginas[paginaAtual].classList.remove('active');
                     }
@@ -253,9 +227,9 @@
                         paginas[paginaAtual].classList.add('active');
                     }
                 }, 15000); 
+
+                container.dataset.carouselIntervalId = intervalId;
             }
-            
-            carregarNomes();
         }
     </script>
 </body>

@@ -186,8 +186,9 @@
     </div>
 
     <script type="module">
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
+        import { initializeApp, getApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
         import { getFirestore, collection, addDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
+        import { getFunctions, httpsCallable } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-functions.js";
 
         const firebaseConfig = {
             apiKey: "AIzaSyBV7RPjk3cFTqL-aIpflJcUojKg1ZXMLuU",
@@ -199,6 +200,7 @@
         };
         const app = initializeApp(firebaseConfig, "vibracoesApp");
         const db = getFirestore(app);
+        const functions = getFunctions(app, 'southamerica-east1');
 
         const radioEncarnado = document.getElementById('radio-encarnado');
         const radioDesencarnado = document.getElementById('radio-desencarnado');
@@ -245,28 +247,34 @@
 
             const tipo = radioEncarnado.checked ? 'encarnado' : 'desencarnado';
             
-            let dadosParaSalvar = {};
-            let colecaoAlvo = '';
-
-            if (tipo === 'encarnado') {
-                colecaoAlvo = 'encarnados';
-                dadosParaSalvar = {
-                    nome: nomeEncarnadoInput.value.trim(),
-                    endereco: enderecoEncarnadoInput.value.trim(),
-                    dataCriacao: serverTimestamp()
-                };
-            } else {
-                colecaoAlvo = 'desencarnados';
-                dadosParaSalvar = {
-                    nome: nomeDesencarnadoInput.value.trim(),
-                    dataCriacao: serverTimestamp()
-                };
-            }
-            
             try {
+                // Pega a data de arquivamento correta do servidor
+                const calcularCicloParaEnvio = httpsCallable(functions, 'calcularCicloParaEnvio');
+                const resultadoCiclo = await calcularCicloParaEnvio();
+                const dataArquivamento = resultadoCiclo.data.dataArquivamento;
+
+                let dadosParaSalvar = {};
+                let colecaoAlvo = tipo + 's'; // 'encarnados' ou 'desencarnados'
+
+                if (tipo === 'encarnado') {
+                    dadosParaSalvar = {
+                        nome: nomeEncarnadoInput.value.trim(),
+                        endereco: enderecoEncarnadoInput.value.trim(),
+                        dataCriacao: serverTimestamp(),
+                        status: 'pendente', // NOVO CAMPO
+                        dataArquivamento: dataArquivamento // NOVO CAMPO
+                    };
+                } else {
+                    dadosParaSalvar = {
+                        nome: nomeDesencarnadoInput.value.trim(),
+                        dataCriacao: serverTimestamp(),
+                        status: 'pendente', // NOVO CAMPO
+                        dataArquivamento: dataArquivamento // NOVO CAMPO
+                    };
+                }
+                
                 await addDoc(collection(db, colecaoAlvo), dadosParaSalvar);
 
-                // Mostra a mensagem de sucesso
                 feedbackDiv.textContent = 'Seu pedido de vibração foi enviado com sucesso. Muita paz!';
                 feedbackDiv.className = 'feedback-sucesso';
                 feedbackDiv.style.display = 'block';
@@ -275,14 +283,11 @@
                 camposEncarnado.style.display = 'none';
                 camposDesencarnado.style.display = 'none';
                 
-                // ===================================================================
-                // LÓGICA DE FEEDBACK AJUSTADA
-                // ===================================================================
-                // Dá um tempo para o usuário ler a mensagem e só depois reseta o botão
                 setTimeout(() => {
                     feedbackDiv.style.display = 'none';
                     btnEnviar.textContent = 'Selecione uma opção';
-                }, 4000); // A mensagem de sucesso ficará visível por 4 segundos
+                    // O botão continua desabilitado até uma nova seleção
+                }, 4000);
 
             } catch (error) {
                 console.error("Erro ao salvar no Firestore: ", error);

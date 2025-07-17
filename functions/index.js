@@ -10,6 +10,42 @@ const db = admin.firestore();
 const storage = admin.storage();
 const REGIAO = 'southamerica-east1';
 
+// ===================================================================
+// NOVA FUNÇÃO AUXILIAR PARA CALCULAR O CICLO DE TRABALHO
+// ===================================================================
+function calcularCicloVibracoes(dataBase) {
+    const agora = new Date(dataBase);
+    
+    // Horário de São Paulo (UTC-3)
+    const proximaQuinta = new Date(agora);
+    proximaQuinta.setUTCHours(proximaQuinta.getUTCHours() - 3); // Ajusta para o fuso de SP
+    
+    const diaDaSemana = proximaQuinta.getDay(); // Domingo = 0, Quinta = 4
+    const horas = proximaQuinta.getHours();
+    const minutos = proximaQuinta.getMinutes();
+
+    let diasAteProximaQuinta = (4 - diaDaSemana + 7) % 7;
+    
+    // Se hoje é quinta, mas já passou do horário de fechamento, a referência é a próxima quinta
+    if (diaDaSemana === 4 && (horas > 19 || (horas === 19 && minutos >= 20))) {
+        diasAteProximaQuinta = 7;
+    }
+    
+    proximaQuinta.setDate(proximaQuinta.getDate() + diasAteProximaQuinta);
+    proximaQuinta.setHours(19, 20, 0, 0);
+    
+    const dataFimCiclo = new Date(proximaQuinta);
+    
+    // A data de arquivamento é 3 semanas (21 dias) após o fim do primeiro ciclo
+    const dataArquivamento = new Date(dataFimCiclo);
+    dataArquivamento.setDate(dataArquivamento.getDate() + 21);
+
+    return {
+        dataFimCiclo: admin.firestore.Timestamp.fromDate(dataFimCiclo),
+        dataArquivamento: admin.firestore.Timestamp.fromDate(dataArquivamento)
+    };
+}
+
 function configurarWebPush() {
     try {
         const vapidConfig = functions.config().vapid;
@@ -269,29 +305,7 @@ exports.verificarAprovacaoFinal = functions.region(REGIAO).firestore.document('b
     return null;
 });
 
-exports.calcularCicloVibracoes = functions.region(REGIAO).https.onCall((data, context) => {
-    const agoraUTC = new Date();
-    const encontrarUltimaQuinta = (d) => {
-        const data = new Date(d);
-        const dia = data.getUTCDay();
-        const diff = (dia < 4) ? dia + 3 : dia - 4;
-        data.setUTCDate(data.getUTCDate() - diff);
-        return data;
-    };
-    const ultimaQuinta = encontrarUltimaQuinta(agoraUTC);
-    let dataFimCiclo = new Date(ultimaQuinta);
-    dataFimCiclo.setUTCHours(22, 20, 0, 0);
-    if (agoraUTC.getTime() > dataFimCiclo.getTime()) {
-        dataFimCiclo.setUTCDate(dataFimCiclo.getUTCDate() + 7);
-    }
-    let dataInicioCiclo = new Date(dataFimCiclo);
-    dataInicioCiclo.setUTCDate(dataInicioCiclo.getUTCDate() - 7);
-    dataInicioCiclo.setUTCMinutes(dataInicioCiclo.getUTCMinutes() + 1);
-    return {
-        inicio: admin.firestore.Timestamp.fromDate(dataInicioCiclo),
-        fim: admin.firestore.Timestamp.fromDate(dataFimCiclo)
-    };
-});
+
 
 exports.enviarNotificacaoImediata = functions.region(REGIAO).https.onRequest((req, res) => {
     cors(req, res, async () => {
@@ -361,43 +375,31 @@ exports.resetarTasvAnual = functions.region(REGIAO).pubsub.schedule('0 4 1 1 *')
     return null;
 });
 
-exports.arquivarVibracoesSemanais = functions.region(REGIAO).pubsub.schedule('30 22 * * 4').timeZone('America/Sao_Paulo').onRun(async (context) => {
-    console.log("Iniciando o arquivamento semanal dos pedidos de vibração.");
+// ===================================================================
+// ROBÔ DE LIMPEZA DE VIBRAÇÕES ATUALIZADO
+// ===================================================================
+exports.arquivarVibracoesConcluidas = functions.region(REGIAO).pubsub.schedule('30 22 * * 4').timeZone('America/Sao_Paulo').onRun(async (context) => {
+    console.log("Iniciando o arquivamento de pedidos de vibração concluídos.");
+    const agora = admin.firestore.Timestamp.now();
+    const colecoes = ['encarnados', 'desencarnados'];
+    let totalArquivado = 0;
 
-    const agoraSP = new Date();
-    
-    let dataFimCiclo = new Date(agoraSP);
-    dataFimCiclo.setHours(19, 20, 0, 0);
-
-    let dataInicioCiclo = new Date(dataFimCiclo);
-    dataInicioCiclo.setDate(dataInicioCiclo.getDate() - 7);
-    dataInicioCiclo.setMinutes(dataInicioCiclo.getMinutes() + 1);
-
-    const cicloInicio = admin.firestore.Timestamp.fromDate(dataInicioCiclo);
-    const cicloFim = admin.firestore.Timestamp.fromDate(dataFimCiclo);
-    
-    const semanaDeReferencia = new Intl.DateTimeFormat('en-CA', { year: 'numeric', month: '2-digit', day: '2-digit' }).format(dataFimCiclo);
-
-    const processarColecao = async (nomeColecao) => {
+    for (const nomeColecao of colecoes) {
         const colecaoRef = db.collection(nomeColecao);
         const historicoRef = db.collection('historico_vibracoes');
-
-        const snapshot = await colecaoRef.where('dataCriacao', '>=', cicloInicio).where('dataCriacao', '<=', cicloFim).get();
+        const snapshot = await colecaoRef.where('dataArquivamento', '<=', agora).get();
         
         if (snapshot.empty) {
             console.log(`Nenhum documento para arquivar na coleção '${nomeColecao}'.`);
-            return 0;
+            continue;
         }
 
         const batch = db.batch();
         snapshot.forEach(doc => {
             const dados = doc.data();
-            const dadosParaHistorico = {
-                ...dados,
-                tipo: nomeColecao.slice(0, -1),
-                semanaDeReferencia: semanaDeReferencia,
-                arquivadoEm: admin.firestore.FieldValue.serverTimestamp()
-            };
+            const semanaDeReferencia = new Intl.DateTimeFormat('en-CA').format(dados.dataArquivamento.toDate());
+            
+            const dadosParaHistorico = { ...dados, tipo: nomeColecao.slice(0, -1), semanaDeReferencia: semanaDeReferencia, arquivadoEm: admin.firestore.FieldValue.serverTimestamp() };
             
             const novoHistoricoRef = historicoRef.doc();
             batch.set(novoHistoricoRef, dadosParaHistorico);
@@ -405,21 +407,49 @@ exports.arquivarVibracoesSemanais = functions.region(REGIAO).pubsub.schedule('30
         });
 
         await batch.commit();
-        console.log(`${snapshot.size} documentos da coleção '${nomeColecao}' foram arquivados e limpos.`);
-        return snapshot.size;
-    };
-
-    try {
-        const totalEncarnados = await processarColecao('encarnados');
-        const totalDesencarnados = await processarColecao('desencarnados');
-        console.log(`Arquivamento concluído. Total: ${totalEncarnados} encarnados, ${totalDesencarnados} desencarnados.`);
-        return null;
-    } catch (error) {
-        console.error("ERRO GRAVE durante o arquivamento das vibrações:", error);
-        return null;
+        console.log(`${snapshot.size} docs da coleção '${nomeColecao}' foram arquivados.`);
+        totalArquivado += snapshot.size;
     }
+    console.log(`Arquivamento concluído. Total: ${totalArquivado} documentos.`);
+    return null;
 });
 
+// ===================================================================
+// NOVO ROBÔ DE ATIVAÇÃO DE PEDIDOS
+// ===================================================================
+exports.ativarNovosPedidos = functions.region(REGIAO).pubsub.schedule('31 22 * * 4').timeZone('America/Sao_Paulo').onRun(async (context) => {
+    console.log("Iniciando a ativação de novos pedidos de vibração.");
+    const colecoes = ['encarnados', 'desencarnados'];
+    const promises = [];
+
+    for (const colecao of colecoes) {
+        const q = db.collection(colecao).where('status', '==', 'pendente');
+        const snapshotPromise = q.get().then(snapshot => {
+            if (snapshot.empty) {
+                console.log(`Nenhum pedido pendente em '${colecao}'.`);
+                return;
+            }
+            const batch = db.batch();
+            snapshot.forEach(doc => {
+                batch.update(doc.ref, { status: 'ativo' });
+            });
+            return batch.commit().then(() => {
+                console.log(`${snapshot.size} pedidos em '${colecao}' foram ativados.`);
+            });
+        });
+        promises.push(snapshotPromise);
+    }
+    
+    await Promise.all(promises);
+    return null;
+});
+
+// ===================================================================
+// NOVA FUNÇÃO onCall PARA A PÁGINA DE ENVIO
+// ===================================================================
+module.exports.calcularCicloParaEnvio = functions.region(REGIAO).https.onCall((data, context) => {
+    return calcularCicloVibracoes(new Date());
+});
 // ===================================================================
 // NOVA FUNÇÃO PARA UPLOAD DE ATAS NO FIREBASE STORAGE
 // ===================================================================
