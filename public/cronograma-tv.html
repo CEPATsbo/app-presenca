@@ -7,8 +7,8 @@
     <style>
         body { 
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; 
-            background-color: #f4f6f9; /* FUNDO OFF-WHITE */
-            color: #343a40; /* TEXTO ESCURO PARA CONTRASTE */
+            background-color: #f4f6f9; 
+            color: #343a40; 
             margin: 0; 
             padding: 20px;
             overflow: hidden; 
@@ -55,29 +55,32 @@
             visibility: visible;
         }
         .semestre h2 { background-color: #34495e; color: white; padding: 1vh; border-radius: 8px; font-size: 3vh; text-align: center; margin-bottom: 2vh; }
-        .timeline { display: flex; position: relative; padding: 14vh 0; box-sizing: border-box; flex-grow: 1; }
+        .timeline { display: grid; position: relative; padding: 14vh 0; box-sizing: border-box; flex-grow: 1; }
         .timeline-axis { position: absolute; top: 50%; left: 0; right: 0; height: 6px; background-color: #7f8c8d; transform: translateY(-50%); z-index: 1; }
-        
-        .month { flex: 1; text-align: center; font-weight: bold; color: #34495e; position: relative; border-right: 1px dotted #ccc; display: flex; justify-content: center; align-items: center;}
+        .month-grid-container { display: contents; }
+        .month { text-align: center; font-weight: bold; color: #34495e; position: relative; border-right: 1px dotted #ccc; display: flex; justify-content: center; align-items: center;}
         .month:last-child { border-right: none; }
         .month::before { content: ''; position: absolute; top: 50%; left: 0; width: 2px; height: 20px; background-color: #bdc3c7; transform: translateY(-50%); }
         .month:first-child::before { display: none; }
         .month-label { background-color: #f4f6f9; padding: 0 15px; font-size: 2.2vh; z-index: 2; }
         
-        .event-node { position: absolute; width: 14vw; max-width: 180px; z-index: 5; display: flex; flex-direction: column; align-items: center; }
+        .event-node { grid-row: 1; position: relative; width: 14vw; max-width: 180px; z-index: 5; display: flex; flex-direction: column; align-items: center; }
         .event-node .details { order: 1; font-size: 1.6vh; background: #fff; color: #333; padding: 0.8vh 0.8vw; border-radius: 6px; line-height: 1.3; text-align: center; border: 1px solid #ddd; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
         .event-node .diamond { order: 2; width: 2.2vh; height: 2.2vh; transform: rotate(45deg); margin: 0.5vh auto; border: 0.3vh solid #f4f6f9; box-shadow: 0 0 0 2px #2E7D32; background-color: #2E7D32; }
         .event-node .line { order: 3; width: 3px; background-color: #2E7D32; }
         .event-node .details strong { display: block; font-size: 1em; font-weight: bold; }
         
-        .event-node[data-position="top"] { align-self: end; bottom: 50%; margin-bottom: 1vh; }
-        .event-node[data-position="bottom"] { align-self: start; top: 50%; margin-top: 1vh; flex-direction: column-reverse; }
+        .event-node[data-position="top"] { align-self: end; padding-bottom: 1vh; }
+        .event-node[data-position="bottom"] { align-self: start; padding-top: 1vh; flex-direction: column-reverse; }
 
         .event-node.cancelado { opacity: 0.6; }
         .event-node.cancelado .details { text-decoration: line-through; background-color: #e9ecef; }
         .event-node.cancelado .diamond, .event-node.cancelado .line { background-color: #777; box-shadow: 0 0 0 2px #777; }
+        
+        .tooltip-text { visibility: hidden; width: 180px; background-color: #333; color: #fff; text-align: center; border-radius: 6px; padding: 8px; position: absolute; z-index: 100; bottom: 125%; left: 50%; transform: translateX(-50%); opacity: 0; transition: opacity 0.3s; pointer-events: none; }
+        .event-node:hover .tooltip-text { visibility: visible; opacity: 1; }
 
-        .feriados-lista { padding: 1.5vh; text-align: center; font-size: 1.6vh; color: #6c757d; }
+        .feriados-lista { position: absolute; bottom: 0; left:0; right: 0; padding: 1.5vh; text-align: center; font-size: 1.6vh; color: #6c757d; }
     </style>
 </head>
 <body>
@@ -119,8 +122,8 @@
             
             const anoAtual = new Date().getFullYear();
             const semestres = {
-                1: { eventos: [] },
-                2: { eventos: [] }
+                1: { de: new Date(anoAtual, 0, 1), ate: new Date(anoAtual, 5, 30, 23, 59, 59), eventos: [] },
+                2: { de: new Date(anoAtual, 6, 1), ate: new Date(anoAtual, 11, 31, 23, 59, 59), eventos: [] }
             };
 
             eventos.forEach(e => {
@@ -142,23 +145,28 @@
                 const timeline = document.getElementById(`timeline-${s}`);
                 const feriadosLista = document.getElementById(`feriados-${s}`);
                 
-                timeline.innerHTML = '<div class="timeline-axis"></div>';
-                const mesesDoSemestre = s === 1 ? [0,1,2,3,4,5] : [6,7,8,9,10,11];
+                const totalDiasSemestre = Math.round((semestre.ate - semestre.de) / (1000 * 60 * 60 * 24));
+                timeline.style.gridTemplateColumns = `repeat(${totalDiasSemestre}, 1fr)`;
+                timeline.innerHTML = '<div class="month-grid-container"></div><div class="timeline-axis"></div>';
+                const monthGridContainer = timeline.querySelector('.month-grid-container');
                 
-                mesesDoSemestre.forEach(mesIndex => {
+                let diaCount = 1;
+                for(let mesIndex = semestre.de.getMonth(); mesIndex <= semestre.ate.getMonth(); mesIndex++) {
                     const mesNome = new Date(anoAtual, mesIndex).toLocaleString('pt-BR', { month: 'long' }).toUpperCase();
+                    const diasNoMes = new Date(anoAtual, mesIndex + 1, 0).getDate();
                     const monthDiv = document.createElement('div');
                     monthDiv.className = 'month';
-                    monthDiv.id = `month-${s}-${mesIndex}`;
+                    monthDiv.style.gridColumn = `${diaCount} / span ${diasNoMes}`;
                     monthDiv.innerHTML = `<span class="month-label">${mesNome}</span>`;
-                    timeline.appendChild(monthDiv);
-                });
+                    monthGridContainer.appendChild(monthDiv);
+                    diaCount += diasNoMes;
+                }
                 
-                if (semestre.eventos.length === 0) {
-                    const msg = document.createElement('p');
-                    msg.textContent = "Nenhum evento planejado para este semestre.";
-                    msg.style.textAlign = 'center';
-                    timeline.parentElement.insertBefore(msg, feriadosLista);
+                if (semestre.eventos.length === 0 && feriadosLista) {
+                     const p = document.createElement('p');
+                     p.textContent = 'Nenhum evento agendado para este semestre.';
+                     p.style.textAlign = 'center';
+                     feriadosLista.parentNode.insertBefore(p, feriadosLista);
                 }
                 
                 let feriadosAdicionados = [];
@@ -166,26 +174,20 @@
 
                 semestre.eventos.forEach(evento => {
                     const dataEvento = evento.dataInicio.toDate();
-                    const mesDoEvento = dataEvento.getUTCMonth();
-                    
-                    if(evento.tipo === 'feriado') {
-                        feriadosAdicionados.push(`${dataEvento.getUTCDate()}/${mesDoEvento + 1} - ${evento.titulo}`);
+                    if (evento.tipo === 'feriado') {
+                        feriadosAdicionados.push(`${dataEvento.getUTCDate()}/${dataEvento.getUTCMonth() + 1} - ${evento.titulo}`);
                         return;
                     }
                     
-                    const diaDoEvento = dataEvento.getUTCDate();
-                    const diasNoMes = new Date(dataEvento.getUTCFullYear(), mesDoEvento + 1, 0).getDate();
-                    const monthContainer = document.getElementById(`month-${s}-${mesDoEvento}`);
-                    if (!monthContainer) return;
-
-                    const leftPosition = (diaDoEvento / diasNoMes) * 100;
+                    const diaNoSemestre = Math.floor((dataEvento - semestre.de) / (1000 * 60 * 60 * 24)) + 1;
+                    if(diaNoSemestre < 1) return;
                     
                     let nivel = 0;
                     let posicao = 'top'; 
                     while (true) {
                         const chavePosicao = `${posicao}-${nivel}`;
-                        const posHorizontal = leftPosition;
-                        if (!placement[chavePosicao] || Math.abs(posHorizontal - placement[chavePosicao]) > 12) { 
+                        const posHorizontal = diaNoSemestre;
+                        if (!placement[chavePosicao] || Math.abs(posHorizontal - placement[chavePosicao]) > 7) { 
                             placement[chavePosicao] = posHorizontal;
                             break;
                         }
@@ -195,7 +197,7 @@
                     
                     const node = document.createElement('div');
                     node.className = `event-node ${evento.status === 'cancelado' ? 'cancelado' : ''}`;
-                    node.style.left = `${leftPosition}%`;
+                    node.style.gridColumn = `${diaNoSemestre} / span 1`;
                     node.dataset.position = posicao;
                     
                     const alturaBase = 6; 
@@ -218,7 +220,12 @@
                     
                     node.querySelector('.details').innerHTML = `<strong>${dataTexto}</strong>${evento.titulo}`;
                     
-                    monthContainer.appendChild(node);
+                    const tooltipSpan = document.createElement('span');
+                    tooltipSpan.className = 'tooltip-text';
+                    tooltipSpan.textContent = evento.detalhes || 'Sem detalhes.';
+                    node.appendChild(tooltipSpan);
+                    
+                    timeline.appendChild(node);
                 });
 
                 if(feriadosAdicionados.length > 0) {
@@ -232,18 +239,22 @@
 
         function iniciarCarrosselTV() {
             const semestres = document.querySelectorAll('.semestre');
-            if (semestres.length <= 1) {
-                if (semestres.length === 1) semestres[0].classList.add('active');
+            if (semestres.length === 0) return;
+
+            // Garante que apenas um semestre esteja ativo se houver apenas um com eventos
+            const semestresComEventos = Array.from(semestres).filter(s => s.querySelector('.event-node'));
+            if (semestresComEventos.length <= 1) {
+                if (semestresComEventos.length === 1) semestresComEventos[0].classList.add('active');
                 return;
             }
 
             let index = 0;
-            semestres[index].classList.add('active');
+            semestresComEventos[index].classList.add('active');
 
             setInterval(() => {
-                semestres[index].classList.remove('active');
-                index = (index + 1) % semestres.length;
-                semestres[index].classList.add('active');
+                semestresComEventos[index].classList.remove('active');
+                index = (index + 1) % semestresComEventos.length;
+                semestresComEventos[index].classList.add('active');
             }, 20000); 
         }
         
