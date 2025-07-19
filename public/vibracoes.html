@@ -187,7 +187,6 @@
 
     <script type="module">
         import { initializeApp, getApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
-        import { getFirestore, collection, addDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
         import { getFunctions, httpsCallable } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-functions.js";
 
         const firebaseConfig = {
@@ -199,7 +198,6 @@
             appId: "1:66122858261:web:7fa21f1805463b5c08331c"
         };
         const app = initializeApp(firebaseConfig, "vibracoesApp");
-        const db = getFirestore(app);
         const functions = getFunctions(app, 'southamerica-east1');
 
         const radioEncarnado = document.getElementById('radio-encarnado');
@@ -247,33 +245,17 @@
 
             const tipo = radioEncarnado.checked ? 'encarnado' : 'desencarnado';
             
+            let dadosParaEnviar = { tipo };
+            if (tipo === 'encarnado') {
+                dadosParaEnviar.nome = nomeEncarnadoInput.value;
+                dadosParaEnviar.endereco = enderecoEncarnadoInput.value;
+            } else {
+                dadosParaEnviar.nome = nomeDesencarnadoInput.value;
+            }
+            
             try {
-                // Pega a data de arquivamento correta do servidor
-                const calcularCicloParaEnvio = httpsCallable(functions, 'calcularCicloParaEnvio');
-                const resultadoCiclo = await calcularCicloParaEnvio();
-                const dataArquivamento = resultadoCiclo.data.dataArquivamento;
-
-                let dadosParaSalvar = {};
-                let colecaoAlvo = tipo + 's'; // 'encarnados' ou 'desencarnados'
-
-                if (tipo === 'encarnado') {
-                    dadosParaSalvar = {
-                        nome: nomeEncarnadoInput.value.trim(),
-                        endereco: enderecoEncarnadoInput.value.trim(),
-                        dataCriacao: serverTimestamp(),
-                        status: 'pendente', // NOVO CAMPO
-                        dataArquivamento: dataArquivamento // NOVO CAMPO
-                    };
-                } else {
-                    dadosParaSalvar = {
-                        nome: nomeDesencarnadoInput.value.trim(),
-                        dataCriacao: serverTimestamp(),
-                        status: 'pendente', // NOVO CAMPO
-                        dataArquivamento: dataArquivamento // NOVO CAMPO
-                    };
-                }
-                
-                await addDoc(collection(db, colecaoAlvo), dadosParaSalvar);
+                const enviarPedidoVibracao = httpsCallable(functions, 'enviarPedidoVibracao');
+                await enviarPedidoVibracao(dadosParaEnviar);
 
                 feedbackDiv.textContent = 'Seu pedido de vibração foi enviado com sucesso. Muita paz!';
                 feedbackDiv.className = 'feedback-sucesso';
@@ -286,17 +268,11 @@
                 setTimeout(() => {
                     feedbackDiv.style.display = 'none';
                     btnEnviar.textContent = 'Selecione uma opção';
-                    // O botão continua desabilitado até uma nova seleção
                 }, 4000);
 
             } catch (error) {
-                console.error("Erro ao salvar no Firestore: ", error);
-                
-                let mensagemErro = "Ocorreu um erro ao enviar seu pedido. Tente novamente.";
-                if (error.code === 'permission-denied') {
-                    mensagemErro = "O período para envio de nomes está fechado no momento. Por favor, tente novamente mais tarde.";
-                }
-                feedbackDiv.textContent = mensagemErro;
+                console.error("Erro ao enviar pedido: ", error);
+                feedbackDiv.textContent = "Ocorreu um erro ao enviar seu pedido. Tente novamente.";
                 feedbackDiv.className = 'feedback-erro';
                 feedbackDiv.style.display = 'block';
 

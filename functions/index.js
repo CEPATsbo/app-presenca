@@ -10,36 +10,20 @@ const db = admin.firestore();
 const storage = admin.storage();
 const REGIAO = 'southamerica-east1';
 
-// ===================================================================
-// NOVA FUNÇÃO AUXILIAR PARA CALCULAR O CICLO DE TRABALHO
-// ===================================================================
 function calcularCicloVibracoes(dataBase) {
     const agora = new Date(dataBase);
-    
-    // Horário de São Paulo (UTC-3)
     const proximaQuinta = new Date(agora);
-    proximaQuinta.setUTCHours(proximaQuinta.getUTCHours() - 3); // Ajusta para o fuso de SP
-    
-    const diaDaSemana = proximaQuinta.getDay(); // Domingo = 0, Quinta = 4
-    const horas = proximaQuinta.getHours();
-    const minutos = proximaQuinta.getMinutes();
-
+    proximaQuinta.setUTCHours(proximaQuinta.getUTCHours() - 3);
+    const diaDaSemana = proximaQuinta.getDay();
     let diasAteProximaQuinta = (4 - diaDaSemana + 7) % 7;
-    
-    // Se hoje é quinta, mas já passou do horário de fechamento, a referência é a próxima quinta
-    if (diaDaSemana === 4 && (horas > 19 || (horas === 19 && minutos >= 20))) {
+    if (diasAteProximaQuinta === 0 && agora.getTime() > proximaQuinta.getTime()) {
         diasAteProximaQuinta = 7;
     }
-    
     proximaQuinta.setDate(proximaQuinta.getDate() + diasAteProximaQuinta);
     proximaQuinta.setHours(19, 20, 0, 0);
-    
     const dataFimCiclo = new Date(proximaQuinta);
-    
-    // A data de arquivamento é 3 semanas (21 dias) após o fim do primeiro ciclo
     const dataArquivamento = new Date(dataFimCiclo);
     dataArquivamento.setDate(dataArquivamento.getDate() + 21);
-
     return {
         dataFimCiclo: admin.firestore.Timestamp.fromDate(dataFimCiclo),
         dataArquivamento: admin.firestore.Timestamp.fromDate(dataArquivamento)
@@ -50,11 +34,7 @@ function configurarWebPush() {
     try {
         const vapidConfig = functions.config().vapid;
         if (vapidConfig && vapidConfig.public_key && vapidConfig.private_key) {
-            webpush.setVapidDetails(
-              "mailto:cepaulodetarso.sbo@gmail.com",
-              vapidConfig.public_key,
-              vapidConfig.private_key
-            );
+            webpush.setVapidDetails("mailto:cepaulodetarso.sbo@gmail.com", vapidConfig.public_key, vapidConfig.private_key);
             return true;
         } else {
             console.error("ERRO CRÍTICO: As chaves VAPID não estão configuradas no ambiente.");
@@ -177,9 +157,6 @@ exports.promoverParaConselheiro = functions.region(REGIAO).https.onCall(async (d
     }
 });
 
-// ===================================================================
-// NOVA FUNÇÃO ADICIONADA
-// ===================================================================
 exports.promoverParaProdutorEvento = functions.region(REGIAO).https.onCall(async (data, context) => {
     if (context.auth.token.role !== 'super-admin') { 
         throw new functions.https.HttpsError('permission-denied', 'Apenas o Super Admin pode promover usuários.'); 
@@ -200,7 +177,6 @@ exports.promoverParaProdutorEvento = functions.region(REGIAO).https.onCall(async
         throw new functions.https.HttpsError('internal', 'Erro interno ao tentar promover o usuário.'); 
     }
 });
-
 
 exports.revogarAcessoDiretor = functions.region(REGIAO).https.onCall(async (data, context) => {
     if (context.auth.token.role !== 'super-admin') { throw new functions.https.HttpsError('permission-denied', 'Apenas o Super Admin pode revogar acesso.'); }
@@ -236,31 +212,20 @@ exports.revogarAcessoConselheiro = functions.region(REGIAO).https.onCall(async (
 });
 
 exports.registrarVotoConselho = functions.region(REGIAO).https.onCall(async (data, context) => {
-    if (!context.auth) {
-        throw new functions.https.HttpsError('unauthenticated', 'A função deve ser chamada por um usuário autenticado.');
-    }
+    if (!context.auth) { throw new functions.https.HttpsError('unauthenticated', 'A função deve ser chamada por um usuário autenticado.'); }
     const userRole = context.auth.token.role;
-    if (!['conselheiro', 'super-admin'].includes(userRole)) {
-        throw new functions.https.HttpsError('permission-denied', 'Apenas membros do conselho ou super-admin podem votar.');
-    }
-    
+    if (!['conselheiro', 'super-admin'].includes(userRole)) { throw new functions.https.HttpsError('permission-denied', 'Apenas membros do conselho ou super-admin podem votar.'); }
     const { balanceteId, voto, mensagem } = data;
-    if (!balanceteId || !voto) {
-        throw new functions.https.HttpsError('invalid-argument', 'ID do balancete e voto são obrigatórios.');
-    }
-
+    if (!balanceteId || !voto) { throw new functions.https.HttpsError('invalid-argument', 'ID do balancete e voto são obrigatórios.'); }
     const balanceteRef = db.collection('balancetes').doc(balanceteId);
     const logAuditoriaCollection = db.collection('log_auditoria');
     const autor = { uid: context.auth.uid, nome: context.auth.token.name || context.auth.token.email };
-    
     try {
         const balanceteDoc = await balanceteRef.get();
         if (!balanceteDoc.exists) { throw new functions.https.HttpsError('not-found', 'Balancete não encontrado.'); }
-        
         const balanceteData = balanceteDoc.data();
         if (balanceteData.status !== 'em revisão') { throw new functions.https.HttpsError('failed-precondition', 'Este balancete não está mais aberto para revisão.'); }
         if (balanceteData.aprovacoes && balanceteData.aprovacoes[autor.uid]) { throw new functions.https.HttpsError('already-exists', 'Você já votou neste balancete.'); }
-        
         let updateData = {};
         let logDetalhes = {};
         if (voto === 'aprovado') {
@@ -270,13 +235,11 @@ exports.registrarVotoConselho = functions.region(REGIAO).https.onCall(async (dat
         } else if (voto === 'reprovado') {
             if (!mensagem) { throw new functions.https.HttpsError('invalid-argument', 'Uma mensagem com a ressalva é obrigatória para reprovar.'); }
             updateData.status = 'com_ressalva';
-            updateData.mensagens = admin.firestore.FieldValue.arrayUnion({ autor, texto: mensagem, data: new Date() });
+            updateData.mensagens = admin.firestore.FieldValue.arrayUnion({ autor, texto: mensagem, data: new Date(), isResposta: false });
             logDetalhes = { balanceteId, voto: 'REPROVADO', ressalva: mensagem };
         }
-        
         await balanceteRef.update(updateData);
         await logAuditoriaCollection.add({ acao: "VOTOU_BALANCETE", autor, timestamp: admin.firestore.FieldValue.serverTimestamp(), detalhes: logDetalhes });
-        
         return { success: true, message: 'Ação registrada com sucesso!' };
     } catch (error) {
         console.error("Erro interno ao registrar voto do conselho:", error);
@@ -288,24 +251,17 @@ exports.verificarAprovacaoFinal = functions.region(REGIAO).firestore.document('b
     const balanceteNovo = change.after.data();
     const balanceteAntigo = change.before.data();
     if (balanceteNovo.status !== 'em revisão') { return null; }
-    
     const aprovacoesNovas = balanceteNovo.aprovacoes || {};
     const aprovacoesAntigas = balanceteAntigo.aprovacoes || {};
-
     if (Object.keys(aprovacoesNovas).length === Object.keys(aprovacoesAntigas).length) { return null; }
-    
     const NUMERO_DE_VOTOS_PARA_APROVAR = 3;
     const totalAprovacoes = Object.keys(aprovacoesNovas).length;
-    
     if (totalAprovacoes >= NUMERO_DE_VOTOS_PARA_APROVAR) {
         await db.collection('balancetes').doc(context.params.balanceteId).update({ status: 'aprovado' });
         await db.collection('log_auditoria').add({ acao: "BALANCETE_APROVADO_AUTO", autor: { nome: 'SISTEMA' }, timestamp: admin.firestore.FieldValue.serverTimestamp(), detalhes: { balanceteId: context.params.balanceteId, totalVotos: totalAprovacoes } });
     }
-    
     return null;
 });
-
-
 
 exports.enviarNotificacaoImediata = functions.region(REGIAO).https.onRequest((req, res) => {
     cors(req, res, async () => {
@@ -322,28 +278,22 @@ exports.enviarNotificacaoImediata = functions.region(REGIAO).https.onRequest((re
 
 exports.verificarAgendamentosAgendados = functions.region(REGIAO).pubsub.schedule('every 1 hours').timeZone('America/Sao_Paulo').onRun(async (context) => {
     if (!configurarWebPush()) { return null; }
-    
     const agoraSP = new Date();
     const agoraTimestamp = admin.firestore.Timestamp.fromDate(agoraSP);
-    
     const agendamentosRef = db.collection('notificacoes_agendadas');
     const unicosSnap = await agendamentosRef.where('tipo', '==', 'unico').where('status', '==', 'pendente').where('enviarEm', '<=', agoraTimestamp).get();
     for (const doc of unicosSnap.docs) { 
         await enviarNotificacoesParaTodos(doc.data().titulo, doc.data().corpo); 
         await doc.ref.update({ status: 'enviada' }); 
     }
-    
     const diaDaSemana = agoraSP.getDay();
     const minutosAgora = agoraSP.getHours() * 60 + agoraSP.getMinutes();
     const hojeFormatado = new Intl.DateTimeFormat('en-CA', { year: 'numeric', month: '2-digit', day: '2-digit', timeZone: 'America/Sao_Paulo' }).format(agoraSP);
-    
     const recorrentesSnap = await agendamentosRef.where('tipo', '==', 'recorrente').where('diaDaSemana', '==', diaDaSemana).get();
-    
     for (const doc of recorrentesSnap.docs) {
         const agendamento = doc.data();
         const [horaAgendada, minutoAgendado] = agendamento.hora.split(':').map(Number);
         const minutosAgendados = horaAgendada * 60 + minutoAgendado;
-
         if (minutosAgora >= minutosAgendados && agendamento.ultimoEnvio !== hojeFormatado) {
             await enviarNotificacoesParaTodos(agendamento.titulo, agendamento.corpo);
             await doc.ref.update({ ultimoEnvio: hojeFormatado });
@@ -375,37 +325,28 @@ exports.resetarTasvAnual = functions.region(REGIAO).pubsub.schedule('0 4 1 1 *')
     return null;
 });
 
-// ===================================================================
-// ROBÔ DE LIMPEZA DE VIBRAÇÕES ATUALIZADO
-// ===================================================================
 exports.arquivarVibracoesConcluidas = functions.region(REGIAO).pubsub.schedule('30 22 * * 4').timeZone('America/Sao_Paulo').onRun(async (context) => {
     console.log("Iniciando o arquivamento de pedidos de vibração concluídos.");
     const agora = admin.firestore.Timestamp.now();
     const colecoes = ['encarnados', 'desencarnados'];
     let totalArquivado = 0;
-
     for (const nomeColecao of colecoes) {
         const colecaoRef = db.collection(nomeColecao);
         const historicoRef = db.collection('historico_vibracoes');
         const snapshot = await colecaoRef.where('dataArquivamento', '<=', agora).get();
-        
         if (snapshot.empty) {
             console.log(`Nenhum documento para arquivar na coleção '${nomeColecao}'.`);
             continue;
         }
-
         const batch = db.batch();
         snapshot.forEach(doc => {
             const dados = doc.data();
             const semanaDeReferencia = new Intl.DateTimeFormat('en-CA').format(dados.dataArquivamento.toDate());
-            
-            const dadosParaHistorico = { ...dados, tipo: nomeColecao.slice(0, -1), semanaDeReferencia: semanaDeReferencia, arquivadoEm: admin.firestore.FieldValue.serverTimestamp() };
-            
+            const dadosParaHistorico = { ...dados, tipo: nomeColecao.slice(0, -1), semanaDeReferencia, arquivadoEm: admin.firestore.FieldValue.serverTimestamp() };
             const novoHistoricoRef = historicoRef.doc();
             batch.set(novoHistoricoRef, dadosParaHistorico);
             batch.delete(doc.ref);
         });
-
         await batch.commit();
         console.log(`${snapshot.size} docs da coleção '${nomeColecao}' foram arquivados.`);
         totalArquivado += snapshot.size;
@@ -414,14 +355,10 @@ exports.arquivarVibracoesConcluidas = functions.region(REGIAO).pubsub.schedule('
     return null;
 });
 
-// ===================================================================
-// NOVO ROBÔ DE ATIVAÇÃO DE PEDIDOS
-// ===================================================================
 exports.ativarNovosPedidos = functions.region(REGIAO).pubsub.schedule('31 22 * * 4').timeZone('America/Sao_Paulo').onRun(async (context) => {
     console.log("Iniciando a ativação de novos pedidos de vibração.");
     const colecoes = ['encarnados', 'desencarnados'];
     const promises = [];
-
     for (const colecao of colecoes) {
         const q = db.collection(colecao).where('status', '==', 'pendente');
         const snapshotPromise = q.get().then(snapshot => {
@@ -439,20 +376,56 @@ exports.ativarNovosPedidos = functions.region(REGIAO).pubsub.schedule('31 22 * *
         });
         promises.push(snapshotPromise);
     }
-    
     await Promise.all(promises);
     return null;
 });
 
 // ===================================================================
-// NOVA FUNÇÃO onCall PARA A PÁGINA DE ENVIO
+// NOVA FUNÇÃO "ROBÔ" PARA RECEBER E PROCESSAR PEDIDOS DE VIBRAÇÃO
 // ===================================================================
-module.exports.calcularCicloParaEnvio = functions.region(REGIAO).https.onCall((data, context) => {
-    return calcularCicloVibracoes(new Date());
+exports.enviarPedidoVibracao = functions.region(REGIAO).https.onCall(async (data, context) => {
+    const { nome, endereco, tipo } = data;
+    if (!nome || !tipo || (tipo === 'encarnado' && !endereco)) {
+        throw new functions.https.HttpsError('invalid-argument', 'Dados do pedido incompletos.');
+    }
+
+    const agoraSP = new Date(new Date().toLocaleString("en-US", { timeZone: "America/Sao_Paulo" }));
+    const diaDaSemana = agoraSP.getDay(); // Domingo 0, Quinta 4
+    const horas = agoraSP.getHours();
+    const minutos = agoraSP.getMinutes();
+    
+    let statusFinal = 'ativo'; // Por padrão, o pedido entra como ativo
+
+    // Condição para entrar na "sala de espera": apenas na quinta-feira, entre 19:21 e 22:30
+    if (diaDaSemana === 4 && 
+        ((horas === 19 && minutos >= 21) || (horas > 19 && horas < 22) || (horas === 22 && minutos <= 30))) {
+        statusFinal = 'pendente';
+    }
+    
+    const { dataArquivamento } = calcularCicloVibracoes(agoraSP);
+    
+    const colecaoAlvo = tipo === 'encarnado' ? 'encarnados' : 'desencarnados';
+    
+    const dadosParaSalvar = {
+        nome: nome.trim(),
+        dataCriacao: admin.firestore.FieldValue.serverTimestamp(),
+        status: statusFinal,
+        dataArquivamento: dataArquivamento
+    };
+
+    if (tipo === 'encarnado') {
+        dadosParaSalvar.endereco = endereco.trim();
+    }
+    
+    try {
+        await db.collection(colecaoAlvo).add(dadosParaSalvar);
+        return { success: true, message: 'Pedido enviado com sucesso!' };
+    } catch (error) {
+        console.error("Erro ao salvar pedido de vibração:", error);
+        throw new functions.https.HttpsError('internal', 'Ocorreu um erro ao salvar o pedido.');
+    }
 });
-// ===================================================================
-// NOVA FUNÇÃO PARA UPLOAD DE ATAS NO FIREBASE STORAGE
-// ===================================================================
+
 exports.uploadAtaParaStorage = functions.region(REGIAO).https.onCall(async (data, context) => {
     if (!context.auth) {
         throw new functions.https.HttpsError('unauthenticated', 'A função deve ser chamada por um usuário autenticado.');
@@ -473,18 +446,15 @@ exports.uploadAtaParaStorage = functions.region(REGIAO).https.onCall(async (data
         const filePath = `atas/${Date.now()}-${fileName}`;
         const file = bucket.file(filePath);
 
-        // Converte o dado Base64 (que vem do site) em um buffer de arquivo
         const buffer = Buffer.from(fileData.split(',')[1], 'base64');
 
-        // Salva o buffer no Firebase Storage
         await file.save(buffer, {
             metadata: { contentType: fileType },
-            public: true // Torna o arquivo publicamente legível para o link funcionar
+            public: true
         });
 
         const publicUrl = file.publicUrl();
 
-        // Salva as informações da ata no banco de dados Firestore
         await db.collection('atas').add({
             titulo: tituloAta,
             dataReuniao: new Date(dataReuniao),
