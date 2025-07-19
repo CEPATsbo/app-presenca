@@ -26,19 +26,43 @@
             box-shadow: 0 6px 25px rgba(0,0,0,0.1);
             text-align: center;
         }
-        h1 {
-            color: #333;
-            margin-bottom: 10px;
+        .header-logo {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            margin-bottom: 20px;
         }
-        .info-text {
+        .header-logo img {
+            width: 100px;
+            height: auto;
+            margin-bottom: 15px;
+        }
+        .header-logo h1 {
+            color: #2E7D32; /* Verde escuro do logo */
+            margin: 0;
+            font-size: 1.5em;
+        }
+        .header-logo h2 {
+            color: #333;
+            margin: 5px 0 0 0;
+            font-size: 1.2em;
+            font-weight: normal;
+        }
+        .horario-info {
             color: #666;
+            font-weight: bold;
+            margin-bottom: 20px;
+        }
+        .aviso-ciclo {
+            background-color: #fff3cd; /* Amarelo claro */
+            color: #856404;
+            padding: 15px;
+            border-radius: 8px;
+            border: 1px solid #ffeeba;
+            text-align: center;
+            margin-bottom: 30px;
             font-size: 0.95em;
             line-height: 1.6;
-            text-align: justify;
-            margin-bottom: 30px;
-            border-left: 4px solid #0277BD;
-            padding-left: 15px;
-            background-color: #f8f9fa;
         }
         .tipo-selecao {
             display: flex;
@@ -104,20 +128,46 @@
             border-color: #0277BD;
             box-shadow: 0 0 5px rgba(2, 119, 189, 0.5);
         }
+        .privacidade-container {
+            text-align: left;
+            margin-top: 30px;
+            padding-top: 20px;
+            border-top: 1px solid #eee;
+        }
+        .privacidade-check {
+            display: flex;
+            align-items: flex-start;
+            gap: 10px;
+        }
+        .privacidade-check input[type="checkbox"] {
+            margin-top: 5px;
+            transform: scale(1.4);
+        }
+        .privacidade-check label {
+            font-size: 0.9em;
+            color: #555;
+            line-height: 1.5;
+        }
+        .privacidade-check a {
+            color: #0277BD;
+            font-weight: bold;
+        }
+        .privacidade-check small {
+            color: #c62828;
+            font-style: italic;
+        }
         .btn-enviar {
             width: 100%;
             padding: 15px;
             font-size: 1.2em;
             font-weight: bold;
             color: white;
-            background-color: #2E7D32;
+            background-color: #0277BD;
             border: none;
             border-radius: 8px;
             cursor: pointer;
             transition: background-color 0.3s;
-        }
-        .btn-enviar:hover {
-            background-color: #1B5E20;
+            margin-top: 20px;
         }
         .btn-enviar:disabled {
             background-color: #aaa;
@@ -130,59 +180,76 @@
             border-radius: 6px;
             display: none;
         }
-        .feedback-sucesso {
-            background-color: #C8E6C9;
-            color: #2E7D32;
-        }
-        .feedback-erro {
-            background-color: #FFCDD2;
-            color: #C62828;
-        }
+        .feedback-sucesso { background-color: #C8E6C9; color: #2E7D32; }
+        .feedback-erro { background-color: #FFCDD2; color: #C62828; }
+        
+        /* Estilos do Modal */
+        .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.6); display: none; justify-content: center; align-items: center; z-index: 1000; }
+        .modal-content { background-color: white; padding: 30px; border-radius: 10px; width: 90%; max-width: 500px; box-shadow: 0 5px 15px rgba(0,0,0,0.3); }
+        .modal-content h2 { margin-top: 0; color: #333; }
+        .modal-content p { text-align: justify; line-height: 1.6; color: #666; }
+        .modal-actions { text-align: right; margin-top: 20px; }
+        .btn-fechar-modal { background-color: #6c757d; color: white; padding: 10px 20px; border: none; border-radius: 6px; cursor: pointer; }
+        .info-link { text-align: left; margin-bottom: 20px; }
+        .info-link a { color: #0277BD; cursor: pointer; text-decoration: underline; }
     </style>
 </head>
 <body>
     <div class="container">
-        <h1>CEPAT - Trabalho de Vibrações</h1>
-        <p class="info-text">
-            A Vibração é um processo mental de irradiação fluídica, ou seja: é a emissão de energias através da força do nosso pensamento direcionadas a um proposito específico. O Trabalho de Vibrações ocorre por meio da prece coletiva, por um grupo de trabalhadores, que sob o auxilio dos Bens Feitores espirituais e a soma das energias de todos os participantes, direcionam vibrações positivas e de coração à todos àqueles que necessitam da nossa ajuda (encarnados ou desencarnados).
-        </p>
+        <div class="header-logo">
+            <img src="/logo-cepat.png" alt="Logo CEPAT">
+            <h1>CEPAT - Casa Espírita Paulo de Tarso - SBO</h1>
+            <h2>Trabalho de Vibrações</h2>
+        </div>
+        
+        <p class="horario-info">As Vibrações Acontecem Todas as Quintas-feiras às 19:30.</p>
+        
+        <div class="info-link">
+            <a id="abrir-modal-vibracao">O que é o Trabalho de Vibração?</a>
+        </div>
+        
+        <div class="aviso-ciclo">
+            <p><strong>Atenção:</strong> Cada pedido enviado participa dos trabalhos de vibração por um ciclo de 4 semanas. Não há necessidade de reenviar o mesmo nome dentro deste período.</p>
+        </div>
 
         <form id="form-vibracoes">
             <div class="tipo-selecao">
-                <label>
-                    Encarnado
-                    <input type="radio" id="radio-encarnado" name="tipo" value="encarnado">
-                    <span class="bolinha"></span>
-                </label>
-                <label>
-                    Desencarnado
-                    <input type="radio" id="radio-desencarnado" name="tipo" value="desencarnado">
-                    <span class="bolinha"></span>
-                </label>
+                <label>Encarnado<input type="radio" id="radio-encarnado" name="tipo" value="encarnado"><span class="bolinha"></span></label>
+                <label>Desencarnado<input type="radio" id="radio-desencarnado" name="tipo" value="desencarnado"><span class="bolinha"></span></label>
             </div>
-
             <div id="campos-encarnado" class="campos-container">
-                <div class="campo-item">
-                    <label for="nome-encarnado">Nome Completo:</label>
-                    <input type="text" id="nome-encarnado" required>
-                </div>
-                <div class="campo-item">
-                    <label for="endereco-encarnado">Endereço (Cidade/Estado ou completo):</label>
-                    <input type="text" id="endereco-encarnado" required>
-                </div>
+                <div class="campo-item"><label for="nome-encarnado">Nome Completo:</label><input type="text" id="nome-encarnado" required></div>
+                <div class="campo-item"><label for="endereco-encarnado">Endereço (Cidade/Estado ou completo):</label><input type="text" id="endereco-encarnado" required></div>
             </div>
-
             <div id="campos-desencarnado" class="campos-container">
-                <div class="campo-item">
-                    <label for="nome-desencarnado">Nome Completo:</label>
-                    <input type="text" id="nome-desencarnado" required>
+                <div class="campo-item"><label for="nome-desencarnado">Nome Completo:</label><input type="text" id="nome-desencarnado" required></div>
+            </div>
+            
+            <div class="privacidade-container">
+                <div class="privacidade-check">
+                    <input type="checkbox" id="politica-privacidade" name="privacidade" required>
+                    <label for="politica-privacidade">
+                        <strong>Política de Privacidade*</strong><br>
+                        Ao informar os dados, eu concordo com a Política de Privacidade da Casa Espírita.<br>
+                        Leia nossa <a href="/politica-privacidade.html" target="_blank">Política de Privacidade</a>.<br>
+                        <small>*Necessário para prosseguir.</small>
+                    </label>
                 </div>
             </div>
 
             <button type="submit" id="btn-enviar" class="btn-enviar" disabled>Selecione uma opção</button>
         </form>
-
         <div id="mensagem-feedback"></div>
+    </div>
+
+    <div id="modal-vibracao" class="modal-overlay">
+        <div class="modal-content">
+            <h2>O que é o Trabalho de Vibração?</h2>
+            <p>A Vibração é um processo mental de irradiação fluídica, ou seja: é a emissão de energias através da força do nosso pensamento direcionadas a um proposito específico. O Trabalho de Vibrações ocorre por meio da prece coletiva, por um grupo de trabalhadores, que sob o auxilio dos Bens Feitores espirituais e a soma das energias de todos os participantes, direcionam vibrações positivas e de coração à todos àqueles que necessitam da nossa ajuda (encarnados ou desencarnados).</p>
+            <div class="modal-actions">
+                <button id="btn-fechar-modal" class="btn-fechar-modal">Fechar</button>
+            </div>
+        </div>
     </div>
 
     <script type="module">
@@ -202,41 +269,50 @@
 
         const radioEncarnado = document.getElementById('radio-encarnado');
         const radioDesencarnado = document.getElementById('radio-desencarnado');
+        const checkPrivacidade = document.getElementById('politica-privacidade');
         const camposEncarnado = document.getElementById('campos-encarnado');
         const camposDesencarnado = document.getElementById('campos-desencarnado');
-        const nomeEncarnadoInput = document.getElementById('nome-encarnado');
-        const enderecoEncarnadoInput = document.getElementById('endereco-encarnado');
-        const nomeDesencarnadoInput = document.getElementById('nome-desencarnado');
         const btnEnviar = document.getElementById('btn-enviar');
         const form = document.getElementById('form-vibracoes');
-        const feedbackDiv = document.getElementById('mensagem-feedback');
+        
+        const modal = document.getElementById('modal-vibracao');
+        const abrirModalLink = document.getElementById('abrir-modal-vibracao');
+        const fecharModalBtn = document.getElementById('btn-fechar-modal');
+        abrirModalLink.addEventListener('click', () => modal.style.display = 'flex');
+        fecharModalBtn.addEventListener('click', () => modal.style.display = 'none');
+        modal.addEventListener('click', (e) => { if (e.target === modal) modal.style.display = 'none'; });
+
+        function checarBotao() {
+            const tipoSelecionado = radioEncarnado.checked || radioDesencarnado.checked;
+            const privacidadeAceita = checkPrivacidade.checked;
+            
+            btnEnviar.disabled = !(tipoSelecionado && privacidadeAceita);
+        }
 
         function atualizarFormulario() {
+            const feedbackDiv = document.getElementById('mensagem-feedback');
             feedbackDiv.style.display = 'none';
             if (radioEncarnado.checked) {
                 camposEncarnado.style.display = 'block';
                 camposDesencarnado.style.display = 'none';
-                nomeDesencarnadoInput.required = false;
-                nomeEncarnadoInput.required = true;
-                enderecoEncarnadoInput.required = true;
-                btnEnviar.textContent = 'Enviar Nome (Encarnado)';
-                btnEnviar.disabled = false;
+                document.getElementById('nome-desencarnado').required = false;
+                document.getElementById('nome-encarnado').required = true;
+                document.getElementById('endereco-encarnado').required = true;
+                btnEnviar.textContent = 'Enviar Pedido';
             } else if (radioDesencarnado.checked) {
                 camposEncarnado.style.display = 'none';
                 camposDesencarnado.style.display = 'block';
-                nomeEncarnadoInput.required = false;
-                enderecoEncarnadoInput.required = false;
-                nomeDesencarnadoInput.required = true;
-                btnEnviar.textContent = 'Enviar Nome (Desencarnado)';
-                btnEnviar.disabled = false;
-            } else {
-                btnEnviar.textContent = 'Selecione uma opção';
-                btnEnviar.disabled = true;
+                document.getElementById('nome-encarnado').required = false;
+                document.getElementById('endereco-encarnado').required = false;
+                document.getElementById('nome-desencarnado').required = true;
+                btnEnviar.textContent = 'Enviar Pedido';
             }
+            checarBotao();
         }
 
         radioEncarnado.addEventListener('change', atualizarFormulario);
         radioDesencarnado.addEventListener('change', atualizarFormulario);
+        checkPrivacidade.addEventListener('change', checarBotao);
 
         form.addEventListener('submit', async (e) => {
             e.preventDefault();
@@ -247,16 +323,17 @@
             
             let dadosParaEnviar = { tipo };
             if (tipo === 'encarnado') {
-                dadosParaEnviar.nome = nomeEncarnadoInput.value;
-                dadosParaEnviar.endereco = enderecoEncarnadoInput.value;
+                dadosParaEnviar.nome = document.getElementById('nome-encarnado').value;
+                dadosParaEnviar.endereco = document.getElementById('endereco-encarnado').value;
             } else {
-                dadosParaEnviar.nome = nomeDesencarnadoInput.value;
+                dadosParaEnviar.nome = document.getElementById('nome-desencarnado').value;
             }
             
             try {
                 const enviarPedidoVibracao = httpsCallable(functions, 'enviarPedidoVibracao');
                 await enviarPedidoVibracao(dadosParaEnviar);
-
+                
+                const feedbackDiv = document.getElementById('mensagem-feedback');
                 feedbackDiv.textContent = 'Seu pedido de vibração foi enviado com sucesso. Muita paz!';
                 feedbackDiv.className = 'feedback-sucesso';
                 feedbackDiv.style.display = 'block';
@@ -268,16 +345,16 @@
                 setTimeout(() => {
                     feedbackDiv.style.display = 'none';
                     btnEnviar.textContent = 'Selecione uma opção';
-                }, 4000);
+                    btnEnviar.disabled = true;
+                }, 5000);
 
             } catch (error) {
                 console.error("Erro ao enviar pedido: ", error);
+                const feedbackDiv = document.getElementById('mensagem-feedback');
                 feedbackDiv.textContent = "Ocorreu um erro ao enviar seu pedido. Tente novamente.";
                 feedbackDiv.className = 'feedback-erro';
                 feedbackDiv.style.display = 'block';
-
-                btnEnviar.disabled = false;
-                btnEnviar.textContent = radioEncarnado.checked ? 'Enviar Nome (Encarnado)' : 'Enviar Nome (Desencarnado)';
+                checarBotao();
             }
         });
     </script>
