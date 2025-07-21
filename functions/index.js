@@ -178,6 +178,30 @@ exports.promoverParaProdutorEvento = functions.region(REGIAO).https.onCall(async
     }
 });
 
+// ===================================================================
+// NOVA FUNÇÃO "ROBÔ" PARA PROMOVER A IRRADIADOR
+// ===================================================================
+exports.promoverParaIrradiador = functions.region(REGIAO).https.onCall(async (data, context) => {
+    if (context.auth.token.role !== 'super-admin') { 
+        throw new functions.https.HttpsError('permission-denied', 'Apenas o Super Admin pode promover usuários.'); 
+    }
+    const uidParaPromover = data.uid;
+    if (!uidParaPromover) { 
+        throw new functions.https.HttpsError('invalid-argument', 'O UID do usuário é necessário.'); 
+    }
+    try {
+        await admin.auth().setCustomUserClaims(uidParaPromover, { role: 'irradiador' });
+        const userQuery = await db.collection('voluntarios').where('authUid', '==', uidParaPromover).limit(1).get();
+        if (!userQuery.empty) { 
+            await userQuery.docs[0].ref.update({ role: 'irradiador' }); 
+        }
+        return { success: true, message: 'Usuário promovido a Irradiador com sucesso.' };
+    } catch (error) { 
+        console.error("Erro ao promover para Irradiador:", error); 
+        throw new functions.https.HttpsError('internal', 'Erro interno ao tentar promover o usuário.'); 
+    }
+});
+
 exports.revogarAcessoDiretor = functions.region(REGIAO).https.onCall(async (data, context) => {
     if (context.auth.token.role !== 'super-admin') { throw new functions.https.HttpsError('permission-denied', 'Apenas o Super Admin pode revogar acesso.'); }
     const uidParaRevogar = data.uid;
@@ -380,43 +404,30 @@ exports.ativarNovosPedidos = functions.region(REGIAO).pubsub.schedule('31 22 * *
     return null;
 });
 
-// ===================================================================
-// NOVA FUNÇÃO "ROBÔ" PARA RECEBER E PROCESSAR PEDIDOS DE VIBRAÇÃO
-// ===================================================================
 exports.enviarPedidoVibracao = functions.region(REGIAO).https.onCall(async (data, context) => {
     const { nome, endereco, tipo } = data;
     if (!nome || !tipo || (tipo === 'encarnado' && !endereco)) {
         throw new functions.https.HttpsError('invalid-argument', 'Dados do pedido incompletos.');
     }
-
     const agoraSP = new Date(new Date().toLocaleString("en-US", { timeZone: "America/Sao_Paulo" }));
-    const diaDaSemana = agoraSP.getDay(); // Domingo 0, Quinta 4
+    const diaDaSemana = agoraSP.getDay();
     const horas = agoraSP.getHours();
     const minutos = agoraSP.getMinutes();
-    
-    let statusFinal = 'ativo'; // Por padrão, o pedido entra como ativo
-
-    // Condição para entrar na "sala de espera": apenas na quinta-feira, entre 19:21 e 22:30
-    if (diaDaSemana === 4 && 
-        ((horas === 19 && minutos >= 21) || (horas > 19 && horas < 22) || (horas === 22 && minutos <= 30))) {
+    let statusFinal = 'ativo';
+    if (diaDaSemana === 4 && ((horas === 19 && minutos >= 21) || (horas > 19 && horas < 22) || (horas === 22 && minutos <= 30))) {
         statusFinal = 'pendente';
     }
-    
     const { dataArquivamento } = calcularCicloVibracoes(agoraSP);
-    
     const colecaoAlvo = tipo === 'encarnado' ? 'encarnados' : 'desencarnados';
-    
     const dadosParaSalvar = {
         nome: nome.trim(),
         dataCriacao: admin.firestore.FieldValue.serverTimestamp(),
         status: statusFinal,
         dataArquivamento: dataArquivamento
     };
-
     if (tipo === 'encarnado') {
         dadosParaSalvar.endereco = endereco.trim();
     }
-    
     try {
         await db.collection(colecaoAlvo).add(dadosParaSalvar);
         return { success: true, message: 'Pedido enviado com sucesso!' };
@@ -430,31 +441,24 @@ exports.uploadAtaParaStorage = functions.region(REGIAO).https.onCall(async (data
     if (!context.auth) {
         throw new functions.https.HttpsError('unauthenticated', 'A função deve ser chamada por um usuário autenticado.');
     }
-    
     const permissoes = ['super-admin', 'diretor', 'tesoureiro']; 
     if (!permissoes.includes(context.auth.token.role)) {
         throw new functions.https.HttpsError('permission-denied', 'Permissão negada.');
     }
-
     const { fileName, fileType, fileData, tituloAta, dataReuniao } = data;
     if (!fileName || !fileType || !fileData || !tituloAta || !dataReuniao) {
         throw new functions.https.HttpsError('invalid-argument', 'Dados incompletos para o upload.');
     }
-
     try {
         const bucket = storage.bucket();
         const filePath = `atas/${Date.now()}-${fileName}`;
         const file = bucket.file(filePath);
-
         const buffer = Buffer.from(fileData.split(',')[1], 'base64');
-
         await file.save(buffer, {
             metadata: { contentType: fileType },
             public: true
         });
-
         const publicUrl = file.publicUrl();
-
         await db.collection('atas').add({
             titulo: tituloAta,
             dataReuniao: new Date(dataReuniao),
@@ -466,9 +470,7 @@ exports.uploadAtaParaStorage = functions.region(REGIAO).https.onCall(async (data
             },
             criadoEm: admin.firestore.FieldValue.serverTimestamp()
         });
-        
         return { success: true, message: 'Ata arquivada com sucesso!' };
-
     } catch (error) {
         console.error("Erro ao fazer upload para o Firebase Storage:", error);
         throw new functions.https.HttpsError('internal', 'Não foi possível enviar o arquivo.');

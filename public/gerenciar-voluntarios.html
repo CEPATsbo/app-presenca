@@ -33,6 +33,7 @@
         .btn-delete { background-color: #c62828; color: white; border-color: #c62828; }
         .btn-promover-conselheiro { background-color: #0277BD; color: white; border-color: #0277BD; }
         .btn-promover-produtor { background-color: #6a1b9a; color: white; border-color: #6a1b9a; }
+        .btn-promover-irradiador { background-color: #00695c; color: white; border-color: #00695c; } /* Nova cor */
         .tasv-container { text-align: center; }
         .tasv-container label { font-size: 0.8em; font-weight: bold; }
         .tasv-checkbox { transform: scale(1.5); cursor: pointer; flex-shrink: 0; }
@@ -40,9 +41,6 @@
         .modal-content { background-color: white; padding: 30px; border-radius: 10px; width: 90%; max-width: 600px; }
         .modal-content h2 { margin-top: 0; }
         .modal-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 20px; }
-        .nav-voltar { max-width: 1200px; margin: 0 auto 30px auto; text-align: left; }
-        .btn-voltar { background-color: #e9ecef; color: #495057; border: 1px solid #dee2e6; padding: 10px 20px; border-radius: 8px; font-weight: bold; font-size: 1em; text-decoration: none; transition: background-color 0.2s; }
-        .btn-voltar:hover { background-color: #dee2e6; }
     </style>
 </head>
 <body>
@@ -102,7 +100,7 @@
         
         initializeApp(firebaseConfig);
 
-        protegerPagina(['super-admin', 'diretor', 'tesoureiro'])
+        protegerPagina(['super-admin', 'diretor', 'tesoureiro', 'irradiador'])
             .then(user => {
                 document.getElementById('main-content').style.display = 'block';
                 inicializarPagina(user);
@@ -186,6 +184,14 @@
                              botaoPromoverProdutor = `<button data-id="${v.authUid}" data-nome="${v.nome}" class="btn-promover-produtor">Promover a Produtor de Evento</button>`;
                         }
 
+                        // ===================================================================
+                        // BOTÃO PARA PROMOVER A IRRADIADOR ADICIONADO
+                        // ===================================================================
+                        let botaoPromoverIrradiador = '';
+                        if (userRole === 'super-admin' && v.authUid && v.role !== 'irradiador') {
+                             botaoPromoverIrradiador = `<button data-id="${v.authUid}" data-nome="${v.nome}" class="btn-promover-irradiador">Promover a Irradiador</button>`;
+                        }
+
                         li.innerHTML = `
                             <div class="voluntario-info">
                                 <strong>${v.nome}</strong>
@@ -201,6 +207,7 @@
                                     <button data-id="${id}" data-nome="${v.nome}" class="btn-delete">Apagar</button>
                                     ${botaoPromoverConselheiro}
                                     ${botaoPromoverProdutor}
+                                    ${botaoPromoverIrradiador}
                                 </div>
                                 <button data-id="${id}" data-status="${v.statusVoluntario || 'ativo'}" class="btn-toggle">Tornar ${v.statusVoluntario === 'ativo' ? 'Inativo' : 'Ativo'}</button>
                             </div>
@@ -227,8 +234,8 @@
                     const novoVoluntario = { nome: ui.nome.value.trim(), endereco: ui.endereco.value.trim(), telefone: ui.telefone.value.trim(), aniversario: ui.aniversario.value.trim(), statusVoluntario: 'ativo', ultimaPresenca: null, tasvAssinadoAno: null, criadoEm: serverTimestamp() };
                     if (!novoVoluntario.nome) return alert("O campo 'Nome Completo' é obrigatório.");
                     try {
-                        await addDoc(voluntariosCollection, novoVoluntario);
-                        await registrarLog("CRIOU_VOLUNTARIO", { nome: novoVoluntario.nome });
+                        const docRef = await addDoc(voluntariosCollection, novoVoluntario);
+                        await registrarLog("CRIOU_VOLUNTARIO", { voluntarioId: docRef.id, nome: novoVoluntario.nome });
                         ui.nome.value = ''; ui.endereco.value = ''; ui.telefone.value = ''; ui.aniversario.value = '';
                     } catch (error) { console.error("Erro ao adicionar voluntário:", error); }
                 });
@@ -243,24 +250,25 @@
                 });
 
                 ui.listaUl.addEventListener('click', async (e) => {
-                    const id = e.target.dataset.id;
+                    const target = e.target;
+                    const id = target.dataset.id;
                     if (!id) return;
                     
-                    const isPromotionButton = e.target.classList.contains('btn-promover-conselheiro') || e.target.classList.contains('btn-promover-produtor');
+                    const isPromotionButton = target.classList.contains('btn-promover-conselheiro') || target.classList.contains('btn-promover-produtor') || target.classList.contains('btn-promover-irradiador');
                     const docRef = isPromotionButton ? null : doc(db, 'voluntarios', id);
                     
-                    if (e.target.classList.contains('btn-delete')) {
-                        const nome = e.target.dataset.nome;
+                    if (target.classList.contains('btn-delete')) {
+                        const nome = target.dataset.nome;
                         if (confirm(`Tem certeza que deseja apagar ${nome}?`)) {
                             const docSnap = await getDoc(docRef);
                             await registrarLog("APAGOU_VOLUNTARIO", { voluntarioId: id, dadosAntigos: docSnap.data() });
                             await deleteDoc(docRef);
                         }
-                    } else if (e.target.classList.contains('btn-toggle')) {
-                        const novoStatus = e.target.dataset.status === 'ativo' ? 'inativo' : 'ativo';
+                    } else if (target.classList.contains('btn-toggle')) {
+                        const novoStatus = target.dataset.status === 'ativo' ? 'inativo' : 'ativo';
                         await updateDoc(docRef, { statusVoluntario: novoStatus });
                         await registrarLog("ALTEROU_STATUS_VOLUNTARIO", { voluntarioId: id, novoStatus: novoStatus });
-                    } else if (e.target.classList.contains('btn-edit')) {
+                    } else if (target.classList.contains('btn-edit')) {
                         const docSnap = await getDoc(docRef);
                         if (docSnap.exists()) {
                             const data = docSnap.data();
@@ -271,13 +279,13 @@
                             ui.editAniversario.value = data.aniversario || '';
                             ui.editModal.style.display = 'flex';
                         }
-                    } else if (e.target.classList.contains('btn-promover-conselheiro')) {
-                        const nome = e.target.dataset.nome;
-                        const uidParaPromover = e.target.dataset.id;
+                    } else if (target.classList.contains('btn-promover-conselheiro')) {
+                        const nome = target.dataset.nome;
+                        const uidParaPromover = target.dataset.id;
                         if (!uidParaPromover) return alert('Erro: UID do usuário não encontrado. O voluntário precisa ter uma conta de login para ser promovido.');
                         if (confirm(`Tem certeza que deseja promover ${nome} a Conselheiro Fiscal?`)) {
-                            e.target.disabled = true;
-                            e.target.textContent = "Promovendo...";
+                            target.disabled = true;
+                            target.textContent = "Promovendo...";
                             try {
                                 const promoverParaConselheiro = httpsCallable(functions, 'promoverParaConselheiro');
                                 const resultado = await promoverParaConselheiro({ uid: uidParaPromover });
@@ -286,20 +294,17 @@
                             } catch (error) {
                                 console.error("Erro ao promover para conselheiro:", error);
                                 alert(`Erro: ${error.message}`);
-                                e.target.disabled = false;
-                                e.target.textContent = "Promover a Conselheiro";
+                                target.disabled = false;
+                                target.textContent = "Promover a Conselheiro";
                             }
                         }
-                    } else if (e.target.classList.contains('btn-promover-produtor')) {
-                        const nome = e.target.dataset.nome;
-                        const uidParaPromover = e.target.dataset.id;
-                        
+                    } else if (target.classList.contains('btn-promover-produtor')) {
+                        const nome = target.dataset.nome;
+                        const uidParaPromover = target.dataset.id;
                         if (!uidParaPromover) return alert('Erro: UID do usuário não encontrado. O voluntário precisa ter uma conta de login para ser promovido.');
-
                         if (confirm(`Tem certeza que deseja promover ${nome} a Produtor de Evento?`)) {
-                            e.target.disabled = true;
-                            e.target.textContent = "Promovendo...";
-                            
+                            target.disabled = true;
+                            target.textContent = "Promovendo...";
                             try {
                                 const promoverParaProdutorEvento = httpsCallable(functions, 'promoverParaProdutorEvento');
                                 const resultado = await promoverParaProdutorEvento({ uid: uidParaPromover });
@@ -308,8 +313,31 @@
                             } catch (error) {
                                 console.error("Erro ao promover para produtor:", error);
                                 alert(`Erro: ${error.message}`);
-                                e.target.disabled = false;
-                                e.target.textContent = "Promover a Produtor de Evento";
+                                target.disabled = false;
+                                target.textContent = "Promover a Produtor de Evento";
+                            }
+                        }
+                    } 
+                    // ===================================================================
+                    // LÓGICA PARA O BOTÃO DE IRRADIADOR ADICIONADA
+                    // ===================================================================
+                    else if (target.classList.contains('btn-promover-irradiador')) {
+                        const nome = target.dataset.nome;
+                        const uidParaPromover = target.dataset.id;
+                        if (!uidParaPromover) return alert('Erro: UID do usuário não encontrado. O voluntário precisa ter uma conta de login para ser promovido.');
+                        if (confirm(`Tem certeza que deseja promover ${nome} a Irradiador(a)?`)) {
+                            target.disabled = true;
+                            target.textContent = "Promovendo...";
+                            try {
+                                const promoverParaIrradiador = httpsCallable(functions, 'promoverParaIrradiador');
+                                const resultado = await promoverParaIrradiador({ uid: uidParaPromover });
+                                alert(resultado.data.message);
+                                await registrarLog("PROMOVEU_IRRADIADOR", { alvo: { nome, uid: uidParaPromover } });
+                            } catch (error) {
+                                console.error("Erro ao promover para irradiador:", error);
+                                alert(`Erro: ${error.message}`);
+                                target.disabled = false;
+                                target.textContent = "Promover a Irradiador";
                             }
                         }
                     }
