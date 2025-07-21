@@ -5,11 +5,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Admin - Gerenciar Gestão</title>
     <style>
-        /* Seu CSS completo aqui, sem alterações */
         body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background-color: #f4f6f9; display: flex; flex-direction: column; align-items: center; min-height: 100vh; margin: 0; padding: 20px; box-sizing: border-box; }
-        .admin-nav { width: 100%; max-width: 900px; background-color: #fff; padding: 15px; margin-bottom: 30px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); text-align: center; display: flex; flex-wrap: wrap; justify-content: center; gap: 15px 25px; }
-        .admin-nav a { margin: 0; padding: 0; background-color: transparent; color: #1565c0; text-decoration: none; font-weight: bold; font-size: 1.1em; white-space: nowrap; }
-        .admin-nav a.active, .admin-nav a:hover { text-decoration: underline; background-color: transparent; color: #0d47a1; }
+        .nav-voltar { max-width: 900px; width:100%; margin: 0 auto 30px auto; text-align: left; }
+        .btn-voltar { background-color: #e9ecef; color: #495057; border: 1px solid #dee2e6; padding: 10px 20px; border-radius: 8px; font-weight: bold; font-size: 1em; text-decoration: none; }
         .container { background-color: white; padding: 40px; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.15); width: 100%; max-width: 900px; margin-bottom: 30px; }
         h1, h2 { text-align: center; color: #333; margin-top: 0; }
         .form-container { border-bottom: 1px solid #ddd; padding-bottom: 30px; margin-bottom: 30px; }
@@ -27,9 +25,6 @@
         .log-details { font-size: 0.8em; color: #666; white-space: pre-wrap; word-break: break-all; background-color: #f9f9f9; padding: 5px; border-radius: 4px; }
         .filtros-logs { display: flex; align-items: flex-end; gap: 15px; margin-bottom: 20px; flex-wrap: wrap; }
         .filtros-logs button { width: auto; padding: 10px 20px; font-size: 1em; background-color: #1976d2; color: white; border: none; border-radius: 6px; cursor: pointer; }
-    .nav-voltar { max-width: 1200px; margin: 0 auto 30px auto; text-align: left; }
-.btn-voltar { background-color: #e9ecef; color: #495057; border: 1px solid #dee2e6; padding: 10px 20px; border-radius: 8px; font-weight: bold; font-size: 1em; text-decoration: none; transition: background-color 0.2s; }
-.btn-voltar:hover { background-color: #dee2e6; }
     </style>
 </head>
 <body>
@@ -101,7 +96,7 @@
             });
 
         function inicializarPagina(user) {
-            const app = getApp(); // Pega a instância padrão já inicializada
+            const app = getApp();
             const db = getFirestore(app);
             const functions = getFunctions(app, 'southamerica-east1');
             const userRole = user.claims.role;
@@ -118,11 +113,12 @@
                 if(colunaAcoes) colunaAcoes.style.display = 'none';
             }
 
-            carregarDiretoria(user.uid, userRole); // Passa a role para a função
+            carregarDiretoria(user.uid, userRole);
             setupLogFilters();
 
             function carregarDiretoria(uidLogado, roleLogado) {
-                const q = query(collection(db, "voluntarios"), where("role", "in", ["diretor", "super-admin", "tesoureiro", "conselheiro"]));
+                // CORREÇÃO: Adicionados os novos cargos à busca
+                const q = query(collection(db, "voluntarios"), where("role", "in", ["diretor", "super-admin", "tesoureiro", "conselheiro", "produtor-evento", "irradiador"]));
                 
                 onSnapshot(q, (snapshot) => {
                     tabelaDiretoria.innerHTML = '';
@@ -139,7 +135,8 @@
                             if (v.role === 'diretor') {
                                 actionsHtml += `<button class="btn-promover-tesoureiro" data-uid="${v.authUid}" data-nome="${v.nome}">Promover a Tesoureiro</button>`;
                             }
-                            if (v.role === 'diretor' || v.role === 'tesoureiro' || v.role === 'conselheiro') {
+                            // BOTÕES DE REVOGAÇÃO PARA TODOS OS CARGOS (EXCETO SUPER-ADMIN)
+                            if (v.role === 'diretor' || v.role === 'tesoureiro' || v.role === 'conselheiro' || v.role === 'produtor-evento' || v.role === 'irradiador') {
                                 actionsHtml += `<button class="btn-revogar-acesso" data-uid="${v.authUid}" data-nome="${v.nome}" data-role="${v.role}">Revogar Acesso</button>`;
                             }
                         }
@@ -173,6 +170,12 @@
                     if (role === 'conselheiro') {
                         funcaoCallable = httpsCallable(functions, 'revogarAcessoConselheiro');
                         mensagemConfirmacao = `Tem certeza que deseja revogar o acesso de conselheiro de ${nome}?`;
+                    } else if (role === 'produtor-evento') {
+                        funcaoCallable = httpsCallable(functions, 'revogarAcessoProdutorEvento');
+                        mensagemConfirmacao = `Tem certeza que deseja revogar o acesso de Produtor de Evento de ${nome}?`;
+                    } else if (role === 'irradiador') {
+                        funcaoCallable = httpsCallable(functions, 'revogarAcessoIrradiador');
+                        mensagemConfirmacao = `Tem certeza que deseja revogar o acesso de Irradiador de ${nome}?`;
                     } else {
                         funcaoCallable = httpsCallable(functions, 'revogarAcessoDiretor');
                         mensagemConfirmacao = `Tem certeza que deseja revogar o acesso deste membro?`;
@@ -217,10 +220,9 @@
 
             function setupLogFilters() {
                 const hoje = new Date();
-                const umaSemanaAtras = new Date();
-                umaSemanaAtras.setDate(hoje.getDate() - 7);
+                // CORREÇÃO: Define a data inicial para hoje também
                 document.getElementById('log-data-fim').value = hoje.toISOString().split('T')[0];
-                document.getElementById('log-data-inicio').value = umaSemanaAtras.toISOString().split('T')[0];
+                document.getElementById('log-data-inicio').value = hoje.toISOString().split('T')[0];
                 btnFiltrarLogs.addEventListener('click', carregarLogsDeAuditoria);
                 carregarLogsDeAuditoria();
             }

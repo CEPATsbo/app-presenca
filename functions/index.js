@@ -235,6 +235,48 @@ exports.revogarAcessoConselheiro = functions.region(REGIAO).https.onCall(async (
     }
 });
 
+exports.revogarAcessoProdutorEvento = functions.region(REGIAO).https.onCall(async (data, context) => {
+    if (context.auth.token.role !== 'super-admin') {
+        throw new functions.https.HttpsError('permission-denied', 'Apenas o Super Admin pode revogar acesso.');
+    }
+    const uidParaRevogar = data.uid;
+    if (!uidParaRevogar) {
+        throw new functions.https.HttpsError('invalid-argument', 'O UID do usuário é necessário.');
+    }
+    try {
+        await admin.auth().setCustomUserClaims(uidParaRevogar, { role: 'voluntario' });
+        const userQuery = await db.collection('voluntarios').where('authUid', '==', uidParaRevogar).limit(1).get();
+        if (!userQuery.empty) {
+            await userQuery.docs[0].ref.update({ role: 'voluntario' });
+        }
+        return { success: true, message: 'Acesso de Produtor de Evento revogado com sucesso.' };
+    } catch (error) {
+        console.error("Erro ao revogar acesso de Produtor de Evento:", error);
+        throw new functions.https.HttpsError('internal', 'Erro interno ao tentar revogar o acesso.');
+    }
+});
+
+exports.revogarAcessoIrradiador = functions.region(REGIAO).https.onCall(async (data, context) => {
+    if (context.auth.token.role !== 'super-admin') {
+        throw new functions.https.HttpsError('permission-denied', 'Apenas o Super Admin pode revogar acesso.');
+    }
+    const uidParaRevogar = data.uid;
+    if (!uidParaRevogar) {
+        throw new functions.https.HttpsError('invalid-argument', 'O UID do usuário é necessário.');
+    }
+    try {
+        await admin.auth().setCustomUserClaims(uidParaRevogar, { role: 'voluntario' });
+        const userQuery = await db.collection('voluntarios').where('authUid', '==', uidParaRevogar).limit(1).get();
+        if (!userQuery.empty) {
+            await userQuery.docs[0].ref.update({ role: 'voluntario' });
+        }
+        return { success: true, message: 'Acesso de Irradiador revogado com sucesso.' };
+    } catch (error) {
+        console.error("Erro ao revogar acesso de Irradiador:", error);
+        throw new functions.https.HttpsError('internal', 'Erro interno ao tentar revogar o acesso.');
+    }
+});
+
 exports.registrarVotoConselho = functions.region(REGIAO).https.onCall(async (data, context) => {
     if (!context.auth) { throw new functions.https.HttpsError('unauthenticated', 'A função deve ser chamada por um usuário autenticado.'); }
     const userRole = context.auth.token.role;
