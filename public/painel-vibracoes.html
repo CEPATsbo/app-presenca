@@ -28,10 +28,29 @@
             border-bottom: 1px solid #1e3a5f;
             margin-bottom: 20px;
             flex-shrink: 0;
+            position: relative; /* Adicionado para o botão */
         }
         header h1 { color: #88c0d0; margin: 0; font-size: 2.2em; }
         header h2 { color: #cdd6f4; margin: 5px 0 0 0; font-size: 1.1em; font-weight: normal; }
         
+        .btn-imprimir {
+            position: absolute;
+            top: 0;
+            right: 0;
+            padding: 10px 15px;
+            font-size: 1em;
+            background-color: #1e3a5f;
+            color: #88c0d0;
+            border: 1px solid #88c0d0;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+        .btn-imprimir:hover {
+            background-color: #88c0d0;
+            color: #112240;
+        }
+
         .listas-container {
             display: flex;
             gap: 30px;
@@ -101,6 +120,7 @@
         <header>
             <h1>Trabalho de Vibrações</h1>
             <h2 id="periodo-info">Exibindo todos os pedidos ativos</h2>
+            <button id="btn-imprimir" class="btn-imprimir">🖨️ Imprimir Listas</button>
         </header>
         <div class="listas-container">
             <div class="lista-coluna">
@@ -124,7 +144,7 @@
 
     <script type="module">
         import { initializeApp, getApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
-        import { getFirestore, collection, query, where, onSnapshot } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
+        import { getFirestore, collection, query, where, onSnapshot, getDocs } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
         import { protegerPagina } from '/auth.js';
 
         const firebaseConfig = {
@@ -153,6 +173,9 @@
             
             escutarLista('encarnados', 'carousel-encarnados');
             escutarLista('desencarnados', 'carousel-desencarnados');
+
+            // Adiciona o listener para o novo botão de imprimir
+            document.getElementById('btn-imprimir').addEventListener('click', imprimirListas);
 
             function escutarLista(nomeColecao, idCarousel) {
                 const q = query(
@@ -228,6 +251,66 @@
                 }, 15000); 
 
                 container.dataset.carouselIntervalId = intervalId;
+            }
+
+            // ===================================================================
+            // NOVA FUNÇÃO PARA IMPRESSÃO
+            // ===================================================================
+            async function imprimirListas() {
+                try {
+                    const qEncarnados = query(collection(db, "encarnados"), where("status", "==", "ativo"));
+                    const qDesencarnados = query(collection(db, "desencarnados"), where("status", "==", "ativo"));
+
+                    const [encarnadosSnapshot, desencarnadosSnapshot] = await Promise.all([
+                        getDocs(qEncarnados),
+                        getDocs(qDesencarnados)
+                    ]);
+
+                    const encarnados = encarnadosSnapshot.docs.map(doc => doc.data()).sort((a, b) => a.nome.localeCompare(b.nome));
+                    const desencarnados = desencarnadosSnapshot.docs.map(doc => doc.data()).sort((a, b) => a.nome.localeCompare(b.nome));
+
+                    const dataHoje = new Date().toLocaleDateString('pt-BR');
+
+                    let html = `
+                        <html>
+                        <head>
+                            <title>Lista de Vibrações - ${dataHoje}</title>
+                            <style>
+                                body { font-family: sans-serif; margin: 20px; }
+                                h1 { text-align: center; }
+                                h2 { border-bottom: 1px solid #ccc; padding-bottom: 5px; }
+                                .colunas { display: flex; gap: 30px; }
+                                .coluna { flex: 1; }
+                                ul { list-style-type: none; padding: 0; }
+                                li { padding: 4px 0; }
+                                .endereco { font-size: 0.9em; color: #666; padding-left: 15px; }
+                            </style>
+                        </head>
+                        <body>
+                            <h1>Lista de Vibrações - ${dataHoje}</h1>
+                            <div class="colunas">
+                                <div class="coluna">
+                                    <h2>Encarnados</h2>
+                                    <ul>${encarnados.map(d => `<li>${d.nome}${d.endereco ? `<div class="endereco">(${d.endereco})</div>` : ''}</li>`).join('')}</ul>
+                                </div>
+                                <div class="coluna">
+                                    <h2>Desencarnados</h2>
+                                    <ul>${desencarnados.map(d => `<li>${d.nome}</li>`).join('')}</ul>
+                                </div>
+                            </div>
+                        </body>
+                        </html>
+                    `;
+
+                    const printWindow = window.open('', '_blank');
+                    printWindow.document.write(html);
+                    printWindow.document.close();
+                    printWindow.print();
+
+                } catch (error) {
+                    console.error("Erro ao gerar lista para impressão:", error);
+                    alert("Ocorreu um erro ao preparar a lista para impressão. Verifique o console.");
+                }
             }
         }
     </script>
