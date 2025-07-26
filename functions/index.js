@@ -479,6 +479,38 @@ exports.enviarPedidoVibracao = functions.region(REGIAO).https.onCall(async (data
     }
 });
 
+// ===================================================================
+// NOVA FUNÇÃO "ROBÔ" PARA REGISTRAR LOGS DE ACESSO
+// ===================================================================
+exports.registrarLogDeAcesso = functions.region(REGIAO).https.onCall(async (data, context) => {
+    if (!context.auth) {
+        throw new functions.https.HttpsError('unauthenticated', 'A função deve ser chamada por um usuário autenticado.');
+    }
+
+    const { acao, detalhes } = data;
+    if (!acao) {
+        throw new functions.https.HttpsError('invalid-argument', 'A ação é obrigatória para o log.');
+    }
+
+    const autor = {
+        uid: context.auth.uid,
+        nome: context.auth.token.name || context.auth.token.email
+    };
+
+    try {
+        await db.collection('log_auditoria').add({
+            acao,
+            autor,
+            detalhes: detalhes || {},
+            timestamp: admin.firestore.FieldValue.serverTimestamp()
+        });
+        return { success: true };
+    } catch (error) {
+        console.error("Erro ao registrar log de acesso:", error);
+        throw new functions.https.HttpsError('internal', 'Não foi possível registrar o log.');
+    }
+});
+
 exports.uploadAtaParaStorage = functions.region(REGIAO).https.onCall(async (data, context) => {
     if (!context.auth) {
         throw new functions.https.HttpsError('unauthenticated', 'A função deve ser chamada por um usuário autenticado.');

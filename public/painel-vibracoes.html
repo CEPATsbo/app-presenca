@@ -28,7 +28,7 @@
             border-bottom: 1px solid #1e3a5f;
             margin-bottom: 20px;
             flex-shrink: 0;
-            position: relative; /* Adicionado para o botão */
+            position: relative;
         }
         header h1 { color: #88c0d0; margin: 0; font-size: 2.2em; }
         header h2 { color: #cdd6f4; margin: 5px 0 0 0; font-size: 1.1em; font-weight: normal; }
@@ -145,6 +145,7 @@
     <script type="module">
         import { initializeApp, getApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
         import { getFirestore, collection, query, where, onSnapshot, getDocs } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
+        import { getFunctions, httpsCallable } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-functions.js";
         import { protegerPagina } from '/auth.js';
 
         const firebaseConfig = {
@@ -157,25 +158,38 @@
         };
         
         const app = initializeApp(firebaseConfig);
+        const functions = getFunctions(app, 'southamerica-east1');
+        const registrarLogDeAcesso = httpsCallable(functions, 'registrarLogDeAcesso');
 
         protegerPagina(['diretor', 'tesoureiro', 'conselheiro', 'irradiador', 'super-admin'])
             .then(user => {
                 document.getElementById('main-content').style.display = 'flex';
-                inicializarPainel();
+                inicializarPainel(user);
+                
+                registrarLogDeAcesso({ acao: 'ACESSOU_PAINEL_VIBRACOES' });
             })
             .catch(error => {
                 console.log(error.message);
                 document.getElementById('acesso-negado').style.display = 'block';
             });
 
-        function inicializarPainel() {
+        function inicializarPainel(user) {
             const db = getFirestore(app);
             
             escutarLista('encarnados', 'carousel-encarnados');
             escutarLista('desencarnados', 'carousel-desencarnados');
 
-            // Adiciona o listener para o novo botão de imprimir
-            document.getElementById('btn-imprimir').addEventListener('click', imprimirListas);
+            document.getElementById('btn-imprimir').addEventListener('click', () => {
+                registrarLogDeAcesso({ 
+                    acao: 'IMPRIMIU_LISTA_VIBRACOES',
+                    detalhes: { pagina: 'painel-vibracoes' } 
+                }).then(() => {
+                    imprimirListas();
+                }).catch(error => {
+                    console.error("Erro ao registrar log de impressão. A impressão continuará.", error);
+                    imprimirListas();
+                });
+            });
 
             function escutarLista(nomeColecao, idCarousel) {
                 const q = query(
@@ -252,10 +266,7 @@
 
                 container.dataset.carouselIntervalId = intervalId;
             }
-
-            // ===================================================================
-            // NOVA FUNÇÃO PARA IMPRESSÃO
-            // ===================================================================
+            
             async function imprimirListas() {
                 try {
                     const qEncarnados = query(collection(db, "encarnados"), where("status", "==", "ativo"));
