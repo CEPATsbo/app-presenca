@@ -86,10 +86,7 @@
                 inicializarPortal();
             }
         });
-
-        // ===================================================================
-        // FUNÇÃO CORRIGIDA PARA FORMATAR PERÍODOS E MESES ÚNICOS
-        // ===================================================================
+        
         function formatarNomeOpcao(periodoId) {
             if (periodoId.includes('_')) {
                 const [inicio, fim] = periodoId.split('_');
@@ -106,7 +103,6 @@
                     return `De ${textoInicio} a ${textoFim}`;
                 }
             } else {
-                // Lógica antiga para IDs de mês único
                 const dataFormatada = new Date(`${periodoId}-02T00:00:00`).toLocaleString('pt-BR', { month: 'long', year: 'numeric' });
                 return dataFormatada.charAt(0).toUpperCase() + dataFormatada.slice(1);
             }
@@ -128,7 +124,7 @@
                 
                 balancetesSnapshot.docs.forEach(doc => {
                     const periodoId = doc.id;
-                    const nomeFormatado = formatarNomeOpcao(periodoId); // Usa a nova função
+                    const nomeFormatado = formatarNomeOpcao(periodoId);
                     const option = new Option(nomeFormatado, periodoId);
                     seletorBalancete.add(option);
                 });
@@ -163,9 +159,12 @@
                 }
                 const balanceteData = balanceteDoc.data();
 
+                // ===================================================================
+                // CORREÇÃO: A busca agora usa 'balanceteId' no log, que é o padrão
+                // ===================================================================
                 const logsQuery = query(
                     collection(db, "log_auditoria"),
-                    where("detalhes.periodo", "==", balanceteId) // Corrigido para buscar pelo novo campo 'periodo'
+                    where("detalhes.balanceteId", "==", balanceteId)
                 );
                 const logsSnapshot = await getDocs(logsQuery);
                 
@@ -238,7 +237,7 @@
         function renderizarCategorias(categorias) {
             let html = '';
             if (!categorias) return '';
-            Object.entries(categorias).forEach(([catNome, itens]) => {
+            Object.entries(categorias).sort(([catA], [catB]) => catA.localeCompare(catB)).forEach(([catNome, itens]) => {
                 html += `<tr class="categoria-header"><th colspan="2">${catNome}</th></tr>`;
                 itens.forEach(item => {
                     html += `<tr><td>${item.nome}</td><td class="valor">${formatarMoeda(item.valor)}</td></tr>`;
