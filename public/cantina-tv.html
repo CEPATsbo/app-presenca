@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cantina Amor e Luz - Cardápio</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Roboto+Condensed:wght@700&family=Roboto:wght@400;500&display=swap');
+        html, body {
+            height: 100%;
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            overflow: hidden;
+        }
+        body { 
+            font-family: 'Roboto', sans-serif;
+            background-color: #fdfaf6;
+            color: #4a4a4a; 
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+        }
+        .header-tv {
+            text-align: center;
+            padding-bottom: 15px;
+            flex-shrink: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 20px;
+            border-bottom: 5px solid #d4c5a3;
+        }
+        .header-tv img {
+            height: 8vh;
+            max-height: 80px;
+        }
+        .header-tv h1 {
+            font-family: 'Roboto Condensed', sans-serif;
+            font-size: 6vh;
+            margin: 0;
+            color: #b38b6d;
+            text-transform: uppercase;
+            letter-spacing: 3px;
+        }
+        .evento-info {
+            text-align: center;
+            font-size: 2.5vh;
+            color: #3e3e3e;
+            padding: 10px;
+            font-weight: 500;
+        }
+        #cardapio-container {
+            flex-grow: 1;
+            overflow: hidden;
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
+            padding: 20px 0;
+        }
+        .categoria-coluna {
+            background-color: #ffffff;
+            border-radius: 8px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.07);
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+        }
+        .categoria-titulo {
+            font-family: 'Roboto Condensed', sans-serif;
+            font-size: 3vh;
+            color: #b38b6d;
+            text-align: center;
+            text-transform: uppercase;
+            padding-bottom: 10px;
+            margin-bottom: 15px;
+            border-bottom: 2px solid #f0e9e0;
+        }
+        .itens-lista {
+            overflow-y: auto;
+            scrollbar-width: none; /* Firefox */
+        }
+        .itens-lista::-webkit-scrollbar {
+            display: none; /* Chrome, Safari, and Opera */
+        }
+        .item-cardapio {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 15px;
+            padding-bottom: 15px;
+            border-bottom: 1px dashed #e0e0e0;
+        }
+        .item-cardapio:last-child {
+            border-bottom: none;
+            margin-bottom: 0;
+        }
+        .item-info {
+            text-align: left;
+        }
+        .item-nome {
+            font-size: 2.2vh;
+            font-weight: 500;
+            color: #333;
+        }
+        .item-descricao {
+            font-size: 1.6vh;
+            color: #777;
+            margin-top: 4px;
+        }
+        .item-preco {
+            font-size: 2.2vh;
+            font-weight: 700;
+            color: #3e3e3e;
+            white-space: nowrap;
+            margin-left: 15px;
+        }
+    </style>
+</head>
+<body>
+    <header class="header-tv">
+        <img src="/logo-cepat.png" alt="Logo CEPAT">
+        <h1>Cantina Amor e Luz</h1>
+    </header>
+    <div id="evento-info">Carregando cardápio...</div>
+    <div id="cardapio-container">
+        </div>
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
+        import { getFirestore, collection, query, where, onSnapshot, Timestamp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
+
+        const firebaseConfig = {
+        apiKey: "AIzaSyBV7RPjk3cFTqL-aIpflJcUojKg1ZXMLuU",
+        authDomain: "voluntarios-ativos---cepat.firebaseapp.com",
+        projectId: "voluntarios-ativos---cepat",
+        storageBucket: "voluntarios-ativos---cepat.firebasestorage.app",
+        messagingSenderId: "66122858261",
+        appId: "1:66122858261:web:7fa21f1805463b5c08331c"
+    };
+        initializeApp(firebaseConfig);
+        const db = getFirestore();
+
+        const eventoInfoDiv = document.getElementById('evento-info');
+        const cardapioContainer = document.getElementById('cardapio-container');
+        let eventoIdHoje = 'padrão'; // Começa com o padrão
+        let eventoTituloHoje = "Cardápio do Dia";
+
+        function renderizarCardapio(itens) {
+            cardapioContainer.innerHTML = '';
+            if (itens.length === 0) {
+                cardapioContainer.innerHTML = '<p style="text-align:center; width:100%;">Nenhum item cadastrado para hoje.</p>';
+                return;
+            }
+
+            const porCategoria = itens.reduce((acc, item) => {
+                if (!acc[item.categoria]) {
+                    acc[item.categoria] = [];
+                }
+                acc[item.categoria].push(item);
+                return acc;
+            }, {});
+
+            Object.keys(porCategoria).sort().forEach(categoria => {
+                const coluna = document.createElement('div');
+                coluna.className = 'categoria-coluna';
+                
+                const titulo = document.createElement('div');
+                titulo.className = 'categoria-titulo';
+                titulo.textContent = categoria;
+                coluna.appendChild(titulo);
+
+                const lista = document.createElement('div');
+                lista.className = 'itens-lista';
+                
+                porCategoria[categoria].sort((a, b) => a.nome.localeCompare(b.nome)).forEach(item => {
+                    const itemDiv = document.createElement('div');
+                    itemDiv.className = 'item-cardapio';
+                    itemDiv.innerHTML = `
+                        <div class="item-info">
+                            <div class="item-nome">${item.nome}</div>
+                            ${item.descricao ? `<div class="item-descricao">${item.descricao}</div>` : ''}
+                        </div>
+                        <div class="item-preco">${Number(item.preco).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</div>
+                    `;
+                    lista.appendChild(itemDiv);
+                });
+                coluna.appendChild(lista);
+                cardapioContainer.appendChild(coluna);
+            });
+        }
+
+        function iniciarListenerCardapio() {
+            const idsParaBuscar = ['padrão', eventoIdHoje];
+            const q = query(collection(db, "cantina_itens"), where("eventoId", "in", idsParaBuscar));
+            
+            onSnapshot(q, (snapshot) => {
+                const itens = snapshot.docs.map(doc => doc.data());
+                renderizarCardapio(itens);
+            });
+        }
+
+        async function verificarEventoDoDia() {
+            const hojeInicio = new Date();
+            hojeInicio.setHours(0, 0, 0, 0);
+            const hojeFim = new Date();
+            hojeFim.setHours(23, 59, 59, 999);
+
+            const qEventos = query(
+                collection(db, "eventos"), 
+                where("dataInicio", ">=", Timestamp.fromDate(hojeInicio)),
+                where("dataInicio", "<=", Timestamp.fromDate(hojeFim))
+            );
+
+            onSnapshot(qEventos, (snapshot) => {
+                if (!snapshot.empty) {
+                    const eventoHoje = snapshot.docs[0];
+                    eventoIdHoje = eventoHoje.id;
+                    eventoTituloHoje = `Cardápio do Evento: ${eventoHoje.data().titulo}`;
+                } else {
+                    eventoIdHoje = 'padrão';
+                    eventoTituloHoje = "Cardápio do Dia";
+                }
+                eventoInfoDiv.textContent = eventoTituloHoje;
+                iniciarListenerCardapio();
+            });
+        }
+        
+        verificarEventoDoDia();
+        
+        // Atualiza a busca do evento a cada 5 minutos
+        setInterval(verificarEventoDoDia, 1000 * 60 * 5);
+        // Recarrega a página inteira a cada 30 minutos
+        setInterval(() => window.location.reload(), 1000 * 60 * 30);
+    </script>
+</body>
+</html>
