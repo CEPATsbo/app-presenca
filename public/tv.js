@@ -14,7 +14,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const app = initializeApp(firebaseConfig);
     const db = getFirestore(app);
 
-    const TEMPO_CARROSSEL_MS = 20000; // 20 segundos por página
+    const TEMPO_CARROSSEL_MS = 20000;
     const LARGURA_BLOCO = 370; // Largura do bloco (350px) + gap (20px)
 
     const listaPresencaDiv = document.getElementById('lista-presenca');
@@ -66,7 +66,9 @@ document.addEventListener('DOMContentLoaded', () => {
             const voluntarios = porAtividade[atividade].sort();
             return {
                 titulo: atividade,
-                nomes: voluntarios
+                nomes: voluntarios,
+                // Altura estimada do bloco em "unidades" para cálculo
+                altura: 85 + (voluntarios.length * 48) 
             };
         });
         
@@ -75,44 +77,42 @@ document.addEventListener('DOMContentLoaded', () => {
         
         const paginas = [];
         let paginaAtual = [];
-        let colunasNaPagina = 0;
+        let alturaColunasPagina = new Array(colunasPorPagina).fill(0);
         
         todosOsBlocos.forEach(bloco => {
-            const alturaBloco = 80 + (bloco.nomes.length * 50); // Estimativa de altura em pixels
-            
-            let colunaEncontrada = false;
-            for (let i = 0; i < paginaAtual.length; i++) {
-                const alturaColuna = paginaAtual[i].reduce((acc, b) => acc + 80 + (b.nomes.length * 50), 0);
-                if (alturaColuna + alturaBloco <= alturaDisponivel) {
-                    paginaAtual[i].push(bloco);
-                    colunaEncontrada = true;
-                    break;
-                }
+            let colunaComMenorAltura = alturaColunasPagina.indexOf(Math.min(...alturaColunasPagina));
+
+            if (alturaColunasPagina[colunaComMenorAltura] + bloco.altura > alturaDisponivel) {
+                paginas.push(paginaAtual);
+                paginaAtual = [];
+                alturaColunasPagina = new Array(colunasPorPagina).fill(0);
+                colunaComMenorAltura = 0;
             }
 
-            if (!colunaEncontrada) {
-                if (colunasNaPagina < colunasPorPagina) {
-                    paginaAtual.push([bloco]);
-                    colunasNaPagina++;
-                } else {
-                    paginas.push(paginaAtual);
-                    paginaAtual = [[bloco]];
-                    colunasNaPagina = 1;
-                }
+            if (!paginaAtual[colunaComMenorAltura]) {
+                paginaAtual[colunaComMenorAltura] = [];
             }
+            paginaAtual[colunaComMenorAltura].push(bloco);
+            alturaColunasPagina[colunaComMenorAltura] += bloco.altura;
         });
-        if (paginaAtual.length > 0) paginas.push(paginaAtual);
+
+        if (paginaAtual.length > 0) {
+            paginas.push(paginaAtual);
+        }
 
         paginas.forEach((pagina) => {
             const paginaDiv = document.createElement('div');
             paginaDiv.className = 'pagina-carrossel';
+            
             pagina.forEach(coluna => {
+                const colunaDiv = document.createElement('div'); // Cria a div da coluna
                 coluna.forEach(bloco => {
                     const grupoDiv = document.createElement('div');
                     grupoDiv.className = 'atividade-grupo';
                     grupoDiv.innerHTML = `<h2 class="atividade-titulo">${bloco.titulo}</h2><ul>${bloco.nomes.map(n => `<li>${n}</li>`).join('')}</ul>`;
-                    paginaDiv.appendChild(grupoDiv);
+                    colunaDiv.appendChild(grupoDiv); // Adiciona o bloco na coluna
                 });
+                paginaDiv.appendChild(colunaDiv); // Adiciona a coluna na página
             });
             listaPresencaDiv.appendChild(paginaDiv);
         });
@@ -161,7 +161,8 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     carregarPresencas();
-    window.addEventListener('resize', () => renderizarLista([])); // Recalcula ao redimensionar
+    window.addEventListener('resize', carregarPresencas);
+    
     setInterval(() => {
         const novaDataSP = getDataDeHojeSP();
         if (novaDataSP !== dataAtualParaConsulta) {
