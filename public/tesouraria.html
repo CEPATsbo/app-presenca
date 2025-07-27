@@ -8,7 +8,7 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <style>
         body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background-color: #f4f6f9; display: flex; flex-direction: column; align-items: center; margin: 0; padding: 20px; box-sizing: border-box; }
-        .balancete-container { display: none; background-color: white; padding: 40px; border-radius: 8px; box-shadow: 0 4px 20px rgba(0,0,0,0.1); width: 100%; max-width: 1100px; margin-bottom: 30px; }
+        .balancete-container, .relatorio-cantina-container { display: none; background-color: white; padding: 40px; border-radius: 8px; box-shadow: 0 4px 20px rgba(0,0,0,0.1); width: 100%; max-width: 1100px; margin-bottom: 30px; }
         #acesso-negado { text-align: center; }
         .cabecalho { text-align: center; margin-bottom: 20px; }
         .cabecalho h1 { font-size: 1.5em; margin: 0; }
@@ -29,45 +29,34 @@
         .corpo-balancete { display: flex; justify-content: space-between; gap: 40px; flex-wrap: wrap;}
         .coluna { width: 100%; min-width: 450px; flex: 1; }
         .coluna h2 { background-color: #e0e0e0; padding: 8px; text-align: center; font-size: 1.2em; margin: 0; }
-        .tabela-balancete { width: 100%; border-collapse: collapse; }
-        .tabela-balancete th, .tabela-balancete td { border: 1px solid #ccc; padding: 12px 8px; font-size: 0.9em; }
-        .tabela-balancete th { background-color: #f2f2f2; text-align: left; }
+        .tabela-balancete, .tabela-relatorio { width: 100%; border-collapse: collapse; margin-top: 15px;}
+        .tabela-balancete th, .tabela-balancete td, .tabela-relatorio th, .tabela-relatorio td { border: 1px solid #ccc; padding: 12px 8px; font-size: 0.9em; }
+        .tabela-balancete th, .tabela-relatorio th { background-color: #f2f2f2; text-align: left; }
         .tabela-balancete input[type="number"] { width: 100%; border: none; background: #fffde7; text-align: center; padding: 5px; box-sizing: border-box; font-size: 1em; -moz-appearance: textfield; appearance: textfield; }
         .tabela-balancete input[type="number"]::-webkit-outer-spin-button, .tabela-balancete input[type="number"]::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
         .tabela-balancete input[type="number"]:focus { outline: 1px solid #007bff; }
         .tabela-balancete td[contenteditable="true"] { background-color: #e3f2fd; cursor: text; }
         .categoria-header th { background-color: #dcedc8; font-weight: bold; display: flex; justify-content: space-between; align-items: center; }
         .btn-add-row { background-color: #4caf50; color: white; border: none; border-radius: 50%; width: 22px; height: 22px; font-weight: bold; cursor: pointer; font-size: 16px; line-height: 22px; }
-        .btn-add-row:hover { background-color: #388e3c; }
         .btn-add-categoria { width: 100%; margin-top: 10px; background-color: #607d8b; color: white; border: none; padding: 8px; font-size: 0.9em; cursor: pointer; border-radius: 4px; }
         .total-row td { font-weight: bold; background-color: #f1f8e9; text-align: right; }
         .total-row td:first-child { text-align: left; }
-        .rodape-assinaturas { margin-top: 60px; }
-        .assinatura { text-align: center; width: 300px; }
-        .assinatura .linha { border-top: 1px solid #333; padding-top: 5px; }
-        .assinatura .cargo { font-size: 0.9em; }
         .assinaturas-container { padding-top: 20px; border-top: 2px solid #333; }
         .assinatura-digital { background-color: #f5f5f5; border: 1px solid #ddd; padding: 15px; border-radius: 6px; margin-bottom: 15px; }
-        .assinatura-digital strong { color: #2E7D32; }
-        .assinatura-digital ul { padding-left: 20px; margin: 5px 0 0 0; list-style-type: none; }
         .actions-container { text-align: center; margin-top: 40px; display: flex; justify-content: center; gap: 20px; flex-wrap: wrap; }
         .actions-container button { width: auto; padding: 15px 30px; font-size: 1.2em; cursor: pointer; border: none; border-radius: 6px; color: white; }
         #btn-salvar { background-color: #1565c0; }
         #btn-liberar { background-color: #ff9800; }
         #btn-gerar-pdf { background-color: #4CAF50; }
-        .actions-container button:disabled { background-color: #aaa; cursor: not-allowed; }
         .mensagens-container { margin-top: 30px; border-top: 2px solid #ccc; padding-top: 20px; }
         .mensagens-lista { list-style-type: none; padding: 0; margin-top: 10px; max-height: 200px; overflow-y: auto; border: 1px solid #ddd; padding: 10px; border-radius: 6px; }
-        .mensagem { margin-bottom: 10px; padding: 10px; border-radius: 8px; }
-        .mensagem-conselho { background-color: #fff3e0; border-left: 4px solid #ff9800; }
-        .mensagem-tesouraria { background-color: #e8f5e9; border-left: 4px solid #4caf50; }
-        .mensagem-autor { font-weight: bold; font-size: 0.9em; }
-        .mensagem-data { font-size: 0.8em; color: #777; }
         #form-resposta textarea { width: 100%; box-sizing: border-box; height: 80px; margin-top: 10px; padding: 8px; border: 1px solid #ccc; border-radius: 6px; }
         #form-resposta button { width: auto; font-size: 1em; padding: 10px 20px; background-color: #0d47a1; margin-top: 5px; color: white; border: none; border-radius: 6px; cursor: pointer; }
-        .nav-voltar { max-width: 1200px; margin: 0 auto 30px auto; text-align: left; }
-        .btn-voltar { background-color: #e9ecef; color: #495057; border: 1px solid #dee2e6; padding: 10px 20px; border-radius: 8px; font-weight: bold; font-size: 1em; text-decoration: none; transition: background-color 0.2s; }
-        .btn-voltar:hover { background-color: #dee2e6; }
+        .nav-voltar { max-width: 1100px; margin: 0 auto 30px auto; text-align: left; }
+        .btn-voltar { background-color: #e9ecef; color: #495057; border: 1px solid #dee2e6; padding: 10px 20px; border-radius: 8px; font-weight: bold; font-size: 1em; text-decoration: none; }
+        .total-relatorio { font-size: 1.2em; font-weight: bold; text-align: center; margin: 20px 0; background-color: #e8f5e9; padding: 15px; border-radius: 8px; }
+        .btn-marcar-pago { background-color: #28a745; color: white; border: none; padding: 5px 10px; border-radius: 4px; cursor: pointer; }
+        .status-pago { background-color: #c8e6c9 !important; }
     </style>
 </head>
 <body>
@@ -80,6 +69,15 @@
     </div>
     <div id="conteudo-pagina" class="balancete-container">
         </div>
+
+    <div id="relatorio-cantina" class="relatorio-cantina-container">
+        <h2>Relatórios da Cantina</h2>
+        <div class="seletor-bloco" style="margin: 0 auto 20px auto; text-align:center;">
+            <label for="seletor-evento-relatorio">Selecione o Evento para ver o Relatório</label>
+            <select id="seletor-evento-relatorio"></select>
+        </div>
+        <div id="resultado-relatorio"></div>
+    </div>
     
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
@@ -87,18 +85,20 @@
         import { getAuth } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-auth.js";
         import { protegerPagina } from '/auth.js';
 
-        initializeApp({
+        const firebaseConfig = {
             apiKey: "AIzaSyBV7RPjk3cFTqL-aIpflJcUojKg1ZXMLuU",
             authDomain: "voluntarios-ativos---cepat.firebaseapp.com",
             projectId: "voluntarios-ativos---cepat",
             storageBucket: "voluntarios-ativos---cepat.firebasestorage.app",
             messagingSenderId: "66122858261",
             appId: "1:66122858261:web:7fa21f1805463b5c08331c"
-        });
+        };
+        initializeApp(firebaseConfig);
 
         protegerPagina(['diretor', 'tesoureiro', 'super-admin'])
             .then(user => {
                 document.getElementById('conteudo-pagina').style.display = 'block';
+                document.getElementById('relatorio-cantina').style.display = 'block';
                 inicializarPagina(user);
             })
             .catch(error => {
@@ -108,7 +108,6 @@
 
         function inicializarPagina(user) {
             const db = getFirestore();
-            const auth = getAuth();
             const conteudoPagina = document.getElementById('conteudo-pagina');
             
             conteudoPagina.innerHTML = `
@@ -151,6 +150,10 @@
                 </div>
                 <div class="rodape-assinaturas" id="assinaturas-section"></div>
             `;
+            
+            // ===================================================================
+            // INÍCIO DA LÓGICA DO BALANCETE (TODA A SUA LÓGICA EXISTENTE)
+            // ===================================================================
             
             const seletorInicio = document.getElementById('mes-ano-inicio');
             const seletorFim = document.getElementById('mes-ano-fim');
@@ -338,11 +341,11 @@
                 document.getElementById('saldo-valor-anterior').value = dados.saldoAnterior ? Number(dados.saldoAnterior).toFixed(2) : '0.00';
                 document.getElementById('nome-saldo-anterior').textContent = dados.nomes?.['nome-saldo-anterior'] || 'SALDO ANTERIOR (PagBank+Sicoob+Espécie)';
                 
-                if (dados.receitas) Object.entries(dados.receitas).forEach(([catNome, itens]) => {
+                if (dados.receitas) Object.entries(dados.receitas).sort(([catA], [catB]) => catA.localeCompare(catB)).forEach(([catNome, itens]) => {
                     const header = adicionarCategoriaHeader(corpoReceitas, catNome);
                     itens.forEach(item => adicionarLinhaApos(header, item.nome, item.valor, 'input-receita'));
                 });
-                if (dados.despesas) Object.entries(dados.despesas).forEach(([catNome, itens]) => {
+                if (dados.despesas) Object.entries(dados.despesas).sort(([catA], [catB]) => catA.localeCompare(catB)).forEach(([catNome, itens]) => {
                     const header = adicionarCategoriaHeader(corpoDespesas, catNome);
                     itens.forEach(item => adicionarLinhaApos(header, item.nome, item.valor, 'input-despesa'));
                 });
@@ -395,7 +398,6 @@
                     renderizarMensagens(balanceteAtual.mensagens || []);
 
                     if (balanceteAtual.status === 'aprovado') {
-                        // CORREÇÃO: A busca agora usa 'balanceteId' no log
                         const logsQuery = query(collection(db, "log_auditoria"), where("detalhes.balanceteId", "==", periodoId));
                         const logsSnapshot = await getDocs(logsQuery);
                         let liberacaoLog = null;
@@ -438,7 +440,7 @@
                     }
                     html = `<div class="assinaturas-container"><h3>Registros de Aprovação</h3><div class="assinatura-digital"><strong>TESOURARIA</strong><ul>${htmlLiberacao}</ul></div><div class="assinatura-digital"><strong>CONSELHO FISCAL</strong><ul>${htmlAprovacoes}</ul></div></div>`;
                 } else {
-                    html = `<div style="display: flex; justify-content: space-around; flex-wrap: wrap; gap: 40px;"><div class="assinatura"><div class="linha"></div><div class="cargo">PRESIDENTE</div></div><div class="assinatura"><div class="linha"></div><div class="cargo">TESOUREIRO</div></div><div class="assinatura"><div class="linha"></div><div class="cargo">Membro do conselho fiscal</div></div><div class="assinatura"><div class="linha"></div><div class="cargo">Membro do conselho Fiscal</div></div></div>`;
+                    html = `<div class="rodape-assinaturas"><div style="display: flex; justify-content: space-around; flex-wrap: wrap; gap: 40px;"><div class="assinatura"><div class="linha"></div><div class="cargo">PRESIDENTE</div></div><div class="assinatura"><div class="linha"></div><div class="cargo">TESOUREIRO</div></div><div class="assinatura"><div class="linha"></div><div class="cargo">Membro do conselho fiscal</div></div><div class="assinatura"><div class="linha"></div><div class="cargo">Membro do conselho Fiscal</div></div></div></div>`;
                 }
                 assinaturasSection.innerHTML = html;
             }
@@ -463,7 +465,7 @@
                         await setDoc(balanceteRef, dadosParaSalvar);
                         balanceteExisteNoDB = true; 
                     }
-                    await registrarLog("SALVOU_BALANCETE", { periodo: periodoId });
+                    await registrarLog("SALVOU_BALANCETE", { balanceteId: periodoId });
                     await carregarBalancetesSalvos();
                 } catch (error) {
                     console.error("Erro ao salvar balancete:", error);
@@ -628,24 +630,6 @@
             document.getElementById('btn-liberar').addEventListener('click', liberarBalancete);
             document.getElementById('btn-enviar-resposta').addEventListener('click', enviarResposta);
             document.getElementById('btn-gerar-pdf').addEventListener('click', gerarPdf);
-            conteudoPagina.addEventListener('click', (e) => {
-                if (e.target.classList.contains('btn-add-row')) {
-                    adicionarLinhaApos(e.target.closest('tr'));
-                } else if (e.target.classList.contains('btn-add-categoria')) {
-                    adicionarCategoriaHeader(document.getElementById(e.target.dataset.target));
-                }
-            });
-            conteudoPagina.addEventListener('input', (e) => {
-                if (e.target.matches('input[type="number"]')) {
-                    calcularETotais();
-                }
-            });
-            conteudoPagina.addEventListener('blur', (e) => {
-                if (e.target.matches('input[type="number"]')) {
-                    const valor = parseFloat(e.target.value) || 0;
-                    e.target.value = valor.toFixed(2);
-                }
-            }, true);
             
             seletorInicio.addEventListener('change', () => { 
                 seletorSalvos.value = ''; 
@@ -661,11 +645,10 @@
                     const [inicio, fim] = periodoId.split('_');
                     seletorInicio.value = inicio;
                     seletorFim.value = fim;
-                    carregarDadosDoPeriodo(true); // Ignora a validação ao carregar
+                    carregarDadosDoPeriodo(true);
                 }
             });
             
-            // --- Carga Inicial ---
             const hoje = new Date();
             const mes = (hoje.getMonth() + 1).toString().padStart(2, '0');
             const ano = hoje.getFullYear();
