@@ -12,7 +12,6 @@
             box-sizing: border-box;
             overflow: hidden;
         }
-
         body { 
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
             background: linear-gradient(135deg, #2e7d32, #66bb6a);
@@ -20,7 +19,6 @@
             color: white; 
             padding: 20px; 
         }
-
         h1 { 
             text-align: center; 
             border-bottom: 2px solid rgba(255, 255, 255, 0.8); 
@@ -32,40 +30,41 @@
             color: white;
             text-shadow: 1px 1px 3px rgba(0,0,0,0.5);
         }
-        
         h1 span#data-hoje {
             font-weight: 400;
             font-size: 0.8em;
             color: rgba(255, 255, 255, 0.9);
         }
-
         #lista-presenca {
-            display: grid;
-            grid-auto-flow: column;
-            grid-auto-columns: minmax(320px, 1fr); /* Largura mínima das colunas */
-            grid-template-rows: repeat(10, auto); /* Suporta até 10 linhas de altura flexível */
-            gap: 15px;
             height: calc(100vh - 120px);
-            align-content: start;
+            width: 100%;
+            position: relative; /* Para o carrossel */
         }
-
+        .pagina-carrossel {
+            display: flex;
+            flex-flow: column wrap;
+            align-content: flex-start;
+            gap: 20px;
+            position: absolute;
+            top: 0; left: 0; right: 0; bottom: 0;
+            opacity: 0;
+            transform: scale(0.98);
+            transition: opacity 0.8s ease-in-out, transform 0.8s ease-in-out;
+            visibility: hidden;
+        }
+        .pagina-carrossel.visivel {
+            opacity: 1;
+            transform: scale(1);
+            visibility: visible;
+        }
         .atividade-grupo { 
             background-color: rgba(0, 0, 0, 0.25);
             border-radius: 10px;
             padding: 15px 20px;
             box-sizing: border-box;
-            transition: opacity 0.5s ease-in-out, transform 0.5s ease-in-out;
-            opacity: 0;
-            transform: scale(0.95);
-            display: none; /* Começa escondido */
+            width: 350px; /* Largura fixa para previsibilidade */
+            break-inside: avoid; /* Evita que o bloco quebre entre colunas */
         }
-
-        .atividade-grupo.visivel {
-            display: block;
-            opacity: 1;
-            transform: scale(1);
-        }
-
         .atividade-titulo { 
             font-size: 3.2vh;
             color: #ffeb3b; 
@@ -74,11 +73,9 @@
             font-weight: 600;
             border-left: 5px solid #ffeb3b;
             padding-left: 10px;
-            word-wrap: break-word; /* Garante que o título quebre a linha */
+            word-wrap: break-word;
         }
-
         ul { list-style-type: none; padding: 0; margin: 0; }
-
         li { 
             background-color: rgba(255,255,255,0.1); 
             padding: 8px 15px; 
@@ -91,10 +88,8 @@
 </head>
 <body>
     <h1>Voluntários Presentes Hoje <span id="data-hoje"></span></h1>
-    
     <div id="lista-presenca">
         </div>
-    
     <script type="module" src="/tv.js"></script>
 </body>
 </html>

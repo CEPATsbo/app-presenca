@@ -14,8 +14,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const app = initializeApp(firebaseConfig);
     const db = getFirestore(app);
 
-    const TEMPO_CARROSSEL_MS = 20000; // 20 segundos
-    const MAX_LINHAS_POR_COLUNA = 10; // Altura máxima de uma coluna em "unidades" (título + nomes)
+    const TEMPO_CARROSSEL_MS = 20000; // 20 segundos por página
+    const LARGURA_BLOCO = 370; // Largura do bloco (350px) + gap (20px)
 
     const listaPresencaDiv = document.getElementById('lista-presenca');
     const dataHojeSpan = document.getElementById('data-hoje');
@@ -66,53 +66,79 @@ document.addEventListener('DOMContentLoaded', () => {
             const voluntarios = porAtividade[atividade].sort();
             return {
                 titulo: atividade,
-                nomes: voluntarios,
-                // Altura em "unidades": 2 para o título, 1 por nome
-                altura: 2 + voluntarios.length 
+                nomes: voluntarios
             };
         });
-
-        // Lógica de distribuição em colunas (Masonry Layout)
-        const colunas = [[]];
-        const alturasColunas = [0];
-
+        
+        const alturaDisponivel = listaPresencaDiv.clientHeight;
+        const colunasPorPagina = Math.floor(listaPresencaDiv.clientWidth / LARGURA_BLOCO);
+        
+        const paginas = [];
+        let paginaAtual = [];
+        let colunasNaPagina = 0;
+        
         todosOsBlocos.forEach(bloco => {
-            let colunaComMenorAltura = 0;
-            // Encontra a coluna mais "vazia" para adicionar o próximo bloco
-            for (let i = 1; i < alturasColunas.length; i++) {
-                if (alturasColunas[i] < alturasColunas[colunaComMenorAltura]) {
-                    colunaComMenorAltura = i;
+            const alturaBloco = 80 + (bloco.nomes.length * 50); // Estimativa de altura em pixels
+            
+            let colunaEncontrada = false;
+            for (let i = 0; i < paginaAtual.length; i++) {
+                const alturaColuna = paginaAtual[i].reduce((acc, b) => acc + 80 + (b.nomes.length * 50), 0);
+                if (alturaColuna + alturaBloco <= alturaDisponivel) {
+                    paginaAtual[i].push(bloco);
+                    colunaEncontrada = true;
+                    break;
                 }
             }
 
-            if (alturasColunas[colunaComMenorAltura] + bloco.altura > MAX_LINHAS_POR_COLUNA && colunas.length < 4) {
-                 // Se o bloco não cabe e ainda temos espaço, cria uma nova coluna
-                colunas.push([bloco]);
-                alturasColunas.push(bloco.altura);
-            } else {
-                // Adiciona o bloco na coluna com menor altura
-                colunas[colunaComMenorAltura].push(bloco);
-                alturasColunas[colunaComMenorAltura] += bloco.altura;
+            if (!colunaEncontrada) {
+                if (colunasNaPagina < colunasPorPagina) {
+                    paginaAtual.push([bloco]);
+                    colunasNaPagina++;
+                } else {
+                    paginas.push(paginaAtual);
+                    paginaAtual = [[bloco]];
+                    colunasNaPagina = 1;
+                }
             }
         });
+        if (paginaAtual.length > 0) paginas.push(paginaAtual);
 
-        // Renderiza as colunas e os blocos
-        colunas.forEach(colunaData => {
-            const colunaDiv = document.createElement('div');
-            colunaData.forEach(bloco => {
-                const grupoDiv = document.createElement('div');
-                grupoDiv.className = 'atividade-grupo';
-                grupoDiv.style.gridRow = `span ${bloco.altura}`; // Define a altura no grid
-                grupoDiv.innerHTML = `<h2 class="atividade-titulo">${bloco.titulo}</h2><ul>${bloco.nomes.map(n => `<li>${n}</li>`).join('')}</ul>`;
-                colunaDiv.appendChild(grupoDiv);
+        paginas.forEach((pagina) => {
+            const paginaDiv = document.createElement('div');
+            paginaDiv.className = 'pagina-carrossel';
+            pagina.forEach(coluna => {
+                coluna.forEach(bloco => {
+                    const grupoDiv = document.createElement('div');
+                    grupoDiv.className = 'atividade-grupo';
+                    grupoDiv.innerHTML = `<h2 class="atividade-titulo">${bloco.titulo}</h2><ul>${bloco.nomes.map(n => `<li>${n}</li>`).join('')}</ul>`;
+                    paginaDiv.appendChild(grupoDiv);
+                });
             });
-            listaPresencaDiv.appendChild(colunaDiv);
+            listaPresencaDiv.appendChild(paginaDiv);
         });
         
-        // Revela os blocos com uma pequena animação
-        setTimeout(() => {
-            document.querySelectorAll('.atividade-grupo').forEach(el => el.classList.add('visivel'));
-        }, 100);
+        iniciarCarrossel(document.querySelectorAll('.pagina-carrossel'));
+    }
+    
+    function iniciarCarrossel(paginas) {
+        if (carrosselInterval) clearInterval(carrosselInterval);
+        if (!paginas || paginas.length === 0) return;
+        
+        paginas.forEach(p => p.classList.remove('visivel'));
+        
+        if (paginas.length <= 1) {
+             if (paginas.length === 1) paginas[0].classList.add('visivel');
+             return;
+        }
+        
+        let paginaAtualIndex = 0;
+        paginas[paginaAtualIndex].classList.add('visivel');
+
+        carrosselInterval = setInterval(() => {
+            paginas[paginaAtualIndex].classList.remove('visivel');
+            paginaAtualIndex = (paginaAtualIndex + 1) % paginas.length;
+            paginas[paginaAtualIndex].classList.add('visivel');
+        }, TEMPO_CARROSSEL_MS);
     }
     
     function carregarPresencas() {
@@ -135,11 +161,10 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     carregarPresencas();
-
+    window.addEventListener('resize', () => renderizarLista([])); // Recalcula ao redimensionar
     setInterval(() => {
         const novaDataSP = getDataDeHojeSP();
         if (novaDataSP !== dataAtualParaConsulta) {
-            console.log("Virada de dia detectada! Recarregando a página...");
             window.location.reload();
         }
     }, 60000);
