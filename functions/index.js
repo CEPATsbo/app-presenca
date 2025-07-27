@@ -202,6 +202,30 @@ exports.promoverParaIrradiador = functions.region(REGIAO).https.onCall(async (da
     }
 });
 
+// ===================================================================
+// NOVA FUNÇÃO "ROBÔ" PARA PROMOVER A BIBLIOTECÁRIO
+// ===================================================================
+exports.promoverParaBibliotecario = functions.region(REGIAO).https.onCall(async (data, context) => {
+    if (context.auth.token.role !== 'super-admin') { 
+        throw new functions.https.HttpsError('permission-denied', 'Apenas o Super Admin pode promover usuários.'); 
+    }
+    const uidParaPromover = data.uid;
+    if (!uidParaPromover) { 
+        throw new functions.https.HttpsError('invalid-argument', 'O UID do usuário é necessário.'); 
+    }
+    try {
+        await admin.auth().setCustomUserClaims(uidParaPromover, { role: 'bibliotecario' });
+        const userQuery = await db.collection('voluntarios').where('authUid', '==', uidParaPromover).limit(1).get();
+        if (!userQuery.empty) { 
+            await userQuery.docs[0].ref.update({ role: 'bibliotecario' }); 
+        }
+        return { success: true, message: 'Usuário promovido a Bibliotecário(a) com sucesso.' };
+    } catch (error) { 
+        console.error("Erro ao promover para Bibliotecário:", error); 
+        throw new functions.https.HttpsError('internal', 'Erro interno ao tentar promover o usuário.'); 
+    }
+});
+
 exports.revogarAcessoDiretor = functions.region(REGIAO).https.onCall(async (data, context) => {
     if (context.auth.token.role !== 'super-admin') { throw new functions.https.HttpsError('permission-denied', 'Apenas o Super Admin pode revogar acesso.'); }
     const uidParaRevogar = data.uid;
