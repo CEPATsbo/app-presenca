@@ -1,5 +1,3 @@
-// VERSÃO FINAL CORRIGIDA - COM TRATAMENTO PARA ATIVIDADE EM ARRAY OU TEXTO
-
 import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
 import { getFirestore, collection, query, where, onSnapshot } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
 
@@ -16,9 +14,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const app = initializeApp(firebaseConfig);
     const db = getFirestore(app);
 
-    const TEMPO_CARROSSEL_MS = 15000;
-    const MAX_VOLUNTARIOS_POR_BLOCO = 5;
-    const MAX_VOLUNTARIOS_POR_COLUNA = 7;
+    const TEMPO_CARROSSEL_MS = 20000; // 20 segundos
+    const MAX_LINHAS_POR_COLUNA = 10; // Altura máxima de uma coluna em "unidades" (título + nomes)
 
     const listaPresencaDiv = document.getElementById('lista-presenca');
     const dataHojeSpan = document.getElementById('data-hoje');
@@ -40,19 +37,15 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
     
-    // ===================================================================
-    // FUNÇÃO CORRIGIDA PARA LIDAR COM OS DOIS TIPOS DE DADOS
-    // ===================================================================
     function renderizarLista(presentes) {
         if(!listaPresencaDiv) return;
 
         const porAtividade = presentes.reduce((acc, pessoa) => {
             let atividadesIndividuais = [];
-            // Verifica se 'atividade' é um array ou uma string
             if (Array.isArray(pessoa.atividade)) {
                 atividadesIndividuais = pessoa.atividade;
             } else if (typeof pessoa.atividade === 'string') {
-                atividadesIndividuais = pessoa.atividade.split(', ');
+                atividadesIndividuais = pessoa.atividade.split(',').map(a => a.trim());
             }
             
             atividadesIndividuais.forEach(atividade => {
@@ -69,95 +62,59 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
-        const todosOsBlocos = [];
-        Object.keys(porAtividade).sort().forEach(atividade => {
+        const todosOsBlocos = Object.keys(porAtividade).sort().map(atividade => {
             const voluntarios = porAtividade[atividade].sort();
-            const totalPaginas = Math.ceil(voluntarios.length / MAX_VOLUNTARIOS_POR_BLOCO);
-            for (let i = 0; i < totalPaginas; i++) {
-                const inicio = i * MAX_VOLUNTARIOS_POR_BLOCO;
-                const fim = inicio + MAX_VOLUNTARIOS_POR_BLOCO;
-                const nomesDoBloco = voluntarios.slice(inicio, fim);
-                todosOsBlocos.push({
-                    titulo: totalPaginas > 1 ? `${atividade} (pág ${i + 1}/${totalPaginas})` : atividade,
-                    nomes: nomesDoBloco,
-                    contagem: nomesDoBloco.length
-                });
-            }
+            return {
+                titulo: atividade,
+                nomes: voluntarios,
+                // Altura em "unidades": 2 para o título, 1 por nome
+                altura: 2 + voluntarios.length 
+            };
         });
 
-        const colunasPorPagina = Math.max(1, Math.floor(window.innerWidth / 420));
-        const paginasDeColunas = [];
-        let paginaAtual = [];
-        let colunaAtual = [];
-        let contagemNaColuna = 0;
-        
+        // Lógica de distribuição em colunas (Masonry Layout)
+        const colunas = [[]];
+        const alturasColunas = [0];
+
         todosOsBlocos.forEach(bloco => {
-            if (colunaAtual.length < 2 && (contagemNaColuna + bloco.contagem) <= MAX_VOLUNTARIOS_POR_COLUNA) {
-                colunaAtual.push(bloco);
-                contagemNaColuna += bloco.contagem;
-            } else {
-                paginaAtual.push(colunaAtual);
-                if (paginaAtual.length >= colunasPorPagina) {
-                    paginasDeColunas.push(paginaAtual);
-                    paginaAtual = [];
+            let colunaComMenorAltura = 0;
+            // Encontra a coluna mais "vazia" para adicionar o próximo bloco
+            for (let i = 1; i < alturasColunas.length; i++) {
+                if (alturasColunas[i] < alturasColunas[colunaComMenorAltura]) {
+                    colunaComMenorAltura = i;
                 }
-                colunaAtual = [bloco];
-                contagemNaColuna = bloco.contagem;
+            }
+
+            if (alturasColunas[colunaComMenorAltura] + bloco.altura > MAX_LINHAS_POR_COLUNA && colunas.length < 4) {
+                 // Se o bloco não cabe e ainda temos espaço, cria uma nova coluna
+                colunas.push([bloco]);
+                alturasColunas.push(bloco.altura);
+            } else {
+                // Adiciona o bloco na coluna com menor altura
+                colunas[colunaComMenorAltura].push(bloco);
+                alturasColunas[colunaComMenorAltura] += bloco.altura;
             }
         });
-        if (colunaAtual.length > 0) paginaAtual.push(colunaAtual);
-        if (paginaAtual.length > 0) paginasDeColunas.push(paginaAtual);
 
-        paginasDeColunas.forEach((pagina, index) => {
-            const paginaDiv = document.createElement('div');
-            paginaDiv.className = 'pagina-carrossel';
-            paginaDiv.style.display = 'none';
-            pagina.forEach(coluna => {
-                const colunaDiv = document.createElement('div');
-                colunaDiv.className = 'coluna';
-                coluna.forEach(bloco => {
-                    const grupoDiv = document.createElement('div');
-                    grupoDiv.className = 'atividade-grupo visivel';
-                    grupoDiv.innerHTML = `<h2 class="atividade-titulo">${bloco.titulo}</h2><ul>${bloco.nomes.map(n => `<li>${n}</li>`).join('')}</ul>`;
-                    colunaDiv.appendChild(grupoDiv);
-                });
-                paginaDiv.appendChild(colunaDiv);
+        // Renderiza as colunas e os blocos
+        colunas.forEach(colunaData => {
+            const colunaDiv = document.createElement('div');
+            colunaData.forEach(bloco => {
+                const grupoDiv = document.createElement('div');
+                grupoDiv.className = 'atividade-grupo';
+                grupoDiv.style.gridRow = `span ${bloco.altura}`; // Define a altura no grid
+                grupoDiv.innerHTML = `<h2 class="atividade-titulo">${bloco.titulo}</h2><ul>${bloco.nomes.map(n => `<li>${n}</li>`).join('')}</ul>`;
+                colunaDiv.appendChild(grupoDiv);
             });
-            listaPresencaDiv.appendChild(paginaDiv);
+            listaPresencaDiv.appendChild(colunaDiv);
         });
         
-        const paginasRenderizadas = document.querySelectorAll('.pagina-carrossel');
-        iniciarCarrossel(paginasRenderizadas);
+        // Revela os blocos com uma pequena animação
+        setTimeout(() => {
+            document.querySelectorAll('.atividade-grupo').forEach(el => el.classList.add('visivel'));
+        }, 100);
     }
     
-    function iniciarCarrossel(paginas) {
-        if (carrosselInterval) clearInterval(carrosselInterval);
-        if (paginas.length === 0) return;
-        
-        if (paginas.length <= 1) {
-             if (paginas.length === 1) paginas[0].style.display = 'flex';
-             return;
-        }
-        
-        let paginaAtualIndex = 0;
-        paginas.forEach((p, i) => {
-            p.style.display = i === 0 ? 'flex' : 'none';
-        });
-
-        carrosselInterval = setInterval(() => {
-            paginas[paginaAtualIndex].style.display = 'none';
-            paginaAtualIndex = (paginaAtualIndex + 1) % paginas.length;
-            paginas[paginaAtualIndex].style.display = 'flex';
-        }, TEMPO_CARROSSEL_MS);
-    }
-    
-    const style = document.createElement('style');
-    style.innerHTML = `
-        .pagina-carrossel { display: flex; width: 100%; height: 100%; gap: 20px; justify-content: center; align-items: flex-start; }
-        .coluna { display: flex; flex-direction: column; gap: 20px; flex-basis: 350px; flex-grow: 1; max-width: 400px; }
-    `;
-    document.head.appendChild(style);
-
     function carregarPresencas() {
         if (unsubscribe) unsubscribe();
         dataAtualParaConsulta = getDataDeHojeSP();
