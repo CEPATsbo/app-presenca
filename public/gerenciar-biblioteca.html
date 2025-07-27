@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin - Gerenciar Biblioteca</title>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background-color: #f4f6f9; display: flex; flex-direction: column; align-items: center; margin: 0; padding: 20px; box-sizing: border-box; }
+        .nav-voltar { max-width: 1000px; width:100%; margin: 0 auto 30px auto; text-align: left; }
+        .btn-voltar { background-color: #e9ecef; color: #495057; border: 1px solid #dee2e6; padding: 10px 20px; border-radius: 8px; font-weight: bold; font-size: 1em; text-decoration: none; }
+        .container { background-color: white; padding: 40px; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.15); width: 100%; max-width: 1000px; margin-bottom: 30px; }
+        h1, h2 { text-align: center; color: #333; margin-top: 0; }
+        .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+        .form-item { display: flex; flex-direction: column; }
+        .form-item label { margin-bottom: 5px; font-weight: bold; color: #555; }
+        .form-item input, .form-item select { padding: 10px; border-radius: 6px; border: 1px solid #ccc; font-size: 1em; }
+        .radio-group { display: flex; gap: 20px; align-items: center; }
+        .form-actions { grid-column: 1 / -1; display: flex; justify-content: flex-end; gap: 10px; margin-top: 20px; }
+        .btn { padding: 12px 25px; border: none; border-radius: 6px; font-size: 1em; font-weight: bold; cursor: pointer; }
+        .btn-primary { background-color: #007bff; color: white; }
+        .btn-secondary { background-color: #6c757d; color: white; }
+        table { width: 100%; border-collapse: collapse; margin-top: 30px; }
+        th, td { padding: 12px 15px; border-bottom: 1px solid #eee; text-align: left; }
+        th { background-color: #f8f9fa; }
+        .actions-table button { margin-right: 5px; padding: 5px 10px; border-radius: 4px; cursor: pointer; border: 1px solid #ccc; }
+        .btn-edit { background-color: #ffc107; color: #333; }
+        .btn-delete { background-color: #dc3545; color: white; }
+    </style>
+</head>
+<body>
+    <nav class="nav-voltar">
+        <a href="/dashboard.html" class="btn-voltar">⬅ Voltar para o Dashboard</a>
+    </nav>
+    <div id="acesso-negado" style="display: none;"><h1>Acesso Negado</h1></div>
+
+    <div id="main-content" class="container" style="display: none;">
+        <h1>Gerenciar Acervo da Biblioteca</h1>
+
+        <form id="form-livro">
+            <input type="hidden" id="livroId">
+            <div class="form-grid">
+                <div class="form-item" style="grid-column: 1 / -1;"><label for="titulo">Título do Livro</label><input type="text" id="titulo" required></div>
+                <div class="form-item"><label for="autor">Autor(a)</label><input type="text" id="autor" required></div>
+                <div class="form-item"><label for="editora">Editora</label><input type="text" id="editora"></div>
+                <div class="form-item"><label for="isbn">ISBN (Código)</label><input type="text" id="isbn"></div>
+                <div class="form-item"><label for="categoria">Categoria</label><select id="categoria"><option value="Doutrinário">Doutrinário</option><option value="Romance">Romance</option><option value="Biografia">Biografia</option><option value="Infantil">Infantil</option><option value="Outros">Outros</option></select></div>
+                <div class="form-item">
+                    <label>Finalidade</label>
+                    <div class="radio-group">
+                        <label><input type="radio" name="finalidade" value="Empréstimo" checked> Para Empréstimo</label>
+                        <label><input type="radio" name="finalidade" value="Venda"> Para Venda</label>
+                    </div>
+                </div>
+                <div class="form-item" id="campo-preco" style="display: none;">
+                    <label for="preco">Preço de Venda (R$)</label>
+                    <input type="number" id="preco" step="0.01">
+                </div>
+            </div>
+            <div class="form-actions">
+                <button type="button" id="btn-cancelar" class="btn btn-secondary" style="display: none;">Cancelar</button>
+                <button type="submit" class="btn btn-primary">Salvar Livro</button>
+            </div>
+        </form>
+
+        <hr style="margin: 40px 0;">
+
+        <h2>Acervo Cadastrado</h2>
+        <table id="tabela-livros">
+            <thead>
+                <tr>
+                    <th>Título / Autor</th>
+                    <th>Categoria</th>
+                    <th>Finalidade</th>
+                    <th>Status / Preço</th>
+                    <th>Ações</th>
+                </tr>
+            </thead>
+            <tbody></tbody>
+        </table>
+    </div>
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
+        import { getFirestore, collection, onSnapshot, addDoc, doc, setDoc, getDoc, deleteDoc, query, orderBy, serverTimestamp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
+        import { protegerPagina } from '/auth.js';
+
+        const firebaseConfig = {
+        apiKey: "AIzaSyBV7RPjk3cFTqL-aIpflJcUojKg1ZXMLuU",
+        authDomain: "voluntarios-ativos---cepat.firebaseapp.com",
+        projectId: "voluntarios-ativos---cepat",
+        storageBucket: "voluntarios-ativos---cepat.firebasestorage.app",
+        messagingSenderId: "66122858261",
+        appId: "1:66122858261:web:7fa21f1805463b5c08331c"
+    };
+        initializeApp(firebaseConfig);
+
+        protegerPagina(['super-admin', 'diretor', 'bibliotecario'])
+            .then(user => {
+                document.getElementById('main-content').style.display = 'block';
+                inicializarPagina(user);
+            })
+            .catch(error => {
+                document.getElementById('acesso-negado').style.display = 'block';
+            });
+        
+        function inicializarPagina(user) {
+            const db = getFirestore();
+            const form = document.getElementById('form-livro');
+            const tabelaLivros = document.getElementById('tabela-livros').querySelector('tbody');
+            const campoPreco = document.getElementById('campo-preco');
+            const radiosFinalidade = document.querySelectorAll('input[name="finalidade"]');
+
+            radiosFinalidade.forEach(radio => {
+                radio.addEventListener('change', () => {
+                    campoPreco.style.display = document.querySelector('input[name="finalidade"]:checked').value === 'Venda' ? 'flex' : 'none';
+                });
+            });
+
+            const qLivros = query(collection(db, "biblioteca_livros"), orderBy("titulo"));
+            onSnapshot(qLivros, (snapshot) => {
+                tabelaLivros.innerHTML = '';
+                snapshot.forEach(doc => {
+                    const livro = doc.data();
+                    const tr = document.createElement('tr');
+                    let statusPreco = '';
+                    if (livro.finalidade === 'Venda') {
+                        statusPreco = Number(livro.preco || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+                    } else {
+                        statusPreco = livro.status === 'emprestado' ? `<span style="color:red; font-weight:bold;">Emprestado</span>` : `<span style="color:green;">Disponível</span>`;
+                    }
+                    tr.innerHTML = `
+                        <td><strong>${livro.titulo}</strong><br><small>${livro.autor}</small></td>
+                        <td>${livro.categoria}</td>
+                        <td>${livro.finalidade}</td>
+                        <td>${statusPreco}</td>
+                        <td class="actions-table">
+                            <button class="btn-edit" data-id="${doc.id}">Editar</button>
+                            <button class="btn-delete" data-id="${doc.id}">Apagar</button>
+                        </td>
+                    `;
+                    tabelaLivros.appendChild(tr);
+                });
+            });
+
+            form.addEventListener('submit', async (e) => {
+                e.preventDefault();
+                const finalidade = document.querySelector('input[name="finalidade"]:checked').value;
+                const livro = {
+                    titulo: document.getElementById('titulo').value,
+                    autor: document.getElementById('autor').value,
+                    editora: document.getElementById('editora').value,
+                    isbn: document.getElementById('isbn').value,
+                    categoria: document.getElementById('categoria').value,
+                    finalidade: finalidade,
+                    preco: finalidade === 'Venda' ? parseFloat(document.getElementById('preco').value) || 0 : null,
+                    status: finalidade === 'Empréstimo' ? 'disponível' : null,
+                };
+                const id = document.getElementById('livroId').value;
+
+                if (id) {
+                    await setDoc(doc(db, 'biblioteca_livros', id), livro, { merge: true });
+                    alert('Livro atualizado com sucesso!');
+                } else {
+                    livro.criadoEm = serverTimestamp();
+                    await addDoc(collection(db, 'biblioteca_livros'), livro);
+                    alert('Livro salvo com sucesso!');
+                }
+                form.reset();
+                campoPreco.style.display = 'none';
+                document.getElementById('livroId').value = '';
+                document.getElementById('btn-cancelar').style.display = 'none';
+            });
+
+            tabelaLivros.addEventListener('click', async (e) => {
+                const target = e.target;
+                const id = target.dataset.id;
+                if (!id) return;
+
+                if (target.classList.contains('btn-edit')) {
+                    const docRef = doc(db, 'biblioteca_livros', id);
+                    const docSnap = await getDoc(docRef);
+                    if (docSnap.exists()) {
+                        const data = docSnap.data();
+                        document.getElementById('livroId').value = id;
+                        document.getElementById('titulo').value = data.titulo;
+                        document.getElementById('autor').value = data.autor;
+                        document.getElementById('editora').value = data.editora || '';
+                        document.getElementById('isbn').value = data.isbn || '';
+                        document.getElementById('categoria').value = data.categoria;
+                        document.querySelector(`input[name="finalidade"][value="${data.finalidade}"]`).checked = true;
+                        if (data.finalidade === 'Venda') {
+                            campoPreco.style.display = 'flex';
+                            document.getElementById('preco').value = data.preco;
+                        } else {
+                            campoPreco.style.display = 'none';
+                        }
+                        document.getElementById('btn-cancelar').style.display = 'inline-block';
+                        window.scrollTo({ top: 0, behavior: 'smooth' });
+                    }
+                } else if (target.classList.contains('btn-delete')) {
+                    if (confirm('Tem certeza que deseja apagar este livro do acervo?')) {
+                        await deleteDoc(doc(db, 'biblioteca_livros', id));
+                    }
+                }
+            });
+
+            document.getElementById('btn-cancelar').addEventListener('click', () => {
+                form.reset();
+                campoPreco.style.display = 'none';
+                document.getElementById('livroId').value = '';
+                document.getElementById('btn-cancelar').style.display = 'none';
+            });
+        }
+    </script>
+</body>
+</html>
