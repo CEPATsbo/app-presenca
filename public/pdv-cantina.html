@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PDV Cantina - Amor e Luz</title>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background-color: #f4f6f9; display: flex; flex-direction: column; align-items: center; margin: 0; padding: 20px; box-sizing: border-box; }
+        .nav-voltar { max-width: 1200px; width:100%; margin: 0 auto 30px auto; text-align: left; }
+        .btn-voltar { background-color: #e9ecef; color: #495057; border: 1px solid #dee2e6; padding: 10px 20px; border-radius: 8px; font-weight: bold; font-size: 1em; text-decoration: none; }
+        .container { background-color: white; padding: 40px; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.15); width: 100%; max-width: 1200px; margin-bottom: 30px; }
+        h1, h2 { text-align: center; color: #333; margin-top: 0; }
+        .seletor-evento-container { text-align: center; margin-bottom: 30px; }
+        .seletor-evento-container select, .seletor-evento-container button { font-size: 1.2em; padding: 10px; border-radius: 8px; border: 1px solid #ccc; }
+        .pdv-container { display: none; grid-template-columns: 2fr 1fr; gap: 30px; }
+        .menu-categorias { display: flex; flex-direction: column; gap: 20px; }
+        .categoria-bloco h3 { background-color: #34495e; color: white; padding: 10px; margin: 0 0 10px 0; border-radius: 6px; }
+        .itens-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; }
+        .item-btn { padding: 15px; font-size: 1em; border: 1px solid #ddd; border-radius: 6px; background-color: #f8f9fa; cursor: pointer; text-align: left; }
+        .item-btn strong { display: block; }
+        .item-btn small { color: #28a745; font-weight: bold; }
+        .carrinho-container { background-color: #f8f9fa; padding: 20px; border-radius: 8px; }
+        #lista-carrinho { list-style-type: none; padding: 0; }
+        .carrinho-item { display: flex; justify-content: space-between; align-items: center; padding: 10px 0; border-bottom: 1px solid #ddd; }
+        .carrinho-item button { background: #dc3545; color: white; border: none; border-radius: 50%; width: 25px; height: 25px; cursor: pointer; }
+        .total-container { margin-top: 20px; text-align: right; font-size: 1.5em; font-weight: bold; }
+        .btn-finalizar { width: 100%; padding: 15px; font-size: 1.2em; background-color: #28a745; color: white; border: none; border-radius: 8px; cursor: pointer; margin-top: 20px; }
+    </style>
+</head>
+<body>
+    <nav class="nav-voltar">
+        <a href="/dashboard.html" class="btn-voltar">⬅ Voltar para o Dashboard</a>
+    </nav>
+    <div id="acesso-negado" style="display: none;"><h1>Acesso Negado</h1></div>
+
+    <div id="main-content" class="container" style="display: none;">
+        <h1>PDV Cantina "Amor e Luz"</h1>
+        <div class="seletor-evento-container">
+            <select id="seletor-evento"></select>
+            <button id="btn-iniciar-pdv">Iniciar Vendas</button>
+        </div>
+
+        <div id="pdv-container" class="pdv-container">
+            <div id="menu-categorias" class="menu-categorias"></div>
+            <div class="carrinho-container">
+                <h2>Carrinho</h2>
+                <ul id="lista-carrinho"></ul>
+                <div id="total-container" class="total-container">Total: R$ 0,00</div>
+                <button id="btn-finalizar" class="btn-finalizar">Finalizar e Registrar Venda</button>
+            </div>
+        </div>
+    </div>
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
+        import { getFirestore, collection, onSnapshot, addDoc, query, where, orderBy, Timestamp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
+        import { getFunctions, httpsCallable } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-functions.js";
+        import { protegerPagina } from '/auth.js';
+
+        const firebaseConfig = {
+        apiKey: "AIzaSyBV7RPjk3cFTqL-aIpflJcUojKg1ZXMLuU",
+        authDomain: "voluntarios-ativos---cepat.firebaseapp.com",
+        projectId: "voluntarios-ativos---cepat",
+        storageBucket: "voluntarios-ativos---cepat.firebasestorage.app",
+        messagingSenderId: "66122858261",
+        appId: "1:66122858261:web:7fa21f1805463b5c08331c"
+    };
+        initializeApp(firebaseConfig);
+
+        protegerPagina(['super-admin', 'diretor', 'tesoureiro', 'conselheiro', 'produtor-evento'])
+            .then(user => {
+                document.getElementById('main-content').style.display = 'block';
+                inicializarPagina(user);
+            })
+            .catch(error => {
+                document.getElementById('acesso-negado').style.display = 'block';
+            });
+
+        function inicializarPagina(user) {
+            const db = getFirestore();
+            const functions = getFunctions(undefined, 'southamerica-east1');
+            const seletorEvento = document.getElementById('seletor-evento');
+            const btnIniciarPDV = document.getElementById('btn-iniciar-pdv');
+            const pdvContainer = document.getElementById('pdv-container');
+            const menuCategorias = document.getElementById('menu-categorias');
+            const listaCarrinho = document.getElementById('lista-carrinho');
+            const totalContainer = document.getElementById('total-container');
+            const btnFinalizar = document.getElementById('btn-finalizar');
+
+            let carrinho = [];
+            let cardapioDoEvento = [];
+
+            // Carrega eventos futuros e o cardápio padrão
+            const hoje = Timestamp.now();
+            const qEventos = query(collection(db, "eventos"), where("dataInicio", ">=", hoje), orderBy("dataInicio"));
+            onSnapshot(qEventos, (snapshot) => {
+                seletorEvento.innerHTML = '<option value="padrão">Cardápio Padrão (Dias Normais)</option>';
+                snapshot.forEach(doc => {
+                    const evento = doc.data();
+                    const dataFormatada = evento.dataInicio.toDate().toLocaleDateString('pt-BR');
+                    seletorEvento.innerHTML += `<option value="${doc.id}">${evento.titulo} (${dataFormatada})</option>`;
+                });
+            });
+            
+            btnIniciarPDV.addEventListener('click', () => {
+                const eventoId = seletorEvento.value;
+                if (!eventoId) return;
+
+                document.querySelector('.seletor-evento-container').style.display = 'none';
+                pdvContainer.style.display = 'grid';
+
+                const qItens = query(collection(db, "cantina_itens"), where("eventoId", "==", eventoId));
+                onSnapshot(qItens, (snapshot) => {
+                    cardapioDoEvento = snapshot.docs.map(doc => ({id: doc.id, ...doc.data()}));
+                    renderizarMenu();
+                });
+            });
+
+            function renderizarMenu() {
+                menuCategorias.innerHTML = '';
+                const porCategoria = cardapioDoEvento.reduce((acc, item) => {
+                    if (!acc[item.categoria]) acc[item.categoria] = [];
+                    acc[item.categoria].push(item);
+                    return acc;
+                }, {});
+
+                for (const categoria in porCategoria) {
+                    const bloco = document.createElement('div');
+                    bloco.className = 'categoria-bloco';
+                    bloco.innerHTML = `<h3>${categoria}</h3>`;
+                    const grid = document.createElement('div');
+                    grid.className = 'itens-grid';
+                    porCategoria[categoria].forEach(item => {
+                        const btn = document.createElement('button');
+                        btn.className = 'item-btn';
+                        btn.dataset.id = item.id;
+                        btn.innerHTML = `<strong>${item.nome}</strong><small>${Number(item.preco).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</small>`;
+                        btn.onclick = () => adicionarAoCarrinho(item);
+                        grid.appendChild(btn);
+                    });
+                    bloco.appendChild(grid);
+                    menuCategorias.appendChild(bloco);
+                }
+            }
+
+            function adicionarAoCarrinho(item) {
+                const itemExistente = carrinho.find(i => i.id === item.id);
+                if (itemExistente) {
+                    itemExistente.qtd++;
+                } else {
+                    carrinho.push({ ...item, qtd: 1 });
+                }
+                renderizarCarrinho();
+            }
+            
+            function removerDoCarrinho(itemId) {
+                carrinho = carrinho.filter(i => i.id !== itemId);
+                renderizarCarrinho();
+            }
+
+            function renderizarCarrinho() {
+                listaCarrinho.innerHTML = '';
+                let total = 0;
+                carrinho.forEach(item => {
+                    const li = document.createElement('li');
+                    li.className = 'carrinho-item';
+                    li.innerHTML = `
+                        <span>${item.qtd}x ${item.nome}</span>
+                        <span>${Number(item.preco * item.qtd).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span>
+                        <button data-id="${item.id}">X</button>
+                    `;
+                    li.querySelector('button').onclick = () => removerDoCarrinho(item.id);
+                    listaCarrinho.appendChild(li);
+                    total += item.preco * item.qtd;
+                });
+                totalContainer.textContent = `Total: ${total.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}`;
+            }
+
+            btnFinalizar.addEventListener('click', async () => {
+                if(carrinho.length === 0) return alert('O carrinho está vazio.');
+                
+                const totalVenda = carrinho.reduce((acc, item) => acc + (item.preco * item.qtd), 0);
+                const resumo = carrinho.map(item => `${item.qtd}x ${item.nome}`).join(', ');
+                
+                try {
+                    const registrarVendaCantina = httpsCallable(functions, 'registrarVendaCantina');
+                    await registrarVendaCantina({
+                        eventoId: seletorEvento.value,
+                        eventoTitulo: seletorEvento.options[seletorEvento.selectedIndex].text,
+                        total: totalVenda,
+                        itens: carrinho
+                    });
+                    
+                    alert('Venda registrada com sucesso!');
+                    carrinho = [];
+                    renderizarCarrinho();
+
+                } catch(error) {
+                    console.error("Erro ao registrar venda: ", error);
+                    alert(`Erro ao registrar venda: ${error.message}`);
+                }
+            });
+        }
+    </script>
+</body>
+</html>
