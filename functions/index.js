@@ -511,6 +511,55 @@ exports.registrarLogDeAcesso = functions.region(REGIAO).https.onCall(async (data
     }
 });
 
+// ===================================================================
+// NOVA FUNÇÃO "ROBÔ" PARA REGISTRAR VENDAS DA CANTINA (PDV)
+// ===================================================================
+exports.registrarVendaCantina = functions.region(REGIAO).https.onCall(async (data, context) => {
+    if (!context.auth) {
+        throw new functions.https.HttpsError('unauthenticated', 'A função deve ser chamada por um usuário autenticado.');
+    }
+    const permissoes = ['super-admin', 'diretor', 'tesoureiro', 'conselheiro', 'produtor-evento'];
+    if (!permissoes.includes(context.auth.token.role)) {
+        throw new functions.https.HttpsError('permission-denied', 'Permissão negada.');
+    }
+
+    const { eventoId, eventoTitulo, total, itens, tipoVenda, voluntario } = data;
+
+    if (!eventoId || !eventoTitulo || total === undefined || !itens || !tipoVenda) {
+        throw new functions.https.HttpsError('invalid-argument', 'Dados da venda incompletos.');
+    }
+    if (tipoVenda === 'prazo' && !voluntario) {
+        throw new functions.https.HttpsError('invalid-argument', 'Voluntário é obrigatório para registrar pendência.');
+    }
+
+    const vendaData = {
+        eventoId,
+        eventoTitulo,
+        total,
+        itens,
+        registradoPor: {
+            uid: context.auth.uid,
+            nome: context.auth.token.name || context.auth.token.email
+        },
+        registradoEm: admin.firestore.FieldValue.serverTimestamp()
+    };
+
+    try {
+        if (tipoVenda === 'vista') {
+            await db.collection('cantina_vendas_avista').add(vendaData);
+        } else if (tipoVenda === 'prazo') {
+            vendaData.voluntarioId = voluntario.id;
+            vendaData.voluntarioNome = voluntario.nome;
+            vendaData.status = 'pendente'; // pendente, pago
+            await db.collection('contas_a_receber').add(vendaData);
+        }
+        return { success: true, message: 'Venda registrada com sucesso!' };
+    } catch (error) {
+        console.error("Erro ao registrar venda da cantina:", error);
+        throw new functions.https.HttpsError('internal', 'Ocorreu um erro ao salvar a venda.');
+    }
+});
+
 exports.uploadAtaParaStorage = functions.region(REGIAO).https.onCall(async (data, context) => {
     if (!context.auth) {
         throw new functions.https.HttpsError('unauthenticated', 'A função deve ser chamada por um usuário autenticado.');

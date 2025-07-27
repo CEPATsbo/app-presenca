@@ -9,22 +9,27 @@
         .nav-voltar { max-width: 1200px; width:100%; margin: 0 auto 30px auto; text-align: left; }
         .btn-voltar { background-color: #e9ecef; color: #495057; border: 1px solid #dee2e6; padding: 10px 20px; border-radius: 8px; font-weight: bold; font-size: 1em; text-decoration: none; }
         .container { background-color: white; padding: 40px; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.15); width: 100%; max-width: 1200px; margin-bottom: 30px; }
-        h1, h2 { text-align: center; color: #333; margin-top: 0; }
+        h1, h2 { text-align: center; color: #333; margin: 0; }
         .seletor-evento-container { text-align: center; margin-bottom: 30px; }
-        .seletor-evento-container select, .seletor-evento-container button { font-size: 1.2em; padding: 10px; border-radius: 8px; border: 1px solid #ccc; }
+        .seletor-evento-container select, .seletor-evento-container button { font-size: 1.2em; padding: 10px; border-radius: 8px; border: 1px solid #ccc; margin: 0 5px;}
         .pdv-container { display: none; grid-template-columns: 2fr 1fr; gap: 30px; }
         .menu-categorias { display: flex; flex-direction: column; gap: 20px; }
         .categoria-bloco h3 { background-color: #34495e; color: white; padding: 10px; margin: 0 0 10px 0; border-radius: 6px; }
         .itens-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; }
-        .item-btn { padding: 15px; font-size: 1em; border: 1px solid #ddd; border-radius: 6px; background-color: #f8f9fa; cursor: pointer; text-align: left; }
+        .item-btn { padding: 15px; font-size: 1em; border: 1px solid #ddd; border-radius: 6px; background-color: #f8f9fa; cursor: pointer; text-align: left; line-height: 1.4; }
         .item-btn strong { display: block; }
         .item-btn small { color: #28a745; font-weight: bold; }
-        .carrinho-container { background-color: #f8f9fa; padding: 20px; border-radius: 8px; }
-        #lista-carrinho { list-style-type: none; padding: 0; }
+        .carrinho-container { background-color: #f8f9fa; padding: 20px; border-radius: 8px; display: flex; flex-direction: column; }
+        #lista-carrinho { list-style-type: none; padding: 0; flex-grow: 1; }
         .carrinho-item { display: flex; justify-content: space-between; align-items: center; padding: 10px 0; border-bottom: 1px solid #ddd; }
         .carrinho-item button { background: #dc3545; color: white; border: none; border-radius: 50%; width: 25px; height: 25px; cursor: pointer; }
         .total-container { margin-top: 20px; text-align: right; font-size: 1.5em; font-weight: bold; }
-        .btn-finalizar { width: 100%; padding: 15px; font-size: 1.2em; background-color: #28a745; color: white; border: none; border-radius: 8px; cursor: pointer; margin-top: 20px; }
+        .botoes-finalizar { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 20px; }
+        .btn-finalizar { width: 100%; padding: 15px; font-size: 1.1em; color: white; border: none; border-radius: 8px; cursor: pointer; }
+        #btn-finalizar-vista { background-color: #28a745; }
+        #btn-finalizar-prazo { background-color: #ffc107; color: #333; }
+        .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.6); display: none; justify-content: center; align-items: center; z-index: 1000; }
+        .modal-content { background-color: white; padding: 30px; border-radius: 10px; width: 90%; max-width: 500px; }
     </style>
 </head>
 <body>
@@ -35,7 +40,7 @@
 
     <div id="main-content" class="container" style="display: none;">
         <h1>PDV Cantina "Amor e Luz"</h1>
-        <div class="seletor-evento-container">
+        <div id="seletor-evento-container" class="seletor-evento-container">
             <select id="seletor-evento"></select>
             <button id="btn-iniciar-pdv">Iniciar Vendas</button>
         </div>
@@ -46,25 +51,40 @@
                 <h2>Carrinho</h2>
                 <ul id="lista-carrinho"></ul>
                 <div id="total-container" class="total-container">Total: R$ 0,00</div>
-                <button id="btn-finalizar" class="btn-finalizar">Finalizar e Registrar Venda</button>
+                <div class="botoes-finalizar">
+                    <button id="btn-finalizar-vista" class="btn-finalizar">Receber e Finalizar</button>
+                    <button id="btn-finalizar-prazo" class="btn-finalizar">Registrar Pendência</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="modal-pendencia" class="modal-overlay">
+        <div class="modal-content">
+            <h2>Registrar Pendência</h2>
+            <p>Selecione o voluntário para registrar esta conta:</p>
+            <select id="seletor-voluntario" style="width: 100%; font-size: 1.1em; padding: 8px;"></select>
+            <div style="text-align: right; margin-top: 20px;">
+                <button type="button" id="btn-cancelar-pendencia" class="btn-secondary">Cancelar</button>
+                <button id="btn-confirmar-pendencia" class="btn-primary">Confirmar</button>
             </div>
         </div>
     </div>
 
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
-        import { getFirestore, collection, onSnapshot, addDoc, query, where, orderBy, Timestamp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
+        import { getFirestore, collection, onSnapshot, addDoc, doc, query, where, orderBy, serverTimestamp, Timestamp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
         import { getFunctions, httpsCallable } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-functions.js";
         import { protegerPagina } from '/auth.js';
 
         const firebaseConfig = {
-        apiKey: "AIzaSyBV7RPjk3cFTqL-aIpflJcUojKg1ZXMLuU",
-        authDomain: "voluntarios-ativos---cepat.firebaseapp.com",
-        projectId: "voluntarios-ativos---cepat",
-        storageBucket: "voluntarios-ativos---cepat.firebasestorage.app",
-        messagingSenderId: "66122858261",
-        appId: "1:66122858261:web:7fa21f1805463b5c08331c"
-    };
+            apiKey: "AIzaSyBV7RPjk3cFTqL-aIpflJcUojKg1ZXMLuU",
+            authDomain: "voluntarios-ativos---cepat.firebaseapp.com",
+            projectId: "voluntarios-ativos---cepat",
+            storageBucket: "voluntarios-ativos---cepat.firebasestorage.app",
+            messagingSenderId: "66122858261",
+            appId: "1:66122858261:web:7fa21f1805463b5c08331c"
+        };
         initializeApp(firebaseConfig);
 
         protegerPagina(['super-admin', 'diretor', 'tesoureiro', 'conselheiro', 'produtor-evento'])
@@ -79,18 +99,25 @@
         function inicializarPagina(user) {
             const db = getFirestore();
             const functions = getFunctions(undefined, 'southamerica-east1');
+            const registrarVendaCantina = httpsCallable(functions, 'registrarVendaCantina');
+
             const seletorEvento = document.getElementById('seletor-evento');
             const btnIniciarPDV = document.getElementById('btn-iniciar-pdv');
             const pdvContainer = document.getElementById('pdv-container');
             const menuCategorias = document.getElementById('menu-categorias');
             const listaCarrinho = document.getElementById('lista-carrinho');
             const totalContainer = document.getElementById('total-container');
-            const btnFinalizar = document.getElementById('btn-finalizar');
-
+            const btnFinalizarVista = document.getElementById('btn-finalizar-vista');
+            const btnFinalizarPrazo = document.getElementById('btn-finalizar-prazo');
+            const modalPendencia = document.getElementById('modal-pendencia');
+            const seletorVoluntario = document.getElementById('seletor-voluntario');
+            const btnConfirmarPendencia = document.getElementById('btn-confirmar-pendencia');
+            const btnCancelarPendencia = document.getElementById('btn-cancelar-pendencia');
+            
             let carrinho = [];
             let cardapioDoEvento = [];
+            let eventoSelecionado = {};
 
-            // Carrega eventos futuros e o cardápio padrão
             const hoje = Timestamp.now();
             const qEventos = query(collection(db, "eventos"), where("dataInicio", ">=", hoje), orderBy("dataInicio"));
             onSnapshot(qEventos, (snapshot) => {
@@ -98,18 +125,28 @@
                 snapshot.forEach(doc => {
                     const evento = doc.data();
                     const dataFormatada = evento.dataInicio.toDate().toLocaleDateString('pt-BR');
-                    seletorEvento.innerHTML += `<option value="${doc.id}">${evento.titulo} (${dataFormatada})</option>`;
+                    seletorEvento.innerHTML += `<option value="${doc.id}" data-titulo="${evento.titulo}">${evento.titulo} (${dataFormatada})</option>`;
+                });
+            });
+
+            onSnapshot(query(collection(db, "voluntarios"), orderBy("nome")), (snapshot) => {
+                seletorVoluntario.innerHTML = '<option value="">Selecione o voluntário</option>';
+                snapshot.forEach(doc => {
+                    seletorVoluntario.innerHTML += `<option value="${doc.id}" data-nome="${doc.data().nome}">${doc.data().nome}</option>`;
                 });
             });
             
             btnIniciarPDV.addEventListener('click', () => {
-                const eventoId = seletorEvento.value;
-                if (!eventoId) return;
+                const selectedOption = seletorEvento.options[seletorEvento.selectedIndex];
+                eventoSelecionado = {
+                    id: selectedOption.value,
+                    titulo: selectedOption.value === 'padrão' ? 'Dia Normal' : selectedOption.dataset.titulo
+                };
 
-                document.querySelector('.seletor-evento-container').style.display = 'none';
+                document.getElementById('seletor-evento-container').style.display = 'none';
                 pdvContainer.style.display = 'grid';
 
-                const qItens = query(collection(db, "cantina_itens"), where("eventoId", "==", eventoId));
+                const qItens = query(collection(db, "cantina_itens"), where("eventoId", "==", eventoSelecionado.id));
                 onSnapshot(qItens, (snapshot) => {
                     cardapioDoEvento = snapshot.docs.map(doc => ({id: doc.id, ...doc.data()}));
                     renderizarMenu();
@@ -124,7 +161,7 @@
                     return acc;
                 }, {});
 
-                for (const categoria in porCategoria) {
+                Object.keys(porCategoria).sort().forEach(categoria => {
                     const bloco = document.createElement('div');
                     bloco.className = 'categoria-bloco';
                     bloco.innerHTML = `<h3>${categoria}</h3>`;
@@ -140,7 +177,7 @@
                     });
                     bloco.appendChild(grid);
                     menuCategorias.appendChild(bloco);
-                }
+                });
             }
 
             function adicionarAoCarrinho(item) {
@@ -176,29 +213,52 @@
                 totalContainer.textContent = `Total: ${total.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}`;
             }
 
-            btnFinalizar.addEventListener('click', async () => {
-                if(carrinho.length === 0) return alert('O carrinho está vazio.');
-                
+            async function finalizarVenda(tipoVenda, voluntario = null) {
+                if (carrinho.length === 0) return alert('O carrinho está vazio.');
                 const totalVenda = carrinho.reduce((acc, item) => acc + (item.preco * item.qtd), 0);
-                const resumo = carrinho.map(item => `${item.qtd}x ${item.nome}`).join(', ');
                 
+                const dadosVenda = {
+                    eventoId: eventoSelecionado.id,
+                    eventoTitulo: eventoSelecionado.titulo,
+                    total: totalVenda,
+                    itens: carrinho.map(i => ({itemId: i.id, nome: i.nome, qtd: i.qtd, precoUnitario: i.preco})),
+                    tipoVenda: tipoVenda,
+                    voluntario: voluntario // será null para venda à vista
+                };
+
                 try {
-                    const registrarVendaCantina = httpsCallable(functions, 'registrarVendaCantina');
-                    await registrarVendaCantina({
-                        eventoId: seletorEvento.value,
-                        eventoTitulo: seletorEvento.options[seletorEvento.selectedIndex].text,
-                        total: totalVenda,
-                        itens: carrinho
-                    });
-                    
+                    await registrarVendaCantina(dadosVenda);
                     alert('Venda registrada com sucesso!');
                     carrinho = [];
                     renderizarCarrinho();
-
+                    if(modalPendencia.style.display === 'flex') {
+                        modalPendencia.style.display = 'none';
+                    }
                 } catch(error) {
                     console.error("Erro ao registrar venda: ", error);
                     alert(`Erro ao registrar venda: ${error.message}`);
                 }
+            }
+
+            btnFinalizarVista.addEventListener('click', () => finalizarVenda('vista'));
+
+            btnFinalizarPrazo.addEventListener('click', () => {
+                if (carrinho.length === 0) return alert('O carrinho está vazio.');
+                modalPendencia.style.display = 'flex';
+            });
+
+            btnCancelarPendencia.addEventListener('click', () => {
+                modalPendencia.style.display = 'none';
+            });
+
+            btnConfirmarPendencia.addEventListener('click', () => {
+                const voluntarioId = seletorVoluntario.value;
+                if (!voluntarioId) return alert('Por favor, selecione um voluntário.');
+                
+                const voluntarioNome = seletorVoluntario.options[seletorVoluntario.selectedIndex].dataset.nome;
+                const dadosVoluntario = { id: voluntarioId, nome: voluntarioNome };
+                
+                finalizarVenda('prazo', dadosVoluntario);
             });
         }
     </script>
