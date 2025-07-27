@@ -151,10 +151,6 @@
                 <div class="rodape-assinaturas" id="assinaturas-section"></div>
             `;
             
-            // ===================================================================
-            // INÍCIO DA LÓGICA DO BALANCETE (TODA A SUA LÓGICA EXISTENTE)
-            // ===================================================================
-            
             const seletorInicio = document.getElementById('mes-ano-inicio');
             const seletorFim = document.getElementById('mes-ano-fim');
             const seletorSalvos = document.getElementById('seletor-balancetes-salvos');
@@ -659,6 +655,96 @@
             carregarBalancetesSalvos().then(() => {
                 carregarDadosDoPeriodo(true);
             });
+
+            // ===================================================================
+            // NOVA LÓGICA PARA OS RELATÓRIOS DA CANTINA
+            // ===================================================================
+            const seletorEventoRelatorio = document.getElementById('seletor-evento-relatorio');
+            const resultadoRelatorio = document.getElementById('resultado-relatorio');
+
+            async function carregarEventosParaRelatorio() {
+                const qEventos = query(collection(db, "eventos"), orderBy("dataInicio", "desc"));
+                const snapshot = await getDocs(qEventos);
+                seletorEventoRelatorio.innerHTML = '<option value="">Selecione um evento ou período</option><option value="padrão">Vendas de Dias Normais</option>';
+                snapshot.forEach(doc => {
+                    const evento = doc.data();
+                    const dataFormatada = evento.dataInicio.toDate().toLocaleDateString('pt-BR');
+                    seletorEventoRelatorio.innerHTML += `<option value="${doc.id}">${evento.titulo} (${dataFormatada})</option>`;
+                });
+            }
+
+            seletorEventoRelatorio.addEventListener('change', async (e) => {
+                const eventoId = e.target.value;
+                if (!eventoId) {
+                    resultadoRelatorio.innerHTML = '';
+                    return;
+                }
+                
+                resultadoRelatorio.innerHTML = '<h3>Carregando relatório...</h3>';
+
+                // Buscar vendas à vista
+                const qVista = query(collection(db, "cantina_vendas_avista"), where("eventoId", "==", eventoId));
+                const snapshotVista = await getDocs(qVista);
+                let totalVista = 0;
+                snapshotVista.forEach(doc => totalVista += doc.data().total);
+
+                // Buscar pendências
+                const qPrazo = query(collection(db, "contas_a_receber"), where("eventoId", "==", eventoId), orderBy("registradoEm"));
+                const snapshotPrazo = await getDocs(qPrazo);
+                let pendenciasHtml = '';
+                if(snapshotPrazo.empty) {
+                    pendenciasHtml = '<tr><td colspan="4">Nenhuma pendência registrada para este evento.</td></tr>';
+                } else {
+                    snapshotPrazo.forEach(doc => {
+                        const pendencia = doc.data();
+                        const trClass = pendencia.status === 'pago' ? 'status-pago' : '';
+                        const comprador = pendencia.compradorNome || 'Nome não registrado';
+                        pendenciasHtml += `
+                            <tr class="${trClass}">
+                                <td>${comprador}</td>
+                                <td>${new Date(pendencia.registradoEm.seconds * 1000).toLocaleDateString('pt-BR')}</td>
+                                <td>${Number(pendencia.total).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</td>
+                                <td>
+                                    ${pendencia.status !== 'pago' ? `<button class="btn-marcar-pago" data-id="${doc.id}">Marcar como Recebido</button>` : 'Recebido'}
+                                </td>
+                            </tr>
+                        `;
+                    });
+                }
+                
+                const htmlFinal = `
+                    <div class="total-relatorio">
+                        Total de Vendas Recebidas (à vista): ${Number(totalVista).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                    </div>
+                    <h3>Contas a Receber (Fiado)</h3>
+                    <table class="tabela-relatorio">
+                        <thead>
+                            <tr>
+                                <th>Comprador</th>
+                                <th>Data da Compra</th>
+                                <th>Valor</th>
+                                <th>Status</th>
+                            </tr>
+                        </thead>
+                        <tbody>${pendenciasHtml}</tbody>
+                    </table>
+                `;
+                resultadoRelatorio.innerHTML = htmlFinal;
+            });
+
+            resultadoRelatorio.addEventListener('click', async (e) => {
+                if (e.target.classList.contains('btn-marcar-pago')) {
+                    const id = e.target.dataset.id;
+                    if (confirm('Tem certeza que deseja marcar esta pendência como recebida? Esta ação não pode ser desfeita.')) {
+                        const docRef = doc(db, 'contas_a_receber', id);
+                        await updateDoc(docRef, { status: 'pago' });
+                        alert('Pendência marcada como recebida!');
+                        seletorEventoRelatorio.dispatchEvent(new Event('change')); // Recarrega o relatório
+                    }
+                }
+            });
+
+            carregarEventosParaRelatorio();
         }
     </script>
 </body>
