@@ -39,8 +39,8 @@
             <input type="hidden" id="itemId">
             <div class="form-grid">
                 <div class="form-item" style="grid-column: 1 / -1;">
-                    <label for="evento">Associar ao Evento</label>
-                    <select id="evento" required></select>
+                    <label for="evento">Associar ao Evento (Opcional)</label>
+                    <select id="evento"></select>
                 </div>
                 <div class="form-item">
                     <label for="nome">Nome do Item</label>
@@ -79,7 +79,7 @@
                     <th>Item</th>
                     <th>Categoria</th>
                     <th>Preço</th>
-                    <th>Evento</th>
+                    <th>Evento Associado</th>
                     <th>Ações</th>
                 </tr>
             </thead>
@@ -90,17 +90,17 @@
 
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
-        import { getFirestore, collection, onSnapshot, addDoc, doc, setDoc, deleteDoc, query, where, orderBy, serverTimestamp, Timestamp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
+        import { getFirestore, collection, onSnapshot, addDoc, doc, getDoc, setDoc, deleteDoc, query, where, orderBy, serverTimestamp, Timestamp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
         import { protegerPagina } from '/auth.js';
 
         const firebaseConfig = {
-        apiKey: "AIzaSyBV7RPjk3cFTqL-aIpflJcUojKg1ZXMLuU",
-        authDomain: "voluntarios-ativos---cepat.firebaseapp.com",
-        projectId: "voluntarios-ativos---cepat",
-        storageBucket: "voluntarios-ativos---cepat.firebasestorage.app",
-        messagingSenderId: "66122858261",
-        appId: "1:66122858261:web:7fa21f1805463b5c08331c"
-    };
+            apiKey: "AIzaSyBV7RPjk3cFTqL-aIpflJcUojKg1ZXMLuU",
+            authDomain: "voluntarios-ativos---cepat.firebaseapp.com",
+            projectId: "voluntarios-ativos---cepat",
+            storageBucket: "voluntarios-ativos---cepat.firebasestorage.app",
+            messagingSenderId: "66122858261",
+            appId: "1:66122858261:web:7fa21f1805463b5c08331c"
+        };
         initializeApp(firebaseConfig);
 
         protegerPagina(['super-admin', 'diretor', 'tesoureiro', 'conselheiro', 'produtor-evento'])
@@ -119,40 +119,53 @@
             const tabelaItens = document.getElementById('tabela-itens').querySelector('tbody');
             const seletorEvento = document.getElementById('evento');
 
-            // Carrega eventos futuros para o seletor
-            const hoje = Timestamp.now();
-            const qEventos = query(collection(db, "eventos"), where("dataInicio", ">=", hoje), orderBy("dataInicio"));
-            onSnapshot(qEventos, (snapshot) => {
-                seletorEvento.innerHTML = '<option value="">Selecione um evento</option>';
-                snapshot.forEach(doc => {
-                    const evento = doc.data();
-                    const dataFormatada = evento.dataInicio.toDate().toLocaleDateString('pt-BR');
-                    seletorEvento.innerHTML += `<option value="${doc.id}" data-data="${dataFormatada}">${evento.titulo} (${dataFormatada})</option>`;
+            const carregarEventos = () => {
+                const hoje = Timestamp.now();
+                const qEventos = query(collection(db, "eventos"), where("dataInicio", ">=", hoje), orderBy("dataInicio"));
+                onSnapshot(qEventos, (snapshot) => {
+                    seletorEvento.innerHTML = '<option value="padrão">Cardápio Padrão (Dias Normais)</option>';
+                    snapshot.forEach(doc => {
+                        const evento = doc.data();
+                        const dataFormatada = evento.dataInicio.toDate().toLocaleDateString('pt-BR');
+                        seletorEvento.innerHTML += `<option value="${doc.id}" data-data="${dataFormatada}">${evento.titulo} (${dataFormatada})</option>`;
+                    });
                 });
-            });
+            };
 
-            // Carrega e exibe os itens da cantina
-            const qItens = query(collection(db, "cantina_itens"), orderBy("eventoId"), orderBy("categoria"), orderBy("nome"));
-            onSnapshot(qItens, (snapshot) => {
-                tabelaItens.innerHTML = '';
-                snapshot.forEach(doc => {
-                    const item = doc.data();
-                    const tr = document.createElement('tr');
-                    tr.innerHTML = `
-                        <td><strong>${item.nome}</strong><br><small>${item.descricao || ''}</small></td>
-                        <td>${item.categoria}</td>
-                        <td>${Number(item.preco).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</td>
-                        <td>${item.eventoTitulo} (${item.eventoData})</td>
-                        <td class="actions-table">
-                            <button class="btn-edit" data-id="${doc.id}">Editar</button>
-                            <button class="btn-delete" data-id="${doc.id}">Apagar</button>
-                        </td>
-                    `;
-                    tabelaItens.appendChild(tr);
+            const carregarItens = () => {
+                const qItens = query(collection(db, "cantina_itens"), orderBy("eventoId"), orderBy("categoria"), orderBy("nome"));
+                onSnapshot(qItens, (snapshot) => {
+                    const itens = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+
+                    // Ordenação customizada no cliente
+                    itens.sort((a, b) => {
+                        if (a.eventoId === 'padrão' && b.eventoId !== 'padrão') return -1;
+                        if (a.eventoId !== 'padrão' && b.eventoId === 'padrão') return 1;
+                        if (a.eventoData < b.eventoData) return -1;
+                        if (a.eventoData > b.eventoData) return 1;
+                        if (a.categoria < b.categoria) return -1;
+                        if (a.categoria > b.categoria) return 1;
+                        return a.nome.localeCompare(b.nome);
+                    });
+
+                    tabelaItens.innerHTML = '';
+                    itens.forEach(item => {
+                        const tr = document.createElement('tr');
+                        tr.innerHTML = `
+                            <td><strong>${item.nome}</strong><br><small>${item.descricao || ''}</small></td>
+                            <td>${item.categoria}</td>
+                            <td>${Number(item.preco).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</td>
+                            <td>${item.eventoId === 'padrão' ? 'Cardápio Padrão' : `${item.eventoTitulo} (${item.eventoData})`}</td>
+                            <td class="actions-table">
+                                <button class="btn-edit" data-id="${item.id}">Editar</button>
+                                <button class="btn-delete" data-id="${item.id}">Apagar</button>
+                            </td>
+                        `;
+                        tabelaItens.appendChild(tr);
+                    });
                 });
-            });
+            };
 
-            // Lógica do Formulário
             form.addEventListener('submit', async (e) => {
                 e.preventDefault();
                 const selectedOption = seletorEvento.options[seletorEvento.selectedIndex];
@@ -162,8 +175,8 @@
                     preco: parseFloat(document.getElementById('preco').value),
                     descricao: document.getElementById('descricao').value,
                     eventoId: selectedOption.value,
-                    eventoTitulo: selectedOption.text.split(' (')[0],
-                    eventoData: selectedOption.dataset.data,
+                    eventoTitulo: selectedOption.value === 'padrão' ? 'Padrão' : selectedOption.text.split(' (')[0],
+                    eventoData: selectedOption.value === 'padrão' ? null : selectedOption.dataset.data,
                 };
                 const id = document.getElementById('itemId').value;
 
@@ -180,7 +193,6 @@
                 document.getElementById('btn-cancelar').style.display = 'none';
             });
             
-            // Lógica dos botões da tabela
             tabelaItens.addEventListener('click', async (e) => {
                 const target = e.target;
                 const id = target.dataset.id;
@@ -196,7 +208,7 @@
                         document.getElementById('nome').value = data.nome;
                         document.getElementById('categoria').value = data.categoria;
                         document.getElementById('preco').value = data.preco;
-                        document.getElementById('descricao').value = data.descricao;
+                        document.getElementById('descricao').value = data.descricao || '';
                         document.getElementById('btn-cancelar').style.display = 'inline-block';
                         window.scrollTo({ top: 0, behavior: 'smooth' });
                     }
@@ -212,6 +224,9 @@
                 document.getElementById('itemId').value = '';
                 document.getElementById('btn-cancelar').style.display = 'none';
             });
+
+            carregarEventos();
+            carregarItens();
         }
     </script>
 </body>
