@@ -2,7 +2,6 @@ import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebas
 import { getFirestore, collection, query, where, onSnapshot } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
 
 document.addEventListener('DOMContentLoaded', () => {
-
     const firebaseConfig = {
         apiKey: "AIzaSyBV7RPjk3cFTqL-aIpflJcUojKg1ZXMLuU",
         authDomain: "voluntarios-ativos---cepat.firebaseapp.com",
@@ -14,7 +13,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const app = initializeApp(firebaseConfig);
     const db = getFirestore(app);
 
-    const TEMPO_CARROSSEL_MS = 20000;
+    const TEMPO_CARROSSEL_MS = 15000; // Tempo ajustado para 15 segundos
+    const MAX_NOMES_POR_BLOCO = 8; // Número máximo de nomes antes de dividir uma atividade
     const LARGURA_BLOCO = 370; // Largura do bloco (350px) + gap (20px)
 
     const listaPresencaDiv = document.getElementById('lista-presenca');
@@ -62,57 +62,64 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
-        const todosOsBlocos = Object.keys(porAtividade).sort().map(atividade => {
+        const todosOsBlocos = [];
+        Object.keys(porAtividade).sort().forEach(atividade => {
             const voluntarios = porAtividade[atividade].sort();
-            return {
-                titulo: atividade,
-                nomes: voluntarios,
-                // Altura estimada do bloco em "unidades" para cálculo
-                altura: 85 + (voluntarios.length * 48) 
-            };
+            const totalPaginas = Math.ceil(voluntarios.length / MAX_NOMES_POR_BLOCO);
+            if (totalPaginas <= 1) {
+                todosOsBlocos.push({ titulo: atividade, nomes: voluntarios });
+            } else {
+                for (let i = 0; i < totalPaginas; i++) {
+                    const inicio = i * MAX_NOMES_POR_BLOCO;
+                    const fim = inicio + MAX_NOMES_POR_BLOCO;
+                    todosOsBlocos.push({
+                        titulo: `${atividade} (pág ${i + 1}/${totalPaginas})`,
+                        nomes: voluntarios.slice(inicio, fim)
+                    });
+                }
+            }
         });
         
         const alturaDisponivel = listaPresencaDiv.clientHeight;
         const colunasPorPagina = Math.floor(listaPresencaDiv.clientWidth / LARGURA_BLOCO);
-        
         const paginas = [];
-        let paginaAtual = [];
-        let alturaColunasPagina = new Array(colunasPorPagina).fill(0);
-        
-        todosOsBlocos.forEach(bloco => {
-            let colunaComMenorAltura = alturaColunasPagina.indexOf(Math.min(...alturaColunasPagina));
+        let paginaAtual = [ ...Array(colunasPorPagina) ].map(() => ({ blocos: [], altura: 0 }));
 
-            if (alturaColunasPagina[colunaComMenorAltura] + bloco.altura > alturaDisponivel) {
+        todosOsBlocos.forEach(bloco => {
+            const alturaBloco = 85 + (bloco.nomes.length * 48);
+            let colunaComMenorAltura = 0;
+            for (let i = 1; i < colunasPorPagina; i++) {
+                if (paginaAtual[i].altura < paginaAtual[colunaComMenorAltura].altura) {
+                    colunaComMenorAltura = i;
+                }
+            }
+
+            if (paginaAtual[colunaComMenorAltura].altura + alturaBloco > alturaDisponivel) {
                 paginas.push(paginaAtual);
-                paginaAtual = [];
-                alturaColunasPagina = new Array(colunasPorPagina).fill(0);
+                paginaAtual = [ ...Array(colunasPorPagina) ].map(() => ({ blocos: [], altura: 0 }));
                 colunaComMenorAltura = 0;
             }
 
-            if (!paginaAtual[colunaComMenorAltura]) {
-                paginaAtual[colunaComMenorAltura] = [];
-            }
-            paginaAtual[colunaComMenorAltura].push(bloco);
-            alturaColunasPagina[colunaComMenorAltura] += bloco.altura;
+            paginaAtual[colunaComMenorAltura].blocos.push(bloco);
+            paginaAtual[colunaComMenorAltura].altura += alturaBloco;
         });
 
-        if (paginaAtual.length > 0) {
+        if (paginaAtual.some(col => col.blocos.length > 0)) {
             paginas.push(paginaAtual);
         }
 
         paginas.forEach((pagina) => {
             const paginaDiv = document.createElement('div');
             paginaDiv.className = 'pagina-carrossel';
-            
             pagina.forEach(coluna => {
                 const colunaDiv = document.createElement('div'); // Cria a div da coluna
-                coluna.forEach(bloco => {
+                coluna.blocos.forEach(bloco => {
                     const grupoDiv = document.createElement('div');
                     grupoDiv.className = 'atividade-grupo';
                     grupoDiv.innerHTML = `<h2 class="atividade-titulo">${bloco.titulo}</h2><ul>${bloco.nomes.map(n => `<li>${n}</li>`).join('')}</ul>`;
-                    colunaDiv.appendChild(grupoDiv); // Adiciona o bloco na coluna
+                    colunaDiv.appendChild(grupoDiv);
                 });
-                paginaDiv.appendChild(colunaDiv); // Adiciona a coluna na página
+                paginaDiv.appendChild(colunaDiv);
             });
             listaPresencaDiv.appendChild(paginaDiv);
         });
