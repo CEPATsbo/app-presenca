@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin - Gerenciar Cantina</title>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background-color: #f4f6f9; display: flex; flex-direction: column; align-items: center; margin: 0; padding: 20px; box-sizing: border-box; }
+        .nav-voltar { max-width: 900px; width:100%; margin: 0 auto 30px auto; text-align: left; }
+        .btn-voltar { background-color: #e9ecef; color: #495057; border: 1px solid #dee2e6; padding: 10px 20px; border-radius: 8px; font-weight: bold; font-size: 1em; text-decoration: none; }
+        .container { background-color: white; padding: 40px; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.15); width: 100%; max-width: 900px; margin-bottom: 30px; }
+        h1, h2 { text-align: center; color: #333; margin-top: 0; }
+        .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+        .form-item { display: flex; flex-direction: column; }
+        .form-item label { margin-bottom: 5px; font-weight: bold; color: #555; }
+        .form-item input, .form-item select, .form-item textarea { padding: 10px; border-radius: 6px; border: 1px solid #ccc; font-size: 1em; }
+        .form-actions { grid-column: 1 / -1; display: flex; justify-content: flex-end; gap: 10px; margin-top: 20px; }
+        .btn { padding: 12px 25px; border: none; border-radius: 6px; font-size: 1em; font-weight: bold; cursor: pointer; }
+        .btn-primary { background-color: #28a745; color: white; }
+        .btn-secondary { background-color: #6c757d; color: white; }
+        table { width: 100%; border-collapse: collapse; margin-top: 30px; }
+        th, td { padding: 12px 15px; border-bottom: 1px solid #eee; text-align: left; }
+        th { background-color: #f8f9fa; }
+        .actions-table button { margin-right: 5px; padding: 5px 10px; border-radius: 4px; cursor: pointer; border: 1px solid #ccc; }
+        .btn-edit { background-color: #007bff; color: white; }
+        .btn-delete { background-color: #dc3545; color: white; }
+    </style>
+</head>
+<body>
+    <nav class="nav-voltar">
+        <a href="/dashboard.html" class="btn-voltar">⬅ Voltar para o Dashboard</a>
+    </nav>
+    <div id="acesso-negado" style="display: none;"><h1>Acesso Negado</h1></div>
+
+    <div id="main-content" class="container" style="display: none;">
+        <h1>Gerenciar Cantina "Amor e Luz"</h1>
+
+        <form id="form-item-cantina">
+            <input type="hidden" id="itemId">
+            <div class="form-grid">
+                <div class="form-item" style="grid-column: 1 / -1;">
+                    <label for="evento">Associar ao Evento</label>
+                    <select id="evento" required></select>
+                </div>
+                <div class="form-item">
+                    <label for="nome">Nome do Item</label>
+                    <input type="text" id="nome" required>
+                </div>
+                <div class="form-item">
+                    <label for="categoria">Categoria</label>
+                    <select id="categoria" required>
+                        <option value="Salgados">Salgados</option>
+                        <option value="Doces">Doces</option>
+                        <option value="Bebidas">Bebidas</option>
+                        <option value="Outros">Outros</option>
+                    </select>
+                </div>
+                <div class="form-item">
+                    <label for="preco">Preço (R$)</label>
+                    <input type="number" id="preco" step="0.01" required>
+                </div>
+                 <div class="form-item">
+                    <label for="descricao">Descrição (opcional)</label>
+                    <input type="text" id="descricao">
+                </div>
+            </div>
+            <div class="form-actions">
+                <button type="button" id="btn-cancelar" class="btn btn-secondary" style="display: none;">Cancelar</button>
+                <button type="submit" class="btn btn-primary">Salvar Item</button>
+            </div>
+        </form>
+
+        <hr style="margin: 40px 0;">
+
+        <h2>Cardápio Cadastrado</h2>
+        <table id="tabela-itens">
+            <thead>
+                <tr>
+                    <th>Item</th>
+                    <th>Categoria</th>
+                    <th>Preço</th>
+                    <th>Evento</th>
+                    <th>Ações</th>
+                </tr>
+            </thead>
+            <tbody>
+                </tbody>
+        </table>
+    </div>
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
+        import { getFirestore, collection, onSnapshot, addDoc, doc, setDoc, deleteDoc, query, where, orderBy, serverTimestamp, Timestamp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
+        import { protegerPagina } from '/auth.js';
+
+        const firebaseConfig = {
+        apiKey: "AIzaSyBV7RPjk3cFTqL-aIpflJcUojKg1ZXMLuU",
+        authDomain: "voluntarios-ativos---cepat.firebaseapp.com",
+        projectId: "voluntarios-ativos---cepat",
+        storageBucket: "voluntarios-ativos---cepat.firebasestorage.app",
+        messagingSenderId: "66122858261",
+        appId: "1:66122858261:web:7fa21f1805463b5c08331c"
+    };
+        initializeApp(firebaseConfig);
+
+        protegerPagina(['super-admin', 'diretor', 'tesoureiro', 'conselheiro', 'produtor-evento'])
+            .then(user => {
+                document.getElementById('main-content').style.display = 'block';
+                inicializarPagina(user);
+            })
+            .catch(error => {
+                document.getElementById('acesso-negado').style.display = 'block';
+                console.error(error.message);
+            });
+        
+        function inicializarPagina(user) {
+            const db = getFirestore();
+            const form = document.getElementById('form-item-cantina');
+            const tabelaItens = document.getElementById('tabela-itens').querySelector('tbody');
+            const seletorEvento = document.getElementById('evento');
+
+            // Carrega eventos futuros para o seletor
+            const hoje = Timestamp.now();
+            const qEventos = query(collection(db, "eventos"), where("dataInicio", ">=", hoje), orderBy("dataInicio"));
+            onSnapshot(qEventos, (snapshot) => {
+                seletorEvento.innerHTML = '<option value="">Selecione um evento</option>';
+                snapshot.forEach(doc => {
+                    const evento = doc.data();
+                    const dataFormatada = evento.dataInicio.toDate().toLocaleDateString('pt-BR');
+                    seletorEvento.innerHTML += `<option value="${doc.id}" data-data="${dataFormatada}">${evento.titulo} (${dataFormatada})</option>`;
+                });
+            });
+
+            // Carrega e exibe os itens da cantina
+            const qItens = query(collection(db, "cantina_itens"), orderBy("eventoId"), orderBy("categoria"), orderBy("nome"));
+            onSnapshot(qItens, (snapshot) => {
+                tabelaItens.innerHTML = '';
+                snapshot.forEach(doc => {
+                    const item = doc.data();
+                    const tr = document.createElement('tr');
+                    tr.innerHTML = `
+                        <td><strong>${item.nome}</strong><br><small>${item.descricao || ''}</small></td>
+                        <td>${item.categoria}</td>
+                        <td>${Number(item.preco).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</td>
+                        <td>${item.eventoTitulo} (${item.eventoData})</td>
+                        <td class="actions-table">
+                            <button class="btn-edit" data-id="${doc.id}">Editar</button>
+                            <button class="btn-delete" data-id="${doc.id}">Apagar</button>
+                        </td>
+                    `;
+                    tabelaItens.appendChild(tr);
+                });
+            });
+
+            // Lógica do Formulário
+            form.addEventListener('submit', async (e) => {
+                e.preventDefault();
+                const selectedOption = seletorEvento.options[seletorEvento.selectedIndex];
+                const item = {
+                    nome: document.getElementById('nome').value,
+                    categoria: document.getElementById('categoria').value,
+                    preco: parseFloat(document.getElementById('preco').value),
+                    descricao: document.getElementById('descricao').value,
+                    eventoId: selectedOption.value,
+                    eventoTitulo: selectedOption.text.split(' (')[0],
+                    eventoData: selectedOption.dataset.data,
+                };
+                const id = document.getElementById('itemId').value;
+
+                if (id) {
+                    await setDoc(doc(db, 'cantina_itens', id), item, { merge: true });
+                    alert('Item atualizado com sucesso!');
+                } else {
+                    item.criadoEm = serverTimestamp();
+                    await addDoc(collection(db, 'cantina_itens'), item);
+                    alert('Item salvo com sucesso!');
+                }
+                form.reset();
+                document.getElementById('itemId').value = '';
+                document.getElementById('btn-cancelar').style.display = 'none';
+            });
+            
+            // Lógica dos botões da tabela
+            tabelaItens.addEventListener('click', async (e) => {
+                const target = e.target;
+                const id = target.dataset.id;
+                if (!id) return;
+
+                if (target.classList.contains('btn-edit')) {
+                    const docRef = doc(db, 'cantina_itens', id);
+                    const docSnap = await getDoc(docRef);
+                    if (docSnap.exists()) {
+                        const data = docSnap.data();
+                        document.getElementById('itemId').value = id;
+                        document.getElementById('evento').value = data.eventoId;
+                        document.getElementById('nome').value = data.nome;
+                        document.getElementById('categoria').value = data.categoria;
+                        document.getElementById('preco').value = data.preco;
+                        document.getElementById('descricao').value = data.descricao;
+                        document.getElementById('btn-cancelar').style.display = 'inline-block';
+                        window.scrollTo({ top: 0, behavior: 'smooth' });
+                    }
+                } else if (target.classList.contains('btn-delete')) {
+                    if (confirm('Tem certeza que deseja apagar este item?')) {
+                        await deleteDoc(doc(db, 'cantina_itens', id));
+                    }
+                }
+            });
+
+            document.getElementById('btn-cancelar').addEventListener('click', () => {
+                form.reset();
+                document.getElementById('itemId').value = '';
+                document.getElementById('btn-cancelar').style.display = 'none';
+            });
+        }
+    </script>
+</body>
+</html>
