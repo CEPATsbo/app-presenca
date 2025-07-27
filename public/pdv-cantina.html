@@ -30,6 +30,10 @@
         #btn-finalizar-prazo { background-color: #ffc107; color: #333; }
         .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.6); display: none; justify-content: center; align-items: center; z-index: 1000; }
         .modal-content { background-color: white; padding: 30px; border-radius: 10px; width: 90%; max-width: 500px; }
+        .modal-content p, .modal-content label { margin-bottom: 10px; display: block; }
+        .modal-content input, .modal-content select { width: 100%; font-size: 1.1em; padding: 8px; box-sizing: border-box; }
+        .modal-content input { margin-top: 10px; }
+
     </style>
 </head>
 <body>
@@ -62,8 +66,11 @@
     <div id="modal-pendencia" class="modal-overlay">
         <div class="modal-content">
             <h2>Registrar Pendência</h2>
-            <p>Selecione o voluntário para registrar esta conta:</p>
-            <select id="seletor-voluntario" style="width: 100%; font-size: 1.1em; padding: 8px;"></select>
+            <p>Selecione um voluntário da lista:</p>
+            <select id="seletor-voluntario"></select>
+            <hr style="margin: 20px 0;">
+            <label for="nome-externo">Ou digite o nome do comprador:</label>
+            <input type="text" id="nome-externo" placeholder="Nome do visitante...">
             <div style="text-align: right; margin-top: 20px;">
                 <button type="button" id="btn-cancelar-pendencia" class="btn-secondary">Cancelar</button>
                 <button id="btn-confirmar-pendencia" class="btn-primary">Confirmar</button>
@@ -78,13 +85,13 @@
         import { protegerPagina } from '/auth.js';
 
         const firebaseConfig = {
-            apiKey: "AIzaSyBV7RPjk3cFTqL-aIpflJcUojKg1ZXMLuU",
-            authDomain: "voluntarios-ativos---cepat.firebaseapp.com",
-            projectId: "voluntarios-ativos---cepat",
-            storageBucket: "voluntarios-ativos---cepat.firebasestorage.app",
-            messagingSenderId: "66122858261",
-            appId: "1:66122858261:web:7fa21f1805463b5c08331c"
-        };
+        apiKey: "AIzaSyBV7RPjk3cFTqL-aIpflJcUojKg1ZXMLuU",
+        authDomain: "voluntarios-ativos---cepat.firebaseapp.com",
+        projectId: "voluntarios-ativos---cepat",
+        storageBucket: "voluntarios-ativos---cepat.firebasestorage.app",
+        messagingSenderId: "66122858261",
+        appId: "1:66122858261:web:7fa21f1805463b5c08331c"
+    };
         initializeApp(firebaseConfig);
 
         protegerPagina(['super-admin', 'diretor', 'tesoureiro', 'conselheiro', 'produtor-evento'])
@@ -111,6 +118,7 @@
             const btnFinalizarPrazo = document.getElementById('btn-finalizar-prazo');
             const modalPendencia = document.getElementById('modal-pendencia');
             const seletorVoluntario = document.getElementById('seletor-voluntario');
+            const nomeExternoInput = document.getElementById('nome-externo');
             const btnConfirmarPendencia = document.getElementById('btn-confirmar-pendencia');
             const btnCancelarPendencia = document.getElementById('btn-cancelar-pendencia');
             
@@ -142,10 +150,8 @@
                     id: selectedOption.value,
                     titulo: selectedOption.value === 'padrão' ? 'Dia Normal' : selectedOption.dataset.titulo
                 };
-
                 document.getElementById('seletor-evento-container').style.display = 'none';
                 pdvContainer.style.display = 'grid';
-
                 const qItens = query(collection(db, "cantina_itens"), where("eventoId", "==", eventoSelecionado.id));
                 onSnapshot(qItens, (snapshot) => {
                     cardapioDoEvento = snapshot.docs.map(doc => ({id: doc.id, ...doc.data()}));
@@ -160,7 +166,6 @@
                     acc[item.categoria].push(item);
                     return acc;
                 }, {});
-
                 Object.keys(porCategoria).sort().forEach(categoria => {
                     const bloco = document.createElement('div');
                     bloco.className = 'categoria-bloco';
@@ -191,7 +196,13 @@
             }
             
             function removerDoCarrinho(itemId) {
-                carrinho = carrinho.filter(i => i.id !== itemId);
+                const itemIndex = carrinho.findIndex(i => i.id === itemId);
+                if (itemIndex > -1) {
+                    carrinho[itemIndex].qtd--;
+                    if (carrinho[itemIndex].qtd === 0) {
+                        carrinho.splice(itemIndex, 1);
+                    }
+                }
                 renderizarCarrinho();
             }
 
@@ -204,7 +215,7 @@
                     li.innerHTML = `
                         <span>${item.qtd}x ${item.nome}</span>
                         <span>${Number(item.preco * item.qtd).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span>
-                        <button data-id="${item.id}">X</button>
+                        <button data-id="${item.id}">-</button>
                     `;
                     li.querySelector('button').onclick = () => removerDoCarrinho(item.id);
                     listaCarrinho.appendChild(li);
@@ -213,7 +224,7 @@
                 totalContainer.textContent = `Total: ${total.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}`;
             }
 
-            async function finalizarVenda(tipoVenda, voluntario = null) {
+            async function finalizarVenda(tipoVenda, comprador = null) {
                 if (carrinho.length === 0) return alert('O carrinho está vazio.');
                 const totalVenda = carrinho.reduce((acc, item) => acc + (item.preco * item.qtd), 0);
                 
@@ -223,7 +234,7 @@
                     total: totalVenda,
                     itens: carrinho.map(i => ({itemId: i.id, nome: i.nome, qtd: i.qtd, precoUnitario: i.preco})),
                     tipoVenda: tipoVenda,
-                    voluntario: voluntario // será null para venda à vista
+                    comprador: comprador
                 };
 
                 try {
@@ -233,6 +244,8 @@
                     renderizarCarrinho();
                     if(modalPendencia.style.display === 'flex') {
                         modalPendencia.style.display = 'none';
+                        seletorVoluntario.value = '';
+                        nomeExternoInput.value = '';
                     }
                 } catch(error) {
                     console.error("Erro ao registrar venda: ", error);
@@ -249,16 +262,27 @@
 
             btnCancelarPendencia.addEventListener('click', () => {
                 modalPendencia.style.display = 'none';
+                seletorVoluntario.value = '';
+                nomeExternoInput.value = '';
             });
 
             btnConfirmarPendencia.addEventListener('click', () => {
                 const voluntarioId = seletorVoluntario.value;
-                if (!voluntarioId) return alert('Por favor, selecione um voluntário.');
+                const nomeExterno = nomeExternoInput.value.trim();
+
+                if (!voluntarioId && !nomeExterno) {
+                    return alert('Por favor, selecione um voluntário ou digite um nome.');
+                }
                 
-                const voluntarioNome = seletorVoluntario.options[seletorVoluntario.selectedIndex].dataset.nome;
-                const dadosVoluntario = { id: voluntarioId, nome: voluntarioNome };
+                let dadosComprador = {};
+                if (voluntarioId) {
+                    const voluntarioNome = seletorVoluntario.options[seletorVoluntario.selectedIndex].dataset.nome;
+                    dadosComprador = { id: voluntarioId, nome: voluntarioNome, tipo: 'voluntario' };
+                } else {
+                    dadosComprador = { id: null, nome: nomeExterno, tipo: 'externo' };
+                }
                 
-                finalizarVenda('prazo', dadosVoluntario);
+                finalizarVenda('prazo', dadosComprador);
             });
         }
     </script>

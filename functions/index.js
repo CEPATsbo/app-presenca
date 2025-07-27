@@ -512,7 +512,7 @@ exports.registrarLogDeAcesso = functions.region(REGIAO).https.onCall(async (data
 });
 
 // ===================================================================
-// NOVA FUNÇÃO "ROBÔ" PARA REGISTRAR VENDAS DA CANTINA (PDV)
+// FUNÇÃO "ROBÔ" PARA REGISTRAR VENDAS DA CANTINA (PDV) ATUALIZADA
 // ===================================================================
 exports.registrarVendaCantina = functions.region(REGIAO).https.onCall(async (data, context) => {
     if (!context.auth) {
@@ -523,13 +523,13 @@ exports.registrarVendaCantina = functions.region(REGIAO).https.onCall(async (dat
         throw new functions.https.HttpsError('permission-denied', 'Permissão negada.');
     }
 
-    const { eventoId, eventoTitulo, total, itens, tipoVenda, voluntario } = data;
+    const { eventoId, eventoTitulo, total, itens, tipoVenda, comprador } = data;
 
     if (!eventoId || !eventoTitulo || total === undefined || !itens || !tipoVenda) {
         throw new functions.https.HttpsError('invalid-argument', 'Dados da venda incompletos.');
     }
-    if (tipoVenda === 'prazo' && !voluntario) {
-        throw new functions.https.HttpsError('invalid-argument', 'Voluntário é obrigatório para registrar pendência.');
+    if (tipoVenda === 'prazo' && !comprador) {
+        throw new functions.https.HttpsError('invalid-argument', 'Dados do comprador são obrigatórios para registrar pendência.');
     }
 
     const vendaData = {
@@ -548,8 +548,9 @@ exports.registrarVendaCantina = functions.region(REGIAO).https.onCall(async (dat
         if (tipoVenda === 'vista') {
             await db.collection('cantina_vendas_avista').add(vendaData);
         } else if (tipoVenda === 'prazo') {
-            vendaData.voluntarioId = voluntario.id;
-            vendaData.voluntarioNome = voluntario.nome;
+            vendaData.compradorId = comprador.id; // Pode ser null se for externo
+            vendaData.compradorNome = comprador.nome;
+            vendaData.compradorTipo = comprador.tipo; // 'voluntario' ou 'externo'
             vendaData.status = 'pendente'; // pendente, pago
             await db.collection('contas_a_receber').add(vendaData);
         }
