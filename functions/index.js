@@ -585,6 +585,94 @@ exports.registrarVendaCantina = functions.region(REGIAO).https.onCall(async (dat
     }
 });
 
+// ===================================================================
+// NOVAS FUNÇÕES "ROBÔS" PARA O MÓDULO DA BIBLIOTECA
+// ===================================================================
+exports.registrarVendaBiblioteca = functions.region(REGIAO).https.onCall(async (data, context) => {
+    if (!context.auth) {
+        throw new functions.https.HttpsError('unauthenticated', 'A função deve ser chamada por um usuário autenticado.');
+    }
+    const permissoes = ['super-admin', 'tesoureiro' , 'diretor', 'bibliotecario'];
+    if (!permissoes.includes(context.auth.token.role)) {
+        throw new functions.https.HttpsError('permission-denied', 'Permissão negada.');
+    }
+
+    const { total, itens, tipoVenda, comprador } = data;
+
+    if (total === undefined || !itens || !tipoVenda) {
+        throw new functions.https.HttpsError('invalid-argument', 'Dados da venda incompletos.');
+    }
+    if (tipoVenda === 'prazo' && !comprador) {
+        throw new functions.https.HttpsError('invalid-argument', 'Dados do comprador são obrigatórios para registrar pendência.');
+    }
+
+    const vendaData = {
+        total,
+        itens,
+        registradoPor: {
+            uid: context.auth.uid,
+            nome: context.auth.token.name || context.auth.token.email
+        },
+        registradoEm: admin.firestore.FieldValue.serverTimestamp()
+    };
+
+    try {
+        if (tipoVenda === 'vista') {
+            await db.collection('biblioteca_vendas_avista').add(vendaData);
+        } else if (tipoVenda === 'prazo') {
+            vendaData.compradorId = comprador.id;
+            vendaData.compradorNome = comprador.nome;
+            vendaData.compradorTipo = comprador.tipo;
+            vendaData.status = 'pendente';
+            await db.collection('biblioteca_contas_a_receber').add(vendaData);
+        }
+        return { success: true, message: 'Venda da biblioteca registrada com sucesso!' };
+    } catch (error) {
+        console.error("Erro ao registrar venda da biblioteca:", error);
+        throw new functions.https.HttpsError('internal', 'Ocorreu um erro ao salvar a venda.');
+    }
+});
+
+exports.gerenciarEmprestimoBiblioteca = functions.region(REGIAO).https.onCall(async (data, context) => {
+    if (!context.auth) {
+        throw new functions.https.HttpsError('unauthenticated', 'A função deve ser chamada por um usuário autenticado.');
+    }
+    const permissoes = ['super-admin', 'tesoureiro' , 'diretor', 'bibliotecario'];
+    if (!permissoes.includes(context.auth.token.role)) {
+        throw new functions.https.HttpsError('permission-denied', 'Permissão negada.');
+    }
+
+    const { acao, livroId, voluntarioId, voluntarioNome, emprestimoId } = data;
+    const livroRef = db.collection('biblioteca_livros').doc(livroId);
+
+    try {
+        if (acao === 'emprestar') {
+            await db.collection('biblioteca_emprestimos').add({
+                livroId,
+                livroTitulo: (await livroRef.get()).data().titulo,
+                voluntarioId,
+                voluntarioNome,
+                dataEmprestimo: admin.firestore.FieldValue.serverTimestamp(),
+                status: 'emprestado'
+            });
+            await livroRef.update({ status: 'emprestado' });
+            return { success: true, message: 'Empréstimo registrado com sucesso!' };
+        } else if (acao === 'devolver') {
+            const emprestimoRef = db.collection('biblioteca_emprestimos').doc(emprestimoId);
+            await emprestimoRef.update({ 
+                status: 'devolvido',
+                dataDevolucao: admin.firestore.FieldValue.serverTimestamp()
+            });
+            await livroRef.update({ status: 'disponível' });
+            return { success: true, message: 'Devolução registrada com sucesso!' };
+        }
+        throw new functions.https.HttpsError('invalid-argument', 'Ação desconhecida.');
+    } catch (error) {
+        console.error("Erro ao gerenciar empréstimo:", error);
+        throw new functions.https.HttpsError('internal', 'Ocorreu um erro na operação.');
+    }
+});
+
 exports.uploadAtaParaStorage = functions.region(REGIAO).https.onCall(async (data, context) => {
     if (!context.auth) {
         throw new functions.https.HttpsError('unauthenticated', 'A função deve ser chamada por um usuário autenticado.');

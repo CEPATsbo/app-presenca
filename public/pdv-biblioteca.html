@@ -1,0 +1,366 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin - PDV e Empréstimos da Biblioteca</title>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background-color: #f4f6f9; display: flex; flex-direction: column; align-items: center; margin: 0; padding: 20px; box-sizing: border-box; }
+        .nav-voltar { max-width: 1200px; width:100%; margin: 0 auto 30px auto; text-align: left; }
+        .btn-voltar { background-color: #e9ecef; color: #495057; border: 1px solid #dee2e6; padding: 10px 20px; border-radius: 8px; font-weight: bold; font-size: 1em; text-decoration: none; }
+        .container { background-color: white; padding: 40px; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.15); width: 100%; max-width: 1200px; margin-bottom: 30px; }
+        h1, h2, h3 { text-align: center; color: #333; margin-top: 0; }
+        .tabs { display: flex; border-bottom: 1px solid #ccc; margin-bottom: 20px; }
+        .tab-link { padding: 10px 20px; cursor: pointer; background-color: #f1f1f1; border: 1px solid #ccc; border-bottom: none; border-radius: 6px 6px 0 0; }
+        .tab-link.active { background-color: white; font-weight: bold; border-bottom: 1px solid white; margin-bottom: -1px; }
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+        .grid-container { display: grid; grid-template-columns: 2fr 1fr; gap: 30px; }
+        .form-item { display: flex; flex-direction: column; margin-bottom: 15px; }
+        .form-item label { margin-bottom: 5px; font-weight: bold; color: #555; }
+        .form-item input, .form-item select { padding: 10px; border-radius: 6px; border: 1px solid #ccc; font-size: 1em; }
+        #resultados-busca-venda, #resultados-busca-emprestimo { max-height: 200px; overflow-y: auto; border: 1px solid #ddd; border-radius: 6px; margin-top: 5px; }
+        .resultado-item { padding: 10px; cursor: pointer; }
+        .resultado-item:hover { background-color: #e9ecef; }
+        .carrinho-container { background-color: #f8f9fa; padding: 20px; border-radius: 8px; display: flex; flex-direction: column; }
+        #lista-carrinho { list-style-type: none; padding: 0; flex-grow: 1; }
+        .carrinho-item { display: flex; justify-content: space-between; align-items: center; padding: 10px 0; border-bottom: 1px solid #ddd; }
+        .carrinho-item button { background: #dc3545; color: white; border: none; border-radius: 50%; width: 25px; height: 25px; cursor: pointer; }
+        .total-container { margin-top: 20px; text-align: right; font-size: 1.5em; font-weight: bold; }
+        .botoes-finalizar { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 20px; }
+        .btn-finalizar, .btn-primary, .btn-secondary { width: 100%; padding: 15px; font-size: 1.1em; border: none; border-radius: 8px; cursor: pointer; }
+        .btn-primary { background-color: #007bff; color: white; }
+        .btn-secondary { background-color: #6c757d; color: white; }
+        #btn-finalizar-vista { background-color: #28a745; color:white;}
+        #btn-finalizar-prazo { background-color: #ffc107; color: #333; }
+        .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.6); display: none; justify-content: center; align-items: center; z-index: 1000; }
+        .modal-content { background-color: white; padding: 30px; border-radius: 10px; width: 90%; max-width: 500px; }
+        table { width: 100%; border-collapse: collapse; }
+        th, td { padding: 12px; border-bottom: 1px solid #eee; text-align: left; }
+        th { background-color: #f2f2f2; }
+    </style>
+</head>
+<body>
+    <nav class="nav-voltar">
+        <a href="/dashboard.html" class="btn-voltar">⬅ Voltar para o Dashboard</a>
+    </nav>
+    <div id="acesso-negado" style="display: none;"><h1>Acesso Negado</h1></div>
+
+    <div id="main-content" class="container" style="display: none;">
+        <h1>PDV e Empréstimos da Biblioteca</h1>
+        <div class="tabs">
+            <div class="tab-link active" data-tab="vendas">Registrar Venda</div>
+            <div class="tab-link" data-tab="emprestimos">Empréstimos e Devoluções</div>
+        </div>
+
+        <div id="tab-vendas" class="tab-content active">
+            <div class="grid-container">
+                <div class="form-item">
+                    <label for="busca-livro-venda">Buscar Livro para Venda</label>
+                    <input type="text" id="busca-livro-venda" placeholder="Digite o título do livro...">
+                    <div id="resultados-busca-venda"></div>
+                </div>
+                <div class="carrinho-container">
+                    <h2>Carrinho de Vendas</h2>
+                    <ul id="lista-carrinho"></ul>
+                    <div id="total-container" class="total-container">Total: R$ 0,00</div>
+                    <div class="botoes-finalizar">
+                        <button id="btn-finalizar-vista" class="btn-finalizar">Receber e Finalizar</button>
+                        <button id="btn-finalizar-prazo" class="btn-finalizar">Registrar Pendência</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div id="tab-emprestimos" class="tab-content">
+            <h3>Registrar Novo Empréstimo</h3>
+            <div class="grid-container">
+                <div class="form-item">
+                    <label for="busca-livro-emprestimo">Buscar Livro para Empréstimo</label>
+                    <input type="text" id="busca-livro-emprestimo" placeholder="Digite o título do livro...">
+                    <div id="resultados-busca-emprestimo"></div>
+                    <p><strong>Selecionado:</strong> <span id="livro-selecionado-emprestimo">Nenhum</span></p>
+                </div>
+                <div class="form-item">
+                    <label for="seletor-voluntario-emprestimo">Emprestar para o Voluntário:</label>
+                    <select id="seletor-voluntario-emprestimo"></select>
+                </div>
+            </div>
+            <button id="btn-registrar-emprestimo" class="btn-primary" style="margin-top: 10px;">Confirmar Empréstimo</button>
+            <hr style="margin: 40px 0;">
+            <h3>Livros Emprestados Atualmente</h3>
+            <table id="tabela-emprestimos">
+                <thead><tr><th>Livro</th><th>Emprestado para</th><th>Data</th><th>Ação</th></tr></thead>
+                <tbody></tbody>
+            </table>
+        </div>
+    </div>
+    
+    <div id="modal-pendencia" class="modal-overlay">
+        <div class="modal-content">
+            <h2>Registrar Pendência</h2>
+            <p>Selecione o voluntário para registrar esta conta:</p>
+            <select id="seletor-voluntario-pendencia"></select>
+            <hr style="margin: 20px 0;">
+            <label for="nome-externo">Ou digite o nome do comprador:</label>
+            <input type="text" id="nome-externo" placeholder="Nome do visitante...">
+            <div style="text-align: right; margin-top: 20px;">
+                <button type="button" id="btn-cancelar-pendencia" class="btn-secondary">Cancelar</button>
+                <button id="btn-confirmar-pendencia" class="btn-primary">Confirmar</button>
+            </div>
+        </div>
+    </div>
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
+        import { getFirestore, collection, onSnapshot, doc, query, where, orderBy, startAt, endAt } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
+        import { getFunctions, httpsCallable } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-functions.js";
+        import { protegerPagina } from '/auth.js';
+
+        const firebaseConfig = {
+            apiKey: "AIzaSyBV7RPjk3cFTqL-aIpflJcUojKg1ZXMLuU",
+            authDomain: "voluntarios-ativos---cepat.firebaseapp.com",
+            projectId: "voluntarios-ativos---cepat",
+            storageBucket: "voluntarios-ativos---cepat.firebasestorage.app",
+            messagingSenderId: "66122858261",
+            appId: "1:66122858261:web:7fa21f1805463b5c08331c"
+        };
+        initializeApp(firebaseConfig);
+
+        protegerPagina(['super-admin', 'diretor', 'bibliotecario'])
+            .then(user => {
+                document.getElementById('main-content').style.display = 'block';
+                inicializarPagina(user);
+            })
+            .catch(error => {
+                document.getElementById('acesso-negado').style.display = 'block';
+            });
+
+        function inicializarPagina(user) {
+            const db = getFirestore();
+            const functions = getFunctions(undefined, 'southamerica-east1');
+            const registrarVendaBiblioteca = httpsCallable(functions, 'registrarVendaBiblioteca');
+            const gerenciarEmprestimoBiblioteca = httpsCallable(functions, 'gerenciarEmprestimoBiblioteca');
+
+            // --- Referências de UI ---
+            const tabs = document.querySelectorAll('.tab-link');
+            const tabContents = document.querySelectorAll('.tab-content');
+            // Vendas
+            const buscaLivroVendaInput = document.getElementById('busca-livro-venda');
+            const resultadosBuscaVenda = document.getElementById('resultados-busca-venda');
+            const listaCarrinho = document.getElementById('lista-carrinho');
+            const totalContainer = document.getElementById('total-container');
+            const btnFinalizarVista = document.getElementById('btn-finalizar-vista');
+            const btnFinalizarPrazo = document.getElementById('btn-finalizar-prazo');
+            const modalPendencia = document.getElementById('modal-pendencia');
+            const seletorVoluntarioPendencia = document.getElementById('seletor-voluntario-pendencia');
+            const nomeExternoInput = document.getElementById('nome-externo');
+            const btnConfirmarPendencia = document.getElementById('btn-confirmar-pendencia');
+            const btnCancelarPendencia = document.getElementById('btn-cancelar-pendencia');
+            // Empréstimos
+            const buscaLivroEmprestimoInput = document.getElementById('busca-livro-emprestimo');
+            const resultadosBuscaEmprestimo = document.getElementById('resultados-busca-emprestimo');
+            const livroSelecionadoSpan = document.getElementById('livro-selecionado-emprestimo');
+            const seletorVoluntarioEmprestimo = document.getElementById('seletor-voluntario-emprestimo');
+            const btnRegistrarEmprestimo = document.getElementById('btn-registrar-emprestimo');
+            const tabelaEmprestimos = document.getElementById('tabela-emprestimos').querySelector('tbody');
+
+            let carrinho = [];
+            let livroParaEmprestimo = null;
+
+            // --- Lógica das Abas ---
+            tabs.forEach(tab => {
+                tab.addEventListener('click', () => {
+                    tabs.forEach(item => item.classList.remove('active'));
+                    tab.classList.add('active');
+                    const target = document.getElementById(`tab-${tab.dataset.tab}`);
+                    tabContents.forEach(content => content.classList.remove('active'));
+                    target.classList.add('active');
+                });
+            });
+            
+            // --- Carregar Voluntários para os seletores ---
+            onSnapshot(query(collection(db, "voluntarios"), orderBy("nome")), (snapshot) => {
+                const options = '<option value="">Selecione o voluntário</option>' + snapshot.docs.map(doc => `<option value="${doc.id}" data-nome="${doc.data().nome}">${doc.data().nome}</option>`).join('');
+                seletorVoluntarioPendencia.innerHTML = options;
+                seletorVoluntarioEmprestimo.innerHTML = options;
+            });
+
+            // --- Lógica de Vendas ---
+            buscaLivroVendaInput.addEventListener('keyup', () => buscarLivros(buscaLivroVendaInput, resultadosBuscaVenda, 'Venda'));
+            
+            function adicionarAoCarrinho(livro) {
+                const itemExistente = carrinho.find(i => i.id === livro.id);
+                if (itemExistente) { itemExistente.qtd++; } 
+                else { carrinho.push({ ...livro, qtd: 1 }); }
+                renderizarCarrinho();
+            }
+            
+            function removerDoCarrinho(livroId) {
+                const itemIndex = carrinho.findIndex(i => i.id === livroId);
+                if (itemIndex > -1) {
+                    carrinho[itemIndex].qtd--;
+                    if (carrinho[itemIndex].qtd === 0) carrinho.splice(itemIndex, 1);
+                }
+                renderizarCarrinho();
+            }
+
+            function renderizarCarrinho() {
+                listaCarrinho.innerHTML = '';
+                let total = 0;
+                carrinho.forEach(item => {
+                    const li = document.createElement('li');
+                    li.className = 'carrinho-item';
+                    li.innerHTML = `<span>${item.qtd}x ${item.titulo}</span><span>${Number(item.preco * item.qtd).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span><button data-id="${item.id}">-</button>`;
+                    li.querySelector('button').onclick = () => removerDoCarrinho(item.id);
+                    listaCarrinho.appendChild(li);
+                    total += item.preco * item.qtd;
+                });
+                totalContainer.textContent = `Total: ${total.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}`;
+            }
+
+            btnFinalizarVista.addEventListener('click', () => finalizarVenda('vista'));
+            btnFinalizarPrazo.addEventListener('click', () => {
+                if (carrinho.length === 0) return alert('O carrinho está vazio.');
+                modalPendencia.style.display = 'flex';
+            });
+            btnCancelarPendencia.addEventListener('click', () => modalPendencia.style.display = 'none');
+            btnConfirmarPendencia.addEventListener('click', () => {
+                const voluntarioId = seletorVoluntarioPendencia.value;
+                const nomeExterno = nomeExternoInput.value.trim();
+                if (!voluntarioId && !nomeExterno) return alert('Por favor, selecione um voluntário ou digite um nome.');
+                
+                let dadosComprador = {};
+                if (voluntarioId) {
+                    const voluntarioNome = seletorVoluntarioPendencia.options[seletorVoluntarioPendencia.selectedIndex].dataset.nome;
+                    dadosComprador = { id: voluntarioId, nome: voluntarioNome, tipo: 'voluntario' };
+                } else {
+                    dadosComprador = { id: null, nome: nomeExterno, tipo: 'externo' };
+                }
+                finalizarVenda('prazo', dadosComprador);
+            });
+
+            async function finalizarVenda(tipoVenda, comprador = null) {
+                if (carrinho.length === 0) return alert('O carrinho está vazio.');
+                const totalVenda = carrinho.reduce((acc, item) => acc + (item.preco * item.qtd), 0);
+                
+                try {
+                    await registrarVendaBiblioteca({
+                        total: totalVenda,
+                        itens: carrinho.map(i => ({livroId: i.id, titulo: i.titulo, qtd: i.qtd, precoUnitario: i.preco})),
+                        tipoVenda,
+                        comprador
+                    });
+                    alert('Venda registrada com sucesso!');
+                    carrinho = [];
+                    renderizarCarrinho();
+                    modalPendencia.style.display = 'none';
+                    seletorVoluntarioPendencia.value = '';
+                    nomeExternoInput.value = '';
+                } catch(error) {
+                    alert(`Erro ao registrar venda: ${error.message}`);
+                }
+            }
+
+            // --- Lógica de Empréstimos ---
+            buscaLivroEmprestimoInput.addEventListener('keyup', () => buscarLivros(buscaLivroEmprestimoInput, resultadosBuscaEmprestimo, 'Empréstimo'));
+
+            btnRegistrarEmprestimo.addEventListener('click', async () => {
+                const voluntarioId = seletorVoluntarioEmprestimo.value;
+                if (!livroParaEmprestimo) return alert("Selecione um livro para emprestar.");
+                if (!voluntarioId) return alert("Selecione um voluntário.");
+                
+                const voluntarioNome = seletorVoluntarioEmprestimo.options[seletorVoluntarioEmprestimo.selectedIndex].dataset.nome;
+
+                try {
+                    await gerenciarEmprestimoBiblioteca({
+                        acao: 'emprestar',
+                        livroId: livroParaEmprestimo.id,
+                        voluntarioId,
+                        voluntarioNome
+                    });
+                    alert('Empréstimo registrado com sucesso!');
+                    livroParaEmprestimo = null;
+                    livroSelecionadoSpan.textContent = 'Nenhum';
+                    buscaLivroEmprestimoInput.value = '';
+                } catch (error) {
+                    alert(`Erro: ${error.message}`);
+                }
+            });
+            
+            const qEmprestimos = query(collection(db, "biblioteca_emprestimos"), where("status", "==", "emprestado"), orderBy("dataEmprestimo", "desc"));
+            onSnapshot(qEmprestimos, (snapshot) => {
+                tabelaEmprestimos.innerHTML = '';
+                snapshot.forEach(doc => {
+                    const emprestimo = doc.data();
+                    const tr = document.createElement('tr');
+                    tr.innerHTML = `
+                        <td>${emprestimo.livroTitulo}</td>
+                        <td>${emprestimo.voluntarioNome}</td>
+                        <td>${emprestimo.dataEmprestimo.toDate().toLocaleDateString('pt-BR')}</td>
+                        <td><button class="btn-secondary" data-emprestimo-id="${doc.id}" data-livro-id="${emprestimo.livroId}">Registrar Devolução</button></td>
+                    `;
+                    tabelaEmprestimos.appendChild(tr);
+                });
+            });
+
+            tabelaEmprestimos.addEventListener('click', async (e) => {
+                if (e.target.tagName !== 'BUTTON') return;
+                const emprestimoId = e.target.dataset.emprestimoId;
+                const livroId = e.target.dataset.livroId;
+                if (confirm("Confirmar a devolução deste livro?")) {
+                    try {
+                        await gerenciarEmprestimoBiblioteca({ acao: 'devolver', emprestimoId, livroId });
+                        alert("Devolução registrada!");
+                    } catch (error) {
+                        alert(`Erro: ${error.message}`);
+                    }
+                }
+            });
+
+            // --- Funções Comuns ---
+            function buscarLivros(inputElement, resultContainer, finalidade) {
+                const textoBusca = inputElement.value.toLowerCase();
+                resultContainer.innerHTML = '';
+                if (textoBusca.length < 3) return;
+
+                const q = query(
+                    collection(db, 'biblioteca_livros'), 
+                    where('finalidade', '==', finalidade),
+                    orderBy('titulo'), 
+                    startAt(textoBusca), 
+                    endAt(textoBusca + '\uf8ff')
+                );
+
+                onSnapshot(q, (snapshot) => {
+                    resultContainer.innerHTML = '';
+                    snapshot.forEach(doc => {
+                        const livro = { id: doc.id, ...doc.data() };
+                        const div = document.createElement('div');
+                        div.className = 'resultado-item';
+                        div.textContent = `${livro.titulo} - ${livro.autor}`;
+                        if (finalidade === 'Empréstimo' && livro.status === 'emprestado') {
+                            div.style.color = '#ccc';
+                            div.title = 'Este livro já está emprestado';
+                        } else {
+                            div.onclick = () => selecionarLivro(livro, finalidade, inputElement, resultContainer);
+                        }
+                        resultContainer.appendChild(div);
+                    });
+                });
+            }
+
+            function selecionarLivro(livro, finalidade, inputElement, resultContainer) {
+                if (finalidade === 'Venda') {
+                    adicionarAoCarrinho(livro);
+                } else {
+                    livroParaEmprestimo = livro;
+                    livroSelecionadoSpan.textContent = `${livro.titulo} - ${livro.autor}`;
+                }
+                inputElement.value = '';
+                resultContainer.innerHTML = '';
+            }
+        }
+    </script>
+</body>
+</html>
