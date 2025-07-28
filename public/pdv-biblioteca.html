@@ -77,13 +77,16 @@
             <div class="grid-container">
                 <div class="form-item">
                     <label for="busca-livro-emprestimo">Buscar Livro para Empréstimo</label>
-                    <input type="text" id="busca-livro-emprestimo" placeholder="Digite o título do livro...">
+                    <input type="text" id="busca-livro-emprestimo" placeholder="Digite para filtrar a lista abaixo...">
                     <div id="resultados-busca-emprestimo"></div>
                     <p><strong>Selecionado:</strong> <span id="livro-selecionado-emprestimo">Nenhum</span></p>
                 </div>
                 <div class="form-item">
                     <label for="seletor-voluntario-emprestimo">Emprestar para o Voluntário:</label>
                     <select id="seletor-voluntario-emprestimo"></select>
+                    <hr style="margin: 20px 0;">
+                    <label for="nome-externo-emprestimo">Ou digite o nome do leitor:</label>
+                    <input type="text" id="nome-externo-emprestimo" placeholder="Nome do visitante...">
                 </div>
             </div>
             <button id="btn-registrar-emprestimo" class="btn-primary" style="margin-top: 10px;">Confirmar Empréstimo</button>
@@ -118,13 +121,13 @@
         import { protegerPagina } from '/auth.js';
 
         const firebaseConfig = {
-            apiKey: "AIzaSyBV7RPjk3cFTqL-aIpflJcUojKg1ZXMLuU",
-            authDomain: "voluntarios-ativos---cepat.firebaseapp.com",
-            projectId: "voluntarios-ativos---cepat",
-            storageBucket: "voluntarios-ativos---cepat.firebasestorage.app",
-            messagingSenderId: "66122858261",
-            appId: "1:66122858261:web:7fa21f1805463b5c08331c"
-        };
+        apiKey: "AIzaSyBV7RPjk3cFTqL-aIpflJcUojKg1ZXMLuU",
+        authDomain: "voluntarios-ativos---cepat.firebaseapp.com",
+        projectId: "voluntarios-ativos---cepat",
+        storageBucket: "voluntarios-ativos---cepat.firebasestorage.app",
+        messagingSenderId: "66122858261",
+        appId: "1:66122858261:web:7fa21f1805463b5c08331c"
+    };
         initializeApp(firebaseConfig);
 
         protegerPagina(['super-admin', 'diretor', 'bibliotecario'])
@@ -162,11 +165,13 @@
             const resultadosBuscaEmprestimo = document.getElementById('resultados-busca-emprestimo');
             const livroSelecionadoSpan = document.getElementById('livro-selecionado-emprestimo');
             const seletorVoluntarioEmprestimo = document.getElementById('seletor-voluntario-emprestimo');
+            const nomeExternoEmprestimoInput = document.getElementById('nome-externo-emprestimo');
             const btnRegistrarEmprestimo = document.getElementById('btn-registrar-emprestimo');
             const tabelaEmprestimos = document.getElementById('tabela-emprestimos').querySelector('tbody');
 
             let carrinho = [];
             let livroParaEmprestimo = null;
+            let todosOsLivrosDisponiveis = [];
 
             // --- Lógica das Abas ---
             tabs.forEach(tab => {
@@ -176,18 +181,21 @@
                     const target = document.getElementById(`tab-${tab.dataset.tab}`);
                     tabContents.forEach(content => content.classList.remove('active'));
                     target.classList.add('active');
+                    if(tab.dataset.tab === 'emprestimos') {
+                        carregarLivrosParaEmprestimo();
+                    }
                 });
             });
             
             // --- Carregar Voluntários para os seletores ---
             onSnapshot(query(collection(db, "voluntarios"), orderBy("nome")), (snapshot) => {
-                const options = '<option value="">Selecione o voluntário</option>' + snapshot.docs.map(doc => `<option value="${doc.id}" data-nome="${doc.data().nome}">${doc.data().nome}</option>`).join('');
+                const options = '<option value="">Selecione um voluntário</option>' + snapshot.docs.map(doc => `<option value="${doc.id}" data-nome="${doc.data().nome}">${doc.data().nome}</option>`).join('');
                 seletorVoluntarioPendencia.innerHTML = options;
                 seletorVoluntarioEmprestimo.innerHTML = options;
             });
 
-            // --- Lógica de Vendas ---
-            buscaLivroVendaInput.addEventListener('keyup', () => buscarLivros(buscaLivroVendaInput, resultadosBuscaVenda, 'Venda'));
+            // --- Lógica de Vendas (código mantido, sem alterações) ---
+            buscaLivroVendaInput.addEventListener('keyup', () => buscarLivrosVenda(buscaLivroVendaInput, resultadosBuscaVenda));
             
             function adicionarAoCarrinho(livro) {
                 const itemExistente = carrinho.find(i => i.id === livro.id);
@@ -263,26 +271,71 @@
             }
 
             // --- Lógica de Empréstimos ---
-            buscaLivroEmprestimoInput.addEventListener('keyup', () => buscarLivros(buscaLivroEmprestimoInput, resultadosBuscaEmprestimo, 'Empréstimo'));
+            function carregarLivrosParaEmprestimo() {
+                const q = query(collection(db, 'biblioteca_livros'), where('finalidade', '==', 'Empréstimo'), where('status', '==', 'disponível'), orderBy('titulo'));
+                onSnapshot(q, (snapshot) => {
+                    todosOsLivrosDisponiveis = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                    renderizarResultadosEmprestimo(todosOsLivrosDisponiveis);
+                });
+            }
+
+            buscaLivroEmprestimoInput.addEventListener('keyup', () => {
+                const textoBusca = buscaLivroEmprestimoInput.value.toLowerCase();
+                const livrosFiltrados = todosOsLivrosDisponiveis.filter(livro => 
+                    livro.titulo.toLowerCase().includes(textoBusca) || 
+                    livro.autor.toLowerCase().includes(textoBusca)
+                );
+                renderizarResultadosEmprestimo(livrosFiltrados);
+            });
+
+            function renderizarResultadosEmprestimo(livros) {
+                resultadosBuscaEmprestimo.innerHTML = '';
+                livros.forEach(livro => {
+                    const div = document.createElement('div');
+                    div.className = 'resultado-item';
+                    div.textContent = `${livro.titulo} - ${livro.autor}`;
+                    div.onclick = () => selecionarLivroParaEmprestimo(livro);
+                    resultadosBuscaEmprestimo.appendChild(div);
+                });
+            }
+
+            function selecionarLivroParaEmprestimo(livro) {
+                livroParaEmprestimo = livro;
+                livroSelecionadoSpan.textContent = `${livro.titulo} - ${livro.autor}`;
+                buscaLivroEmprestimoInput.value = livro.titulo;
+                resultadosBuscaEmprestimo.innerHTML = '';
+            }
 
             btnRegistrarEmprestimo.addEventListener('click', async () => {
                 const voluntarioId = seletorVoluntarioEmprestimo.value;
+                const nomeExterno = nomeExternoEmprestimoInput.value.trim();
+
                 if (!livroParaEmprestimo) return alert("Selecione um livro para emprestar.");
-                if (!voluntarioId) return alert("Selecione um voluntário.");
+                if (!voluntarioId && !nomeExterno) return alert("Selecione um voluntário ou digite o nome do leitor.");
                 
-                const voluntarioNome = seletorVoluntarioEmprestimo.options[seletorVoluntarioEmprestimo.selectedIndex].dataset.nome;
+                let dadosLeitor = {};
+                if(voluntarioId){
+                    dadosLeitor.id = voluntarioId;
+                    dadosLeitor.nome = seletorVoluntarioEmprestimo.options[seletorVoluntarioEmprestimo.selectedIndex].dataset.nome;
+                    dadosLeitor.tipo = 'voluntario';
+                } else {
+                    dadosLeitor.id = null;
+                    dadosLeitor.nome = nomeExterno;
+                    dadosLeitor.tipo = 'externo';
+                }
 
                 try {
                     await gerenciarEmprestimoBiblioteca({
                         acao: 'emprestar',
                         livroId: livroParaEmprestimo.id,
-                        voluntarioId,
-                        voluntarioNome
+                        leitor: dadosLeitor
                     });
                     alert('Empréstimo registrado com sucesso!');
                     livroParaEmprestimo = null;
                     livroSelecionadoSpan.textContent = 'Nenhum';
                     buscaLivroEmprestimoInput.value = '';
+                    nomeExternoEmprestimoInput.value = '';
+                    seletorVoluntarioEmprestimo.value = '';
                 } catch (error) {
                     alert(`Erro: ${error.message}`);
                 }
@@ -296,7 +349,7 @@
                     const tr = document.createElement('tr');
                     tr.innerHTML = `
                         <td>${emprestimo.livroTitulo}</td>
-                        <td>${emprestimo.voluntarioNome}</td>
+                        <td>${emprestimo.leitor.nome}</td>
                         <td>${emprestimo.dataEmprestimo.toDate().toLocaleDateString('pt-BR')}</td>
                         <td><button class="btn-secondary" data-emprestimo-id="${doc.id}" data-livro-id="${emprestimo.livroId}">Registrar Devolução</button></td>
                     `;
@@ -318,15 +371,15 @@
                 }
             });
 
-            // --- Funções Comuns ---
-            function buscarLivros(inputElement, resultContainer, finalidade) {
+            // --- Funções Comuns de Busca ---
+            function buscarLivrosVenda(inputElement, resultContainer) {
                 const textoBusca = inputElement.value.toLowerCase();
                 resultContainer.innerHTML = '';
                 if (textoBusca.length < 3) return;
 
                 const q = query(
                     collection(db, 'biblioteca_livros'), 
-                    where('finalidade', '==', finalidade),
+                    where('finalidade', '==', 'Venda'),
                     orderBy('titulo'), 
                     startAt(textoBusca), 
                     endAt(textoBusca + '\uf8ff')
@@ -338,27 +391,15 @@
                         const livro = { id: doc.id, ...doc.data() };
                         const div = document.createElement('div');
                         div.className = 'resultado-item';
-                        div.textContent = `${livro.titulo} - ${livro.autor}`;
-                        if (finalidade === 'Empréstimo' && livro.status === 'emprestado') {
-                            div.style.color = '#ccc';
-                            div.title = 'Este livro já está emprestado';
-                        } else {
-                            div.onclick = () => selecionarLivro(livro, finalidade, inputElement, resultContainer);
-                        }
+                        div.innerHTML = `${livro.titulo} - ${livro.autor} <strong>(${Number(livro.preco).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })})</strong>`;
+                        div.onclick = () => {
+                            adicionarAoCarrinho(livro);
+                            inputElement.value = '';
+                            resultContainer.innerHTML = '';
+                        };
                         resultContainer.appendChild(div);
                     });
                 });
-            }
-
-            function selecionarLivro(livro, finalidade, inputElement, resultContainer) {
-                if (finalidade === 'Venda') {
-                    adicionarAoCarrinho(livro);
-                } else {
-                    livroParaEmprestimo = livro;
-                    livroSelecionadoSpan.textContent = `${livro.titulo} - ${livro.autor}`;
-                }
-                inputElement.value = '';
-                resultContainer.innerHTML = '';
             }
         }
     </script>

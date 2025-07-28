@@ -637,27 +637,32 @@ exports.gerenciarEmprestimoBiblioteca = functions.region(REGIAO).https.onCall(as
     if (!context.auth) {
         throw new functions.https.HttpsError('unauthenticated', 'A função deve ser chamada por um usuário autenticado.');
     }
-    const permissoes = ['super-admin', 'tesoureiro' , 'diretor', 'bibliotecario'];
+    const permissoes = ['super-admin', 'diretor', 'bibliotecario'];
     if (!permissoes.includes(context.auth.token.role)) {
         throw new functions.https.HttpsError('permission-denied', 'Permissão negada.');
     }
 
-    const { acao, livroId, voluntarioId, voluntarioNome, emprestimoId } = data;
+    const { acao, livroId, leitor, emprestimoId } = data;
     const livroRef = db.collection('biblioteca_livros').doc(livroId);
 
     try {
         if (acao === 'emprestar') {
+            if (!livroId || !leitor) throw new functions.https.HttpsError('invalid-argument', 'Dados do empréstimo incompletos.');
             await db.collection('biblioteca_emprestimos').add({
                 livroId,
                 livroTitulo: (await livroRef.get()).data().titulo,
-                voluntarioId,
-                voluntarioNome,
+                leitor: { // Salva o objeto completo do leitor
+                    id: leitor.id || null,
+                    nome: leitor.nome,
+                    tipo: leitor.tipo
+                },
                 dataEmprestimo: admin.firestore.FieldValue.serverTimestamp(),
                 status: 'emprestado'
             });
             await livroRef.update({ status: 'emprestado' });
             return { success: true, message: 'Empréstimo registrado com sucesso!' };
         } else if (acao === 'devolver') {
+            if (!emprestimoId || !livroId) throw new functions.https.HttpsError('invalid-argument', 'Dados da devolução incompletos.');
             const emprestimoRef = db.collection('biblioteca_emprestimos').doc(emprestimoId);
             await emprestimoRef.update({ 
                 status: 'devolvido',
@@ -672,7 +677,6 @@ exports.gerenciarEmprestimoBiblioteca = functions.region(REGIAO).https.onCall(as
         throw new functions.https.HttpsError('internal', 'Ocorreu um erro na operação.');
     }
 });
-
 exports.uploadAtaParaStorage = functions.region(REGIAO).https.onCall(async (data, context) => {
     if (!context.auth) {
         throw new functions.https.HttpsError('unauthenticated', 'A função deve ser chamada por um usuário autenticado.');
