@@ -79,7 +79,7 @@
     </div>
 
     <script type="module">
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
+        import { initializeApp, getApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
         import { getFirestore, collection, onSnapshot, addDoc, doc, query, where, orderBy, serverTimestamp, Timestamp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
         import { getFunctions, httpsCallable } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-functions.js";
         import { protegerPagina } from '/auth.js';
@@ -98,9 +98,9 @@
             .then(user => {
                 document.getElementById('main-content').style.display = 'block';
                 inicializarPagina(user);
-            })
-            .catch(error => {
-                document.getElementById('acesso-negado').style.display = 'block';
+                // Log de Acesso
+                const registrarLogDeAcesso = httpsCallable(getFunctions(getApp(), 'southamerica-east1'), 'registrarLogDeAcesso');
+                registrarLogDeAcesso({ acao: 'ACESSOU_PDV_CANTINA' });
             });
 
         function inicializarPagina(user) {

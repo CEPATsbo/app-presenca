@@ -8,7 +8,8 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <style>
         body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background-color: #f4f6f9; display: flex; flex-direction: column; align-items: center; margin: 0; padding: 20px; box-sizing: border-box; }
-        .balancete-container, .relatorio-cantina-container { display: none; background-color: white; padding: 40px; border-radius: 8px; box-shadow: 0 4px 20px rgba(0,0,0,0.1); width: 100%; max-width: 1100px; margin-bottom: 30px; }
+        .balancete-container, .relatorio-container { display: none; background-color: white; padding: 40px; border-radius: 8px; box-shadow: 0 4px 20px rgba(0,0,0,0.1); width: 100%; max-width: 1100px; margin-bottom: 30px; }
+        h2 { border-bottom: 1px solid #eee; padding-bottom: 10px; margin-bottom: 20px;}
         #acesso-negado { text-align: center; }
         .cabecalho { text-align: center; margin-bottom: 20px; }
         .cabecalho h1 { font-size: 1.5em; margin: 0; }
@@ -34,7 +35,6 @@
         .tabela-balancete th, .tabela-relatorio th { background-color: #f2f2f2; text-align: left; }
         .tabela-balancete input[type="number"] { width: 100%; border: none; background: #fffde7; text-align: center; padding: 5px; box-sizing: border-box; font-size: 1em; -moz-appearance: textfield; appearance: textfield; }
         .tabela-balancete input[type="number"]::-webkit-outer-spin-button, .tabela-balancete input[type="number"]::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
-        .tabela-balancete input[type="number"]:focus { outline: 1px solid #007bff; }
         .tabela-balancete td[contenteditable="true"] { background-color: #e3f2fd; cursor: text; }
         .categoria-header th { background-color: #dcedc8; font-weight: bold; display: flex; justify-content: space-between; align-items: center; }
         .btn-add-row { background-color: #4caf50; color: white; border: none; border-radius: 50%; width: 22px; height: 22px; font-weight: bold; cursor: pointer; font-size: 16px; line-height: 22px; }
@@ -70,13 +70,22 @@
     <div id="conteudo-pagina" class="balancete-container">
         </div>
 
-    <div id="relatorio-cantina" class="relatorio-cantina-container">
+    <div id="relatorio-cantina" class="relatorio-container">
         <h2>Relatórios da Cantina</h2>
         <div class="seletor-bloco" style="margin: 0 auto 20px auto; text-align:center;">
-            <label for="seletor-evento-relatorio">Selecione o Evento para ver o Relatório</label>
-            <select id="seletor-evento-relatorio"></select>
+            <label for="seletor-evento-relatorio-cantina">Selecione o Evento para ver o Relatório</label>
+            <select id="seletor-evento-relatorio-cantina"></select>
         </div>
-        <div id="resultado-relatorio"></div>
+        <div id="resultado-relatorio-cantina"></div>
+    </div>
+    
+    <div id="relatorio-biblioteca" class="relatorio-container">
+        <h2>Relatórios da Biblioteca</h2>
+        <div class="seletor-bloco" style="margin: 0 auto 20px auto; text-align:center;">
+            <label for="seletor-evento-relatorio-biblioteca">Selecione para ver o Relatório</label>
+            <select id="seletor-evento-relatorio-biblioteca"></select>
+        </div>
+        <div id="resultado-relatorio-biblioteca"></div>
     </div>
     
     <script type="module">
@@ -85,20 +94,21 @@
         import { getAuth } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-auth.js";
         import { protegerPagina } from '/auth.js';
 
-        const firebaseConfig = {
-            apiKey: "AIzaSyBV7RPjk3cFTqL-aIpflJcUojKg1ZXMLuU",
-            authDomain: "voluntarios-ativos---cepat.firebaseapp.com",
-            projectId: "voluntarios-ativos---cepat",
-            storageBucket: "voluntarios-ativos---cepat.firebasestorage.app",
-            messagingSenderId: "66122858261",
-            appId: "1:66122858261:web:7fa21f1805463b5c08331c"
-        };
+       const firebaseConfig = {
+        apiKey: "AIzaSyBV7RPjk3cFTqL-aIpflJcUojKg1ZXMLuU",
+        authDomain: "voluntarios-ativos---cepat.firebaseapp.com",
+        projectId: "voluntarios-ativos---cepat",
+        storageBucket: "voluntarios-ativos---cepat.firebasestorage.app",
+        messagingSenderId: "66122858261",
+        appId: "1:66122858261:web:7fa21f1805463b5c08331c"
+    };
         initializeApp(firebaseConfig);
 
         protegerPagina(['diretor', 'tesoureiro', 'super-admin'])
             .then(user => {
                 document.getElementById('conteudo-pagina').style.display = 'block';
                 document.getElementById('relatorio-cantina').style.display = 'block';
+                document.getElementById('relatorio-biblioteca').style.display = 'block';
                 inicializarPagina(user);
             })
             .catch(error => {
@@ -657,94 +667,97 @@
             });
 
             // ===================================================================
-            // NOVA LÓGICA PARA OS RELATÓRIOS DA CANTINA
+            // LÓGICA PARA OS RELATÓRIOS DA CANTINA E BIBLIOTECA
             // ===================================================================
-            const seletorEventoRelatorio = document.getElementById('seletor-evento-relatorio');
-            const resultadoRelatorio = document.getElementById('resultado-relatorio');
+            const seletorEventoRelatorioCantina = document.getElementById('seletor-evento-relatorio-cantina');
+            const resultadoRelatorioCantina = document.getElementById('resultado-relatorio-cantina');
+            const seletorEventoRelatorioBiblioteca = document.getElementById('seletor-evento-relatorio-biblioteca');
+            const resultadoRelatorioBiblioteca = document.getElementById('resultado-relatorio-biblioteca');
 
-            async function carregarEventosParaRelatorio() {
+            async function carregarEventosParaRelatorios() {
                 const qEventos = query(collection(db, "eventos"), orderBy("dataInicio", "desc"));
                 const snapshot = await getDocs(qEventos);
-                seletorEventoRelatorio.innerHTML = '<option value="">Selecione um evento ou período</option><option value="padrão">Vendas de Dias Normais</option>';
+                
+                let optionsHtml = '<option value="">Selecione um evento ou período</option><option value="padrão">Vendas de Dias Normais</option>';
                 snapshot.forEach(doc => {
                     const evento = doc.data();
                     const dataFormatada = evento.dataInicio.toDate().toLocaleDateString('pt-BR');
-                    seletorEventoRelatorio.innerHTML += `<option value="${doc.id}">${evento.titulo} (${dataFormatada})</option>`;
+                    optionsHtml += `<option value="${doc.id}">${evento.titulo} (${dataFormatada})</option>`;
                 });
+                seletorEventoRelatorioCantina.innerHTML = optionsHtml;
+                seletorEventoRelatorioBiblioteca.innerHTML = '<option value="">Selecione para consultar</option>' + optionsHtml;
             }
 
-            seletorEventoRelatorio.addEventListener('change', async (e) => {
-                const eventoId = e.target.value;
+            async function carregarRelatorio(eventoId, tipo, resultadoDiv, colecaoVista, colecaoPrazo) {
                 if (!eventoId) {
-                    resultadoRelatorio.innerHTML = '';
+                    resultadoDiv.innerHTML = '';
                     return;
                 }
                 
-                resultadoRelatorio.innerHTML = '<h3>Carregando relatório...</h3>';
+                resultadoDiv.innerHTML = '<h3>Carregando relatório...</h3>';
 
-                // Buscar vendas à vista
-                const qVista = query(collection(db, "cantina_vendas_avista"), where("eventoId", "==", eventoId));
+                const qVista = query(collection(db, colecaoVista), where("eventoId", "==", eventoId));
                 const snapshotVista = await getDocs(qVista);
                 let totalVista = 0;
                 snapshotVista.forEach(doc => totalVista += doc.data().total);
 
-                // Buscar pendências
-                const qPrazo = query(collection(db, "contas_a_receber"), where("eventoId", "==", eventoId), orderBy("registradoEm"));
+                const qPrazo = query(collection(db, colecaoPrazo), where("eventoId", "==", eventoId), orderBy("registradoEm"));
                 const snapshotPrazo = await getDocs(qPrazo);
                 let pendenciasHtml = '';
                 if(snapshotPrazo.empty) {
-                    pendenciasHtml = '<tr><td colspan="4">Nenhuma pendência registrada para este evento.</td></tr>';
+                    pendenciasHtml = `<tr><td colspan="4">Nenhuma pendência registrada para ${tipo === 'cantina' ? 'este evento' : 'estas vendas'}.</td></tr>`;
                 } else {
                     snapshotPrazo.forEach(doc => {
                         const pendencia = doc.data();
                         const trClass = pendencia.status === 'pago' ? 'status-pago' : '';
-                        const comprador = pendencia.compradorNome || 'Nome não registrado';
+                        const comprador = pendencia.compradorNome || pendencia.comprador?.nome || 'Nome não registrado';
                         pendenciasHtml += `
                             <tr class="${trClass}">
                                 <td>${comprador}</td>
                                 <td>${new Date(pendencia.registradoEm.seconds * 1000).toLocaleDateString('pt-BR')}</td>
                                 <td>${Number(pendencia.total).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</td>
                                 <td>
-                                    ${pendencia.status !== 'pago' ? `<button class="btn-marcar-pago" data-id="${doc.id}">Marcar como Recebido</button>` : 'Recebido'}
+                                    ${pendencia.status !== 'pago' ? `<button class="btn-marcar-pago" data-id="${doc.id}" data-colecao="${colecaoPrazo}">Marcar como Recebido</button>` : 'Recebido'}
                                 </td>
                             </tr>
                         `;
                     });
                 }
                 
-                const htmlFinal = `
+                resultadoDiv.innerHTML = `
                     <div class="total-relatorio">
                         Total de Vendas Recebidas (à vista): ${Number(totalVista).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
                     </div>
                     <h3>Contas a Receber (Fiado)</h3>
                     <table class="tabela-relatorio">
-                        <thead>
-                            <tr>
-                                <th>Comprador</th>
-                                <th>Data da Compra</th>
-                                <th>Valor</th>
-                                <th>Status</th>
-                            </tr>
-                        </thead>
+                        <thead><tr><th>Comprador</th><th>Data da Compra</th><th>Valor</th><th>Status</th></tr></thead>
                         <tbody>${pendenciasHtml}</tbody>
                     </table>
                 `;
-                resultadoRelatorio.innerHTML = htmlFinal;
+            }
+
+            seletorEventoRelatorioCantina.addEventListener('change', (e) => {
+                carregarRelatorio(e.target.value, 'cantina', resultadoRelatorioCantina, 'cantina_vendas_avista', 'contas_a_receber');
+            });
+            seletorEventoRelatorioBiblioteca.addEventListener('change', (e) => {
+                carregarRelatorio(e.target.value, 'biblioteca', resultadoRelatorioBiblioteca, 'biblioteca_vendas_avista', 'biblioteca_contas_a_receber');
             });
 
-            resultadoRelatorio.addEventListener('click', async (e) => {
+            document.body.addEventListener('click', async (e) => {
                 if (e.target.classList.contains('btn-marcar-pago')) {
                     const id = e.target.dataset.id;
+                    const colecao = e.target.dataset.colecao;
                     if (confirm('Tem certeza que deseja marcar esta pendência como recebida? Esta ação não pode ser desfeita.')) {
-                        const docRef = doc(db, 'contas_a_receber', id);
+                        const docRef = doc(db, colecao, id);
                         await updateDoc(docRef, { status: 'pago' });
                         alert('Pendência marcada como recebida!');
-                        seletorEventoRelatorio.dispatchEvent(new Event('change')); // Recarrega o relatório
+                        if(colecao.includes('cantina')) seletorEventoRelatorioCantina.dispatchEvent(new Event('change'));
+                        else seletorEventoRelatorioBiblioteca.dispatchEvent(new Event('change'));
                     }
                 }
             });
 
-            carregarEventosParaRelatorio();
+            carregarEventosParaRelatorios();
         }
     </script>
 </body>

@@ -90,7 +90,8 @@
 
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
-        import { getFirestore, collection, onSnapshot, addDoc, doc, getDoc, setDoc, deleteDoc, query, where, orderBy, serverTimestamp, Timestamp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
+        import { getFirestore, collection, onSnapshot, addDoc, doc, setDoc, getDoc, deleteDoc, query, orderBy, serverTimestamp, Timestamp, where } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
+        import { getFunctions, httpsCallable } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-functions.js";
         import { protegerPagina } from '/auth.js';
 
         const firebaseConfig = {
@@ -107,14 +108,12 @@
             .then(user => {
                 document.getElementById('main-content').style.display = 'block';
                 inicializarPagina(user);
-            })
-            .catch(error => {
-                document.getElementById('acesso-negado').style.display = 'block';
-                console.error(error.message);
             });
         
         function inicializarPagina(user) {
             const db = getFirestore();
+            const functions = getFunctions(undefined, 'southamerica-east1');
+            const registrarLogDeAcesso = httpsCallable(functions, 'registrarLogDeAcesso');
             const form = document.getElementById('form-item-cantina');
             const tabelaItens = document.getElementById('tabela-itens').querySelector('tbody');
             const seletorEvento = document.getElementById('evento');
@@ -182,10 +181,12 @@
 
                 if (id) {
                     await setDoc(doc(db, 'cantina_itens', id), item, { merge: true });
+                    registrarLogDeAcesso({ acao: 'EDITOU_ITEM_CANTINA', detalhes: { itemId: id, nome: item.nome } });
                     alert('Item atualizado com sucesso!');
                 } else {
                     item.criadoEm = serverTimestamp();
-                    await addDoc(collection(db, 'cantina_itens'), item);
+                    const docRef = await addDoc(collection(db, 'cantina_itens'), item);
+                    registrarLogDeAcesso({ acao: 'CRIOU_ITEM_CANTINA', detalhes: { itemId: docRef.id, nome: item.nome } });
                     alert('Item salvo com sucesso!');
                 }
                 form.reset();
@@ -212,9 +213,14 @@
                         document.getElementById('btn-cancelar').style.display = 'inline-block';
                         window.scrollTo({ top: 0, behavior: 'smooth' });
                     }
-                } else if (target.classList.contains('btn-delete')) {
+                } if (target.classList.contains('btn-delete')) {
                     if (confirm('Tem certeza que deseja apagar este item?')) {
-                        await deleteDoc(doc(db, 'cantina_itens', id));
+                        const docRef = doc(db, 'cantina_itens', id);
+                        const docSnap = await getDoc(docRef);
+                        const nomeItem = docSnap.exists() ? docSnap.data().nome : 'Item Desconhecido';
+                        
+                        await deleteDoc(docRef);
+                        registrarLogDeAcesso({ acao: 'APAGOU_ITEM_CANTINA', detalhes: { itemId: id, nome: nomeItem } });
                     }
                 }
             });

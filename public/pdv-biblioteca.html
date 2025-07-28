@@ -130,13 +130,13 @@
     };
         initializeApp(firebaseConfig);
 
-        protegerPagina(['super-admin', 'diretor', 'bibliotecario'])
+        protegerPagina(['super-admin', 'diretor', 'tesoureiro' , 'bibliotecario'])
             .then(user => {
                 document.getElementById('main-content').style.display = 'block';
                 inicializarPagina(user);
-            })
-            .catch(error => {
-                document.getElementById('acesso-negado').style.display = 'block';
+                // Log de Acesso
+                const registrarLogDeAcesso = httpsCallable(getFunctions(getApp(), 'southamerica-east1'), 'registrarLogDeAcesso');
+                registrarLogDeAcesso({ acao: 'ACESSOU_PDV_BIBLIOTECA' });
             });
 
         function inicializarPagina(user) {

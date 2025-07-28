@@ -82,6 +82,7 @@
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
         import { getFirestore, collection, onSnapshot, addDoc, doc, setDoc, getDoc, deleteDoc, query, orderBy, serverTimestamp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
+        import { getFunctions, httpsCallable } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-functions.js";
         import { protegerPagina } from '/auth.js';
 
         const firebaseConfig = {
@@ -98,13 +99,12 @@
             .then(user => {
                 document.getElementById('main-content').style.display = 'block';
                 inicializarPagina(user);
-            })
-            .catch(error => {
-                document.getElementById('acesso-negado').style.display = 'block';
             });
         
         function inicializarPagina(user) {
             const db = getFirestore();
+            const functions = getFunctions(undefined, 'southamerica-east1');
+            const registrarLogDeAcesso = httpsCallable(functions, 'registrarLogDeAcesso');
             const form = document.getElementById('form-livro');
             const tabelaLivros = document.getElementById('tabela-livros').querySelector('tbody');
             const campoPreco = document.getElementById('campo-preco');
@@ -159,10 +159,12 @@
 
                 if (id) {
                     await setDoc(doc(db, 'biblioteca_livros', id), livro, { merge: true });
+                    registrarLogDeAcesso({ acao: 'EDITOU_LIVRO_BIBLIOTECA', detalhes: { livroId: id, titulo: livro.titulo } });
                     alert('Livro atualizado com sucesso!');
                 } else {
                     livro.criadoEm = serverTimestamp();
-                    await addDoc(collection(db, 'biblioteca_livros'), livro);
+                    const docRef = await addDoc(collection(db, 'biblioteca_livros'), livro);
+                    registrarLogDeAcesso({ acao: 'CRIOU_LIVRO_BIBLIOTECA', detalhes: { livroId: docRef.id, titulo: livro.titulo } });
                     alert('Livro salvo com sucesso!');
                 }
                 form.reset();
@@ -197,9 +199,14 @@
                         document.getElementById('btn-cancelar').style.display = 'inline-block';
                         window.scrollTo({ top: 0, behavior: 'smooth' });
                     }
-                } else if (target.classList.contains('btn-delete')) {
+                } if (target.classList.contains('btn-delete')) {
                     if (confirm('Tem certeza que deseja apagar este livro do acervo?')) {
-                        await deleteDoc(doc(db, 'biblioteca_livros', id));
+                        const docRef = doc(db, 'biblioteca_livros', id);
+                        const docSnap = await getDoc(docRef);
+                        const tituloLivro = docSnap.exists() ? docSnap.data().titulo : 'Livro Desconhecido';
+
+                        await deleteDoc(docRef);
+                        registrarLogDeAcesso({ acao: 'APAGOU_LIVRO_BIBLIOTECA', detalhes: { livroId: id, titulo: tituloLivro } });
                     }
                 }
             });
