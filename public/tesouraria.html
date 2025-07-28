@@ -82,26 +82,26 @@
     <div id="relatorio-biblioteca" class="relatorio-container">
         <h2>Relatórios da Biblioteca</h2>
         <div class="seletor-bloco" style="margin: 0 auto 20px auto; text-align:center;">
-            <label for="seletor-evento-relatorio-biblioteca">Selecione para ver o Relatório</label>
-            <select id="seletor-evento-relatorio-biblioteca"></select>
+            <label for="seletor-mes-relatorio-biblioteca">Selecione o Mês para ver o Relatório</label>
+            <input type="month" id="seletor-mes-relatorio-biblioteca">
         </div>
         <div id="resultado-relatorio-biblioteca"></div>
     </div>
     
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
-        import { getFirestore, doc, setDoc, getDoc, updateDoc, collection, addDoc, serverTimestamp, query, where, getDocs, onSnapshot, orderBy, documentId } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
+        import { getFirestore, doc, setDoc, getDoc, updateDoc, collection, addDoc, serverTimestamp, query, where, getDocs, onSnapshot, orderBy, documentId, Timestamp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
         import { getAuth } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-auth.js";
         import { protegerPagina } from '/auth.js';
 
-       const firebaseConfig = {
-        apiKey: "AIzaSyBV7RPjk3cFTqL-aIpflJcUojKg1ZXMLuU",
-        authDomain: "voluntarios-ativos---cepat.firebaseapp.com",
-        projectId: "voluntarios-ativos---cepat",
-        storageBucket: "voluntarios-ativos---cepat.firebasestorage.app",
-        messagingSenderId: "66122858261",
-        appId: "1:66122858261:web:7fa21f1805463b5c08331c"
-    };
+        const firebaseConfig = {
+            apiKey: "AIzaSyBV7RPjk3cFTqL-aIpflJcUojKg1ZXMLuU",
+            authDomain: "voluntarios-ativos---cepat.firebaseapp.com",
+            projectId: "voluntarios-ativos---cepat",
+            storageBucket: "voluntarios-ativos---cepat.firebasestorage.app",
+            messagingSenderId: "66122858261",
+            appId: "1:66122858261:web:7fa21f1805463b5c08331c"
+        };
         initializeApp(firebaseConfig);
 
         protegerPagina(['diretor', 'tesoureiro', 'super-admin'])
@@ -667,14 +667,14 @@
             });
 
             // ===================================================================
-            // LÓGICA PARA OS RELATÓRIOS DA CANTINA E BIBLIOTECA
+            // NOVA LÓGICA PARA OS RELATÓRIOS DA CANTINA
             // ===================================================================
             const seletorEventoRelatorioCantina = document.getElementById('seletor-evento-relatorio-cantina');
             const resultadoRelatorioCantina = document.getElementById('resultado-relatorio-cantina');
-            const seletorEventoRelatorioBiblioteca = document.getElementById('seletor-evento-relatorio-biblioteca');
+            const seletorMesRelatorioBiblioteca = document.getElementById('seletor-mes-relatorio-biblioteca');
             const resultadoRelatorioBiblioteca = document.getElementById('resultado-relatorio-biblioteca');
 
-            async function carregarEventosParaRelatorios() {
+            async function carregarEventosParaRelatorio() {
                 const qEventos = query(collection(db, "eventos"), orderBy("dataInicio", "desc"));
                 const snapshot = await getDocs(qEventos);
                 
@@ -685,27 +685,43 @@
                     optionsHtml += `<option value="${doc.id}">${evento.titulo} (${dataFormatada})</option>`;
                 });
                 seletorEventoRelatorioCantina.innerHTML = optionsHtml;
-                seletorEventoRelatorioBiblioteca.innerHTML = '<option value="">Selecione para consultar</option>' + optionsHtml;
             }
 
-            async function carregarRelatorio(eventoId, tipo, resultadoDiv, colecaoVista, colecaoPrazo) {
-                if (!eventoId) {
+            seletorEventoRelatorioCantina.addEventListener('change', (e) => {
+                carregarRelatorio(e.target.value, resultadoRelatorioCantina, 'cantina_vendas_avista', 'contas_a_receber');
+            });
+            seletorMesRelatorioBiblioteca.addEventListener('change', (e) => {
+                carregarRelatorio(e.target.value, resultadoRelatorioBiblioteca, 'biblioteca_vendas_avista', 'biblioteca_contas_a_receber', true);
+            });
+
+            async function carregarRelatorio(filtroId, resultadoDiv, colecaoVista, colecaoPrazo, isMensal = false) {
+                if (!filtroId) {
                     resultadoDiv.innerHTML = '';
                     return;
                 }
-                
                 resultadoDiv.innerHTML = '<h3>Carregando relatório...</h3>';
 
-                const qVista = query(collection(db, colecaoVista), where("eventoId", "==", eventoId));
-                const snapshotVista = await getDocs(qVista);
+                let qVista, qPrazo;
+
+                if (isMensal) {
+                    const [ano, mes] = filtroId.split('-');
+                    const inicioMes = Timestamp.fromDate(new Date(ano, mes - 1, 1));
+                    const fimMes = Timestamp.fromDate(new Date(ano, mes, 0, 23, 59, 59));
+                    qVista = query(collection(db, colecaoVista), where("registradoEm", ">=", inicioMes), where("registradoEm", "<=", fimMes));
+                    qPrazo = query(collection(db, colecaoPrazo), where("registradoEm", ">=", inicioMes), where("registradoEm", "<=", fimMes), orderBy("registradoEm"));
+                } else {
+                    qVista = query(collection(db, colecaoVista), where("eventoId", "==", filtroId));
+                    qPrazo = query(collection(db, colecaoPrazo), where("eventoId", "==", filtroId), orderBy("registradoEm"));
+                }
+
+                const [snapshotVista, snapshotPrazo] = await Promise.all([getDocs(qVista), getDocs(qPrazo)]);
+                
                 let totalVista = 0;
                 snapshotVista.forEach(doc => totalVista += doc.data().total);
 
-                const qPrazo = query(collection(db, colecaoPrazo), where("eventoId", "==", eventoId), orderBy("registradoEm"));
-                const snapshotPrazo = await getDocs(qPrazo);
                 let pendenciasHtml = '';
                 if(snapshotPrazo.empty) {
-                    pendenciasHtml = `<tr><td colspan="4">Nenhuma pendência registrada para ${tipo === 'cantina' ? 'este evento' : 'estas vendas'}.</td></tr>`;
+                    pendenciasHtml = `<tr><td colspan="4">Nenhuma pendência registrada para este período.</td></tr>`;
                 } else {
                     snapshotPrazo.forEach(doc => {
                         const pendencia = doc.data();
@@ -725,9 +741,7 @@
                 }
                 
                 resultadoDiv.innerHTML = `
-                    <div class="total-relatorio">
-                        Total de Vendas Recebidas (à vista): ${Number(totalVista).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
-                    </div>
+                    <div class="total-relatorio">Total de Vendas Recebidas (à vista): ${Number(totalVista).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</div>
                     <h3>Contas a Receber (Fiado)</h3>
                     <table class="tabela-relatorio">
                         <thead><tr><th>Comprador</th><th>Data da Compra</th><th>Valor</th><th>Status</th></tr></thead>
@@ -735,13 +749,6 @@
                     </table>
                 `;
             }
-
-            seletorEventoRelatorioCantina.addEventListener('change', (e) => {
-                carregarRelatorio(e.target.value, 'cantina', resultadoRelatorioCantina, 'cantina_vendas_avista', 'contas_a_receber');
-            });
-            seletorEventoRelatorioBiblioteca.addEventListener('change', (e) => {
-                carregarRelatorio(e.target.value, 'biblioteca', resultadoRelatorioBiblioteca, 'biblioteca_vendas_avista', 'biblioteca_contas_a_receber');
-            });
 
             document.body.addEventListener('click', async (e) => {
                 if (e.target.classList.contains('btn-marcar-pago')) {
@@ -752,12 +759,17 @@
                         await updateDoc(docRef, { status: 'pago' });
                         alert('Pendência marcada como recebida!');
                         if(colecao.includes('cantina')) seletorEventoRelatorioCantina.dispatchEvent(new Event('change'));
-                        else seletorEventoRelatorioBiblioteca.dispatchEvent(new Event('change'));
+                        else seletorMesRelatorioBiblioteca.dispatchEvent(new Event('change'));
                     }
                 }
             });
 
-            carregarEventosParaRelatorios();
+            carregarEventosParaRelatorio();
+            const hojeRelatorio = new Date();
+            const mesAtualRelatorio = (hojeRelatorio.getMonth() + 1).toString().padStart(2, '0');
+            const anoAtualRelatorio = hojeRelatorio.getFullYear();
+            seletorMesRelatorioBiblioteca.value = `${anoAtualRelatorio}-${mesAtualRelatorio}`;
+            seletorMesRelatorioBiblioteca.dispatchEvent(new Event('change'));
         }
     </script>
 </body>
