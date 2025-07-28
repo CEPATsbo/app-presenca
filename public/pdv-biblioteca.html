@@ -57,7 +57,7 @@
             <div class="grid-container">
                 <div class="form-item">
                     <label for="busca-livro-venda">Buscar Livro para Venda</label>
-                    <input type="text" id="busca-livro-venda" placeholder="Digite o título do livro...">
+                    <input type="text" id="busca-livro-venda" placeholder="Digite para filtrar a lista abaixo...">
                     <div id="resultados-busca-venda"></div>
                 </div>
                 <div class="carrinho-container">
@@ -171,6 +171,7 @@
 
             let carrinho = [];
             let livroParaEmprestimo = null;
+            let todosOsLivrosAVenda = [];
             let todosOsLivrosDisponiveis = [];
 
             // --- Lógica das Abas ---
@@ -181,9 +182,6 @@
                     const target = document.getElementById(`tab-${tab.dataset.tab}`);
                     tabContents.forEach(content => content.classList.remove('active'));
                     target.classList.add('active');
-                    if(tab.dataset.tab === 'emprestimos') {
-                        carregarLivrosParaEmprestimo();
-                    }
                 });
             });
             
@@ -194,9 +192,38 @@
                 seletorVoluntarioEmprestimo.innerHTML = options;
             });
 
-            // --- Lógica de Vendas (código mantido, sem alterações) ---
-            buscaLivroVendaInput.addEventListener('keyup', () => buscarLivrosVenda(buscaLivroVendaInput, resultadosBuscaVenda));
+            // --- Lógica de Vendas ---
+            function carregarLivrosParaVenda() {
+                const q = query(collection(db, 'biblioteca_livros'), where('finalidade', '==', 'Venda'), orderBy('titulo'));
+                onSnapshot(q, (snapshot) => {
+                    todosOsLivrosAVenda = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                    renderizarResultadosVenda(todosOsLivrosAVenda);
+                });
+            }
             
+            buscaLivroVendaInput.addEventListener('keyup', () => {
+                const textoBusca = buscaLivroVendaInput.value.toLowerCase();
+                const livrosFiltrados = todosOsLivrosAVenda.filter(livro => 
+                    livro.titulo.toLowerCase().includes(textoBusca) || 
+                    livro.autor.toLowerCase().includes(textoBusca)
+                );
+                renderizarResultadosVenda(livrosFiltrados);
+            });
+
+            function renderizarResultadosVenda(livros) {
+                resultadosBuscaVenda.innerHTML = '';
+                livros.forEach(livro => {
+                    const div = document.createElement('div');
+                    div.className = 'resultado-item';
+                    div.innerHTML = `${livro.titulo} - ${livro.autor} <strong>(${Number(livro.preco).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })})</strong>`;
+                    div.onclick = () => {
+                        adicionarAoCarrinho(livro);
+                        buscaLivroVendaInput.value = '';
+                        renderizarResultadosVenda(todosOsLivrosAVenda); // Reseta a lista de busca
+                    };
+                    resultadosBuscaVenda.appendChild(div);
+                });
+            }
             function adicionarAoCarrinho(livro) {
                 const itemExistente = carrinho.find(i => i.id === livro.id);
                 if (itemExistente) { itemExistente.qtd++; } 
@@ -270,7 +297,7 @@
                 }
             }
 
-            // --- Lógica de Empréstimos ---
+            // --- Lógica de Empréstimos --- 
             function carregarLivrosParaEmprestimo() {
                 const q = query(collection(db, 'biblioteca_livros'), where('finalidade', '==', 'Empréstimo'), where('status', '==', 'disponível'), orderBy('titulo'));
                 onSnapshot(q, (snapshot) => {
@@ -302,7 +329,7 @@
             function selecionarLivroParaEmprestimo(livro) {
                 livroParaEmprestimo = livro;
                 livroSelecionadoSpan.textContent = `${livro.titulo} - ${livro.autor}`;
-                buscaLivroEmprestimoInput.value = livro.titulo;
+                buscaLivroEmprestimoInput.value = '';
                 resultadosBuscaEmprestimo.innerHTML = '';
             }
 
@@ -370,37 +397,10 @@
                     }
                 }
             });
-
-            // --- Funções Comuns de Busca ---
-            function buscarLivrosVenda(inputElement, resultContainer) {
-                const textoBusca = inputElement.value.toLowerCase();
-                resultContainer.innerHTML = '';
-                if (textoBusca.length < 3) return;
-
-                const q = query(
-                    collection(db, 'biblioteca_livros'), 
-                    where('finalidade', '==', 'Venda'),
-                    orderBy('titulo'), 
-                    startAt(textoBusca), 
-                    endAt(textoBusca + '\uf8ff')
-                );
-
-                onSnapshot(q, (snapshot) => {
-                    resultContainer.innerHTML = '';
-                    snapshot.forEach(doc => {
-                        const livro = { id: doc.id, ...doc.data() };
-                        const div = document.createElement('div');
-                        div.className = 'resultado-item';
-                        div.innerHTML = `${livro.titulo} - ${livro.autor} <strong>(${Number(livro.preco).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })})</strong>`;
-                        div.onclick = () => {
-                            adicionarAoCarrinho(livro);
-                            inputElement.value = '';
-                            resultContainer.innerHTML = '';
-                        };
-                        resultContainer.appendChild(div);
-                    });
-                });
-            }
+            
+            // Carga inicial
+            carregarLivrosParaVenda();
+            carregarLivrosParaEmprestimo();
         }
     </script>
 </body>
