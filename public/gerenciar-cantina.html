@@ -120,7 +120,12 @@
 
             const carregarEventos = () => {
                 const hoje = Timestamp.now();
-                const qEventos = query(collection(db, "eventos"), where("dataInicio", ">=", hoje), orderBy("dataInicio"));
+                const qEventos = query(
+                    collection(db, "eventos"), 
+                    where("tipo", "!=", "Feriado"), // <-- CORREÇÃO APLICADA AQUI
+                    where("dataInicio", ">=", hoje), 
+                    orderBy("dataInicio")
+                );
                 onSnapshot(qEventos, (snapshot) => {
                     seletorEvento.innerHTML = '<option value="padrão">Cardápio Padrão (Dias Normais)</option>';
                     snapshot.forEach(doc => {
@@ -132,11 +137,10 @@
             };
 
             const carregarItens = () => {
-                const qItens = query(collection(db, "cantina_itens"), orderBy("eventoId"), orderBy("categoria"), orderBy("nome"));
+                const qItens = query(collection(db, "cantina_itens"), orderBy("criadoEm", "desc"));
                 onSnapshot(qItens, (snapshot) => {
                     const itens = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
 
-                    // Ordenação customizada no cliente
                     itens.sort((a, b) => {
                         if (a.eventoId === 'padrão' && b.eventoId !== 'padrão') return -1;
                         if (a.eventoId !== 'padrão' && b.eventoId === 'padrão') return 1;
@@ -162,6 +166,9 @@
                         `;
                         tabelaItens.appendChild(tr);
                     });
+                }, (error) => {
+                    console.error("Erro ao carregar itens da cantina:", error);
+                    tabelaItens.innerHTML = '<tr><td colspan="5">Ocorreu um erro ao carregar os itens. Verifique o console.</td></tr>';
                 });
             };
 
@@ -213,7 +220,7 @@
                         document.getElementById('btn-cancelar').style.display = 'inline-block';
                         window.scrollTo({ top: 0, behavior: 'smooth' });
                     }
-                } if (target.classList.contains('btn-delete')) {
+                } else if (target.classList.contains('btn-delete')) {
                     if (confirm('Tem certeza que deseja apagar este item?')) {
                         const docRef = doc(db, 'cantina_itens', id);
                         const docSnap = await getDoc(docRef);

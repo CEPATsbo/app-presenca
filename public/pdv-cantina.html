@@ -33,7 +33,9 @@
         .modal-content p, .modal-content label { margin-bottom: 10px; display: block; }
         .modal-content input, .modal-content select { width: 100%; font-size: 1.1em; padding: 8px; box-sizing: border-box; }
         .modal-content input { margin-top: 10px; }
-
+        .painel-totais { border: 2px solid #28a745; padding: 15px; border-radius: 8px; margin-bottom: 20px; background-color: #e8f5e9; }
+        .painel-totais p { margin: 5px 0; font-size: 1.1em; font-weight: 500; display: flex; justify-content: space-between; }
+        .painel-totais strong { color: #1b5e20; }
     </style>
 </head>
 <body>
@@ -52,6 +54,7 @@
         <div id="pdv-container" class="pdv-container">
             <div id="menu-categorias" class="menu-categorias"></div>
             <div class="carrinho-container">
+                <div id="painel-totais" class="painel-totais"></div>
                 <h2>Carrinho</h2>
                 <ul id="lista-carrinho"></ul>
                 <div id="total-container" class="total-container">Total: R$ 0,00</div>
@@ -80,25 +83,24 @@
 
     <script type="module">
         import { initializeApp, getApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
-        import { getFirestore, collection, onSnapshot, addDoc, doc, query, where, orderBy, serverTimestamp, Timestamp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
+        import { getFirestore, collection, onSnapshot, query, where, orderBy, Timestamp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
         import { getFunctions, httpsCallable } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-functions.js";
         import { protegerPagina } from '/auth.js';
 
         const firebaseConfig = {
-        apiKey: "AIzaSyBV7RPjk3cFTqL-aIpflJcUojKg1ZXMLuU",
-        authDomain: "voluntarios-ativos---cepat.firebaseapp.com",
-        projectId: "voluntarios-ativos---cepat",
-        storageBucket: "voluntarios-ativos---cepat.firebasestorage.app",
-        messagingSenderId: "66122858261",
-        appId: "1:66122858261:web:7fa21f1805463b5c08331c"
-    };
+            apiKey: "AIzaSyBV7RPjk3cFTqL-aIpflJcUojKg1ZXMLuU",
+            authDomain: "voluntarios-ativos---cepat.firebaseapp.com",
+            projectId: "voluntarios-ativos---cepat",
+            storageBucket: "voluntarios-ativos---cepat.firebasestorage.app",
+            messagingSenderId: "66122858261",
+            appId: "1:66122858261:web:7fa21f1805463b5c08331c"
+        };
         initializeApp(firebaseConfig);
 
         protegerPagina(['super-admin', 'diretor', 'tesoureiro', 'conselheiro', 'produtor-evento'])
             .then(user => {
                 document.getElementById('main-content').style.display = 'block';
                 inicializarPagina(user);
-                // Log de Acesso
                 const registrarLogDeAcesso = httpsCallable(getFunctions(getApp(), 'southamerica-east1'), 'registrarLogDeAcesso');
                 registrarLogDeAcesso({ acao: 'ACESSOU_PDV_CANTINA' });
             });
@@ -114,6 +116,7 @@
             const menuCategorias = document.getElementById('menu-categorias');
             const listaCarrinho = document.getElementById('lista-carrinho');
             const totalContainer = document.getElementById('total-container');
+            const painelTotais = document.getElementById('painel-totais');
             const btnFinalizarVista = document.getElementById('btn-finalizar-vista');
             const btnFinalizarPrazo = document.getElementById('btn-finalizar-prazo');
             const modalPendencia = document.getElementById('modal-pendencia');
@@ -127,7 +130,8 @@
             let eventoSelecionado = {};
 
             const hoje = Timestamp.now();
-            const qEventos = query(collection(db, "eventos"), where("dataInicio", ">=", hoje), orderBy("dataInicio"));
+            // CORREÇÃO: Adicionado filtro para não buscar feriados
+            const qEventos = query(collection(db, "eventos"), where("tipo", "!=", "Feriado"), where("dataInicio", ">=", hoje), orderBy("dataInicio"));
             onSnapshot(qEventos, (snapshot) => {
                 seletorEvento.innerHTML = '<option value="padrão">Cardápio Padrão (Dias Normais)</option>';
                 snapshot.forEach(doc => {
@@ -135,6 +139,9 @@
                     const dataFormatada = evento.dataInicio.toDate().toLocaleDateString('pt-BR');
                     seletorEvento.innerHTML += `<option value="${doc.id}" data-titulo="${evento.titulo}">${evento.titulo} (${dataFormatada})</option>`;
                 });
+            }, (error) => {
+                console.error("Erro ao buscar eventos (verifique os índices no Firestore): ", error);
+                alert("Erro ao carregar a lista de eventos. Pode ser necessário criar um índice no Firestore. Verifique o console para mais detalhes (F12).");
             });
 
             onSnapshot(query(collection(db, "voluntarios"), orderBy("nome")), (snapshot) => {
@@ -152,11 +159,15 @@
                 };
                 document.getElementById('seletor-evento-container').style.display = 'none';
                 pdvContainer.style.display = 'grid';
+                
                 const qItens = query(collection(db, "cantina_itens"), where("eventoId", "==", eventoSelecionado.id));
                 onSnapshot(qItens, (snapshot) => {
                     cardapioDoEvento = snapshot.docs.map(doc => ({id: doc.id, ...doc.data()}));
                     renderizarMenu();
                 });
+
+                // Inicia o listener para os totais do evento
+                escutarTotaisDoEvento(eventoSelecionado.id);
             });
 
             function renderizarMenu() {
@@ -284,6 +295,29 @@
                 
                 finalizarVenda('prazo', dadosComprador);
             });
+        function escutarTotaisDoEvento(eventoId) {
+                const qVista = query(collection(db, "cantina_vendas_avista"), where("eventoId", "==", eventoId));
+                const qPrazo = query(collection(db, "contas_a_receber"), where("eventoId", "==", eventoId));
+
+                onSnapshot(qVista, (snapshotVista) => {
+                    onSnapshot(qPrazo, (snapshotPrazo) => {
+                        let totalVista = 0;
+                        snapshotVista.forEach(doc => totalVista += doc.data().total);
+
+                        let totalPrazo = 0;
+                        snapshotPrazo.forEach(doc => totalPrazo += doc.data().total);
+
+                        const totalGeral = totalVista + totalPrazo;
+
+                        painelTotais.innerHTML = `
+                            <p>Recebido (à vista): <strong>${totalVista.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</strong></p>
+                            <p>Pendências (a receber): <strong>${totalPrazo.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</strong></p>
+                            <hr>
+                            <p>Total Geral do Evento: <strong>${totalGeral.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</strong></p>
+                        `;
+                    });
+                });
+            }
         }
     </script>
 </body>
