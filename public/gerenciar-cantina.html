@@ -34,7 +34,6 @@
 
     <div id="main-content" class="container" style="display: none;">
         <h1>Gerenciar Cantina "Amor e Luz"</h1>
-
         <form id="form-item-cantina">
             <input type="hidden" id="itemId">
             <div class="form-grid">
@@ -42,49 +41,21 @@
                     <label for="evento">Associar ao Evento (Opcional)</label>
                     <select id="evento"></select>
                 </div>
-                <div class="form-item">
-                    <label for="nome">Nome do Item</label>
-                    <input type="text" id="nome" required>
-                </div>
-                <div class="form-item">
-                    <label for="categoria">Categoria</label>
-                    <select id="categoria" required>
-                        <option value="Salgados">Salgados</option>
-                        <option value="Doces">Doces</option>
-                        <option value="Bebidas">Bebidas</option>
-                        <option value="Outros">Outros</option>
-                    </select>
-                </div>
-                <div class="form-item">
-                    <label for="preco">Preço (R$)</label>
-                    <input type="number" id="preco" step="0.01" required>
-                </div>
-                 <div class="form-item">
-                    <label for="descricao">Descrição (opcional)</label>
-                    <input type="text" id="descricao">
-                </div>
+                <div class="form-item"><label for="nome">Nome do Item</label><input type="text" id="nome" required></div>
+                <div class="form-item"><label for="categoria">Categoria</label><select id="categoria" required><option value="Salgados">Salgados</option><option value="Doces">Doces</option><option value="Bebidas">Bebidas</option><option value="Outros">Outros</option></select></div>
+                <div class="form-item"><label for="preco">Preço (R$)</label><input type="number" id="preco" step="0.01" required></div>
+                <div class="form-item"><label for="descricao">Descrição (opcional)</label><input type="text" id="descricao"></div>
             </div>
             <div class="form-actions">
                 <button type="button" id="btn-cancelar" class="btn btn-secondary" style="display: none;">Cancelar</button>
                 <button type="submit" class="btn btn-primary">Salvar Item</button>
             </div>
         </form>
-
         <hr style="margin: 40px 0;">
-
         <h2>Cardápio Cadastrado</h2>
         <table id="tabela-itens">
-            <thead>
-                <tr>
-                    <th>Item</th>
-                    <th>Categoria</th>
-                    <th>Preço</th>
-                    <th>Evento Associado</th>
-                    <th>Ações</th>
-                </tr>
-            </thead>
-            <tbody>
-                </tbody>
+            <thead><tr><th>Item</th><th>Categoria</th><th>Preço</th><th>Evento Associado</th><th>Ações</th></tr></thead>
+            <tbody></tbody>
         </table>
     </div>
 
@@ -95,23 +66,19 @@
         import { protegerPagina } from '/auth.js';
 
         const firebaseConfig = {
-            apiKey: "AIzaSyBV7RPjk3cFTqL-aIpflJcUojKg1ZXMLuU",
-            authDomain: "voluntarios-ativos---cepat.firebaseapp.com",
-            projectId: "voluntarios-ativos---cepat",
-            storageBucket: "voluntarios-ativos---cepat.firebasestorage.app",
-            messagingSenderId: "66122858261",
-            appId: "1:66122858261:web:7fa21f1805463b5c08331c"
-        };
+        apiKey: "AIzaSyBV7RPjk3cFTqL-aIpflJcUojKg1ZXMLuU",
+        authDomain: "voluntarios-ativos---cepat.firebaseapp.com",
+        projectId: "voluntarios-ativos---cepat",
+        storageBucket: "voluntarios-ativos---cepat.firebasestorage.app",
+        messagingSenderId: "66122858261",
+        appId: "1:66122858261:web:7fa21f1805463b5c08331c"
+    };
         initializeApp(firebaseConfig);
 
         protegerPagina(['super-admin', 'diretor', 'tesoureiro', 'conselheiro', 'produtor-evento'])
             .then(user => {
                 document.getElementById('main-content').style.display = 'block';
                 inicializarPagina(user);
-            })
-            .catch(error => {
-                document.getElementById('acesso-negado').style.display = 'block';
-                console.error(error.message);
             });
         
         function inicializarPagina(user) {
@@ -124,12 +91,10 @@
 
             const carregarEventos = () => {
                 const hoje = Timestamp.now();
-                // CORREÇÃO: A consulta ao Firestore foi simplificada
                 const qEventos = query(collection(db, "eventos"), where("dataInicio", ">=", hoje), orderBy("dataInicio"));
                 onSnapshot(qEventos, (snapshot) => {
                     seletorEvento.innerHTML = '<option value="padrão">Cardápio Padrão (Dias Normais)</option>';
-                    // CORREÇÃO: O filtro de feriado agora é feito no navegador
-                    const eventosFiltrados = snapshot.docs.filter(doc => doc.data().tipo !== 'Feriado');
+                    const eventosFiltrados = snapshot.docs.filter(doc => (doc.data().tipo || '').toLowerCase().trim() !== 'feriado');
                     eventosFiltrados.forEach(doc => {
                         const evento = doc.data();
                         const dataFormatada = evento.dataInicio.toDate().toLocaleDateString('pt-BR');
