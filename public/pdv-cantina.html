@@ -33,9 +33,6 @@
         .modal-content p, .modal-content label { margin-bottom: 10px; display: block; }
         .modal-content input, .modal-content select { width: 100%; font-size: 1.1em; padding: 8px; box-sizing: border-box; }
         .modal-content input { margin-top: 10px; }
-        .painel-totais { border: 2px solid #28a745; padding: 15px; border-radius: 8px; margin-bottom: 20px; background-color: #e8f5e9; }
-        .painel-totais p { margin: 5px 0; font-size: 1.1em; font-weight: 500; display: flex; justify-content: space-between; }
-        .painel-totais strong { color: #1b5e20; }
     </style>
 </head>
 <body>
@@ -43,16 +40,17 @@
         <a href="/dashboard.html" class="btn-voltar">⬅ Voltar para o Dashboard</a>
     </nav>
     <div id="acesso-negado" style="display: none;"><h1>Acesso Negado</h1></div>
+
     <div id="main-content" class="container" style="display: none;">
         <h1>PDV Cantina "Amor e Luz"</h1>
         <div id="seletor-evento-container" class="seletor-evento-container">
             <select id="seletor-evento"></select>
             <button id="btn-iniciar-pdv">Iniciar Vendas</button>
         </div>
+
         <div id="pdv-container" class="pdv-container">
             <div id="menu-categorias" class="menu-categorias"></div>
             <div class="carrinho-container">
-                <div id="painel-totais"></div>
                 <h2>Carrinho</h2>
                 <ul id="lista-carrinho"></ul>
                 <div id="total-container" class="total-container">Total: R$ 0,00</div>
@@ -63,8 +61,22 @@
             </div>
         </div>
     </div>
+
     <div id="modal-pendencia" class="modal-overlay">
+        <div class="modal-content">
+            <h2>Registrar Pendência</h2>
+            <p>Selecione um voluntário da lista:</p>
+            <select id="seletor-voluntario"></select>
+            <hr style="margin: 20px 0;">
+            <label for="nome-externo">Ou digite o nome do comprador:</label>
+            <input type="text" id="nome-externo" placeholder="Nome do visitante...">
+            <div style="text-align: right; margin-top: 20px;">
+                <button type="button" id="btn-cancelar-pendencia" class="btn-secondary">Cancelar</button>
+                <button id="btn-confirmar-pendencia" class="btn-primary">Confirmar</button>
+            </div>
         </div>
+    </div>
+
     <script type="module">
         import { initializeApp, getApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
         import { getFirestore, collection, onSnapshot, query, where, orderBy, Timestamp, getDocs } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
@@ -72,13 +84,13 @@
         import { protegerPagina } from '/auth.js';
 
         const firebaseConfig = {
-        apiKey: "AIzaSyBV7RPjk3cFTqL-aIpflJcUojKg1ZXMLuU",
-        authDomain: "voluntarios-ativos---cepat.firebaseapp.com",
-        projectId: "voluntarios-ativos---cepat",
-        storageBucket: "voluntarios-ativos---cepat.firebasestorage.app",
-        messagingSenderId: "66122858261",
-        appId: "1:66122858261:web:7fa21f1805463b5c08331c"
-    };
+            apiKey: "AIzaSyBV7RPjk3cFTqL-aIpflJcUojKg1ZXMLuU",
+            authDomain: "voluntarios-ativos---cepat.firebaseapp.com",
+            projectId: "voluntarios-ativos---cepat",
+            storageBucket: "voluntarios-ativos---cepat.firebasestorage.app",
+            messagingSenderId: "66122858261",
+            appId: "1:66122858261:web:7fa21f1805463b5c08331c"
+        };
         initializeApp(firebaseConfig);
 
         protegerPagina(['super-admin', 'diretor', 'tesoureiro', 'conselheiro', 'produtor-evento'])
@@ -87,29 +99,40 @@
                 inicializarPagina(user);
                 const registrarLogDeAcesso = httpsCallable(getFunctions(getApp(), 'southamerica-east1'), 'registrarLogDeAcesso');
                 registrarLogDeAcesso({ acao: 'ACESSOU_PDV_CANTINA' });
+            })
+            .catch(error => {
+                document.getElementById('acesso-negado').style.display = 'block';
+                console.error(error.message);
             });
 
         function inicializarPagina(user) {
             const db = getFirestore();
             const functions = getFunctions(undefined, 'southamerica-east1');
             const registrarVendaCantina = httpsCallable(functions, 'registrarVendaCantina');
+
             const seletorEvento = document.getElementById('seletor-evento');
             const btnIniciarPDV = document.getElementById('btn-iniciar-pdv');
             const pdvContainer = document.getElementById('pdv-container');
-            const painelTotais = document.getElementById('painel-totais');
+            const menuCategorias = document.getElementById('menu-categorias');
+            const listaCarrinho = document.getElementById('lista-carrinho');
+            const totalContainer = document.getElementById('total-container');
+            const btnFinalizarVista = document.getElementById('btn-finalizar-vista');
+            const btnFinalizarPrazo = document.getElementById('btn-finalizar-prazo');
+            const modalPendencia = document.getElementById('modal-pendencia');
+            const seletorVoluntario = document.getElementById('seletor-voluntario');
+            const nomeExternoInput = document.getElementById('nome-externo');
+            const btnConfirmarPendencia = document.getElementById('btn-confirmar-pendencia');
+            const btnCancelarPendencia = document.getElementById('btn-cancelar-pendencia');
             
             let carrinho = [];
+            let cardapioDoEvento = [];
             let eventoSelecionado = {};
-            let unsubTotais = null;
 
             const hoje = Timestamp.now();
-            // CORREÇÃO: A consulta ao Firestore foi simplificada
             const qEventos = query(collection(db, "eventos"), where("dataInicio", ">=", hoje), orderBy("dataInicio"));
             onSnapshot(qEventos, (snapshot) => {
                 seletorEvento.innerHTML = '<option value="padrão">Cardápio Padrão (Dias Normais)</option>';
-                // CORREÇÃO: O filtro de feriado agora é feito no navegador
-                const eventosFiltrados = snapshot.docs.filter(doc => (doc.data().tipo || '').toLowerCase().trim() !== 'feriado');
-                eventosFiltrados.forEach(doc => {
+                snapshot.forEach(doc => {
                     const evento = doc.data();
                     const dataFormatada = evento.dataInicio.toDate().toLocaleDateString('pt-BR');
                     seletorEvento.innerHTML += `<option value="${doc.id}" data-titulo="${evento.titulo}">${evento.titulo} (${dataFormatada})</option>`;
