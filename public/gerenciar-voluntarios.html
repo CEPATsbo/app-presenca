@@ -22,7 +22,7 @@
         .status-ativo { border-left-color: #4CAF50; }
         .status-inativo { border-left-color: #FF9800; }
         .status-pendente { border-left-color: #f44336; }
-        .voluntario-info { flex-grow: 1; }
+        .voluntario-info { flex-grow: 1; word-break: break-word; }
         .voluntario-info strong { font-size: 1.2em; display: block; margin-bottom: 4px;}
         .voluntario-info small { color: #777; }
         .actions { display: flex; flex-direction: column; gap: 8px; align-items: center; }
@@ -34,7 +34,7 @@
         .btn-promover-conselheiro { background-color: #0277BD; color: white; border-color: #0277BD; }
         .btn-promover-produtor { background-color: #6a1b9a; color: white; border-color: #6a1b9a; }
         .btn-promover-irradiador { background-color: #00695c; color: white; border-color: #00695c; }
-        .btn-promover-bibliotecario { background-color: #ef6c00; color: white; border-color: #ef6c00; } /* Nova cor */
+        .btn-promover-bibliotecario { background-color: #ef6c00; color: white; border-color: #ef6c00; }
         .tasv-container { text-align: center; }
         .tasv-container label { font-size: 0.8em; font-weight: bold; }
         .tasv-checkbox { transform: scale(1.5); cursor: pointer; flex-shrink: 0; }
@@ -113,7 +113,6 @@
 
         function inicializarPagina(user) {
             const db = getFirestore();
-            const auth = getAuth();
             const functions = getFunctions(undefined, 'southamerica-east1');
             
             const voluntariosCollection = collection(db, 'voluntarios');
@@ -175,24 +174,20 @@
                         const li = document.createElement('li');
                         li.className = `item-voluntario ${statusClasse}`;
                         
-                        let botaoPromoverConselheiro = '';
-                        if (userRole === 'super-admin' && totalConselheiros < 5 && v.authUid && v.role !== 'conselheiro') {
-                            botaoPromoverConselheiro = `<button data-id="${v.authUid}" data-nome="${v.nome}" class="btn-promover-conselheiro">Promover a Conselheiro</button>`;
-                        }
-
-                        let botaoPromoverProdutor = '';
-                        if (userRole === 'super-admin' && v.authUid && v.role !== 'produtor-evento') {
-                             botaoPromoverProdutor = `<button data-id="${v.authUid}" data-nome="${v.nome}" class="btn-promover-produtor">Promover a Produtor de Evento</button>`;
-                        }
-                        
-                        let botaoPromoverIrradiador = '';
-                        if (userRole === 'super-admin' && v.authUid && v.role !== 'irradiador') {
-                             botaoPromoverIrradiador = `<button data-id="${v.authUid}" data-nome="${v.nome}" class="btn-promover-irradiador">Promover a Irradiador</button>`;
-                        }
-
-                        let botaoPromoverBibliotecario = '';
-                        if (userRole === 'super-admin' && v.authUid && v.role !== 'bibliotecario') {
-                             botaoPromoverBibliotecario = `<button data-id="${v.authUid}" data-nome="${v.nome}" class="btn-promover-bibliotecario">Promover a BibliotecÃ¡rio(a)</button>`;
+                        let botoesPromocao = '';
+                        if (userRole === 'super-admin' && v.authUid) {
+                            if (v.role !== 'conselheiro' && totalConselheiros < 5) {
+                                botoesPromocao += `<button data-auth-uid="${v.authUid}" data-nome="${v.nome}" class="btn-promover-conselheiro">Promover a Conselheiro</button>`;
+                            }
+                            if (v.role !== 'produtor-evento') {
+                                botoesPromocao += `<button data-auth-uid="${v.authUid}" data-nome="${v.nome}" class="btn-promover-produtor">Promover a Produtor</button>`;
+                            }
+                            if (v.role !== 'irradiador') {
+                                botoesPromocao += `<button data-auth-uid="${v.authUid}" data-nome="${v.nome}" class="btn-promover-irradiador">Promover a Irradiador</button>`;
+                            }
+                            if (v.role !== 'bibliotecario') {
+                                botoesPromocao += `<button data-auth-uid="${v.authUid}" data-nome="${v.nome}" class="btn-promover-bibliotecario">Promover a BibliotecÃ¡rio</button>`;
+                            }
                         }
 
                         li.innerHTML = `
@@ -202,18 +197,15 @@
                             </div>
                             <div class="tasv-container">
                                 <label for="tasv-${id}">TASV ${anoVigente}</label>
-                                <input type="checkbox" id="tasv-${id}" data-id="${id}" class="tasv-checkbox" ${v.tasvAssinadoAno === anoVigente ? 'checked' : ''}>
+                                <input type="checkbox" id="tasv-${id}" data-doc-id="${id}" class="tasv-checkbox" ${v.tasvAssinadoAno === anoVigente ? 'checked' : ''}>
                             </div>
                             <div class="actions">
                                 <div class="actions-buttons">
-                                    <button data-id="${id}" class="btn-edit">Editar</button>
-                                    <button data-id="${id}" data-nome="${v.nome}" class="btn-delete">Apagar</button>
-                                    ${botaoPromoverConselheiro}
-                                    ${botaoPromoverProdutor}
-                                    ${botaoPromoverIrradiador}
-                                    ${botaoPromoverBibliotecario}
+                                    <button data-doc-id="${id}" class="btn-edit">Editar</button>
+                                    <button data-doc-id="${id}" data-nome="${v.nome}" class="btn-delete">Apagar</button>
+                                    ${botoesPromocao}
                                 </div>
-                                <button data-id="${id}" data-status="${v.statusVoluntario || 'ativo'}" class="btn-toggle">Tornar ${v.statusVoluntario === 'ativo' ? 'Inativo' : 'Ativo'}</button>
+                                <button data-doc-id="${id}" data-status="${v.statusVoluntario || 'ativo'}" class="btn-toggle">Tornar ${v.statusVoluntario === 'ativo' ? 'Inativo' : 'Ativo'}</button>
                             </div>
                         `;
                         ui.listaUl.appendChild(li);
@@ -246,56 +238,76 @@
 
                 ui.listaUl.addEventListener('change', async (e) => {
                     if (e.target.classList.contains('tasv-checkbox')) {
-                        const id = e.target.dataset.id;
+                        const docId = e.target.dataset.docId;
+                        if (!docId) return;
                         const novoValor = e.target.checked ? new Date().getFullYear() : null;
-                        await updateDoc(doc(db, 'voluntarios', id), { tasvAssinadoAno: novoValor });
-                        await registrarLog("ATUALIZOU_TASV", { voluntarioId: id, tasvParaAno: novoValor });
+                        await updateDoc(doc(db, 'voluntarios', docId), { tasvAssinadoAno: novoValor });
+                        await registrarLog("ATUALIZOU_TASV", { voluntarioId: docId, tasvParaAno: novoValor });
                     }
                 });
 
                 ui.listaUl.addEventListener('click', async (e) => {
                     const target = e.target;
-                    const id = target.dataset.id;
-                    if (!id) return;
-                    
-                    const isPromotionButton = target.classList.contains('btn-promover-conselheiro') || target.classList.contains('btn-promover-produtor') || target.classList.contains('btn-promover-irradiador') || target.classList.contains('btn-promover-bibliotecario');
-                    const docRef = isPromotionButton ? null : doc(db, 'voluntarios', id);
-                    
-                    if (target.classList.contains('btn-delete')) { /* ... */ }
-                    else if (target.classList.contains('btn-toggle')) { /* ... */ }
-                    else if (target.classList.contains('btn-edit')) { /* ... */ }
-                    else if (target.classList.contains('btn-promover-conselheiro')) { /* ... */ }
-                    else if (target.classList.contains('btn-promover-produtor')) { /* ... */ } 
-                    else if (target.classList.contains('btn-promover-irradiador')) { /* ... */ }
-                    else if (target.classList.contains('btn-promover-bibliotecario')) {
+                    const docId = target.dataset.docId;
+                    const authUid = target.dataset.authUid;
+
+                    // AÃ§Ãµes de gerenciamento do documento
+                    if (docId) {
+                        const docRef = doc(db, 'voluntarios', docId);
+                        if (target.classList.contains('btn-edit')) {
+                            const docSnap = await getDoc(docRef);
+                            if (docSnap.exists()) {
+                                const data = docSnap.data();
+                                currentEditingId = docId;
+                                ui.editNome.value = data.nome || '';
+                                ui.editEndereco.value = data.endereco || '';
+                                ui.editTelefone.value = phoneMask(data.telefone || '');
+                                ui.editAniversario.value = data.aniversario || '';
+                                ui.editModal.style.display = 'flex';
+                            }
+                        } else if (target.classList.contains('btn-delete')) {
+                            const nome = target.dataset.nome;
+                            if (confirm(`Tem certeza que deseja apagar ${nome}?`)) {
+                                const docSnap = await getDoc(docRef);
+                                await registrarLog("APAGOU_VOLUNTARIO", { voluntarioId: docId, dadosAntigos: docSnap.data() });
+                                await deleteDoc(docRef);
+                            }
+                        } else if (target.classList.contains('btn-toggle')) {
+                            const novoStatus = target.dataset.status === 'ativo' ? 'inativo' : 'ativo';
+                            await updateDoc(docRef, { statusVoluntario: novoStatus });
+                            await registrarLog("ALTEROU_STATUS_VOLUNTARIO", { voluntarioId: docId, novoStatus: novoStatus });
+                        }
+                        return;
+                    }
+
+                    // AÃ§Ãµes de promoÃ§Ã£o (usando authUid)
+                    if (authUid) {
                         const nome = target.dataset.nome;
-                        const uidParaPromover = target.dataset.id;
-                        if (!uidParaPromover) return alert('Erro: UID do usuÃ¡rio nÃ£o encontrado.');
-                        if (confirm(`Tem certeza que deseja promover ${nome} a BibliotecÃ¡rio(a)?`)) {
+                        let functionName = '';
+                        let roleName = '';
+
+                        if (target.classList.contains('btn-promover-conselheiro')) {
+                            functionName = 'promoverParaConselheiro';
+                            roleName = 'Conselheiro Fiscal';
+                        } else if (target.classList.contains('btn-promover-produtor')) {
+                            functionName = 'promoverParaProdutorEvento';
+                            roleName = 'Produtor de Evento';
+                        } else if (target.classList.contains('btn-promover-irradiador')) {
+                            functionName = 'promoverParaIrradiador';
+                            roleName = 'Irradiador(a)';
+                        } else if (target.classList.contains('btn-promover-bibliotecario')) {
+                            functionName = 'promoverParaBibliotecario';
+                            roleName = 'BibliotecÃ¡rio(a)';
+                        }
+
+                        if (functionName && confirm(`Tem certeza que deseja promover ${nome} a ${roleName}?`)) {
                             target.disabled = true;
                             target.textContent = "Promovendo...";
                             try {
-                                const promoverParaBibliotecario = httpsCallable(functions, 'promoverParaBibliotecario');
-                                const resultado = await promoverParaBibliotecario({ uid: uidParaPromover });
+                                const promoteFunction = httpsCallable(functions, functionName);
+                                const resultado = await promoteFunction({ uid: authUid });
                                 alert(resultado.data.message);
-                                await registrarLog("PROMOVEU_BIBLIOTECARIO", { alvo: { nome, uid: uidParaPromover } });
-                            } catch (error) {
-                                console.error("Erro ao promover para bibliotecÃ¡rio:", error);
-                                alert(`Erro: ${error.message}`);
-                                target.disabled = false;
-                                target.textContent = "Promover a BibliotecÃ¡rio(a)";
-                            }
-                        }
-                    }
-                });
-                
-                ui.btnSalvar.addEventListener('click', async () => { /* ... */ });
-                ui.btnCancelar.addEventListener('click', () => { /* ... */ });
-            }
-            
-            setupEventListeners();
-            carregarVoluntarios();
-        }
-    </script>
-</body>
-</html>
+                                await registrarLog(`PROMOVEU_${roleName.toUppernKÀöşşşæææ?şñşóŸ‡‡‡%‹uÎ9çB¨¢Ìõ0ƒ1¥æ×w¿7Óößnmmåœ ‹,Ğ  æù÷¡eEa¹‘R’­Ì¦Œ    IDAT^ì¿Ì£ğË/¿|œ¾1ŠD ¹[M	pÛ¯ã8s®~oœÎËŒáœx9Çqîˆ'.€K¼¥©fdÇûÏøá‡1FMÓlŒ·š¦1ÓE¿Á¿èLšÚ×³m,«jûúåÓAı)#gÉ(E´÷ï­ª*ç\üQwŸíıíoÛßß/EŠ*Æ¼RÕÊØœqa
+Í}1‰¥ğRšÍf¼ÿÓO?ıöÛo‡‡‡sO+R°ªªq5ÚÜÜ|şüåşşşîîîööv	åíe¼ªjÖ¡ª'Ho''ó2ÀWwté¾ÍÀ¹Ûw9ü¾PW§WM5+´Ç5Y¯o¾ÙzıòMŒq:~ıúõË—/¿¿ûãÃ‡ï?ş1›ÍbŒÕxBhróÿüûÿõÿ¿ÿ}ww÷ùóçoŞ¼yóæÍÖævÊõ(Ì¬Ôì=›õà*”<^mÛöEÿf³¦ªFÿò/ÿmggï?ÿó?rNUUu‰Ö‚v¦x!‡ ËöşËû¦i^æ—/v_†˜E¬ëá^ 3”5æÎL‘ºnEäÕÖ‹ñëê?ßë§OŸZIUU‡ÿÇ¼šç8ã¬F?Q¹ë†<Ì¬’qÂ,ŞÁÎ%ˆ/–Ü*O] wa¼Ä¤Z{±ÿâ‡½·A‚ÎrÅˆ¬TC°«sÓeT*R¬ƒ*­ÕôîğÓáÑá1Ûc¢™©@†¶Ü^#mll¼}ûöOùóx<.b¸ªªâ¥|åTÏœPiz"XP4™2°ªªÃã¯>|øå_~úé§Ÿ?¤”È "m›Hî¬ïlmm=¶¿¿¿ÿòùËÍÍÍqœ°/dg°dföÿ³÷îÏqÙÕà¹7³ª_x¿	âAğMJYòÌgÍ¬=Ÿ¿õîFlÄ÷ïnÄ†c×ë±=¶F–f<£G¢ø I€@€x5º»ª2ïİ²º»@ )|Ö	D€®®ÎÊÊÊÌsçŠäêJ†­1Æ‡pîÜM­ı’¼’K…½Ğíè‰HŞ«ªÖô-ò ‰˜É‘ªWÕ˜*¤vmW³õúXãôÔÜ¹¥sišîuöîß¿¿¶¶¶½½½·¿İõĞòşşöîîÖ­åÕjuvfvqqqjbºÑhX²Ş{tyüã86#¢w‹{Bâá&I255522rÿşıååå½½½Ü  €aî5#"˜Èì»ƒ½Õ[I–ÎÌÌÔ¨¦ÚïX„LuPèZ1Ùcmˆ‘’z“*+÷×òqb8ô3œßú<œ%J”(ñZPàWÑb¤Ùº$5%J¼øàpàWÔ-9KDpˆl4=:=1:Qáj–f¬™Ë(—®™ğ9Ñì®ääÙ“¨j3íìïïï¤M0ÔšTEˆˆÙe.Š¢@z×Í²ljjêìÙ³ãããAæ™ºe‡‰(Ğ†ÚğŸç¹.íV¦UÕË  lÙ{ßî´–¿_¾³rg{{»Ùj B£Õ³¸´833351=444PTUr@®x Ò¯óDÆôYËóZÑõÖö¶¹4ÔqîÅ9÷t{÷¨÷Úëğ€ÖáæU„{-d¶ ;ç³,!kâ‘‘±±±‰«W¯îïïo=ÚÜØØXYYŞßßï}W»İ¾~ıûÛ·oNÌÌÌœ™?;99Y"ñ*ªêU™Y•úQ ¡Á"İĞ- c x§ ÅQ5M³Ÿ[½uëÖúúz÷~˜Œ1i’U*dâÈX"ZİXm&Íó3ç«Õj–9cŒQ%€åB$Dİµ”z `p 0X8szQWe{{ÛÆVœÀæîúĞ~}<³½D‰%J|¸è-a%~Iäû¯bæ<¯ª»«ìº^b.oĞ[ÜOVğ¿Ÿoè[Ø¤W† ÷¬›ÌLd¼÷ÛŸ;Ç1%ˆÈ†ÃócvP…WU
+úÉÂ+iBÒI:›ÍGÍfÓW,ybt©cd­sˆâ8n·Û•JåÒ¥Ksssõzİ9¢„‹ÍCò=srTUV""aÔ 8"fxU}°¾¶¼¼|óæÍV«e+631DssgfggG‡ëõ:„œsYêÍ}Ëª ÊC–œ×çnÃª}˜
+@â{8odÏÚcÈÄd,©Šªvİ™‡Io~u¹Ö2@¡º.ÖpcË½R÷œyF±bh`xxpèÌü™Ï>ıÙÆÆÆ½{w¶¶¶¶¶wTÕÚ˜ˆ·¶¶666n\¿966¶´´´¸¸Ø¨@A¡c{Ì1Wf« VçîûÌWÔ‹044ôñÇŞ½{×e™½OUµR©¤ijŒa&‚‰ílıØ‘¹¹¹±¡Qç2ˆafE
