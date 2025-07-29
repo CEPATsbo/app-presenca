@@ -120,15 +120,13 @@
             let unsubTotais = null;
 
             const hoje = Timestamp.now();
-            const qEventos = query(
-                collection(db, "eventos"), 
-                where("tipo", "!=", "Feriado"),
-                where("dataInicio", ">=", hoje), 
-                orderBy("dataInicio")
-            );
+            // CORREÇÃO: A consulta ao Firestore foi simplificada
+            const qEventos = query(collection(db, "eventos"), where("dataInicio", ">=", hoje), orderBy("dataInicio"));
             onSnapshot(qEventos, (snapshot) => {
                 seletorEvento.innerHTML = '<option value="padrão">Cardápio Padrão (Dias Normais)</option>';
-                snapshot.forEach(doc => {
+                // CORREÇÃO: O filtro de feriado agora é feito no navegador
+                const eventosFiltrados = snapshot.docs.filter(doc => doc.data().tipo !== 'Feriado');
+                eventosFiltrados.forEach(doc => {
                     const evento = doc.data();
                     const dataFormatada = evento.dataInicio.toDate().toLocaleDateString('pt-BR');
                     seletorEvento.innerHTML += `<option value="${doc.id}" data-titulo="${evento.titulo}">${evento.titulo} (${dataFormatada})</option>`;
