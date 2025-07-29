@@ -33,9 +33,6 @@
         .modal-content p, .modal-content label { margin-bottom: 10px; display: block; }
         .modal-content input, .modal-content select { width: 100%; font-size: 1.1em; padding: 8px; box-sizing: border-box; }
         .modal-content input { margin-top: 10px; }
-        .painel-totais { border: 2px solid #28a745; padding: 15px; border-radius: 8px; margin-bottom: 20px; background-color: #e8f5e9; }
-        .painel-totais p { margin: 5px 0; font-size: 1.1em; font-weight: 500; display: flex; justify-content: space-between; }
-        .painel-totais strong { color: #1b5e20; }
     </style>
 </head>
 <body>
@@ -54,7 +51,6 @@
         <div id="pdv-container" class="pdv-container">
             <div id="menu-categorias" class="menu-categorias"></div>
             <div class="carrinho-container">
-                <div id="painel-totais"></div>
                 <h2>Carrinho</h2>
                 <ul id="lista-carrinho"></ul>
                 <div id="total-container" class="total-container">Total: R$ 0,00</div>
@@ -113,29 +109,39 @@
             const seletorEvento = document.getElementById('seletor-evento');
             const btnIniciarPDV = document.getElementById('btn-iniciar-pdv');
             const pdvContainer = document.getElementById('pdv-container');
-            const painelTotais = document.getElementById('painel-totais');
+            const menuCategorias = document.getElementById('menu-categorias');
+            const listaCarrinho = document.getElementById('lista-carrinho');
+            const totalContainer = document.getElementById('total-container');
+            const btnFinalizarVista = document.getElementById('btn-finalizar-vista');
+            const btnFinalizarPrazo = document.getElementById('btn-finalizar-prazo');
+            const modalPendencia = document.getElementById('modal-pendencia');
+            const seletorVoluntario = document.getElementById('seletor-voluntario');
+            const nomeExternoInput = document.getElementById('nome-externo');
+            const btnConfirmarPendencia = document.getElementById('btn-confirmar-pendencia');
+            const btnCancelarPendencia = document.getElementById('btn-cancelar-pendencia');
             
             let carrinho = [];
+            let cardapioDoEvento = [];
             let eventoSelecionado = {};
-            let unsubTotais = null;
 
             const hoje = Timestamp.now();
-            // CORREÇÃO: A consulta ao Firestore foi simplificada
             const qEventos = query(collection(db, "eventos"), where("dataInicio", ">=", hoje), orderBy("dataInicio"));
             onSnapshot(qEventos, (snapshot) => {
                 seletorEvento.innerHTML = '<option value="padrão">Cardápio Padrão (Dias Normais)</option>';
-                // CORREÇÃO: O filtro de feriado agora é feito no navegador
-                const eventosFiltrados = snapshot.docs.filter(doc => doc.data().tipo !== 'Feriado');
-                eventosFiltrados.forEach(doc => {
+                snapshot.forEach(doc => {
                     const evento = doc.data();
                     const dataFormatada = evento.dataInicio.toDate().toLocaleDateString('pt-BR');
                     seletorEvento.innerHTML += `<option value="${doc.id}" data-titulo="${evento.titulo}">${evento.titulo} (${dataFormatada})</option>`;
                 });
-            }, (error) => {
-                console.error("Erro ao buscar eventos:", error);
-                alert("Erro ao carregar a lista de eventos. Pode ser necessário criar um índice no Firestore. Verifique o console (F12).");
             });
 
+            onSnapshot(query(collection(db, "voluntarios"), orderBy("nome")), (snapshot) => {
+                seletorVoluntario.innerHTML = '<option value="">Selecione o voluntário</option>';
+                snapshot.forEach(doc => {
+                    seletorVoluntario.innerHTML += `<option value="${doc.id}" data-nome="${doc.data().nome}">${doc.data().nome}</option>`;
+                });
+            });
+            
             btnIniciarPDV.addEventListener('click', () => {
                 const selectedOption = seletorEvento.options[seletorEvento.selectedIndex];
                 eventoSelecionado = {
@@ -144,48 +150,12 @@
                 };
                 document.getElementById('seletor-evento-container').style.display = 'none';
                 pdvContainer.style.display = 'grid';
-                
                 const qItens = query(collection(db, "cantina_itens"), where("eventoId", "==", eventoSelecionado.id));
                 onSnapshot(qItens, (snapshot) => {
-                    const cardapioDoEvento = snapshot.docs.map(doc => ({id: doc.id, ...doc.data()}));
-                    renderizarMenu(cardapioDoEvento);
+                    cardapioDoEvento = snapshot.docs.map(doc => ({id: doc.id, ...doc.data()}));
+                    renderizarMenu();
                 });
-
-                escutarTotaisDoEvento(eventoSelecionado.id);
             });
-            
-            function escutarTotaisDoEvento(eventoId) {
-                if (unsubTotais) unsubTotais();
-
-                const qVista = query(collection(db, "cantina_vendas_avista"), where("eventoId", "==", eventoId));
-                const qPrazo = query(collection(db, "contas_a_receber"), where("eventoId", "==", eventoId));
-
-                const unsubVista = onSnapshot(qVista, () => atualizarPainel());
-                const unsubPrazo = onSnapshot(qPrazo, () => atualizarPainel());
-                
-                unsubTotais = () => { unsubVista(); unsubPrazo(); };
-
-                async function atualizarPainel() {
-                    const [snapshotVista, snapshotPrazo] = await Promise.all([getDocs(qVista), getDocs(qPrazo)]);
-                    
-                    let totalVista = 0;
-                    snapshotVista.forEach(doc => totalVista += doc.data().total);
-
-                    let totalPrazo = 0;
-                    snapshotPrazo.forEach(doc => totalPrazo += doc.data().total);
-
-                    const totalGeral = totalVista + totalPrazo;
-
-                    painelTotais.innerHTML = `
-                        <p>Recebido (à vista): <strong>${totalVista.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</strong></p>
-                        <p>Pendências (a receber): <strong>${totalPrazo.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</strong></p>
-                        <hr>
-                        <p>Total Geral do Evento: <strong>${totalGeral.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</strong></p>
-                    `;
-                }
-                atualizarPainel();
-            }
-            
 
             function renderizarMenu() {
                 menuCategorias.innerHTML = '';
@@ -312,29 +282,6 @@
                 
                 finalizarVenda('prazo', dadosComprador);
             });
-        function escutarTotaisDoEvento(eventoId) {
-                const qVista = query(collection(db, "cantina_vendas_avista"), where("eventoId", "==", eventoId));
-                const qPrazo = query(collection(db, "contas_a_receber"), where("eventoId", "==", eventoId));
-
-                onSnapshot(qVista, (snapshotVista) => {
-                    onSnapshot(qPrazo, (snapshotPrazo) => {
-                        let totalVista = 0;
-                        snapshotVista.forEach(doc => totalVista += doc.data().total);
-
-                        let totalPrazo = 0;
-                        snapshotPrazo.forEach(doc => totalPrazo += doc.data().total);
-
-                        const totalGeral = totalVista + totalPrazo;
-
-                        painelTotais.innerHTML = `
-                            <p>Recebido (à vista): <strong>${totalVista.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</strong></p>
-                            <p>Pendências (a receber): <strong>${totalPrazo.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</strong></p>
-                            <hr>
-                            <p>Total Geral do Evento: <strong>${totalGeral.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</strong></p>
-                        `;
-                    });
-                });
-            }
         }
     </script>
 </body>
