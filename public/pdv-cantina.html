@@ -54,7 +54,7 @@
         <div id="pdv-container" class="pdv-container">
             <div id="menu-categorias" class="menu-categorias"></div>
             <div class="carrinho-container">
-                <div id="painel-totais" class="painel-totais"></div>
+                <div id="painel-totais"></div>
                 <h2>Carrinho</h2>
                 <ul id="lista-carrinho"></ul>
                 <div id="total-container" class="total-container">Total: R$ 0,00</div>
@@ -83,7 +83,7 @@
 
     <script type="module">
         import { initializeApp, getApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
-        import { getFirestore, collection, onSnapshot, query, where, orderBy, Timestamp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
+        import { getFirestore, collection, onSnapshot, query, where, orderBy, Timestamp, getDocs } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
         import { getFunctions, httpsCallable } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-functions.js";
         import { protegerPagina } from '/auth.js';
 
@@ -113,25 +113,19 @@
             const seletorEvento = document.getElementById('seletor-evento');
             const btnIniciarPDV = document.getElementById('btn-iniciar-pdv');
             const pdvContainer = document.getElementById('pdv-container');
-            const menuCategorias = document.getElementById('menu-categorias');
-            const listaCarrinho = document.getElementById('lista-carrinho');
-            const totalContainer = document.getElementById('total-container');
             const painelTotais = document.getElementById('painel-totais');
-            const btnFinalizarVista = document.getElementById('btn-finalizar-vista');
-            const btnFinalizarPrazo = document.getElementById('btn-finalizar-prazo');
-            const modalPendencia = document.getElementById('modal-pendencia');
-            const seletorVoluntario = document.getElementById('seletor-voluntario');
-            const nomeExternoInput = document.getElementById('nome-externo');
-            const btnConfirmarPendencia = document.getElementById('btn-confirmar-pendencia');
-            const btnCancelarPendencia = document.getElementById('btn-cancelar-pendencia');
             
             let carrinho = [];
-            let cardapioDoEvento = [];
             let eventoSelecionado = {};
+            let unsubTotais = null;
 
             const hoje = Timestamp.now();
-            // CORREÇÃO: Adicionado filtro para não buscar feriados
-            const qEventos = query(collection(db, "eventos"), where("tipo", "!=", "Feriado"), where("dataInicio", ">=", hoje), orderBy("dataInicio"));
+            const qEventos = query(
+                collection(db, "eventos"), 
+                where("tipo", "!=", "Feriado"),
+                where("dataInicio", ">=", hoje), 
+                orderBy("dataInicio")
+            );
             onSnapshot(qEventos, (snapshot) => {
                 seletorEvento.innerHTML = '<option value="padrão">Cardápio Padrão (Dias Normais)</option>';
                 snapshot.forEach(doc => {
@@ -140,17 +134,10 @@
                     seletorEvento.innerHTML += `<option value="${doc.id}" data-titulo="${evento.titulo}">${evento.titulo} (${dataFormatada})</option>`;
                 });
             }, (error) => {
-                console.error("Erro ao buscar eventos (verifique os índices no Firestore): ", error);
-                alert("Erro ao carregar a lista de eventos. Pode ser necessário criar um índice no Firestore. Verifique o console para mais detalhes (F12).");
+                console.error("Erro ao buscar eventos:", error);
+                alert("Erro ao carregar a lista de eventos. Pode ser necessário criar um índice no Firestore. Verifique o console (F12).");
             });
 
-            onSnapshot(query(collection(db, "voluntarios"), orderBy("nome")), (snapshot) => {
-                seletorVoluntario.innerHTML = '<option value="">Selecione o voluntário</option>';
-                snapshot.forEach(doc => {
-                    seletorVoluntario.innerHTML += `<option value="${doc.id}" data-nome="${doc.data().nome}">${doc.data().nome}</option>`;
-                });
-            });
-            
             btnIniciarPDV.addEventListener('click', () => {
                 const selectedOption = seletorEvento.options[seletorEvento.selectedIndex];
                 eventoSelecionado = {
@@ -162,13 +149,45 @@
                 
                 const qItens = query(collection(db, "cantina_itens"), where("eventoId", "==", eventoSelecionado.id));
                 onSnapshot(qItens, (snapshot) => {
-                    cardapioDoEvento = snapshot.docs.map(doc => ({id: doc.id, ...doc.data()}));
-                    renderizarMenu();
+                    const cardapioDoEvento = snapshot.docs.map(doc => ({id: doc.id, ...doc.data()}));
+                    renderizarMenu(cardapioDoEvento);
                 });
 
-                // Inicia o listener para os totais do evento
                 escutarTotaisDoEvento(eventoSelecionado.id);
             });
+            
+            function escutarTotaisDoEvento(eventoId) {
+                if (unsubTotais) unsubTotais();
+
+                const qVista = query(collection(db, "cantina_vendas_avista"), where("eventoId", "==", eventoId));
+                const qPrazo = query(collection(db, "contas_a_receber"), where("eventoId", "==", eventoId));
+
+                const unsubVista = onSnapshot(qVista, () => atualizarPainel());
+                const unsubPrazo = onSnapshot(qPrazo, () => atualizarPainel());
+                
+                unsubTotais = () => { unsubVista(); unsubPrazo(); };
+
+                async function atualizarPainel() {
+                    const [snapshotVista, snapshotPrazo] = await Promise.all([getDocs(qVista), getDocs(qPrazo)]);
+                    
+                    let totalVista = 0;
+                    snapshotVista.forEach(doc => totalVista += doc.data().total);
+
+                    let totalPrazo = 0;
+                    snapshotPrazo.forEach(doc => totalPrazo += doc.data().total);
+
+                    const totalGeral = totalVista + totalPrazo;
+
+                    painelTotais.innerHTML = `
+                        <p>Recebido (à vista): <strong>${totalVista.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</strong></p>
+                        <p>Pendências (a receber): <strong>${totalPrazo.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</strong></p>
+                        <hr>
+                        <p>Total Geral do Evento: <strong>${totalGeral.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</strong></p>
+                    `;
+                }
+                atualizarPainel();
+            }
+            
 
             function renderizarMenu() {
                 menuCategorias.innerHTML = '';
