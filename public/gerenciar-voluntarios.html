@@ -251,7 +251,6 @@
                     const docId = target.dataset.docId;
                     const authUid = target.dataset.authUid;
 
-                    // AÃ§Ãµes de gerenciamento do documento
                     if (docId) {
                         const docRef = doc(db, 'voluntarios', docId);
                         if (target.classList.contains('btn-edit')) {
@@ -280,24 +279,20 @@
                         return;
                     }
 
-                    // AÃ§Ãµes de promoÃ§Ã£o (usando authUid)
                     if (authUid) {
                         const nome = target.dataset.nome;
                         let functionName = '';
                         let roleName = '';
+                        let logAction = '';
 
                         if (target.classList.contains('btn-promover-conselheiro')) {
-                            functionName = 'promoverParaConselheiro';
-                            roleName = 'Conselheiro Fiscal';
+                            functionName = 'promoverParaConselheiro'; roleName = 'Conselheiro'; logAction = 'PROMOVEU_CONSELHEIRO';
                         } else if (target.classList.contains('btn-promover-produtor')) {
-                            functionName = 'promoverParaProdutorEvento';
-                            roleName = 'Produtor de Evento';
+                            functionName = 'promoverParaProdutorEvento'; roleName = 'Produtor de Evento'; logAction = 'PROMOVEU_PRODUTOR_EVENTO';
                         } else if (target.classList.contains('btn-promover-irradiador')) {
-                            functionName = 'promoverParaIrradiador';
-                            roleName = 'Irradiador(a)';
+                            functionName = 'promoverParaIrradiador'; roleName = 'Irradiador(a)'; logAction = 'PROMOVEU_IRRADIADOR';
                         } else if (target.classList.contains('btn-promover-bibliotecario')) {
-                            functionName = 'promoverParaBibliotecario';
-                            roleName = 'BibliotecÃ¡rio(a)';
+                            functionName = 'promoverParaBibliotecario'; roleName = 'BibliotecÃ¡rio(a)'; logAction = 'PROMOVEU_BIBLIOTECARIO';
                         }
 
                         if (functionName && confirm(`Tem certeza que deseja promover ${nome} a ${roleName}?`)) {
@@ -307,7 +302,38 @@
                                 const promoteFunction = httpsCallable(functions, functionName);
                                 const resultado = await promoteFunction({ uid: authUid });
                                 alert(resultado.data.message);
-                                await registrarLog(`PROMOVEU_${roleName.toUppernKÀöşşşæææ?şñşóŸ‡‡‡%‹uÎ9çB¨¢Ìõ0ƒ1¥æ×w¿7Óößnmmåœ ‹,Ğ  æù÷¡eEa¹‘R’­Ì¦Œ    IDAT^ì¿Ì£ğË/¿|œ¾1ŠD ¹[M	pÛ¯ã8s®~oœÎËŒáœx9Çqîˆ'.€K¼¥©fdÇûÏøá‡1FMÓlŒ·š¦1ÓE¿Á¿èLšÚ×³m,«jûúåÓAı)#gÉ(E´÷ï­ª*ç\üQwŸíıíoÛßß/EŠ*Æ¼RÕÊØœqa
-Í}1‰¥ğRšÍf¼ÿÓO?ıöÛo‡‡‡sO+R°ªªq5ÚÜÜ|şüåşşşîîîööv	åíe¼ªjÖ¡ª'Ho''ó2ÀWwté¾ÍÀ¹Ûw9ü¾PW§WM5+´Ç5Y¯o¾ÙzıòMŒq:~ıúõË—/¿¿ûãÃ‡ï?ş1›ÍbŒÕxBhróÿüûÿõÿ¿ÿ}ww÷ùóçoŞ¼yóæÍÖævÊõ(Ì¬Ôì=›õà*”<^mÛöEÿf³¦ªFÿò/ÿmggï?ÿó?rNUUu‰Ö‚v¦x!‡ ËöşËû¦i^æ—/v_†˜E¬ëá^ 3”5æÎL‘ºnEäÕÖ‹ñëê?ßë§OŸZIUU‡ÿÇ¼šç8ã¬F?Q¹ë†<Ì¬’qÂ,ŞÁÎ%ˆ/–Ü*O] wa¼Ä¤Z{±ÿâ‡½·A‚ÎrÅˆ¬TC°«sÓeT*R¬ƒ*­ÕôîğÓáÑá1Ûc¢™©@†¶Ü^#mll¼}ûöOùóx<.b¸ªªâ¥|åTÏœPiz"XP4™2°ªªÃã¯>|øå_~úé§Ÿ?¤”È "m›Hî¬ïlmm=¶¿¿¿ÿòùËÍÍÍqœ°/dg°dföÿ³÷îÏqÙÕà¹7³ª_x¿	âAğMJYòÌgÍ¬=Ÿ¿õîFlÄ÷ïnÄ†c×ë±=¶F–f<£G¢ø I€@€x5º»ª2ïİ²º»@ )|Ö	D€®®ÎÊÊÊÌsçŠäêJ†­1Æ‡pîÜM­ı’¼’K…½Ğíè‰HŞ«ªÖô-ò ‰˜É‘ªWÕ˜*¤vmW³õúXãôÔÜ¹¥sišîuöîß¿¿¶¶¶½½½·¿İõĞòşşöîîÖ­åÕjuvfvqqqjbºÑhX²Ş{tyüã86#¢w‹{Bâá&I255522rÿşıååå½½½Ü  €aî5#"˜Èì»ƒ½Õ[I–ÎÌÌÔ¨¦ÚïX„LuPèZ1Ùcmˆ‘’z“*+÷×òqb8ô3œßú<œ%J”(ñZPàWÑb¤Ùº$5%J¼øàpàWÔ-9KDpˆl4=:=1:Qáj–f¬™Ë(—®™ğ9Ñì®ääÙ“¨j3íìïïï¤M0ÔšTEˆˆÙe.Š¢@z×Í²ljjêìÙ³ãããAæ™ºe‡‰(Ğ†ÚğŸç¹.íV¦UÕË  lÙ{ßî´–¿_¾³rg{{»Ùj B£Õ³¸´833351=444PTUr@®x Ò¯óDÆôYËóZÑõÖö¶¹4ÔqîÅ9÷t{÷¨÷Úëğ€ÖáæU„{-d¶ ;ç³,!kâ‘‘±±±‰«W¯îïïo=ÚÜØØXYYŞßßï}W»İ¾~ıûÛ·oNÌÌÌœ™?;99Y"ñ*ªêU™Y•úQ ¡Á"İĞ- c x§ ÅQ5M³Ÿ[½uëÖúúz÷~˜Œ1i’U*dâÈX"ZİXm&Íó3ç«Õj–9cŒQ%€åB$Dİµ”z `p 0X8szQWe{{ÛÆVœÀæîúĞ~}<³½D‰%J|¸è-a%~Iäû¯bæ<¯ª»«ìº^b.oĞ[ÜOVğ¿Ÿoè[Ø¤W† ÷¬›ÌLd¼÷ÛŸ;Ç1%ˆÈ†ÃócvP…WU
-úÉÂ+iBÒI:›ÍGÍfÓW,ybt©cd­sˆâ8n·Û•JåÒ¥Ksssõzİ9¢„‹ÍCò=srTUV""aÔ 8"fxU}°¾¶¼¼|óæÍV«e+631DssgfggG‡ëõ:„œsYêÍ}Ëª ÊC–œ×çnÃª}˜
-@â{8odÏÚcÈÄd,©Šªvİ™‡Io~u¹Ö2@¡º.ÖpcË½R÷œyF±bh`xxpèÌü™Ï>ıÙÆÆÆ½{w¶¶¶¶¶wTÕÚ˜ˆ·¶¶666n\¿966¶´´´¸¸Ø¨@A¡c{Ì1Wf« VçîûÌWÔ‹044ôñÇŞ½{×e™½OUµR©¤ijŒa&‚‰ílıØ‘¹¹¹±¡Qç2ˆafE
+                                await registrarLog(logAction, { alvo: { nome, uid: authUid } });
+                            } catch (error) {
+                                console.error(`Erro ao promover:`, error);
+                                alert(`Erro: ${error.message}`);
+                            } finally {
+                                target.disabled = false;
+                                target.textContent = `Promover a ${roleName}`;
+                            }
+                        }
+                    }
+                });
+                
+                ui.btnSalvar.addEventListener('click', async () => {
+                    if (!currentEditingId) return;
+                    const docRef = doc(db, 'voluntarios', currentEditingId);
+                    const docSnap = await getDoc(docRef);
+                    const dadosAntigos = docSnap.data();
+                    const dadosNovos = { nome: ui.editNome.value.trim(), endereco: ui.editEndereco.value.trim(), telefone: ui.editTelefone.value.trim(), aniversario: ui.editAniversario.value.trim() };
+                    try {
+                        await updateDoc(docRef, dadosNovos);
+                        await registrarLog("EDITOU_VOLUNTARIO", { voluntarioId: currentEditingId, dadosAntigos, dadosNovos });
+                        ui.editModal.style.display = 'none';
+                        currentEditingId = null;
+                    } catch (error) { console.error("Erro ao salvar:", error); }
+                });
+
+                ui.btnCancelar.addEventListener('click', () => { ui.editModal.style.display = 'none'; currentEditingId = null; });
+            }
+            
+            setupEventListeners();
+            carregarVoluntarios();
+        }
+    </script>
+</body>
+</html>
