@@ -118,7 +118,7 @@
 
             function carregarDiretoria(uidLogado, roleLogado) {
                 // CORREÇÃO: Adicionados os novos cargos à busca
-                const q = query(collection(db, "voluntarios"), where("role", "in", ["diretor", "super-admin", "tesoureiro", "conselheiro", "produtor-evento", "irradiador"]));
+                const q = query(collection(db, "voluntarios"), where("role", "in", ["diretor", "super-admin", "tesoureiro", "conselheiro", "bibliotecario" , "produtor-evento", "irradiador"]));
                 
                 onSnapshot(q, (snapshot) => {
                     tabelaDiretoria.innerHTML = '';
@@ -136,7 +136,7 @@
                                 actionsHtml += `<button class="btn-promover-tesoureiro" data-uid="${v.authUid}" data-nome="${v.nome}">Promover a Tesoureiro</button>`;
                             }
                             // BOTÕES DE REVOGAÇÃO PARA TODOS OS CARGOS (EXCETO SUPER-ADMIN)
-                            if (v.role === 'diretor' || v.role === 'tesoureiro' || v.role === 'conselheiro' || v.role === 'produtor-evento' || v.role === 'irradiador') {
+                            if (v.role === 'diretor' || v.role === 'tesoureiro' || v.role === 'bibliotecario' || v.role === 'conselheiro' || v.role === 'produtor-evento' || v.role === 'irradiador') {
                                 actionsHtml += `<button class="btn-revogar-acesso" data-uid="${v.authUid}" data-nome="${v.nome}" data-role="${v.role}">Revogar Acesso</button>`;
                             }
                         }
@@ -176,6 +176,9 @@
                     } else if (role === 'irradiador') {
                         funcaoCallable = httpsCallable(functions, 'revogarAcessoIrradiador');
                         mensagemConfirmacao = `Tem certeza que deseja revogar o acesso de Irradiador de ${nome}?`;
+                    } else if (role === 'bibliotecario') {
+                        funcaoCallable = httpsCallable(functions, 'revogarAcessoBibliotecario');
+                        mensagemConfirmacao = `Tem certeza que deseja revogar o acesso de Bibliotecario de ${nome}?`;
                     } else {
                         funcaoCallable = httpsCallable(functions, 'revogarAcessoDiretor');
                         mensagemConfirmacao = `Tem certeza que deseja revogar o acesso deste membro?`;
