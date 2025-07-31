@@ -730,6 +730,60 @@ exports.gerenciarEmprestimoBiblioteca = functions.region(REGIAO).https.onCall(as
     }
 });
 
+// ===================================================================
+// NOVA FUNÇÃO "ROBÔ" PARA GERAR RELATÓRIOS DA BIBLIOTECA
+// ===================================================================
+exports.gerarRelatorioBiblioteca = functions.region(REGIAO).https.onCall(async (data, context) => {
+    if (!context.auth) {
+        throw new functions.https.HttpsError('unauthenticated', 'A função deve ser chamada por um usuário autenticado.');
+    }
+    const permissoes = ['super-admin', 'diretor', 'bibliotecario'];
+    if (!permissoes.includes(context.auth.token.role)) {
+        throw new functions.https.HttpsError('permission-denied', 'Permissão negada.');
+    }
+
+    const { ano, mes } = data;
+    if (!ano || !mes) {
+        throw new functions.https.HttpsError('invalid-argument', 'Mês e ano são obrigatórios.');
+    }
+
+    // Define o intervalo de datas para o mês selecionado
+    const inicioDoMes = new Date(ano, mes - 1, 1);
+    const fimDoMes = new Date(ano, mes, 0, 23, 59, 59);
+
+    try {
+        // Busca vendas à vista no período
+        const qVista = db.collection('biblioteca_vendas_avista')
+            .where('registradoEm', '>=', inicioDoMes)
+            .where('registradoEm', '<=', fimDoMes);
+        const snapshotVista = await qVista.get();
+        const vendasVista = snapshotVista.docs.map(doc => doc.data());
+
+        // Busca pendências (pagas ou não) no período
+        const qPrazo = db.collection('biblioteca_contas_a_receber')
+            .where('registradoEm', '>=', inicioDoMes)
+            .where('registradoEm', '<=', fimDoMes);
+        const snapshotPrazo = await qPrazo.get();
+        const vendasPrazo = snapshotPrazo.docs.map(doc => doc.data());
+
+        // Busca empréstimos no período
+        const qEmprestimos = db.collection('biblioteca_emprestimos')
+            .where('dataEmprestimo', '>=', inicioDoMes)
+            .where('dataEmprestimo', '<=', fimDoMes);
+        const snapshotEmprestimos = await qEmprestimos.get();
+        const emprestimos = snapshotEmprestimos.docs.map(doc => doc.data());
+
+        return {
+            vendas: [...vendasVista, ...vendasPrazo],
+            emprestimos: emprestimos
+        };
+
+    } catch (error) {
+        console.error("Erro ao gerar relatório da biblioteca:", error);
+        throw new functions.https.HttpsError('internal', 'Ocorreu um erro ao buscar os dados do relatório.');
+    }
+});
+
 exports.uploadAtaParaStorage = functions.region(REGIAO).https.onCall(async (data, context) => {
     if (!context.auth) {
         throw new functions.https.HttpsError('unauthenticated', 'A função deve ser chamada por um usuário autenticado.');

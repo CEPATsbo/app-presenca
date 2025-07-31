@@ -4,6 +4,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Admin - Gerenciar Biblioteca</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.23/jspdf.plugin.autotable.min.js"></script>
     <style>
         body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background-color: #f4f6f9; display: flex; flex-direction: column; align-items: center; margin: 0; padding: 20px; box-sizing: border-box; }
         .nav-voltar { max-width: 1000px; width:100%; margin: 0 auto 30px auto; text-align: left; }
@@ -27,6 +29,9 @@
         .btn-edit { background-color: #ffc107; color: #333; }
         .btn-delete { background-color: #dc3545; color: white; }
         .estoque-zerado { color: #dc3545; font-weight: bold; }
+        .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.6); display: none; justify-content: center; align-items: center; z-index: 1000; }
+        .modal-content { background-color: white; padding: 30px; border-radius: 10px; width: 90%; max-width: 500px; }
+        .modal-content h2 { margin-top: 0; }
     </style>
 </head>
 <body>
@@ -39,34 +44,7 @@
         <h1>Gerenciar Acervo da Biblioteca</h1>
 
         <form id="form-livro">
-            <input type="hidden" id="livroId">
-            <div class="form-grid">
-                <div class="form-item" style="grid-column: 1 / -1;"><label for="titulo">Título do Livro</label><input type="text" id="titulo" required></div>
-                <div class="form-item"><label for="autor">Autor(a)</label><input type="text" id="autor" required></div>
-                <div class="form-item"><label for="editora">Editora</label><input type="text" id="editora"></div>
-                <div class="form-item"><label for="isbn">ISBN (Código)</label><input type="text" id="isbn"></div>
-                <div class="form-item"><label for="categoria">Categoria</label><select id="categoria"><option value="Doutrinário">Doutrinário</option><option value="Romance">Romance</option><option value="Biografia">Biografia</option><option value="Infantil">Infantil</option><option value="Outros">Outros</option></select></div>
-                <div class="form-item">
-                    <label>Finalidade</label>
-                    <div class="radio-group">
-                        <label><input type="radio" name="finalidade" value="Empréstimo" checked> Para Empréstimo</label>
-                        <label><input type="radio" name="finalidade" value="Venda"> Para Venda</label>
-                    </div>
-                </div>
-                <div class="form-item" id="campo-preco" style="display: none;">
-                    <label for="preco">Preço de Venda (R$)</label>
-                    <input type="number" id="preco" step="0.01">
-                </div>
-                <div class="form-item">
-                    <label for="quantidade">Quantidade em Estoque</label>
-                    <input type="number" id="quantidade" value="1" min="0" required>
-                </div>
-            </div>
-            <div class="form-actions">
-                <button type="button" id="btn-cancelar" class="btn btn-secondary" style="display: none;">Cancelar</button>
-                <button type="submit" class="btn btn-primary">Salvar Livro</button>
-            </div>
-        </form>
+            </form>
 
         <hr style="margin: 40px 0;">
 
@@ -75,17 +53,27 @@
             <button id="btn-relatorio" class="btn btn-secondary">Gerar Relatório</button>
         </div>
         <table id="tabela-livros">
-            <thead>
-                <tr>
-                    <th>Título / Autor</th>
-                    <th>Finalidade</th>
-                    <th>Status / Preço</th>
-                    <th>Estoque</th>
-                    <th>Ações</th>
-                </tr>
-            </thead>
-            <tbody></tbody>
-        </table>
+            </table>
+    </div>
+
+    <div id="modal-relatorio" class="modal-overlay">
+        <div class="modal-content">
+            <h2>Gerar Relatório da Biblioteca</h2>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
+                <div class="form-item">
+                    <label for="relatorio-mes">Mês</label>
+                    <select id="relatorio-mes"></select>
+                </div>
+                <div class="form-item">
+                    <label for="relatorio-ano">Ano</label>
+                    <select id="relatorio-ano"></select>
+                </div>
+            </div>
+            <div style="text-align: right; margin-top: 20px;">
+                <button type="button" id="btn-cancelar-relatorio" class="btn-secondary">Cancelar</button>
+                <button id="btn-confirmar-relatorio" class="btn-primary">Gerar</button>
+            </div>
+        </div>
     </div>
 
     <script type="module">
@@ -116,11 +104,18 @@
         function inicializarPagina(user) {
             const db = getFirestore();
             const functions = getFunctions(undefined, 'southamerica-east1');
+            const gerarRelatorioBiblioteca = httpsCallable(functions, 'gerarRelatorioBiblioteca');
             const registrarLogDeAcesso = httpsCallable(functions, 'registrarLogDeAcesso');
             const form = document.getElementById('form-livro');
             const tabelaLivros = document.getElementById('tabela-livros').querySelector('tbody');
             const campoPreco = document.getElementById('campo-preco');
             const radiosFinalidade = document.querySelectorAll('input[name="finalidade"]');
+            const modalRelatorio = document.getElementById('modal-relatorio');
+            const btnRelatorio = document.getElementById('btn-relatorio');
+            const btnCancelarRelatorio = document.getElementById('btn-cancelar-relatorio');
+            const btnConfirmarRelatorio = document.getElementById('btn-confirmar-relatorio');
+            const seletorMes = document.getElementById('relatorio-mes');
+            const seletorAno = document.getElementById('relatorio-ano');
 
             radiosFinalidade.forEach(radio => {
                 radio.addEventListener('change', () => {
@@ -240,7 +235,92 @@
             document.getElementById('btn-relatorio').addEventListener('click', () => {
                 alert("Funcionalidade de relatórios será implementada em breve!");
             });
+        // --- LÓGICA DO RELATÓRIO ---
+            btnRelatorio.addEventListener('click', () => {
+                preencherFiltrosRelatorio();
+                modalRelatorio.style.display = 'flex';
+            });
+            btnCancelarRelatorio.addEventListener('click', () => {
+                modalRelatorio.style.display = 'none';
+            });
+            btnConfirmarRelatorio.addEventListener('click', async () => {
+                const mes = seletorMes.value;
+                const ano = seletorAno.value;
+                btnConfirmarRelatorio.disabled = true;
+                btnConfirmarRelatorio.textContent = 'Gerando...';
+
+                try {
+                    const resultado = await gerarRelatorioBiblioteca({ mes, ano });
+                    gerarPDF(resultado.data, mes, ano);
+                } catch (error) {
+                    console.error("Erro ao gerar relatório:", error);
+                    alert("Não foi possível gerar o relatório. Verifique o console.");
+                } finally {
+                    btnConfirmarRelatorio.disabled = false;
+                    btnConfirmarRelatorio.textContent = 'Gerar';
+                    modalRelatorio.style.display = 'none';
+                }
+            });
+            
+            function preencherFiltrosRelatorio() {
+                const meses = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
+                seletorMes.innerHTML = meses.map((nome, index) => `<option value="${index + 1}">${nome}</option>`).join('');
+                
+                const anoAtual = new Date().getFullYear();
+                seletorAno.innerHTML = '';
+                for (let i = anoAtual; i >= anoAtual - 5; i--) {
+                    seletorAno.innerHTML += `<option value="${i}">${i}</option>`;
+                }
+
+                seletorMes.value = new Date().getMonth() + 1;
+                seletorAno.value = anoAtual;
+            }
+
+            function gerarPDF(dados, mes, ano) {
+                const { jsPDF } = window.jspdf;
+                const doc = new jsPDF();
+                const meses = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
+                const mesNome = meses[mes - 1];
+
+                doc.setFontSize(18);
+                doc.text(`Relatório da Biblioteca - ${mesNome} de ${ano}`, 14, 22);
+
+                // Seção de Vendas
+                doc.setFontSize(14);
+                doc.text("Resumo de Vendas", 14, 35);
+                const corpoVendas = dados.vendas.map(v => [
+                    new Date(v.registradoEm.seconds * 1000).toLocaleDateString('pt-BR'),
+                    v.compradorNome || 'Venda à vista',
+                    v.itens.map(i => `${i.qtd}x ${i.titulo}`).join(', '),
+                    v.tipoVenda === 'prazo' ? `Pendente (${v.status})` : 'Recebido',
+                    Number(v.total).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
+                ]);
+                doc.autoTable({
+                    startY: 40,
+                    head: [['Data', 'Comprador', 'Itens', 'Status', 'Total']],
+                    body: corpoVendas,
+                });
+
+                // Seção de Empréstimos
+                const finalYVendas = doc.lastAutoTable.finalY || 40;
+                doc.setFontSize(14);
+                doc.text("Resumo de Empréstimos e Devoluções", 14, finalYVendas + 15);
+                const corpoEmprestimos = dados.emprestimos.map(e => [
+                    new Date(e.dataEmprestimo.seconds * 1000).toLocaleDateString('pt-BR'),
+                    e.livroTitulo,
+                    e.leitor.nome,
+                    e.dataDevolucao ? new Date(e.dataDevolucao.seconds * 1000).toLocaleDateString('pt-BR') : 'Emprestado'
+                ]);
+                doc.autoTable({
+                    startY: finalYVendas + 20,
+                    head: [['Data Empréstimo', 'Livro', 'Leitor', 'Status / Data Devolução']],
+                    body: corpoEmprestimos,
+                });
+
+                doc.save(`relatorio_biblioteca_${mes}_${ano}.pdf`);
+            }
         }
     </script>
 </body>
 </html>
+  
