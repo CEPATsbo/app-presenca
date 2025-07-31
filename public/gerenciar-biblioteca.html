@@ -53,7 +53,18 @@
             <button id="btn-relatorio" class="btn btn-secondary">Gerar Relatório</button>
         </div>
         <table id="tabela-livros">
-            </table>
+            <thead>
+                <tr>
+                    <th>Título/Autor</th>
+                    <th>Finalidade</th>
+                    <th>Status/Preço</th>
+                    <th>Qtd.</th>
+                    <th>Ações</th>
+                </tr>
+            </thead>
+            <tbody>
+                </tbody>
+        </table>
     </div>
 
     <div id="modal-relatorio" class="modal-overlay">
@@ -92,11 +103,19 @@
         };
         initializeApp(firebaseConfig);
 
-        protegerPagina(['super-admin', 'diretor', 'bibliotecario'])
-            .then(user => {
-                document.getElementById('main-content').style.display = 'block';
-                inicializarPagina(user);
-            });
+        // *** CORREÇÃO APLICADA AQUI ***
+        // Espera o documento HTML estar completamente carregado antes de executar o script
+        document.addEventListener('DOMContentLoaded', () => {
+            protegerPagina(['super-admin', 'diretor', 'bibliotecario'])
+                .then(user => {
+                    document.getElementById('main-content').style.display = 'block';
+                    inicializarPagina(user);
+                })
+                .catch(err => {
+                    console.error("Erro de autenticação:", err);
+                    document.getElementById('acesso-negado').style.display = 'block';
+                });
+        });
         
         function inicializarPagina(user) {
             const db = getFirestore();
@@ -106,8 +125,6 @@
             
             const form = document.getElementById('form-livro');
             const tabelaLivros = document.getElementById('tabela-livros').querySelector('tbody');
-            const campoPreco = document.getElementById('campo-preco');
-            const radiosFinalidade = document.querySelectorAll('input[name="finalidade"]');
             const modalRelatorio = document.getElementById('modal-relatorio');
             const btnRelatorio = document.getElementById('btn-relatorio');
             const btnCancelarRelatorio = document.getElementById('btn-cancelar-relatorio');
@@ -115,17 +132,29 @@
             const seletorMes = document.getElementById('relatorio-mes');
             const seletorAno = document.getElementById('relatorio-ano');
 
-            radiosFinalidade.forEach(radio => {
-                radio.addEventListener('change', () => {
-                    const paraVenda = document.querySelector('input[name="finalidade"]:checked').value === 'Venda';
-                    campoPreco.style.display = paraVenda ? 'flex' : 'none';
-                    document.getElementById('preco').required = paraVenda;
+            // Os elementos do formulário são dinâmicos, então não os selecionamos aqui
+            
+            // Verificando a existência dos elementos antes de adicionar listeners
+            const radiosFinalidade = document.querySelectorAll('input[name="finalidade"]');
+            if (radiosFinalidade.length > 0) {
+                radiosFinalidade.forEach(radio => {
+                    radio.addEventListener('change', () => {
+                        const paraVenda = document.querySelector('input[name="finalidade"]:checked').value === 'Venda';
+                        const campoPreco = document.getElementById('campo-preco');
+                        if (campoPreco) {
+                            campoPreco.style.display = paraVenda ? 'flex' : 'none';
+                        }
+                        const precoInput = document.getElementById('preco');
+                        if (precoInput) {
+                            precoInput.required = paraVenda;
+                        }
+                    });
                 });
-            });
+            }
 
             const qLivros = query(collection(db, "biblioteca_livros"), orderBy("titulo"));
             onSnapshot(qLivros, (snapshot) => {
-                tabelaLivros.innerHTML = '';
+                tabelaLivros.innerHTML = ''; // Esta linha agora funciona
                 snapshot.forEach(doc => {
                     const livro = doc.data();
                     const tr = document.createElement('tr');
@@ -177,12 +206,12 @@
                     alert('Livro salvo com sucesso!');
                 }
                 form.reset();
-                campoPreco.style.display = 'none';
+                document.getElementById('campo-preco').style.display = 'none';
                 document.getElementById('livroId').value = '';
                 document.getElementById('btn-cancelar').style.display = 'none';
             });
 
-            tabelaLivros.addEventListener('click', async (e) => {
+            tabelaLivros.addEventListener('click', async (e) => { // Esta linha agora funciona
                 const target = e.target;
                 const id = target.dataset.id;
                 if (!id) return;
@@ -202,6 +231,7 @@
                         document.querySelector(`input[name="finalidade"][value="${data.finalidade}"]`).checked = true;
                         
                         const paraVenda = data.finalidade === 'Venda';
+                        const campoPreco = document.getElementById('campo-preco');
                         campoPreco.style.display = paraVenda ? 'flex' : 'none';
                         document.getElementById('preco').required = paraVenda;
                         if (paraVenda) {
@@ -223,12 +253,16 @@
                 }
             });
 
-            document.getElementById('btn-cancelar').addEventListener('click', () => {
-                form.reset();
-                campoPreco.style.display = 'none';
-                document.getElementById('livroId').value = '';
-                document.getElementById('btn-cancelar').style.display = 'none';
-            });
+            // Adicionando listener para o botão de cancelar fora do loop
+            const btnCancelar = document.getElementById('btn-cancelar');
+            if (btnCancelar) {
+                 btnCancelar.addEventListener('click', () => {
+                    form.reset();
+                    document.getElementById('campo-preco').style.display = 'none';
+                    document.getElementById('livroId').value = '';
+                    btnCancelar.style.display = 'none';
+                });
+            }
             
             // --- LÓGICA DO RELATÓRIO ---
             btnRelatorio.addEventListener('click', () => {
@@ -284,7 +318,6 @@
                 doc.setFontSize(14);
                 doc.text("Resumo de Vendas", 14, 35);
                 const corpoVendas = dados.vendas.map(v => {
-                    // CORREÇÃO DO STATUS E DA DATA
                     const dataVenda = new Date(v.registradoEm).toLocaleDateString('pt-BR');
                     const statusVenda = v.tipoVenda === 'prazo' ? `Pendente (${v.status})` : 'Recebido';
                     return [
@@ -306,7 +339,6 @@
                 doc.setFontSize(14);
                 doc.text("Resumo de Empréstimos e Devoluções", 14, finalYVendas + 15);
                 const corpoEmprestimos = dados.emprestimos.map(e => {
-                    // CORREÇÃO DA DATA
                     const dataEmprestimo = new Date(e.dataEmprestimo).toLocaleDateString('pt-BR');
                     const dataDevolucao = e.dataDevolucao ? new Date(e.dataDevolucao).toLocaleDateString('pt-BR') : 'Emprestado';
                     return [
