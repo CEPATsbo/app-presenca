@@ -44,7 +44,34 @@
         <h1>Gerenciar Acervo da Biblioteca</h1>
 
         <form id="form-livro">
-            </form>
+            <input type="hidden" id="livroId">
+            <div class="form-grid">
+                <div class="form-item" style="grid-column: 1 / -1;"><label for="titulo">Título do Livro</label><input type="text" id="titulo" required></div>
+                <div class="form-item"><label for="autor">Autor(a)</label><input type="text" id="autor" required></div>
+                <div class="form-item"><label for="editora">Editora</label><input type="text" id="editora"></div>
+                <div class="form-item"><label for="isbn">ISBN (Código)</label><input type="text" id="isbn"></div>
+                <div class="form-item"><label for="categoria">Categoria</label><select id="categoria"><option value="Doutrinário">Doutrinário</option><option value="Romance">Romance</option><option value="Biografia">Biografia</option><option value="Infantil">Infantil</option><option value="Outros">Outros</option></select></div>
+                <div class="form-item">
+                    <label>Finalidade</label>
+                    <div class="radio-group">
+                        <label><input type="radio" name="finalidade" value="Empréstimo" checked> Para Empréstimo</label>
+                        <label><input type="radio" name="finalidade" value="Venda"> Para Venda</label>
+                    </div>
+                </div>
+                <div class="form-item" id="campo-preco" style="display: none;">
+                    <label for="preco">Preço de Venda (R$)</label>
+                    <input type="number" id="preco" step="0.01">
+                </div>
+                <div class="form-item">
+                    <label for="quantidade">Quantidade em Estoque</label>
+                    <input type="number" id="quantidade" value="1" min="0" required>
+                </div>
+            </div>
+            <div class="form-actions">
+                <button type="button" id="btn-cancelar" class="btn btn-secondary" style="display: none;">Cancelar</button>
+                <button type="submit" class="btn btn-primary">Salvar Livro</button>
+            </div>
+        </form>
 
         <hr style="margin: 40px 0;">
 
@@ -53,7 +80,17 @@
             <button id="btn-relatorio" class="btn btn-secondary">Gerar Relatório</button>
         </div>
         <table id="tabela-livros">
-            </table>
+            <thead>
+                <tr>
+                    <th>Título / Autor</th>
+                    <th>Finalidade</th>
+                    <th>Status / Preço</th>
+                    <th>Estoque</th>
+                    <th>Ações</th>
+                </tr>
+            </thead>
+            <tbody></tbody>
+        </table>
     </div>
 
     <div id="modal-relatorio" class="modal-overlay">
@@ -70,8 +107,8 @@
                 </div>
             </div>
             <div style="text-align: right; margin-top: 20px;">
-                <button type="button" id="btn-cancelar-relatorio" class="btn-secondary">Cancelar</button>
-                <button id="btn-confirmar-relatorio" class="btn-primary">Gerar</button>
+                <button type="button" id="btn-cancelar-relatorio" class="btn btn-secondary">Cancelar</button>
+                <button id="btn-confirmar-relatorio" class="btn btn-primary">Gerar</button>
             </div>
         </div>
     </div>
@@ -83,13 +120,13 @@
         import { protegerPagina } from '/auth.js';
 
         const firebaseConfig = {
-        apiKey: "AIzaSyBV7RPjk3cFTqL-aIpflJcUojKg1ZXMLuU",
-        authDomain: "voluntarios-ativos---cepat.firebaseapp.com",
-        projectId: "voluntarios-ativos---cepat",
-        storageBucket: "voluntarios-ativos---cepat.firebasestorage.app",
-        messagingSenderId: "66122858261",
-        appId: "1:66122858261:web:7fa21f1805463b5c08331c"
-    };
+            apiKey: "AIzaSyBV7RPjk3cFTqL-aIpflJcUojKg1ZXMLuU",
+            authDomain: "voluntarios-ativos---cepat.firebaseapp.com",
+            projectId: "voluntarios-ativos---cepat",
+            storageBucket: "voluntarios-ativos---cepat.firebasestorage.app",
+            messagingSenderId: "66122858261",
+            appId: "1:66122858261:web:7fa21f1805463b5c08331c"
+        };
         initializeApp(firebaseConfig);
 
         protegerPagina(['super-admin', 'diretor', 'bibliotecario'])
@@ -104,8 +141,9 @@
         function inicializarPagina(user) {
             const db = getFirestore();
             const functions = getFunctions(undefined, 'southamerica-east1');
-            const gerarRelatorioBiblioteca = httpsCallable(functions, 'gerarRelatorioBiblioteca');
             const registrarLogDeAcesso = httpsCallable(functions, 'registrarLogDeAcesso');
+            const gerarRelatorioBiblioteca = httpsCallable(functions, 'gerarRelatorioBiblioteca');
+            
             const form = document.getElementById('form-livro');
             const tabelaLivros = document.getElementById('tabela-livros').querySelector('tbody');
             const campoPreco = document.getElementById('campo-preco');
@@ -232,10 +270,6 @@
                 document.getElementById('btn-cancelar').style.display = 'none';
             });
             
-            document.getElementById('btn-relatorio').addEventListener('click', () => {
-                alert("Funcionalidade de relatórios será implementada em breve!");
-            });
-        // --- LÓGICA DO RELATÓRIO ---
             btnRelatorio.addEventListener('click', () => {
                 preencherFiltrosRelatorio();
                 modalRelatorio.style.display = 'flex';
@@ -250,7 +284,7 @@
                 btnConfirmarRelatorio.textContent = 'Gerando...';
 
                 try {
-                    const resultado = await gerarRelatorioBiblioteca({ mes, ano });
+                    const resultado = await gerarRelatorioBiblioteca({ mes: parseInt(mes), ano: parseInt(ano) });
                     gerarPDF(resultado.data, mes, ano);
                 } catch (error) {
                     console.error("Erro ao gerar relatório:", error);
@@ -323,4 +357,3 @@
     </script>
 </body>
 </html>
-  
