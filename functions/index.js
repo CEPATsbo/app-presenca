@@ -627,6 +627,23 @@ exports.registrarVendaBiblioteca = functions.region(REGIAO).https.onCall(async (
         throw new functions.https.HttpsError('invalid-argument', 'Dados do comprador são obrigatórios para registrar pendência.');
     }
 
+    // Inicia uma transação para garantir a consistência do estoque
+    await db.runTransaction(async (transaction) => {
+        for (const item of itens) {
+            const livroRef = db.collection('biblioteca_livros').doc(item.livroId);
+            const livroDoc = await transaction.get(livroRef);
+            if (!livroDoc.exists) {
+                throw new functions.https.HttpsError('not-found', `Livro ${item.titulo} não encontrado.`);
+            }
+            const estoqueAtual = livroDoc.data().quantidade;
+            if (estoqueAtual < item.qtd) {
+                throw new functions.https.HttpsError('failed-precondition', `Estoque insuficiente para o livro: ${item.titulo}. Disponível: ${estoqueAtual}`);
+            }
+            // Decrementa o estoque
+            transaction.update(livroRef, { quantidade: admin.firestore.FieldValue.increment(-item.qtd) });
+        }
+    });
+
     const vendaData = {
         total,
         itens,
@@ -669,10 +686,16 @@ exports.gerenciarEmprestimoBiblioteca = functions.region(REGIAO).https.onCall(as
     try {
         if (acao === 'emprestar') {
             if (!livroId || !leitor) throw new functions.https.HttpsError('invalid-argument', 'Dados do empréstimo incompletos.');
+            
+            const livroDoc = await livroRef.get();
+            if(!livroDoc.exists || livroDoc.data().quantidade < 1 || livroDoc.data().status !== 'disponível') {
+                 throw new functions.https.HttpsError('failed-precondition', 'Este livro não está disponível para empréstimo.');
+            }
+
             await db.collection('biblioteca_emprestimos').add({
                 livroId,
-                livroTitulo: (await livroRef.get()).data().titulo,
-                leitor: { // Salva o objeto completo do leitor
+                livroTitulo: livroDoc.data().titulo,
+                leitor: {
                     id: leitor.id || null,
                     nome: leitor.nome,
                     tipo: leitor.tipo
@@ -680,16 +703,24 @@ exports.gerenciarEmprestimoBiblioteca = functions.region(REGIAO).https.onCall(as
                 dataEmprestimo: admin.firestore.FieldValue.serverTimestamp(),
                 status: 'emprestado'
             });
-            await livroRef.update({ status: 'emprestado' });
+            await livroRef.update({ 
+                status: 'emprestado',
+                quantidade: admin.firestore.FieldValue.increment(-1)
+            });
             return { success: true, message: 'Empréstimo registrado com sucesso!' };
+
         } else if (acao === 'devolver') {
             if (!emprestimoId || !livroId) throw new functions.https.HttpsError('invalid-argument', 'Dados da devolução incompletos.');
+            
             const emprestimoRef = db.collection('biblioteca_emprestimos').doc(emprestimoId);
             await emprestimoRef.update({ 
                 status: 'devolvido',
                 dataDevolucao: admin.firestore.FieldValue.serverTimestamp()
             });
-            await livroRef.update({ status: 'disponível' });
+            await livroRef.update({ 
+                status: 'disponível',
+                quantidade: admin.firestore.FieldValue.increment(1)
+            });
             return { success: true, message: 'Devolução registrada com sucesso!' };
         }
         throw new functions.https.HttpsError('invalid-argument', 'Ação desconhecida.');
@@ -698,6 +729,7 @@ exports.gerenciarEmprestimoBiblioteca = functions.region(REGIAO).https.onCall(as
         throw new functions.https.HttpsError('internal', 'Ocorreu um erro na operação.');
     }
 });
+
 exports.uploadAtaParaStorage = functions.region(REGIAO).https.onCall(async (data, context) => {
     if (!context.auth) {
         throw new functions.https.HttpsError('unauthenticated', 'A função deve ser chamada por um usuário autenticado.');

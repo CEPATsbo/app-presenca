@@ -22,6 +22,7 @@
         #resultados-busca-venda, #resultados-busca-emprestimo { max-height: 200px; overflow-y: auto; border: 1px solid #ddd; border-radius: 6px; margin-top: 5px; }
         .resultado-item { padding: 10px; cursor: pointer; }
         .resultado-item:hover { background-color: #e9ecef; }
+        .resultado-item.esgotado { color: #aaa; cursor: not-allowed; text-decoration: line-through; }
         .carrinho-container { background-color: #f8f9fa; padding: 20px; border-radius: 8px; display: flex; flex-direction: column; }
         #lista-carrinho { list-style-type: none; padding: 0; flex-grow: 1; }
         .carrinho-item { display: flex; justify-content: space-between; align-items: center; padding: 10px 0; border-bottom: 1px solid #ddd; }
@@ -116,27 +117,26 @@
 
     <script type="module">
         import { initializeApp, getApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
-        import { getFirestore, collection, onSnapshot, doc, query, where, orderBy, startAt, endAt } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
+        import { getFirestore, collection, onSnapshot, doc, query, where, orderBy } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
         import { getFunctions, httpsCallable } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-functions.js";
         import { protegerPagina } from '/auth.js';
 
         const firebaseConfig = {
-            apiKey: "AIzaSyBV7RPjk3cFTqL-aIpflJcUojKg1ZXMLuU",
-            authDomain: "voluntarios-ativos---cepat.firebaseapp.com",
-            projectId: "voluntarios-ativos---cepat",
-            storageBucket: "voluntarios-ativos---cepat.firebasestorage.app",
-            messagingSenderId: "66122858261",
-            appId: "1:66122858261:web:7fa21f1805463b5c08331c"
-        };
-        const app = initializeApp(firebaseConfig);
+        apiKey: "AIzaSyBV7RPjk3cFTqL-aIpflJcUojKg1ZXMLuU",
+        authDomain: "voluntarios-ativos---cepat.firebaseapp.com",
+        projectId: "voluntarios-ativos---cepat",
+        storageBucket: "voluntarios-ativos---cepat.firebasestorage.app",
+        messagingSenderId: "66122858261",
+        appId: "1:66122858261:web:7fa21f1805463b5c08331c"
+    };
+        initializeApp(firebaseConfig);
 
         protegerPagina(['super-admin', 'diretor', 'bibliotecario'])
             .then(user => {
                 document.getElementById('main-content').style.display = 'block';
                 inicializarPagina(user);
                 
-                // Dispara o log de acesso assim que a página é autorizada
-                const registrarLogDeAcesso = httpsCallable(getFunctions(app, 'southamerica-east1'), 'registrarLogDeAcesso');
+                const registrarLogDeAcesso = httpsCallable(getFunctions(getApp(), 'southamerica-east1'), 'registrarLogDeAcesso');
                 registrarLogDeAcesso({ acao: 'ACESSOU_PDV_BIBLIOTECA' });
             })
             .catch(error => {
@@ -194,7 +194,7 @@
             });
 
             function carregarLivrosParaVenda() {
-                const q = query(collection(db, 'biblioteca_livros'), where('finalidade', '==', 'Venda'), orderBy('titulo'));
+                const q = query(collection(db, 'biblioteca_livros'), where('finalidade', '==', 'Venda'), where('quantidade', '>', 0), orderBy('titulo'));
                 onSnapshot(q, (snapshot) => {
                     todosOsLivrosAVenda = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
                     renderizarResultadosVenda(todosOsLivrosAVenda);
@@ -227,6 +227,13 @@
 
             function adicionarAoCarrinho(livro) {
                 const itemExistente = carrinho.find(i => i.id === livro.id);
+                const qtdNoCarrinho = itemExistente ? itemExistente.qtd : 0;
+
+                if (qtdNoCarrinho >= livro.quantidade) {
+                    alert(`Estoque esgotado para o livro "${livro.titulo}".`);
+                    return;
+                }
+
                 if (itemExistente) { itemExistente.qtd++; } 
                 else { carrinho.push({ ...livro, qtd: 1 }); }
                 renderizarCarrinho();
@@ -299,7 +306,7 @@
             }
 
             function carregarLivrosParaEmprestimo() {
-                const q = query(collection(db, 'biblioteca_livros'), where('finalidade', '==', 'Empréstimo'), where('status', '==', 'disponível'), orderBy('titulo'));
+                const q = query(collection(db, 'biblioteca_livros'), where('finalidade', '==', 'Empréstimo'), where('status', '==', 'disponível'), where('quantidade', '>', 0), orderBy('titulo'));
                 onSnapshot(q, (snapshot) => {
                     todosOsLivrosDisponiveis = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
                     renderizarResultadosEmprestimo(todosOsLivrosDisponiveis);
