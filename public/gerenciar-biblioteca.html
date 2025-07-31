@@ -10,7 +10,7 @@
         .btn-voltar { background-color: #e9ecef; color: #495057; border: 1px solid #dee2e6; padding: 10px 20px; border-radius: 8px; font-weight: bold; font-size: 1em; text-decoration: none; }
         .container { background-color: white; padding: 40px; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.15); width: 100%; max-width: 1000px; margin-bottom: 30px; }
         h1, h2 { text-align: center; color: #333; margin-top: 0; }
-        .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+        .form-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 20px; }
         .form-item { display: flex; flex-direction: column; }
         .form-item label { margin-bottom: 5px; font-weight: bold; color: #555; }
         .form-item input, .form-item select { padding: 10px; border-radius: 6px; border: 1px solid #ccc; font-size: 1em; }
@@ -19,12 +19,14 @@
         .btn { padding: 12px 25px; border: none; border-radius: 6px; font-size: 1em; font-weight: bold; cursor: pointer; }
         .btn-primary { background-color: #007bff; color: white; }
         .btn-secondary { background-color: #6c757d; color: white; }
-        table { width: 100%; border-collapse: collapse; margin-top: 30px; }
+        .header-acervo { display: flex; justify-content: space-between; align-items: center; }
+        table { width: 100%; border-collapse: collapse; margin-top: 20px; }
         th, td { padding: 12px 15px; border-bottom: 1px solid #eee; text-align: left; }
         th { background-color: #f8f9fa; }
         .actions-table button { margin-right: 5px; padding: 5px 10px; border-radius: 4px; cursor: pointer; border: 1px solid #ccc; }
         .btn-edit { background-color: #ffc107; color: #333; }
         .btn-delete { background-color: #dc3545; color: white; }
+        .estoque-zerado { color: #dc3545; font-weight: bold; }
     </style>
 </head>
 <body>
@@ -55,6 +57,10 @@
                     <label for="preco">Preço de Venda (R$)</label>
                     <input type="number" id="preco" step="0.01">
                 </div>
+                <div class="form-item">
+                    <label for="quantidade">Quantidade em Estoque</label>
+                    <input type="number" id="quantidade" value="1" min="0" required>
+                </div>
             </div>
             <div class="form-actions">
                 <button type="button" id="btn-cancelar" class="btn btn-secondary" style="display: none;">Cancelar</button>
@@ -64,14 +70,17 @@
 
         <hr style="margin: 40px 0;">
 
-        <h2>Acervo Cadastrado</h2>
+        <div class="header-acervo">
+            <h2>Acervo Cadastrado</h2>
+            <button id="btn-relatorio" class="btn btn-secondary">Gerar Relatório</button>
+        </div>
         <table id="tabela-livros">
             <thead>
                 <tr>
                     <th>Título / Autor</th>
-                    <th>Categoria</th>
                     <th>Finalidade</th>
                     <th>Status / Preço</th>
+                    <th>Estoque</th>
                     <th>Ações</th>
                 </tr>
             </thead>
@@ -99,6 +108,9 @@
             .then(user => {
                 document.getElementById('main-content').style.display = 'block';
                 inicializarPagina(user);
+            })
+            .catch(error => {
+                document.getElementById('acesso-negado').style.display = 'block';
             });
         
         function inicializarPagina(user) {
@@ -112,7 +124,9 @@
 
             radiosFinalidade.forEach(radio => {
                 radio.addEventListener('change', () => {
-                    campoPreco.style.display = document.querySelector('input[name="finalidade"]:checked').value === 'Venda' ? 'flex' : 'none';
+                    const paraVenda = document.querySelector('input[name="finalidade"]:checked').value === 'Venda';
+                    campoPreco.style.display = paraVenda ? 'flex' : 'none';
+                    document.getElementById('preco').required = paraVenda;
                 });
             });
 
@@ -128,11 +142,12 @@
                     } else {
                         statusPreco = livro.status === 'emprestado' ? `<span style="color:red; font-weight:bold;">Emprestado</span>` : `<span style="color:green;">Disponível</span>`;
                     }
+                    const estoqueClasse = (livro.quantidade === 0) ? 'estoque-zerado' : '';
                     tr.innerHTML = `
                         <td><strong>${livro.titulo}</strong><br><small>${livro.autor}</small></td>
-                        <td>${livro.categoria}</td>
                         <td>${livro.finalidade}</td>
                         <td>${statusPreco}</td>
+                        <td class="${estoqueClasse}">${livro.quantidade}</td>
                         <td class="actions-table">
                             <button class="btn-edit" data-id="${doc.id}">Editar</button>
                             <button class="btn-delete" data-id="${doc.id}">Apagar</button>
@@ -153,6 +168,7 @@
                     categoria: document.getElementById('categoria').value,
                     finalidade: finalidade,
                     preco: finalidade === 'Venda' ? parseFloat(document.getElementById('preco').value) || 0 : null,
+                    quantidade: parseInt(document.getElementById('quantidade').value) || 0,
                     status: finalidade === 'Empréstimo' ? 'disponível' : null,
                 };
                 const id = document.getElementById('livroId').value;
@@ -189,22 +205,25 @@
                         document.getElementById('editora').value = data.editora || '';
                         document.getElementById('isbn').value = data.isbn || '';
                         document.getElementById('categoria').value = data.categoria;
+                        document.getElementById('quantidade').value = data.quantidade || 0;
                         document.querySelector(`input[name="finalidade"][value="${data.finalidade}"]`).checked = true;
-                        if (data.finalidade === 'Venda') {
-                            campoPreco.style.display = 'flex';
+                        
+                        const paraVenda = data.finalidade === 'Venda';
+                        campoPreco.style.display = paraVenda ? 'flex' : 'none';
+                        document.getElementById('preco').required = paraVenda;
+                        if (paraVenda) {
                             document.getElementById('preco').value = data.preco;
-                        } else {
-                            campoPreco.style.display = 'none';
                         }
+                        
                         document.getElementById('btn-cancelar').style.display = 'inline-block';
                         window.scrollTo({ top: 0, behavior: 'smooth' });
                     }
-                } if (target.classList.contains('btn-delete')) {
+                } else if (target.classList.contains('btn-delete')) {
                     if (confirm('Tem certeza que deseja apagar este livro do acervo?')) {
                         const docRef = doc(db, 'biblioteca_livros', id);
                         const docSnap = await getDoc(docRef);
                         const tituloLivro = docSnap.exists() ? docSnap.data().titulo : 'Livro Desconhecido';
-
+                        
                         await deleteDoc(docRef);
                         registrarLogDeAcesso({ acao: 'APAGOU_LIVRO_BIBLIOTECA', detalhes: { livroId: id, titulo: tituloLivro } });
                     }
@@ -216,6 +235,10 @@
                 campoPreco.style.display = 'none';
                 document.getElementById('livroId').value = '';
                 document.getElementById('btn-cancelar').style.display = 'none';
+            });
+            
+            document.getElementById('btn-relatorio').addEventListener('click', () => {
+                alert("Funcionalidade de relatórios será implementada em breve!");
             });
         }
     </script>
