@@ -122,21 +122,21 @@
         import { protegerPagina } from '/auth.js';
 
         const firebaseConfig = {
-        apiKey: "AIzaSyBV7RPjk3cFTqL-aIpflJcUojKg1ZXMLuU",
-        authDomain: "voluntarios-ativos---cepat.firebaseapp.com",
-        projectId: "voluntarios-ativos---cepat",
-        storageBucket: "voluntarios-ativos---cepat.firebasestorage.app",
-        messagingSenderId: "66122858261",
-        appId: "1:66122858261:web:7fa21f1805463b5c08331c"
-    };
-        initializeApp(firebaseConfig);
+            apiKey: "AIzaSyBV7RPjk3cFTqL-aIpflJcUojKg1ZXMLuU",
+            authDomain: "voluntarios-ativos---cepat.firebaseapp.com",
+            projectId: "voluntarios-ativos---cepat",
+            storageBucket: "voluntarios-ativos---cepat.firebasestorage.app",
+            messagingSenderId: "66122858261",
+            appId: "1:66122858261:web:7fa21f1805463b5c08331c"
+        };
+        const app = initializeApp(firebaseConfig);
 
         protegerPagina(['super-admin', 'diretor', 'bibliotecario'])
             .then(user => {
                 document.getElementById('main-content').style.display = 'block';
                 inicializarPagina(user);
                 
-                const registrarLogDeAcesso = httpsCallable(getFunctions(getApp(), 'southamerica-east1'), 'registrarLogDeAcesso');
+                const registrarLogDeAcesso = httpsCallable(getFunctions(app, 'southamerica-east1'), 'registrarLogDeAcesso');
                 registrarLogDeAcesso({ acao: 'ACESSOU_PDV_BIBLIOTECA' });
             })
             .catch(error => {
@@ -150,7 +150,6 @@
             const registrarVendaBiblioteca = httpsCallable(functions, 'registrarVendaBiblioteca');
             const gerenciarEmprestimoBiblioteca = httpsCallable(functions, 'gerenciarEmprestimoBiblioteca');
 
-            // --- Referências de UI ---
             const tabs = document.querySelectorAll('.tab-link');
             const tabContents = document.querySelectorAll('.tab-content');
             const buscaLivroVendaInput = document.getElementById('busca-livro-venda');
@@ -193,10 +192,14 @@
                 seletorVoluntarioEmprestimo.innerHTML = options;
             });
 
+            // --- Lógica de Vendas ---
             function carregarLivrosParaVenda() {
-                const q = query(collection(db, 'biblioteca_livros'), where('finalidade', '==', 'Venda'), where('quantidade', '>', 0), orderBy('titulo'));
+                const q = query(collection(db, 'biblioteca_livros'), where('finalidade', '==', 'Venda'));
                 onSnapshot(q, (snapshot) => {
-                    todosOsLivrosAVenda = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                    let livros = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                    livros = livros.filter(livro => livro.quantidade > 0);
+                    livros.sort((a, b) => a.titulo.localeCompare(b.titulo));
+                    todosOsLivrosAVenda = livros;
                     renderizarResultadosVenda(todosOsLivrosAVenda);
                 }, (error) => console.error("Erro ao carregar livros para venda:", error));
             }
@@ -306,9 +309,12 @@
             }
 
             function carregarLivrosParaEmprestimo() {
-                const q = query(collection(db, 'biblioteca_livros'), where('finalidade', '==', 'Empréstimo'), where('status', '==', 'disponível'), where('quantidade', '>', 0), orderBy('titulo'));
+                const q = query(collection(db, 'biblioteca_livros'), where('finalidade', '==', 'Empréstimo'));
                 onSnapshot(q, (snapshot) => {
-                    todosOsLivrosDisponiveis = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                    let livros = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                    livros = livros.filter(livro => livro.status === 'disponível' && livro.quantidade > 0);
+                    livros.sort((a, b) => a.titulo.localeCompare(b.titulo));
+                    todosOsLivrosDisponiveis = livros;
                     renderizarResultadosEmprestimo(todosOsLivrosDisponiveis);
                 }, (error) => console.error("Erro ao carregar livros para empréstimo:", error));
             }
