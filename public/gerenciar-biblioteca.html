@@ -44,7 +44,34 @@
         <h1>Gerenciar Acervo da Biblioteca</h1>
 
         <form id="form-livro">
-            </form>
+            <input type="hidden" id="livroId">
+            <div class="form-grid">
+                <div class="form-item" style="grid-column: 1 / -1;"><label for="titulo">Título do Livro</label><input type="text" id="titulo" required></div>
+                <div class="form-item"><label for="autor">Autor(a)</label><input type="text" id="autor" required></div>
+                <div class="form-item"><label for="editora">Editora</label><input type="text" id="editora"></div>
+                <div class="form-item"><label for="isbn">ISBN (Código)</label><input type="text" id="isbn"></div>
+                <div class="form-item"><label for="categoria">Categoria</label><select id="categoria"><option value="Doutrinário">Doutrinário</option><option value="Romance">Romance</option><option value="Biografia">Biografia</option><option value="Infantil">Infantil</option><option value="Outros">Outros</option></select></div>
+                <div class="form-item">
+                    <label>Finalidade</label>
+                    <div class="radio-group">
+                        <label><input type="radio" name="finalidade" value="Empréstimo" checked> Para Empréstimo</label>
+                        <label><input type="radio" name="finalidade" value="Venda"> Para Venda</label>
+                    </div>
+                </div>
+                <div class="form-item" id="campo-preco" style="display: none;">
+                    <label for="preco">Preço de Venda (R$)</label>
+                    <input type="number" id="preco" step="0.01">
+                </div>
+                <div class="form-item">
+                    <label for="quantidade">Quantidade em Estoque</label>
+                    <input type="number" id="quantidade" value="1" min="0" required>
+                </div>
+            </div>
+            <div class="form-actions">
+                <button type="button" id="btn-cancelar" class="btn btn-secondary" style="display: none;">Cancelar</button>
+                <button type="submit" class="btn btn-primary">Salvar Livro</button>
+            </div>
+        </form>
 
         <hr style="margin: 40px 0;">
 
@@ -55,15 +82,14 @@
         <table id="tabela-livros">
             <thead>
                 <tr>
-                    <th>Título/Autor</th>
+                    <th>Título / Autor</th>
                     <th>Finalidade</th>
-                    <th>Status/Preço</th>
-                    <th>Qtd.</th>
+                    <th>Status / Preço</th>
+                    <th>Estoque</th>
                     <th>Ações</th>
                 </tr>
             </thead>
-            <tbody>
-                </tbody>
+            <tbody></tbody>
         </table>
     </div>
 
@@ -81,7 +107,7 @@
                 </div>
             </div>
             <div style="text-align: right; margin-top: 20px;">
-                <button type="button" id="btn-cancelar-relatorio" class="btn btn-secondary">Cancelar</button>
+                <button type="button" id="btn-cancelar-relatorio" class="btn-secondary">Cancelar</button>
                 <button id="btn-confirmar-relatorio" class="btn btn-primary">Gerar</button>
             </div>
         </div>
@@ -103,28 +129,25 @@
         };
         initializeApp(firebaseConfig);
 
-        // *** CORREÇÃO APLICADA AQUI ***
-        // Espera o documento HTML estar completamente carregado antes de executar o script
-        document.addEventListener('DOMContentLoaded', () => {
-            protegerPagina(['super-admin', 'diretor', 'bibliotecario'])
-                .then(user => {
-                    document.getElementById('main-content').style.display = 'block';
-                    inicializarPagina(user);
-                })
-                .catch(err => {
-                    console.error("Erro de autenticação:", err);
-                    document.getElementById('acesso-negado').style.display = 'block';
-                });
-        });
+        protegerPagina(['super-admin', 'diretor', 'bibliotecario'])
+            .then(user => {
+                document.getElementById('main-content').style.display = 'block';
+                inicializarPagina(user);
+            })
+            .catch(error => {
+                document.getElementById('acesso-negado').style.display = 'block';
+            });
         
         function inicializarPagina(user) {
             const db = getFirestore();
             const functions = getFunctions(undefined, 'southamerica-east1');
-            const gerarRelatorioBiblioteca = httpsCallable(functions, 'gerarRelatorioBiblioteca');
             const registrarLogDeAcesso = httpsCallable(functions, 'registrarLogDeAcesso');
+            const gerarRelatorioBiblioteca = httpsCallable(functions, 'gerarRelatorioBiblioteca');
             
             const form = document.getElementById('form-livro');
             const tabelaLivros = document.getElementById('tabela-livros').querySelector('tbody');
+            const campoPreco = document.getElementById('campo-preco');
+            const radiosFinalidade = document.querySelectorAll('input[name="finalidade"]');
             const modalRelatorio = document.getElementById('modal-relatorio');
             const btnRelatorio = document.getElementById('btn-relatorio');
             const btnCancelarRelatorio = document.getElementById('btn-cancelar-relatorio');
@@ -132,29 +155,17 @@
             const seletorMes = document.getElementById('relatorio-mes');
             const seletorAno = document.getElementById('relatorio-ano');
 
-            // Os elementos do formulário são dinâmicos, então não os selecionamos aqui
-            
-            // Verificando a existência dos elementos antes de adicionar listeners
-            const radiosFinalidade = document.querySelectorAll('input[name="finalidade"]');
-            if (radiosFinalidade.length > 0) {
-                radiosFinalidade.forEach(radio => {
-                    radio.addEventListener('change', () => {
-                        const paraVenda = document.querySelector('input[name="finalidade"]:checked').value === 'Venda';
-                        const campoPreco = document.getElementById('campo-preco');
-                        if (campoPreco) {
-                            campoPreco.style.display = paraVenda ? 'flex' : 'none';
-                        }
-                        const precoInput = document.getElementById('preco');
-                        if (precoInput) {
-                            precoInput.required = paraVenda;
-                        }
-                    });
+            radiosFinalidade.forEach(radio => {
+                radio.addEventListener('change', () => {
+                    const paraVenda = document.querySelector('input[name="finalidade"]:checked').value === 'Venda';
+                    campoPreco.style.display = paraVenda ? 'flex' : 'none';
+                    document.getElementById('preco').required = paraVenda;
                 });
-            }
+            });
 
             const qLivros = query(collection(db, "biblioteca_livros"), orderBy("titulo"));
             onSnapshot(qLivros, (snapshot) => {
-                tabelaLivros.innerHTML = ''; // Esta linha agora funciona
+                tabelaLivros.innerHTML = '';
                 snapshot.forEach(doc => {
                     const livro = doc.data();
                     const tr = document.createElement('tr');
@@ -206,12 +217,12 @@
                     alert('Livro salvo com sucesso!');
                 }
                 form.reset();
-                document.getElementById('campo-preco').style.display = 'none';
+                campoPreco.style.display = 'none';
                 document.getElementById('livroId').value = '';
                 document.getElementById('btn-cancelar').style.display = 'none';
             });
 
-            tabelaLivros.addEventListener('click', async (e) => { // Esta linha agora funciona
+            tabelaLivros.addEventListener('click', async (e) => {
                 const target = e.target;
                 const id = target.dataset.id;
                 if (!id) return;
@@ -231,7 +242,6 @@
                         document.querySelector(`input[name="finalidade"][value="${data.finalidade}"]`).checked = true;
                         
                         const paraVenda = data.finalidade === 'Venda';
-                        const campoPreco = document.getElementById('campo-preco');
                         campoPreco.style.display = paraVenda ? 'flex' : 'none';
                         document.getElementById('preco').required = paraVenda;
                         if (paraVenda) {
@@ -253,25 +263,22 @@
                 }
             });
 
-            // Adicionando listener para o botão de cancelar fora do loop
-            const btnCancelar = document.getElementById('btn-cancelar');
-            if (btnCancelar) {
-                 btnCancelar.addEventListener('click', () => {
-                    form.reset();
-                    document.getElementById('campo-preco').style.display = 'none';
-                    document.getElementById('livroId').value = '';
-                    btnCancelar.style.display = 'none';
-                });
-            }
+            document.getElementById('btn-cancelar').addEventListener('click', () => {
+                form.reset();
+                campoPreco.style.display = 'none';
+                document.getElementById('livroId').value = '';
+                document.getElementById('btn-cancelar').style.display = 'none';
+            });
             
-            // --- LÓGICA DO RELATÓRIO ---
             btnRelatorio.addEventListener('click', () => {
                 preencherFiltrosRelatorio();
                 modalRelatorio.style.display = 'flex';
             });
+
             btnCancelarRelatorio.addEventListener('click', () => {
                 modalRelatorio.style.display = 'none';
             });
+
             btnConfirmarRelatorio.addEventListener('click', async () => {
                 const mes = seletorMes.value;
                 const ano = seletorAno.value;
@@ -319,11 +326,11 @@
                 doc.text("Resumo de Vendas", 14, 35);
                 const corpoVendas = dados.vendas.map(v => {
                     const dataVenda = new Date(v.registradoEm).toLocaleDateString('pt-BR');
-                    const statusVenda = v.tipoVenda === 'prazo' ? `Pendente (${v.status})` : 'Recebido';
+                    const statusVenda = v.tipoVenda === 'prazo' ? `${v.status.charAt(0).toUpperCase() + v.status.slice(1)}` : 'Recebido';
                     return [
                         dataVenda,
                         v.compradorNome || 'Venda à vista',
-                        v.itens.map(i => `${i.qtd}x ${i.titulo}`).join(', '),
+                        v.itens.map(i => `${i.qtd}x ${i.titulo}`).join('\n'),
                         statusVenda,
                         Number(v.total).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
                     ];
