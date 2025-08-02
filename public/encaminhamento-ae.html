@@ -14,13 +14,27 @@
         .btn-info { background-color: #17a2b8; }
         h1, h2 { color: #333; text-align: center; }
         .cards-container { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 20px; }
-        .assistido-card { background-color: white; padding: 20px; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); display: flex; flex-direction: column; gap: 15px; }
+        .assistido-card { background-color: white; padding: 20px; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); display: flex; flex-direction: column; gap: 15px; border-left: 5px solid #6c757d; }
         .assistido-card h3 { margin: 0; font-size: 1.5em; text-align: center; color: #333; }
         .assistido-card .info { text-align: center; font-size: 1.1em; color: #666; }
         .assistido-card .actions { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
         .assistido-card .actions .btn { width: 100%; padding: 15px; font-size: 1.1em; }
-        .chamado { background-color: #e2e3e5; opacity: 0.7; }
-        .chamado h3 { text-decoration: line-through; }
+        
+        /* NOVO ESTILO: Para indicar que a entrevista já foi chamada */
+        .entrevista-chamada {
+            border-left-color: #17a2b8; /* Azul claro */
+        }
+        
+        /* ESTILO EXISTENTE: Para indicar que o atendimento foi totalmente finalizado */
+        .passe-chamado {
+            border-left-color: #28a745; /* Verde */
+            background-color: #f8f9fa;
+            opacity: 0.8;
+        }
+        .passe-chamado h3 {
+            text-decoration: line-through;
+        }
+
     </style>
 </head>
 <body>
@@ -78,27 +92,27 @@
                     card.className = 'assistido-card';
                     card.id = `card-${atendimento.id}`;
 
-                    let chamadoClass = '';
-                    let buttonsDisabled = false;
-                    if (atendimento.status === 'chamado_entrevista' || atendimento.status === 'chamado_passe') {
-                        chamadoClass = 'chamado';
-                        buttonsDisabled = true;
+                    // ==========================================================
+                    // LÓGICA DE CONTROLE DOS BOTÕES CORRIGIDA
+                    // ==========================================================
+                    let entrevistaBtnDisabled = false;
+                    let passeBtnDisabled = false;
+
+                    if (atendimento.status === 'chamado_entrevista') {
+                        entrevistaBtnDisabled = true; // Desabilita SÓ o botão da entrevista
+                        card.classList.add('entrevista-chamada'); // Adiciona estilo visual de "em andamento"
+                    } else if (atendimento.status === 'chamado_passe') {
+                        entrevistaBtnDisabled = true; // Se chamou pro passe, a entrevista já passou
+                        passeBtnDisabled = true;      // Desabilita o botão do passe
+                        card.classList.add('passe-chamado'); // Adiciona estilo visual de "finalizado"
                     }
                     
-                    // ==========================================================
-                    // CORREÇÃO APLICADA AQUI
-                    // Adiciona a classe apenas se a variável não estiver vazia
-                    // ==========================================================
-                    if (chamadoClass) {
-                        card.classList.add(chamadoClass);
-                    }
-
                     card.innerHTML = `
                         <h3>${atendimento.nomeAssistido}</h3>
                         <p class="info">Passe Recomendado: <strong>${atendimento.passeRecomendado || 'N/A'}</strong></p>
                         <div class="actions">
-                            <button class="btn btn-info btn-chamar-entrevista" data-id="${atendimento.id}" ${buttonsDisabled ? 'disabled' : ''}>Chamar p/ Entrevista</button>
-                            <button class="btn btn-success btn-chamar-passe" data-id="${atendimento.id}" ${buttonsDisabled ? 'disabled' : ''}>Chamar p/ Passe</button>
+                            <button class="btn btn-info btn-chamar-entrevista" data-id="${atendimento.id}" ${entrevistaBtnDisabled ? 'disabled' : ''}>Chamar p/ Entrevista</button>
+                            <button class="btn btn-success btn-chamar-passe" data-id="${atendimento.id}" ${passeBtnDisabled ? 'disabled' : ''}>Chamar p/ Passe</button>
                         </div>
                     `;
                     cardsContainer.appendChild(card);
