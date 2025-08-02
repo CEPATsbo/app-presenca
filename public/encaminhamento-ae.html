@@ -43,16 +43,16 @@
         import { protegerPagina } from '/auth.js';
 
         const firebaseConfig = {
-        apiKey: "AIzaSyBV7RPjk3cFTqL-aIpflJcUojKg1ZXMLuU",
-        authDomain: "voluntarios-ativos---cepat.firebaseapp.com",
-        projectId: "voluntarios-ativos---cepat",
-        storageBucket: "voluntarios-ativos---cepat.firebasestorage.app",
-        messagingSenderId: "66122858261",
-        appId: "1:66122858261:web:7fa21f1805463b5c08331c"
-    };
+            apiKey: "AIzaSyBV7RPjk3cFTqL-aIpflJcUojKg1ZXMLuU",
+            authDomain: "voluntarios-ativos---cepat.firebaseapp.com",
+            projectId: "voluntarios-ativos---cepat",
+            storageBucket: "voluntarios-ativos---cepat.firebasestorage.app",
+            messagingSenderId: "66122858261",
+            appId: "1:66122858261:web:7fa21f1805463b5c08331c"
+        };
         initializeApp(firebaseConfig);
 
-        protegerPagina(['entrevistador', 'recepcionista' , 'tesoureiro' , 'conselheiro' , 'diretor', 'super-admin']).then(user => {
+        protegerPagina(['entrevistador', 'diretor', 'super-admin']).then(user => {
             document.getElementById('main-content').style.display = 'block';
             inicializarPagina(user);
         }).catch(err => { document.getElementById('acesso-negado').style.display = 'block'; });
@@ -84,7 +84,14 @@
                         chamadoClass = 'chamado';
                         buttonsDisabled = true;
                     }
-                    card.classList.add(chamadoClass);
+                    
+                    // ==========================================================
+                    // CORREÇÃO APLICADA AQUI
+                    // Adiciona a classe apenas se a variável não estiver vazia
+                    // ==========================================================
+                    if (chamadoClass) {
+                        card.classList.add(chamadoClass);
+                    }
 
                     card.innerHTML = `
                         <h3>${atendimento.nomeAssistido}</h3>
