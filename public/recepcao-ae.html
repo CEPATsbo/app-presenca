@@ -39,7 +39,7 @@
     <nav class="nav-voltar"><a href="/dashboard.html" class="btn-voltar">⬅ Voltar para o Dashboard</a></nav>
     <div id="acesso-negado" class="container hidden"><h1>Acesso Negado</h1></div>
 
-    <div id="main-content" class="container hidden">
+    <div id="main-content" class="container">
         <form id="ficha-atendimento" onsubmit="return false;">
             
             <fieldset id="fs-dados-pessoais">
@@ -52,8 +52,8 @@
                             <ul id="search-results"></ul>
                         </div>
                     </div>
-                    <div class="form-item"><label for="telefone">TELEFONE:</label><input type="tel" id="telefone"></div>
-                    <div class="form-item"><label for="dn">DN:</label><input type="date" id="dn"></div>
+                    <div class="form-item"><label for="telefone">TELEFONE:</label><input type="tel" id="telefone" required></div>
+                    <div class="form-item"><label for="dn">DN:</label><input type="date" id="dn" required></div>
                 </div>
             </fieldset>
 
@@ -66,19 +66,20 @@
                             <button id="btn-iniciar-tratamento" type="button" class="btn btn-success btn-full">Iniciar Tratamento (1ª Vez/Reinicio)</button>
                         </div>
                     </fieldset>
-                    <fieldset id="fs-primeira-vez" class="hidden">
-                        <legend>ENTREVISTA DE 1ª VEZ OU DE REINICIO</legend>
-                        <div class="form-grid">
-                            <div class="form-item"><label for="primeira-data">DATA:</label><input type="date" id="primeira-data" disabled></div>
-                            <div class="form-item"><label for="primeira-entrevistador">ENTREVISTADOR:</label><input type="text" id="primeira-entrevistador"></div>
-                        </div>
-                        <div class="form-item" style="margin-top: 15px;"><label for="primeira-notas">Notas da Entrevista:</label><textarea id="primeira-notas" rows="4"></textarea></div>
-                        <div class="actions-grid" style="margin-top: 15px;">
-                            <button id="btn-cancelar-primeira" type="button" class="btn btn-secondary">Cancelar</button>
-                            <button id="btn-salvar-primeira" type="button" class="btn btn-success">Salvar e Iniciar Tratamento</button>
-                        </div>
-                    </fieldset>
                 </div>
+                <fieldset id="fs-primeira-vez" class="hidden">
+                    <legend>ENTREVISTA DE 1ª VEZ OU DE REINICIO</legend>
+                    <div class="form-grid">
+                        <div class="form-item"><label for="primeira-data">DATA:</label><input type="date" id="primeira-data" disabled></div>
+                        <div class="form-item"><label for="primeira-entrevistador">ENTREVISTADOR:</label><input type="text" id="primeira-entrevistador"></div>
+                    </div>
+                    <div class="form-item" style="margin-top: 15px;"><label for="primeira-notas">Notas da Entrevista:</label><textarea id="primeira-notas" rows="4"></textarea></div>
+                    <div class="actions-grid" style="margin-top: 15px;">
+                        <button id="btn-cancelar-primeira" type="button" class="btn btn-secondary">Cancelar</button>
+                        <button id="btn-salvar-primeira" type="button" class="btn btn-success">Salvar e Iniciar Tratamento</button>
+                    </div>
+                </fieldset>
+                
                 <div id="tratamento-ativo-section" class="hidden">
                      <fieldset id="fs-tratamento-ativo">
                         <legend id="legend-tratamento-ativo">Tratamento em Andamento</legend>
@@ -222,8 +223,8 @@
                     return html;
                 };
                 return `<fieldset style="border-style: dashed;"><legend>Registro da ${semanaNum}ª Semana</legend>
-                    <div class="form-grid"><div class="form-item"><label>Data:</label><input type="date" value="${hojeFormatado()}" disabled></div><div class="form-item"><label for="retorno-entrevistador">Entrevistador:</label><input type="text" id="retorno-entrevistador"></div></div>
-                    <hr><h5>Entrevista</h5><div class="form-grid"><div class="form-item"><label for="retorno-passe">Passe:</label><select id="retorno-passe">${gerarOpcoesPasse()}</select></div><div class="form-item"><label for="retorno-inicio">Início:</label><input type="time" id="retorno-inicio"></div><div class="form-item"><label for="retorno-fim">Fim:</label><input type="time" id="retorno-fim"></div></div>
+                    <div class="form-grid"><div class="form-item"><label>Data:</label><input type="date" value="${hojeFormatado()}" disabled></div><div class="form-item"><label for="retorno-entrevistador">Entrevistador:</label><input type="text" id="retorno-entrevistador" required></div></div>
+                    <hr><h5>Entrevista</h5><div class="form-grid"><div class="form-item"><label for="retorno-passe">Passe:</label><select id="retorno-passe" required>${gerarOpcoesPasse()}</select></div><div class="form-item"><label for="retorno-inicio">Início:</label><input type="time" id="retorno-inicio"></div><div class="form-item"><label for="retorno-fim">Fim:</label><input type="time" id="retorno-fim"></div></div>
                     <div class="form-item" style="margin-top:15px;"><label>Evolução:</label><div style="display:flex; gap: 15px;"><label><input type="radio" name="evolucao" value="melhorou"> Melhorou</label><label><input type="radio" name="evolucao" value="piorou"> Piorou</label><label><input type="radio" name="evolucao" value="na_mesma" checked> Na Mesma</label></div></div>
                     <hr><h5>Colegiado</h5><div class="form-grid"><div class="form-item"><label for="colegiado-de">DE:</label><select id="colegiado-de" disabled>${gerarOpcoesPasse(passeDe)}</select></div><div class="form-item"><label for="colegiado-para">PARA:</label><select id="colegiado-para">${gerarOpcoesPasse()}</select></div></div>
                     <div class="form-item" style="margin-top:15px;"><label>Encaminhamentos:</label><div class="checkbox-group" id="retorno-encaminhamentos">
@@ -232,10 +233,19 @@
                 </fieldset>`;
             };
 
+            const validarDadosPessoais = () => {
+                if (!ui.nomeInput.value || !ui.telefoneInput.value || !ui.dnInput.value) {
+                    alert("Por favor, preencha os campos Nome, Telefone e DN antes de continuar.");
+                    return false;
+                }
+                return true;
+            };
+
             const criarNovoAssistidoSeNaoExistir = async () => {
                 if (assistidoSelecionado) return assistidoSelecionado.id;
+                if (!validarDadosPessoais()) throw new Error("Dados pessoais incompletos");
+                
                 const nome = ui.nomeInput.value.trim();
-                if(!nome) { alert("O campo Nome é obrigatório para um novo cadastro."); throw new Error("Nome não preenchido"); }
                 const novoAssistidoData = { nome: nome, nome_lower: nome.toLowerCase(), telefone: ui.telefoneInput.value, dn: ui.dnInput.value, criadoEm: serverTimestamp(), criadoPor: { uid: user.uid, nome: user.displayName } };
                 const docRef = await addDoc(assistidosRef, novoAssistidoData);
                 assistidoSelecionado = { id: docRef.id, ...novoAssistidoData };
@@ -261,6 +271,20 @@
                 alert('Retorno da semana salvo com sucesso!');
                 await renderizarPainel(assistidoSelecionado);
             }
+
+            const handlePhone = (event) => {
+                let input = event.target.value.replace(/\D/g, '');
+                input = input.substring(0, 11);
+                let size = input.length;
+                if (size === 0) { input = ''; } 
+                else if (size < 3) { input = '(' + input; } 
+                else if (size < 8) { input = '(' + input.substring(0, 2) + ') ' + input.substring(2, 7); } 
+                else { input = '(' + input.substring(0, 2) + ') ' + input.substring(2, 7) + '-' + input.substring(7, 11); }
+                event.target.value = input;
+            };
+            ui.telefoneInput.addEventListener('input', handlePhone);
+
+            // --- EVENT LISTENERS DOS BOTÕES ---
 
             ui.nomeInput.addEventListener('input', async (e) => {
                 const termo = e.target.value.trim().toLowerCase();
@@ -289,8 +313,10 @@
             });
 
             ui.nomeInput.addEventListener('blur', () => { setTimeout(() => { if (!assistidoSelecionado && ui.nomeInput.value.length > 2) { ui.novoAtendimentoSection.classList.remove('hidden'); } ui.searchResults.innerHTML = ''; }, 200); });
+            
             ui.btnRegistrarAvulso.addEventListener('click', async (e) => {
                 e.target.disabled = true;
+                if (!validarDadosPessoais()) { e.target.disabled = false; return; }
                 try {
                     const assistidoId = await criarNovoAssistidoSeNaoExistir();
                     const trintaDiasAtras = new Date(); trintaDiasAtras.setDate(trintaDiasAtras.getDate() - 30);
@@ -321,6 +347,7 @@
 
             ui.btnSalvarPrimeira.addEventListener('click', async (e) => {
                 e.target.disabled = true;
+                if (!validarDadosPessoais()) { e.target.disabled = false; return; }
                 const entrevistador = ui.primeiraEntrevistador.value;
                 if (!entrevistador) { alert('O nome do entrevistador é obrigatório.'); e.target.disabled = false; return; }
                 try {
