@@ -16,25 +16,12 @@
         .cards-container { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 20px; }
         .assistido-card { background-color: white; padding: 20px; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); display: flex; flex-direction: column; gap: 15px; border-left: 5px solid #6c757d; }
         .assistido-card h3 { margin: 0; font-size: 1.5em; text-align: center; color: #333; }
-        .assistido-card .info { text-align: center; font-size: 1.1em; color: #666; }
+        .assistido-card .info { text-align: center; font-size: 1.0em; color: #666; line-height: 1.5; }
         .assistido-card .actions { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
         .assistido-card .actions .btn { width: 100%; padding: 15px; font-size: 1.1em; }
-        
-        /* NOVO ESTILO: Para indicar que a entrevista já foi chamada */
-        .entrevista-chamada {
-            border-left-color: #17a2b8; /* Azul claro */
-        }
-        
-        /* ESTILO EXISTENTE: Para indicar que o atendimento foi totalmente finalizado */
-        .passe-chamado {
-            border-left-color: #28a745; /* Verde */
-            background-color: #f8f9fa;
-            opacity: 0.8;
-        }
-        .passe-chamado h3 {
-            text-decoration: line-through;
-        }
-
+        .entrevista-chamada { border-left-color: #17a2b8; }
+        .passe-chamado { border-left-color: #28a745; background-color: #f8f9fa; opacity: 0.8; }
+        .passe-chamado h3 { text-decoration: line-through; }
     </style>
 </head>
 <body>
@@ -92,33 +79,54 @@
                     card.className = 'assistido-card';
                     card.id = `card-${atendimento.id}`;
 
-                    // ==========================================================
-                    // LÓGICA DE CONTROLE DOS BOTÕES CORRIGIDA
-                    // ==========================================================
-                    let entrevistaBtnDisabled = false;
-                    let passeBtnDisabled = false;
+                    let buttonsHtml = '';
 
-                    if (atendimento.status === 'chamado_entrevista') {
-                        entrevistaBtnDisabled = true; // Desabilita SÓ o botão da entrevista
-                        card.classList.add('entrevista-chamada'); // Adiciona estilo visual de "em andamento"
-                    } else if (atendimento.status === 'chamado_passe') {
-                        entrevistaBtnDisabled = true; // Se chamou pro passe, a entrevista já passou
-                        passeBtnDisabled = true;      // Desabilita o botão do passe
-                        card.classList.add('passe-chamado'); // Adiciona estilo visual de "finalizado"
+                    // ==========================================================
+                    // LÓGICA CORRIGIDA: VERIFICA O TIPO DE ATENDIMENTO
+                    // ==========================================================
+                    if (atendimento.tipoAtendimento === 'avulso') {
+                        // Se for Passe Avulso, mostra SÓ o botão de chamar para o passe
+                        const passeBtnDisabled = atendimento.status === 'chamado_passe';
+                        buttonsHtml = `
+                            <div class="actions" style="grid-template-columns: 1fr;"> <button class="btn btn-success btn-chamar-passe" data-id="${atendimento.id}" ${passeBtnDisabled ? 'disabled' : ''}>Chamar p/ Passe</button>
+                            </div>
+                        `;
+                        if (passeBtnDisabled) {
+                            card.classList.add('passe-chamado');
+                        }
+                    } else {
+                        // Se for tratamento normal, mantém a lógica dos dois botões
+                        let entrevistaBtnDisabled = false;
+                        let passeBtnDisabled = false;
+
+                        if (atendimento.status === 'chamado_entrevista') {
+                            entrevistaBtnDisabled = true;
+                            card.classList.add('entrevista-chamada');
+                        } else if (atendimento.status === 'chamado_passe') {
+                            entrevistaBtnDisabled = true;
+                            passeBtnDisabled = true;
+                            card.classList.add('passe-chamado');
+                        }
+                        
+                        buttonsHtml = `
+                            <div class="actions">
+                                <button class="btn btn-info btn-chamar-entrevista" data-id="${atendimento.id}" ${entrevistaBtnDisabled ? 'disabled' : ''}>Chamar p/ Entrevista</button>
+                                <button class="btn btn-success btn-chamar-passe" data-id="${atendimento.id}" ${passeBtnDisabled ? 'disabled' : ''}>Chamar p/ Passe</button>
+                            </div>
+                        `;
                     }
-                    
+
                     card.innerHTML = `
                         <h3>${atendimento.nomeAssistido}</h3>
-                        <p class="info">Passe Recomendado: <strong>${atendimento.passeRecomendado || 'N/A'}</strong></p>
-                        <div class="actions">
-                            <button class="btn btn-info btn-chamar-entrevista" data-id="${atendimento.id}" ${entrevistaBtnDisabled ? 'disabled' : ''}>Chamar p/ Entrevista</button>
-                            <button class="btn btn-success btn-chamar-passe" data-id="${atendimento.id}" ${passeBtnDisabled ? 'disabled' : ''}>Chamar p/ Passe</button>
-                        </div>
+                        <p class="info">
+                            Atendimento: <strong>${atendimento.tipoAtendimento === 'avulso' ? 'Passe Avulso' : 'Tratamento'}</strong><br>
+                            Passe Indicado: <strong>${atendimento.passeRecomendado || 'N/A'}</strong>
+                        </p>
+                        ${buttonsHtml}
                     `;
                     cardsContainer.appendChild(card);
                 });
 
-                // Adicionar listeners aos novos botões
                 document.querySelectorAll('.btn-chamar-entrevista').forEach(btn => {
                     btn.addEventListener('click', () => chamar(btn.dataset.id, 'chamado_entrevista'));
                 });
