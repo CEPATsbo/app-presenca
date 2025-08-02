@@ -5,185 +5,89 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Recepção - Atendimento Espiritual</title>
     <style>
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-            background-color: #f4f6f9;
-            margin: 0;
-            padding: 20px;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-        }
-        .container {
-            width: 100%;
-            max-width: 1200px;
-            background-color: white;
-            padding: 30px;
-            border-radius: 12px;
-            box-shadow: 0 6pxrgba(0,0,0,0.1);
-            margin-bottom: 20px;
-        }
-        .nav-voltar {
-            width: 100%;
-            max-width: 1200px;
-            margin-bottom: 20px;
-        }
-        .btn, .btn-voltar {
-            background-color: #007bff;
-            color: white;
-            border: none;
-            padding: 12px 20px;
-            border-radius: 8px;
-            font-weight: bold;
-            font-size: 1em;
-            text-decoration: none;
-            cursor: pointer;
-            transition: background-color 0.3s;
-        }
-        .btn-voltar {
-             background-color: #6c757d;
-        }
-        .btn-primary { background-color: #007bff; }
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background-color: #f4f6f9; margin: 0; padding: 20px; display: flex; flex-direction: column; align-items: center; }
+        .container { width: 100%; max-width: 1200px; background-color: white; padding: 30px; border-radius: 12px; box-shadow: 0 6px 24px rgba(0,0,0,0.1); margin-bottom: 20px; }
+        .nav-voltar { width: 100%; max-width: 1200px; margin-bottom: 20px; }
+        .btn, .btn-voltar { background-color: #007bff; color: white; border: none; padding: 12px 20px; border-radius: 8px; font-weight: bold; font-size: 1em; text-decoration: none; cursor: pointer; transition: background-color 0.3s; }
+        .btn-voltar { background-color: #6c757d; }
         .btn-success { background-color: #28a745; }
         .btn-secondary { background-color: #6c757d; }
-        .btn-danger { background-color: #dc3545; }
-        .btn:hover, .btn-voltar:hover {
-            opacity: 0.9;
-        }
-        h1, h2, h3 {
-            color: #333;
-            text-align: center;
-        }
-        .grid-container {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 30px;
-        }
-        .form-section, .info-section {
-            display: flex;
-            flex-direction: column;
-            gap: 15px;
-        }
-        .form-item {
-            display: flex;
-            flex-direction: column;
-        }
-        .form-item label {
-            margin-bottom: 5px;
-            font-weight: bold;
-            color: #555;
-        }
-        .form-item input, .form-item select {
-            padding: 12px;
-            border-radius: 6px;
-            border: 1px solid #ccc;
-            font-size: 1em;
-            width: 100%;
-            box-sizing: border-box;
-        }
-        #search-results {
-            list-style-type: none;
-            padding: 0;
-            margin-top: 10px;
-            max-height: 200px;
-            overflow-y: auto;
-            border: 1px solid #ddd;
-            border-radius: 6px;
-        }
-        #search-results li {
-            padding: 12px;
-            border-bottom: 1px solid #eee;
-            cursor: pointer;
-        }
-        #search-results li:hover {
-            background-color: #f0f0f0;
-        }
-        .selected-assistido {
-            background-color: #e9f5ff;
-            padding: 20px;
-            border-radius: 8px;
-            border: 1px solid #bce0fd;
-        }
-        .selected-assistido h3 { margin-top: 0; }
-        .atendimento-actions {
-            display: flex;
-            gap: 15px;
-            justify-content: center;
-            margin-top: 15px;
-        }
-        #fila-hoje {
-            list-style-type: decimal;
-            padding-left: 20px;
-        }
-        #fila-hoje li {
-            padding: 8px;
-            font-size: 1.1em;
-            border-bottom: 1px solid #eee;
-        }
-        .modal-overlay {
-            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-            background-color: rgba(0,0,0,0.6);
-            display: none; justify-content: center; align-items: center; z-index: 1000;
-        }
-        .modal-content {
-            background-color: white; padding: 30px; border-radius: 10px;
-            width: 90%; max-width: 500px;
-        }
-        .modal-actions {
-            display: flex; justify-content: flex-end; gap: 10px; margin-top: 20px;
-        }
-
-        @media (max-width: 900px) {
-            .grid-container { grid-template-columns: 1fr; }
-        }
+        h1, h2, h3 { color: #333; text-align: center; }
+        .form-section { display: flex; flex-direction: column; gap: 15px; }
+        .form-item { display: flex; flex-direction: column; }
+        .form-item label { margin-bottom: 5px; font-weight: bold; color: #555; }
+        .form-item input, .form-item select, .form-item textarea { padding: 12px; border-radius: 6px; border: 1px solid #ccc; font-size: 1em; width: 100%; box-sizing: border-box; }
+        #search-results { list-style-type: none; padding: 0; margin-top: 10px; max-height: 200px; overflow-y: auto; border: 1px solid #ddd; border-radius: 6px; }
+        #search-results li { padding: 12px; border-bottom: 1px solid #eee; cursor: pointer; }
+        #search-results li:hover { background-color: #f0f0f0; }
+        .selected-assistido { background-color: #e9f5ff; padding: 20px; border-radius: 8px; border: 1px solid #bce0fd; }
+        #form-atendimento { border-top: 2px solid #007bff; margin-top: 20px; padding-top: 20px; }
+        .checkbox-group { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; padding: 15px; border-radius: 6px; border: 1px solid #ddd; }
+        .checkbox-item { display: flex; align-items: center; gap: 8px; }
+        .checkbox-item input { width: auto; }
+        .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.6); display: none; justify-content: center; align-items: center; z-index: 1000; }
+        .modal-content { background-color: white; padding: 30px; border-radius: 10px; width: 90%; max-width: 500px; }
+        .modal-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 20px; }
     </style>
 </head>
 <body>
 
-    <nav class="nav-voltar">
-        <a href="/dashboard.html" class="btn-voltar">⬅ Voltar para o Dashboard</a>
-    </nav>
-
-    <div id="acesso-negado" style="display: none;" class="container">
-        <h1>Acesso Negado</h1>
-        <p>Você não tem permissão para acessar esta página. Fale com um administrador.</p>
-    </div>
+    <nav class="nav-voltar"><a href="/dashboard.html" class="btn-voltar">⬅ Voltar para o Dashboard</a></nav>
+    <div id="acesso-negado" style="display: none;" class="container"><h1>Acesso Negado</h1></div>
 
     <div id="main-content" style="display: none;">
         <div class="container">
             <h1>Recepção do Atendimento Espiritual</h1>
-            <div class="grid-container">
-                <div class="form-section">
-                    <h2>1. Buscar ou Cadastrar Assistido</h2>
+            <div class="form-section">
+                <h2>1. Buscar ou Cadastrar Assistido</h2>
+                <div class="form-item">
+                    <label for="search-nome">Digite o nome do assistido:</label>
+                    <input type="text" id="search-nome" placeholder="Comece a digitar para buscar...">
+                </div>
+                <ul id="search-results"></ul>
+                <button id="btn-novo-assistido" class="btn btn-secondary">Não encontrou? Cadastrar Novo Assistido</button>
+            </div>
+            
+            <div id="painel-assistido-selecionado" style="display: none;">
+                <div class="selected-assistido">
+                    <h3 id="nome-selecionado"></h3>
+                    <p id="info-selecionado"></p>
+                </div>
+                
+                <div id="form-atendimento">
+                    <h2>2. Registrar Atendimento</h2>
                     <div class="form-item">
-                        <label for="search-nome">Digite o nome do assistido:</label>
-                        <input type="text" id="search-nome" placeholder="Comece a digitar para buscar...">
+                        <label for="passe-recomendado">Passe Recomendado:</label>
+                        <select id="passe-recomendado">
+                            <option value="">Selecione um passe...</option>
+                            <option value="P1">P1</option>
+                            <option value="P2">P2</option>
+                            <option value="P3A">P3A</option>
+                            <option value="P3B">P3B</option>
+                            <option value="P4A">P4A</option>
+                            <option value="P4B">P4B</option>
+                            <option value="CH">CH</option>
+                        </select>
                     </div>
-                    <ul id="search-results"></ul>
-                    <button id="btn-novo-assistido" class="btn btn-secondary">Não encontrou? Cadastrar Novo Assistido</button>
-                    
-                    <hr>
-
-                    <div id="painel-assistido-selecionado" style="display: none;">
-                        <h2>2. Iniciar Atendimento</h2>
-                        <div class="selected-assistido">
-                            <h3 id="nome-selecionado"></h3>
-                            <p id="info-selecionado"></p>
-                            <div class="atendimento-actions">
-                                <button id="btn-iniciar-avulso" class="btn btn-primary">Passe Avulso</button>
-                                <button id="btn-iniciar-tratamento" class="btn btn-success">Assistência Espiritual</button>
-                            </div>
+                    <div class="form-item">
+                        <label>Outros Encaminhamentos:</label>
+                        <div id="encaminhamentos-group" class="checkbox-group">
+                             <div class="checkbox-item"><input type="checkbox" value="ENL"> <label>ENL</label></div>
+                             <div class="checkbox-item"><input type="checkbox" value="Leituras"> <label>Leituras</label></div>
+                             <div class="checkbox-item"><input type="checkbox" value="EAE"> <label>EAE</label></div>
+                             <div class="checkbox-item"><input type="checkbox" value="Voluntariado"> <label>Voluntariado</label></div>
+                             <div class="checkbox-item"><input type="checkbox" value="Médico"> <label>Médico</label></div>
+                             <div class="checkbox-item"><input type="checkbox" value="Alimento"> <label>Alimento</label></div>
+                             <div class="checkbox-item"><input type="checkbox" value="Natureza"> <label>Natureza</label></div>
+                             <div class="checkbox-item"><input type="checkbox" value="Mocidade"> <label>Mocidade</label></div>
+                             <div class="checkbox-item"><input type="checkbox" value="Evangelização"> <label>Evangelização</label></div>
                         </div>
                     </div>
-                </div>
-
-                <div class="info-section">
-                    <h2>Fila para Entrevista (Hoje)</h2>
-                    <div id="fila-container">
-                        <ul id="fila-hoje">
-                            <li>Carregando fila...</li>
-                        </ul>
+                    <div class="form-item">
+                        <label for="observacoes">Observações (se houver):</label>
+                        <textarea id="observacoes" rows="3"></textarea>
                     </div>
+                    <button id="btn-finalizar-registro" class="btn btn-success" style="width:100%; margin-top:20px; padding: 15px; font-size: 1.2em;">Adicionar à Fila de Chamada</button>
                 </div>
             </div>
         </div>
@@ -192,61 +96,43 @@
     <div id="modal-cadastro" class="modal-overlay">
         <div class="modal-content">
             <h2 id="modal-titulo">Cadastrar Novo Assistido</h2>
-            <div class="form-item">
-                <label for="modal-nome">Nome Completo:</label>
-                <input type="text" id="modal-nome" required>
-            </div>
-            <div class="form-item">
-                <label for="modal-nascimento">Data de Nascimento:</label>
-                <input type="date" id="modal-nascimento">
-            </div>
-            <div class="form-item">
-                <label for="modal-telefone">Telefone (opcional):</label>
-                <input type="tel" id="modal-telefone" placeholder="(19) 99999-9999">
-            </div>
-            <div class="modal-actions">
-                <button id="btn-cancelar-modal" class="btn btn-secondary">Cancelar</button>
-                <button id="btn-salvar-assistido" class="btn btn-success">Salvar</button>
-            </div>
+            <div class="form-item"><label for="modal-nome">Nome Completo:</label><input type="text" id="modal-nome" required></div>
+            <div class="form-item"><label for="modal-nascimento">Data de Nascimento:</label><input type="date" id="modal-nascimento"></div>
+            <div class="form-item"><label for="modal-telefone">Telefone (opcional):</label><input type="tel" id="modal-telefone"></div>
+            <div class="modal-actions"><button id="btn-cancelar-modal" class="btn btn-secondary">Cancelar</button><button id="btn-salvar-assistido" class="btn btn-success">Salvar</button></div>
         </div>
     </div>
 
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
-        import { getFirestore, collection, onSnapshot, addDoc, doc, serverTimestamp, updateDoc, query, where, orderBy, limit, getDocs, Timestamp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
+        import { getFirestore, collection, addDoc, doc, serverTimestamp, query, where, limit, getDocs, Timestamp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
+        import { getFunctions, httpsCallable } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-functions.js";
         import { protegerPagina } from '/auth.js';
-
+        
         const firebaseConfig = {
-            apiKey: "AIzaSyBV7RPjk3cFTqL-aIpflJcUojKg1ZXMLuU",
-            authDomain: "voluntarios-ativos---cepat.firebaseapp.com",
-            projectId: "voluntarios-ativos---cepat",
-            storageBucket: "voluntarios-ativos---cepat.firebasestorage.app",
-            messagingSenderId: "66122858261",
-            appId: "1:66122858261:web:7fa21f1805463b5c08331c"
-        };
-
+        apiKey: "AIzaSyBV7RPjk3cFTqL-aIpflJcUojKg1ZXMLuU",
+        authDomain: "voluntarios-ativos---cepat.firebaseapp.com",
+        projectId: "voluntarios-ativos---cepat",
+        storageBucket: "voluntarios-ativos---cepat.firebasestorage.app",
+        messagingSenderId: "66122858261",
+        appId: "1:66122858261:web:7fa21f1805463b5c08331c"
+    };
         initializeApp(firebaseConfig);
 
-        const permissoes = ['recepcionista', 'tesoureiro', 'conselheiro', 'diretor', 'super-admin'];
-        protegerPagina(permissoes)
-            .then(user => {
-                document.getElementById('main-content').style.display = 'block';
-                inicializarPagina(user);
-            })
-            .catch(error => {
-                document.getElementById('acesso-negado').style.display = 'block';
-                console.error(error.message);
-            });
+        protegerPagina(['recepcionista', 'diretor', 'tesoureiro' , 'conselheiro' ,'super-admin']).then(user => {
+            document.getElementById('main-content').style.display = 'block';
+            inicializarPagina(user);
+        }).catch(err => { document.getElementById('acesso-negado').style.display = 'block'; });
 
         function inicializarPagina(user) {
             const db = getFirestore();
+            const functions = getFunctions(undefined, 'southamerica-east1');
             const assistidosRef = collection(db, 'assistidos');
             const filaRef = collection(db, 'fila_atendimento_ae');
+            const atendimentosRef = collection(db, 'atendimentos_ae');
 
-            // --- Gerenciamento de Estado ---
             let assistidoSelecionado = null;
 
-            // --- Elementos da UI ---
             const ui = {
                 searchInput: document.getElementById('search-nome'),
                 searchResults: document.getElementById('search-results'),
@@ -254,11 +140,11 @@
                 painelAssistido: document.getElementById('painel-assistido-selecionado'),
                 nomeSelecionado: document.getElementById('nome-selecionado'),
                 infoSelecionado: document.getElementById('info-selecionado'),
-                btnIniciarAvulso: document.getElementById('btn-iniciar-avulso'),
-                btnIniciarTratamento: document.getElementById('btn-iniciar-tratamento'),
-                filaHoje: document.getElementById('fila-hoje'),
+                passeRecomendado: document.getElementById('passe-recomendado'),
+                encaminhamentosGroup: document.getElementById('encaminhamentos-group'),
+                observacoes: document.getElementById('observacoes'),
+                btnFinalizarRegistro: document.getElementById('btn-finalizar-registro'),
                 modal: document.getElementById('modal-cadastro'),
-                modalTitulo: document.getElementById('modal-titulo'),
                 modalNome: document.getElementById('modal-nome'),
                 modalNascimento: document.getElementById('modal-nascimento'),
                 modalTelefone: document.getElementById('modal-telefone'),
@@ -266,171 +152,100 @@
                 btnCancelarModal: document.getElementById('btn-cancelar-modal')
             };
 
-            // --- Funções ---
-            const resetarSelecao = () => {
+            const registrarLog = httpsCallable(functions, 'registrarLogDeAcesso');
+
+            const resetarFormulario = () => {
                 assistidoSelecionado = null;
                 ui.painelAssistido.style.display = 'none';
                 ui.searchInput.value = '';
                 ui.searchResults.innerHTML = '';
+                ui.passeRecomendado.value = '';
+                ui.observacoes.value = '';
+                ui.encaminhamentosGroup.querySelectorAll('input:checked').forEach(el => el.checked = false);
             };
 
             const selecionarAssistido = (assistido) => {
                 assistidoSelecionado = assistido;
                 ui.nomeSelecionado.textContent = assistido.nome;
-                let info = `Nasc: ${assistido.dataNascimento ? new Date(assistido.dataNascimento).toLocaleDateString() : 'N/A'}`;
+                let info = `Nasc: ${assistido.dataNascimento ? new Date(assistido.dataNascimento + 'T03:00:00Z').toLocaleDateString('pt-BR') : 'N/A'}`;
                 info += ` | Tel: ${assistido.telefone || 'N/A'}`;
                 ui.infoSelecionado.textContent = info;
                 ui.painelAssistido.style.display = 'block';
-                ui.searchResults.innerHTML = ''; // Limpa os resultados da busca
+                ui.searchResults.innerHTML = '';
             };
 
-            const abrirModal = () => {
-                ui.modal.style.display = 'flex';
-                ui.modalNome.value = ui.searchInput.value; // Pré-popula o nome com o que foi buscado
-                ui.modalNascimento.value = '';
-                ui.modalTelefone.value = '';
-            };
+            ui.searchInput.addEventListener('input', async (e) => {
+                const termo = e.target.value.trim().toLowerCase();
+                if (termo.length < 3) { ui.searchResults.innerHTML = ''; return; }
+                const q = query(assistidosRef, where('nome_lower', '>=', termo), where('nome_lower', '<=', termo + '\uf8ff'), limit(10));
+                const snapshot = await getDocs(q);
+                ui.searchResults.innerHTML = '';
+                snapshot.forEach(docSnapshot => {
+                    const assistido = { id: docSnapshot.id, ...docSnapshot.data() };
+                    const li = document.createElement('li');
+                    li.textContent = assistido.nome;
+                    li.addEventListener('click', () => selecionarAssistido(assistido));
+                    ui.searchResults.appendChild(li);
+                });
+            });
 
-            const fecharModal = () => {
+            ui.btnNovoAssistido.addEventListener('click', () => ui.modal.style.display = 'flex');
+            ui.btnCancelarModal.addEventListener('click', () => ui.modal.style.display = 'none');
+            
+            ui.btnSalvarAssistido.addEventListener('click', async () => {
+                const nome = ui.modalNome.value.trim();
+                if (!nome) { alert('O nome completo é obrigatório.'); return; }
+                const novoAssistido = {
+                    nome: nome, nome_lower: nome.toLowerCase(),
+                    dataNascimento: ui.modalNascimento.value || null,
+                    telefone: ui.modalTelefone.value || null,
+                    criadoEm: serverTimestamp(), criadoPor: { uid: user.uid, nome: user.displayName }
+                };
+                const docRef = await addDoc(assistidosRef, novoAssistido);
+                await registrarLog({ acao: 'CADASTROU_ASSISTIDO_AE', detalhes: { assistidoId: docRef.id, nome }});
+                alert('Assistido cadastrado!');
                 ui.modal.style.display = 'none';
-            };
+                selecionarAssistido({ id: docRef.id, ...novoAssistido });
+            });
 
-            const iniciarAtendimento = async (tipo) => {
-                if (!assistidoSelecionado) {
-                    alert('Por favor, selecione um assistido primeiro.');
-                    return;
-                }
-                
-                // Verifica se a pessoa já está na fila de hoje
+            ui.btnFinalizarRegistro.addEventListener('click', async () => {
+                if (!assistidoSelecionado) { alert('Selecione um assistido.'); return; }
+
                 const hoje = new Date();
                 const inicioDoDia = new Date(hoje.setHours(0, 0, 0, 0));
-                
-                const qCheck = query(filaRef, 
-                    where("assistidoId", "==", assistidoSelecionado.id),
-                    where("chegadaEm", ">=", Timestamp.fromDate(inicioDoDia))
-                );
-
+                const qCheck = query(filaRef, where("assistidoId", "==", assistidoSelecionado.id), where("chegadaEm", ">=", Timestamp.fromDate(inicioDoDia)));
                 const checkSnapshot = await getDocs(qCheck);
                 if (!checkSnapshot.empty) {
                     alert(`${assistidoSelecionado.nome} já foi encaminhado para atendimento hoje.`);
-                    resetarSelecao();
-                    return;
+                    resetarFormulario(); return;
                 }
 
-                try {
-                    await addDoc(filaRef, {
-                        assistidoId: assistidoSelecionado.id,
-                        nomeAssistido: assistidoSelecionado.nome,
-                        status: 'aguardando_entrevista', // Status inicial
-                        tipoAtendimento: tipo,
-                        chegadaEm: serverTimestamp(),
-                        recepcionista: { uid: user.uid, nome: user.displayName }
-                    });
-                    alert(`${assistidoSelecionado.nome} foi adicionado(a) à fila de atendimento!`);
-                    resetarSelecao();
-                } catch (error) {
-                    console.error("Erro ao iniciar atendimento: ", error);
-                    alert("Ocorreu um erro. Tente novamente.");
-                }
-            };
-            
-            // --- Event Listeners ---
-            ui.searchInput.addEventListener('input', async (e) => {
-                const termo = e.target.value.trim().toLowerCase();
-                if (termo.length < 3) {
-                    ui.searchResults.innerHTML = '';
-                    return;
-                }
+                const encaminhamentos = Array.from(ui.encaminhamentosGroup.querySelectorAll('input:checked')).map(cb => cb.value);
                 
-                const q = query(assistidosRef, 
-                    where('nome_lower', '>=', termo), 
-                    where('nome_lower', '<=', termo + '\uf8ff'),
-                    limit(10)
-                );
-
-                const snapshot = await getDocs(q);
-                ui.searchResults.innerHTML = '';
-                if (snapshot.empty) {
-                    ui.searchResults.innerHTML = '<li>Nenhum resultado encontrado.</li>';
-                } else {
-                    snapshot.forEach(doc => {
-                        const assistido = { id: doc.id, ...doc.data() };
-                        const li = document.createElement('li');
-                        li.textContent = assistido.nome;
-                        li.addEventListener('click', () => selecionarAssistido(assistido));
-                        ui.searchResults.appendChild(li);
-                    });
-                }
-            });
-
-            ui.btnNovoAssistido.addEventListener('click', abrirModal);
-            ui.btnCancelarModal.addEventListener('click', fecharModal);
-
-            ui.btnSalvarAssistido.addEventListener('click', async () => {
-                const nome = ui.modalNome.value.trim();
-                if (!nome) {
-                    alert('O nome completo é obrigatório.');
-                    return;
-                }
-                const novoAssistido = {
-                    nome: nome,
-                    nome_lower: nome.toLowerCase(), // Para busca case-insensitive
-                    dataNascimento: ui.modalNascimento.value || null,
-                    telefone: ui.modalTelefone.value || null,
-                    criadoEm: serverTimestamp()
-                };
-
-                try {
-                    const docRef = await addDoc(assistidosRef, novoAssistido);
-                    alert('Assistido cadastrado com sucesso!');
-                    fecharModal();
-                    // Seleciona o assistido recém-criado
-                    selecionarAssistido({ id: docRef.id, ...novoAssistido });
-                } catch (error) {
-                    console.error("Erro ao cadastrar assistido: ", error);
-                    alert('Falha ao cadastrar. Tente novamente.');
-                }
-            });
-
-            ui.btnIniciarAvulso.addEventListener('click', () => iniciarAtendimento('avulso'));
-            ui.btnIniciarTratamento.addEventListener('click', () => iniciarAtendimento('assistencia_espiritual'));
-
-
-            // --- Listeners em Tempo Real ---
-            const escutarFila = () => {
-                const hoje = new Date();
-                const inicioDoDia = new Date(hoje.setHours(0, 0, 0, 0));
-
-                const qFila = query(filaRef, 
-                    where("chegadaEm", ">=", Timestamp.fromDate(inicioDoDia)),
-                    orderBy("chegadaEm", "asc")
-                );
-
-                onSnapshot(qFila, (snapshot) => {
-                    ui.filaHoje.innerHTML = '';
-                    if (snapshot.empty) {
-                        ui.filaHoje.innerHTML = '<li>Ainda não há ninguém na fila.</li>';
-                        return;
-                    }
-                    snapshot.forEach(doc => {
-                        const item = doc.data();
-                        const li = document.createElement('li');
-                        const statusFormatado = item.status.replace('_', ' ').replace(/(^\w{1})|(\s+\w{1})/g, letra => letra.toUpperCase());
-                        li.textContent = `${item.nomeAssistido} - Status: ${statusFormatado}`;
-                        if(item.status !== 'aguardando_entrevista') {
-                            li.style.textDecoration = "line-through";
-                            li.style.color = "#888";
-                        }
-                        ui.filaHoje.appendChild(li);
-                    });
-                }, (error) => {
-                    console.error("Erro ao carregar a fila: ", error);
-                    ui.filaHoje.innerHTML = '<li>Erro ao carregar a fila.</li>';
+                // Adiciona o registro à fila que o tablet vai ler
+                await addDoc(filaRef, {
+                    assistidoId: assistidoSelecionado.id,
+                    nomeAssistido: assistidoSelecionado.nome,
+                    status: 'pronto_para_chamar', // NOVO STATUS INICIAL
+                    passeRecomendado: ui.passeRecomendado.value,
+                    chegadaEm: serverTimestamp(),
+                    recepcionista: { uid: user.uid, nome: user.displayName }
                 });
-            };
+                
+                // Salva o histórico permanente do atendimento
+                await addDoc(atendimentosRef, {
+                    assistidoId: assistidoSelecionado.id,
+                    dataAtendimento: serverTimestamp(),
+                    encaminhamentos: encaminhamentos,
+                    observacoes: ui.observacoes.value,
+                    passeRecomendado: ui.passeRecomendado.value,
+                    registradoPor: { uid: user.uid, nome: user.displayName }
+                });
 
-            // Inicia o listener da fila
-            escutarFila();
+                await registrarLog({ acao: 'REGISTROU_ATENDIMENTO_AE', detalhes: { assistidoId: assistidoSelecionado.id, nome: assistidoSelecionado.nome, passe: ui.passeRecomendado.value }});
+                alert('Atendimento registrado e enviado para a fila de chamada!');
+                resetarFormulario();
+            });
         }
     </script>
 </body>
