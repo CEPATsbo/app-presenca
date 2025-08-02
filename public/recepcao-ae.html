@@ -6,174 +6,243 @@
     <title>Recepção - Atendimento Espiritual</title>
     <style>
         body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background-color: #f4f6f9; margin: 0; padding: 20px; display: flex; flex-direction: column; align-items: center; }
-        .container { width: 100%; max-width: 1200px; background-color: white; padding: 30px; border-radius: 12px; box-shadow: 0 6px 24px rgba(0,0,0,0.1); margin-bottom: 20px; }
-        .nav-voltar { width: 100%; max-width: 1200px; margin-bottom: 20px; }
+        .container { width: 100%; max-width: 800px; background-color: white; padding: 30px; border-radius: 12px; box-shadow: 0 6px 24px rgba(0,0,0,0.1); margin-bottom: 20px; }
+        .nav-voltar { width: 100%; max-width: 800px; margin-bottom: 20px; }
         .btn, .btn-voltar { background-color: #007bff; color: white; border: none; padding: 12px 20px; border-radius: 8px; font-weight: bold; font-size: 1em; text-decoration: none; cursor: pointer; transition: background-color 0.3s; }
         .btn-voltar { background-color: #6c757d; }
         .btn-success { background-color: #28a745; }
         .btn-secondary { background-color: #6c757d; }
+        .btn-danger { background-color: #dc3545; }
+        .btn-info { background-color: #17a2b8; }
+        .btn-primary { background-color: #007bff; }
+        .btn-full { width: 100%; padding: 15px; font-size: 1.2em; }
         h1, h2, h3 { color: #333; text-align: center; }
-        .form-section { display: flex; flex-direction: column; gap: 15px; }
+        .form-section, .actions-section { display: flex; flex-direction: column; gap: 15px; }
         .form-item { display: flex; flex-direction: column; }
         .form-item label { margin-bottom: 5px; font-weight: bold; color: #555; }
         .form-item input, .form-item select, .form-item textarea { padding: 12px; border-radius: 6px; border: 1px solid #ccc; font-size: 1em; width: 100%; box-sizing: border-box; }
         #search-results { list-style-type: none; padding: 0; margin-top: 10px; max-height: 200px; overflow-y: auto; border: 1px solid #ddd; border-radius: 6px; }
         #search-results li { padding: 12px; border-bottom: 1px solid #eee; cursor: pointer; }
         #search-results li:hover { background-color: #f0f0f0; }
-        .selected-assistido { background-color: #e9f5ff; padding: 20px; border-radius: 8px; border: 1px solid #bce0fd; }
-        #form-atendimento { border-top: 2px solid #007bff; margin-top: 20px; padding-top: 20px; }
-        .checkbox-group { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; padding: 15px; border-radius: 6px; border: 1px solid #ddd; }
-        .checkbox-item { display: flex; align-items: center; gap: 8px; }
-        .checkbox-item input { width: auto; }
+        .info-box { background-color: #e9f5ff; padding: 20px; border-radius: 8px; border: 1px solid #bce0fd; }
+        .info-box h3 { margin-top: 0; }
+        .info-box p { margin-bottom: 0; }
+        .actions-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; }
+        .hidden { display: none; }
         .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.6); display: none; justify-content: center; align-items: center; z-index: 1000; }
         .modal-content { background-color: white; padding: 30px; border-radius: 10px; width: 90%; max-width: 500px; }
         .modal-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 20px; }
     </style>
 </head>
 <body>
+    <nav class="nav-voltar">
+        <a href="/dashboard.html" class="btn-voltar">⬅ Voltar para o Dashboard</a>
+    </nav>
+    <div id="acesso-negado" class="container hidden">
+        <h1>Acesso Negado</h1>
+    </div>
 
-    <nav class="nav-voltar"><a href="/dashboard.html" class="btn-voltar">⬅ Voltar para o Dashboard</a></nav>
-    <div id="acesso-negado" style="display: none;" class="container"><h1>Acesso Negado</h1></div>
+    <div id="main-content" class="container hidden">
+        <h1>Recepção do Atendimento Espiritual</h1>
+        
+        <div id="busca-section" class="form-section">
+            <h2>1. Buscar Assistido</h2>
+            <div class="form-item">
+                <label for="search-nome">Digite o nome do assistido:</label>
+                <input type="text" id="search-nome" placeholder="Comece a digitar para buscar...">
+            </div>
+            <ul id="search-results"></ul>
+            <button id="btn-novo-assistido" class="btn btn-secondary">Não encontrou? Cadastrar Novo Assistido</button>
+        </div>
 
-    <div id="main-content" style="display: none;">
-        <div class="container">
-            <h1>Recepção do Atendimento Espiritual</h1>
-            <div class="form-section">
-                <h2>1. Buscar ou Cadastrar Assistido</h2>
-                <div class="form-item">
-                    <label for="search-nome">Digite o nome do assistido:</label>
-                    <input type="text" id="search-nome" placeholder="Comece a digitar para buscar...">
-                </div>
-                <ul id="search-results"></ul>
-                <button id="btn-novo-assistido" class="btn btn-secondary">Não encontrou? Cadastrar Novo Assistido</button>
+        <div id="assistido-section" class="hidden">
+            <div class="info-box">
+                <h3 id="nome-selecionado"></h3>
+                <p id="info-selecionado"></p>
             </div>
             
-            <div id="painel-assistido-selecionado" style="display: none;">
-                <div class="selected-assistido">
-                    <h3 id="nome-selecionado"></h3>
-                    <p id="info-selecionado"></p>
+            <div id="novos-atendimentos-section" class="actions-section hidden">
+                <h2>2. Escolha o tipo de atendimento</h2>
+                <div class="actions-grid">
+                    <button id="btn-iniciar-avulso" class="btn btn-info btn-full">Registrar Passe Avulso</button>
+                    <button id="btn-iniciar-tratamento" class="btn btn-success btn-full">Iniciar Tratamento de A.E.</button>
                 </div>
-                
-                <div id="form-atendimento">
-                    <h2>2. Registrar Atendimento</h2>
-                    <div class="form-item">
-                        <label for="passe-recomendado">Passe Recomendado:</label>
-                        <select id="passe-recomendado">
-                            <option value="">Selecione um passe...</option>
-                            <option value="P1">P1</option>
-                            <option value="P2">P2</option>
-                            <option value="P3A">P3A</option>
-                            <option value="P3B">P3B</option>
-                            <option value="P4A">P4A</option>
-                            <option value="P4B">P4B</option>
-                            <option value="CH">CH</option>
-                        </select>
-                    </div>
-                    <div class="form-item">
-                        <label>Outros Encaminhamentos:</label>
-                        <div id="encaminhamentos-group" class="checkbox-group">
-                             <div class="checkbox-item"><input type="checkbox" value="ENL"> <label>ENL</label></div>
-                             <div class="checkbox-item"><input type="checkbox" value="Leituras"> <label>Leituras</label></div>
-                             <div class="checkbox-item"><input type="checkbox" value="EAE"> <label>EAE</label></div>
-                             <div class="checkbox-item"><input type="checkbox" value="Voluntariado"> <label>Voluntariado</label></div>
-                             <div class="checkbox-item"><input type="checkbox" value="Médico"> <label>Médico</label></div>
-                             <div class="checkbox-item"><input type="checkbox" value="Alimento"> <label>Alimento</label></div>
-                             <div class="checkbox-item"><input type="checkbox" value="Natureza"> <label>Natureza</label></div>
-                             <div class="checkbox-item"><input type="checkbox" value="Mocidade"> <label>Mocidade</label></div>
-                             <div class="checkbox-item"><input type="checkbox" value="Evangelização"> <label>Evangelização</label></div>
-                        </div>
-                    </div>
-                    <div class="form-item">
-                        <label for="observacoes">Observações (se houver):</label>
-                        <textarea id="observacoes" rows="3"></textarea>
-                    </div>
-                    <button id="btn-finalizar-registro" class="btn btn-success" style="width:100%; margin-top:20px; padding: 15px; font-size: 1.2em;">Adicionar à Fila de Chamada</button>
+            </div>
+
+            <div id="retorno-tratamento-section" class="actions-section hidden">
+                <h2>Tratamento em Andamento</h2>
+                <p style="text-align:center;">Este assistido possui um tratamento ativo. Registre o retorno ou finalize o ciclo.</p>
+                <div class="actions-grid">
+                    <button id="btn-registrar-retorno" class="btn btn-primary btn-full">Registrar Retorno da Semana</button>
+                    <button id="btn-dar-alta" class="btn btn-danger btn-full">Finalizar Tratamento (Dar Alta)</button>
                 </div>
             </div>
         </div>
-    </div>
 
-    <div id="modal-cadastro" class="modal-overlay">
+        <div id="form-section" class="form-section hidden">
+            <h2 id="form-titulo"></h2>
+            <div class="form-item">
+                <label for="entrevistador">Nome do Entrevistador:</label>
+                <input type="text" id="entrevistador" placeholder="Digite o nome de quem entrevistou">
+            </div>
+            <div class="form-item">
+                <label for="passe-recomendado">Passe Recomendado:</label>
+                <select id="passe-recomendado">
+                    <option value="">Selecione um passe...</option>
+                    <option value="P1">P1</option>
+                    <option value="P2">P2</option>
+                    <option value="P3A">P3A</option>
+                    <option value="P3B">P3B</option>
+                    <option value="P4A">P4A</option>
+                    <option value="P4B">P4B</option>
+                    <option value="CH">CH</option>
+                </select>
+            </div>
+            <div class="form-item">
+                <label for="observacoes">Observações do Colegiado (se houver):</label>
+                <textarea id="observacoes" rows="3"></textarea>
+            </div>
+            <button id="btn-salvar-atendimento" class="btn btn-success btn-full">Salvar e Enviar para Fila de Chamada</button>
+            <button id="btn-cancelar-formulario" class="btn btn-secondary btn-full" style="margin-top:10px;">Cancelar</button>
+        </div>
+    </div>
+    
+    <div id="modal-cadastro" class="modal-overlay hidden">
         <div class="modal-content">
-            <h2 id="modal-titulo">Cadastrar Novo Assistido</h2>
-            <div class="form-item"><label for="modal-nome">Nome Completo:</label><input type="text" id="modal-nome" required></div>
-            <div class="form-item"><label for="modal-nascimento">Data de Nascimento:</label><input type="date" id="modal-nascimento"></div>
-            <div class="form-item"><label for="modal-telefone">Telefone (opcional):</label><input type="tel" id="modal-telefone"></div>
-            <div class="modal-actions"><button id="btn-cancelar-modal" class="btn btn-secondary">Cancelar</button><button id="btn-salvar-assistido" class="btn btn-success">Salvar</button></div>
+            <h2>Cadastrar Novo Assistido</h2>
+            <div class="form-item">
+                <label for="modal-nome">Nome Completo:</label>
+                <input type="text" id="modal-nome" required>
+            </div>
+            <div class="form-item">
+                <label for="modal-nascimento">Data de Nascimento:</label>
+                <input type="date" id="modal-nascimento">
+            </div>
+            <div class="form-item">
+                <label for="modal-telefone">Telefone (opcional):</label>
+                <input type="tel" id="modal-telefone">
+            </div>
+            <div class="modal-actions">
+                <button id="btn-cancelar-modal" class="btn btn-secondary">Cancelar</button>
+                <button id="btn-salvar-assistido" class="btn btn-success">Salvar</button>
+            </div>
         </div>
     </div>
 
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
-        import { getFirestore, collection, addDoc, doc, serverTimestamp, query, where, limit, getDocs, Timestamp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
+        import { getFirestore, collection, addDoc, doc, serverTimestamp, query, where, limit, getDocs, Timestamp, orderBy, updateDoc } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
         import { getFunctions, httpsCallable } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-functions.js";
         import { protegerPagina } from '/auth.js';
-        
-        const firebaseConfig = {
-        apiKey: "AIzaSyBV7RPjk3cFTqL-aIpflJcUojKg1ZXMLuU",
-        authDomain: "voluntarios-ativos---cepat.firebaseapp.com",
-        projectId: "voluntarios-ativos---cepat",
-        storageBucket: "voluntarios-ativos---cepat.firebasestorage.app",
-        messagingSenderId: "66122858261",
-        appId: "1:66122858261:web:7fa21f1805463b5c08331c"
-    };
-        initializeApp(firebaseConfig);
 
-        protegerPagina(['recepcionista', 'diretor', 'tesoureiro' , 'conselheiro' ,'super-admin']).then(user => {
-            document.getElementById('main-content').style.display = 'block';
+        const firebaseConfig = {
+            apiKey: "AIzaSyBV7RPjk3cFTqL-aIpflJcUojKg1ZXMLuU",
+            authDomain: "voluntarios-ativos---cepat.firebaseapp.com",
+            projectId: "voluntarios-ativos---cepat",
+            storageBucket: "voluntarios-ativos---cepat.firebasestorage.app",
+            messagingSenderId: "66122858261",
+            appId: "1:66122858261:web:7fa21f1805463b5c08331c"
+        };
+        initializeApp(firebaseConfig);
+        
+        protegerPagina(['recepcionista', 'diretor', 'super-admin']).then(user => {
+            document.getElementById('main-content').classList.remove('hidden');
             inicializarPagina(user);
-        }).catch(err => { document.getElementById('acesso-negado').style.display = 'block'; });
+        }).catch(err => { 
+            document.getElementById('acesso-negado').classList.remove('hidden');
+            document.getElementById('main-content').classList.add('hidden');
+        });
 
         function inicializarPagina(user) {
             const db = getFirestore();
             const functions = getFunctions(undefined, 'southamerica-east1');
             const assistidosRef = collection(db, 'assistidos');
             const filaRef = collection(db, 'fila_atendimento_ae');
+            const tratamentosRef = collection(db, 'tratamentos_ae');
             const atendimentosRef = collection(db, 'atendimentos_ae');
+            const registrarLog = httpsCallable(functions, 'registrarLogDeAcesso');
 
             let assistidoSelecionado = null;
+            let tratamentoAtivo = null;
+            let acaoAtual = null;
 
             const ui = {
+                buscaSection: document.getElementById('busca-section'),
+                assistidoSection: document.getElementById('assistido-section'),
+                formSection: document.getElementById('form-section'),
+                novosAtendimentosSection: document.getElementById('novos-atendimentos-section'),
+                retornoTratamentoSection: document.getElementById('retorno-tratamento-section'),
+                formTitulo: document.getElementById('form-titulo'),
                 searchInput: document.getElementById('search-nome'),
                 searchResults: document.getElementById('search-results'),
                 btnNovoAssistido: document.getElementById('btn-novo-assistido'),
-                painelAssistido: document.getElementById('painel-assistido-selecionado'),
                 nomeSelecionado: document.getElementById('nome-selecionado'),
                 infoSelecionado: document.getElementById('info-selecionado'),
+                entrevistador: document.getElementById('entrevistador'),
                 passeRecomendado: document.getElementById('passe-recomendado'),
-                encaminhamentosGroup: document.getElementById('encaminhamentos-group'),
                 observacoes: document.getElementById('observacoes'),
-                btnFinalizarRegistro: document.getElementById('btn-finalizar-registro'),
+                btnSalvarAtendimento: document.getElementById('btn-salvar-atendimento'),
+                btnCancelarFormulario: document.getElementById('btn-cancelar-formulario'),
+                btnIniciarAvulso: document.getElementById('btn-iniciar-avulso'),
+                btnIniciarTratamento: document.getElementById('btn-iniciar-tratamento'),
+                btnRegistrarRetorno: document.getElementById('btn-registrar-retorno'),
+                btnDarAlta: document.getElementById('btn-dar-alta'),
                 modal: document.getElementById('modal-cadastro'),
                 modalNome: document.getElementById('modal-nome'),
                 modalNascimento: document.getElementById('modal-nascimento'),
                 modalTelefone: document.getElementById('modal-telefone'),
                 btnSalvarAssistido: document.getElementById('btn-salvar-assistido'),
-                btnCancelarModal: document.getElementById('btn-cancelar-modal')
+                btnCancelarModal: document.getElementById('btn-cancelar-modal'),
             };
 
-            const registrarLog = httpsCallable(functions, 'registrarLogDeAcesso');
-
-            const resetarFormulario = () => {
+            const resetarTudo = () => {
                 assistidoSelecionado = null;
-                ui.painelAssistido.style.display = 'none';
+                tratamentoAtivo = null;
+                acaoAtual = null;
                 ui.searchInput.value = '';
                 ui.searchResults.innerHTML = '';
+                ui.buscaSection.classList.remove('hidden');
+                ui.assistidoSection.classList.add('hidden');
+                ui.formSection.classList.add('hidden');
+                ui.entrevistador.value = '';
                 ui.passeRecomendado.value = '';
                 ui.observacoes.value = '';
-                ui.encaminhamentosGroup.querySelectorAll('input:checked').forEach(el => el.checked = false);
             };
 
-            const selecionarAssistido = (assistido) => {
+            const mostrarFormulario = (titulo, acao) => {
+                acaoAtual = acao;
+                ui.formTitulo.textContent = titulo;
+                ui.buscaSection.classList.add('hidden');
+                ui.assistidoSection.classList.add('hidden');
+                ui.formSection.classList.remove('hidden');
+                ui.entrevistador.value = '';
+                ui.passeRecomendado.value = '';
+                ui.observacoes.value = '';
+            };
+            
+            const selecionarAssistido = async (assistido) => {
                 assistidoSelecionado = assistido;
                 ui.nomeSelecionado.textContent = assistido.nome;
                 let info = `Nasc: ${assistido.dataNascimento ? new Date(assistido.dataNascimento + 'T03:00:00Z').toLocaleDateString('pt-BR') : 'N/A'}`;
                 info += ` | Tel: ${assistido.telefone || 'N/A'}`;
                 ui.infoSelecionado.textContent = info;
-                ui.painelAssistido.style.display = 'block';
                 ui.searchResults.innerHTML = '';
-            };
 
+                const qTratamento = query(tratamentosRef, where("assistidoId", "==", assistido.id), where("status", "==", "ativo"), limit(1));
+                const snapshot = await getDocs(qTratamento);
+
+                if (snapshot.empty) {
+                    tratamentoAtivo = null;
+                    ui.novosAtendimentosSection.classList.remove('hidden');
+                    ui.retornoTratamentoSection.classList.add('hidden');
+                } else {
+                    tratamentoAtivo = { id: snapshot.docs[0].id, ...snapshot.docs[0].data() };
+                    ui.novosAtendimentosSection.classList.add('hidden');
+                    ui.retornoTratamentoSection.classList.remove('hidden');
+                }
+                ui.assistidoSection.classList.remove('hidden');
+            };
+            
             ui.searchInput.addEventListener('input', async (e) => {
                 const termo = e.target.value.trim().toLowerCase();
                 if (termo.length < 3) { ui.searchResults.innerHTML = ''; return; }
@@ -189,8 +258,8 @@
                 });
             });
 
-            ui.btnNovoAssistido.addEventListener('click', () => ui.modal.style.display = 'flex');
-            ui.btnCancelarModal.addEventListener('click', () => ui.modal.style.display = 'none');
+            ui.btnNovoAssistido.addEventListener('click', () => { ui.modal.style.display = 'flex'; ui.modal.classList.remove('hidden'); });
+            ui.btnCancelarModal.addEventListener('click', () => { ui.modal.style.display = 'none'; ui.modal.classList.add('hidden'); });
             
             ui.btnSalvarAssistido.addEventListener('click', async () => {
                 const nome = ui.modalNome.value.trim();
@@ -205,46 +274,79 @@
                 await registrarLog({ acao: 'CADASTROU_ASSISTIDO_AE', detalhes: { assistidoId: docRef.id, nome }});
                 alert('Assistido cadastrado!');
                 ui.modal.style.display = 'none';
+                ui.modal.classList.add('hidden');
                 selecionarAssistido({ id: docRef.id, ...novoAssistido });
             });
 
-            ui.btnFinalizarRegistro.addEventListener('click', async () => {
-                if (!assistidoSelecionado) { alert('Selecione um assistido.'); return; }
+            const salvarEAdicionarNaFila = async () => {
+                if (!assistidoSelecionado) { alert('Erro: Nenhum assistido selecionado.'); return; }
 
                 const hoje = new Date();
                 const inicioDoDia = new Date(hoje.setHours(0, 0, 0, 0));
                 const qCheck = query(filaRef, where("assistidoId", "==", assistidoSelecionado.id), where("chegadaEm", ">=", Timestamp.fromDate(inicioDoDia)));
                 const checkSnapshot = await getDocs(qCheck);
                 if (!checkSnapshot.empty) {
-                    alert(`${assistidoSelecionado.nome} já foi encaminhado para atendimento hoje.`);
-                    resetarFormulario(); return;
+                    alert(`${assistidoSelecionado.nome} já foi adicionado à fila hoje.`); return;
                 }
 
-                const encaminhamentos = Array.from(ui.encaminhamentosGroup.querySelectorAll('input:checked')).map(cb => cb.value);
-                
-                // Adiciona o registro à fila que o tablet vai ler
-                await addDoc(filaRef, {
-                    assistidoId: assistidoSelecionado.id,
-                    nomeAssistido: assistidoSelecionado.nome,
-                    status: 'pronto_para_chamar', // NOVO STATUS INICIAL
-                    passeRecomendado: ui.passeRecomendado.value,
-                    chegadaEm: serverTimestamp(),
-                    recepcionista: { uid: user.uid, nome: user.displayName }
-                });
-                
-                // Salva o histórico permanente do atendimento
+                let passeRecomendado = ui.passeRecomendado.value;
+                if (acaoAtual === 'passe_avulso') {
+                    passeRecomendado = 'P1'; // Passe avulso é sempre P1
+                } else if (!ui.entrevistador.value || !passeRecomendado) {
+                    alert('Os campos Entrevistador e Passe Recomendado são obrigatórios.'); return;
+                }
+
+                let tratamentoId = tratamentoAtivo ? tratamentoAtivo.id : null;
+                if (acaoAtual === 'iniciar_tratamento') {
+                    const novoTratamentoRef = await addDoc(tratamentosRef, {
+                        assistidoId: assistidoSelecionado.id, dataInicio: serverTimestamp(), status: 'ativo'
+                    });
+                    tratamentoId = novoTratamentoRef.id;
+                }
+
                 await addDoc(atendimentosRef, {
-                    assistidoId: assistidoSelecionado.id,
-                    dataAtendimento: serverTimestamp(),
-                    encaminhamentos: encaminhamentos,
-                    observacoes: ui.observacoes.value,
-                    passeRecomendado: ui.passeRecomendado.value,
-                    registradoPor: { uid: user.uid, nome: user.displayName }
+                    assistidoId: assistidoSelecionado.id, tratamentoId: tratamentoId,
+                    tipo: (acaoAtual === 'passe_avulso' ? 'avulso' : 'tratamento_semanal'),
+                    dataAtendimento: serverTimestamp(), entrevistador: ui.entrevistador.value,
+                    passeRecomendado: passeRecomendado, observacoes: ui.observacoes.value
                 });
 
-                await registrarLog({ acao: 'REGISTROU_ATENDIMENTO_AE', detalhes: { assistidoId: assistidoSelecionado.id, nome: assistidoSelecionado.nome, passe: ui.passeRecomendado.value }});
+                await addDoc(filaRef, {
+                    assistidoId: assistidoSelecionado.id, nomeAssistido: assistidoSelecionado.nome,
+                    status: 'pronto_para_chamar', passeRecomendado: passeRecomendado,
+                    chegadaEm: serverTimestamp(), recepcionista: { uid: user.uid, nome: user.displayName }
+                });
+
+                await registrarLog({ acao: 'REGISTROU_ATENDIMENTO_AE', detalhes: { assistidoId: assistidoSelecionado.id, nome: assistidoSelecionado.nome, acao: acaoAtual }});
                 alert('Atendimento registrado e enviado para a fila de chamada!');
-                resetarFormulario();
+                resetarTudo();
+            };
+            
+            ui.btnIniciarAvulso.addEventListener('click', async () => {
+                const trintaDiasAtras = new Date(); trintaDiasAtras.setDate(trintaDiasAtras.getDate() - 30);
+                const qAvulso = query(atendimentosRef, where("assistidoId", "==", assistidoSelecionado.id), where("tipo", "==", "avulso"), where("dataAtendimento", ">=", Timestamp.fromDate(trintaDiasAtras)));
+                const snapshotAvulso = await getDocs(qAvulso);
+                if (!snapshotAvulso.empty) {
+                    alert('Este assistido já recebeu um passe avulso nos últimos 30 dias.'); return;
+                }
+                acaoAtual = 'passe_avulso';
+                await salvarEAdicionarNaFila();
+            });
+            
+            ui.btnIniciarTratamento.addEventListener('click', () => mostrarFormulario('Iniciar Novo Tratamento de A.E.', 'iniciar_tratamento'));
+            ui.btnRegistrarRetorno.addEventListener('click', () => mostrarFormulario('Registrar Retorno da Semana', 'retorno_tratamento'));
+            ui.btnCancelarFormulario.addEventListener('click', resetarTudo);
+            ui.btnSalvarAtendimento.addEventListener('click', salvarEAdicionarNaFila);
+
+            ui.btnDarAlta.addEventListener('click', async () => {
+                if (!tratamentoAtivo) return;
+                if (confirm(`Tem certeza que deseja dar alta e finalizar o tratamento de ${assistidoSelecionado.nome}?`)) {
+                    const tratamentoDocRef = doc(db, 'tratamentos_ae', tratamentoAtivo.id);
+                    await updateDoc(tratamentoDocRef, { status: 'concluido', dataFim: serverTimestamp() });
+                    await registrarLog({ acao: 'FINALIZOU_TRATAMENTO_AE', detalhes: { assistidoId: assistidoSelecionado.id, nome: assistidoSelecionado.nome, tratamentoId: tratamentoAtivo.id }});
+                    alert('Tratamento finalizado com sucesso!');
+                    resetarTudo();
+                }
             });
         }
     </script>
