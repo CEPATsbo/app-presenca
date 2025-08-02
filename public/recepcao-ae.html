@@ -5,34 +5,41 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Recepção - Atendimento Espiritual</title>
     <style>
+        :root { --cor-primaria: #007bff; --cor-borda: #ddd; --fundo-desabilitado: #f9f9f9; }
         body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background-color: #f4f6f9; margin: 0; padding: 20px; display: flex; flex-direction: column; align-items: center; }
         .container { width: 100%; max-width: 900px; background-color: white; padding: 30px; border-radius: 12px; box-shadow: 0 6px 24px rgba(0,0,0,0.1); margin-bottom: 20px; }
         .nav-voltar { width: 100%; max-width: 900px; margin-bottom: 20px; }
-        .btn, .btn-voltar { background-color: #007bff; color: white; border: none; padding: 12px 20px; border-radius: 8px; font-weight: bold; font-size: 1em; text-decoration: none; cursor: pointer; transition: background-color 0.3s; }
+        .btn, .btn-voltar { background-color: var(--cor-primaria); color: white; border: none; padding: 12px 20px; border-radius: 8px; font-weight: bold; font-size: 1em; text-decoration: none; cursor: pointer; transition: background-color 0.3s; }
         .btn:disabled { background-color: #ccc; cursor: not-allowed; }
         .btn-voltar { background-color: #6c757d; }
         .btn-success { background-color: #28a745; }
         .btn-secondary { background-color: #6c757d; }
         .btn-danger { background-color: #dc3545; }
         .btn-info { background-color: #17a2b8; }
-        .btn-primary { background-color: #007bff; }
         .btn-warning { background-color: #ffc107; color: #212529; }
-        .btn-full { width: 100%; }
         h1, h2, h3, h4 { color: #333; text-align: center; }
-        fieldset { border: 1px solid #ddd; border-radius: 8px; padding: 20px; margin-bottom: 20px; }
-        fieldset:disabled { background-color: #f9f9f9; opacity: 0.6; }
+        fieldset { border: 1px solid var(--cor-borda); border-radius: 8px; padding: 20px; margin-bottom: 20px; }
+        fieldset:disabled { background-color: var(--fundo-desabilitado); opacity: 0.6; }
         legend { font-weight: bold; font-size: 1.2em; color: #0056b3; padding: 0 10px; }
         .form-item { display: flex; flex-direction: column; }
         .form-item label { margin-bottom: 5px; font-weight: bold; color: #555; }
         .form-item input, .form-item select, .form-item textarea { padding: 10px; border-radius: 6px; border: 1px solid #ccc; font-size: 1em; width: 100%; box-sizing: border-box; }
         .form-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; align-items: end; }
         #search-results-container { position: relative; }
-        #search-results { list-style-type: none; padding: 0; margin: 0; position: absolute; background: white; border: 1px solid #ddd; border-top: none; width: 100%; max-height: 200px; overflow-y: auto; z-index: 10; border-radius: 0 0 6px 6px; }
+        #search-results { list-style-type: none; padding: 0; margin: 0; position: absolute; background: white; border: 1px solid var(--cor-borda); border-top: none; width: 100%; max-height: 200px; overflow-y: auto; z-index: 10; border-radius: 0 0 6px 6px; }
         #search-results li { padding: 10px; cursor: pointer; }
         #search-results li:hover { background-color: #f0f0f0; }
         .actions-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-top: 20px; }
         .hidden { display: none; }
+        .bloco-semanal { border: 1px solid var(--cor-borda); border-radius: 8px; padding: 20px; margin-bottom: 20px; background-color: #fdfdfd; }
+        .bloco-semanal h4 { margin-top: 0; }
         .bloco-semanal.falta { background-color: #fff3cd; border-color: #ffeeba; }
+        /* Estilos para o dropdown com checkboxes */
+        .multiselect { position: relative; }
+        .select-box { border: 1px solid #ccc; border-radius: 6px; padding: 10px; cursor: pointer; }
+        .checkboxes { position: absolute; background: white; border: 1px solid var(--cor-borda); border-radius: 6px; z-index: 100; max-height: 200px; overflow-y: auto; padding: 10px; }
+        .checkboxes label { display: block; padding: 5px; }
+        .checkboxes label:hover { background-color: #f0f0f0; }
     </style>
 </head>
 <body>
@@ -62,8 +69,8 @@
                     <fieldset id="fs-acoes-iniciais">
                         <legend>Novo Atendimento</legend>
                         <div class="actions-grid">
-                            <button id="btn-registrar-avulso" type="button" class="btn btn-info btn-full">Registrar Passe Avulso</button>
-                            <button id="btn-iniciar-tratamento" type="button" class="btn btn-success btn-full">Iniciar Tratamento (1ª Vez/Reinicio)</button>
+                            <button id="btn-registrar-avulso" type="button" class="btn btn-info">Registrar Passe Avulso</button>
+                            <button id="btn-iniciar-tratamento" type="button" class="btn btn-success">Iniciar Tratamento</button>
                         </div>
                     </fieldset>
                 </div>
@@ -197,18 +204,30 @@ function inicializarPagina(user) {
 
         semanasSnapshot.forEach((doc, index) => {
             const semana = doc.data();
-            if (semana.dataAtendimento) {
-                ultimaData = semana.dataAtendimento.toDate();
-            }
+            if (semana.dataAtendimento) ultimaData = semana.dataAtendimento.toDate();
+            
             const eFalta = semana.tipo === 'falta';
             const dataFormatada = ultimaData.toLocaleDateString('pt-BR');
+            const semanaNum = index + 1;
+
+            let detalhesHtml = '';
+            if (eFalta) {
+                detalhesHtml = '<p>FALTA REGISTRADA</p>';
+            } else if (semanaNum === 1) {
+                const entrevista = tratamentoAtivo.primeiraEntrevista;
+                detalhesHtml = `<p style="margin: 5px 0;"><strong>Entrevistador:</strong> ${entrevista.entrevistador || 'N/A'}</p>
+                               <p style="margin: 5px 0;"><strong>Passe Recebido:</strong> P2 (Automático)</p>
+                               <p style="margin: 5px 0;"><strong>Descrição:</strong><br>${entrevista.notas || 'N/A'}</p>`;
+            } else {
+                detalhesHtml = `<p style="margin: 5px 0;"><strong>Entrevistador:</strong> ${semana.entrevistador || 'N/A'}</p>
+                                <p style="margin: 5px 0;"><strong>Passe Recebido:</strong> ${semana.passeRecomendado || 'N/A'}</p>
+                                <p style="margin: 5px 0;"><strong>Colegiado (DE/PARA):</strong> ${semana.passeDe || 'N/A'} -> ${semana.passePara || 'N/A'}</p>
+                                <p style="margin: 5px 0;"><strong>Descrição:</strong><br>${semana.notas || 'N/A'}</p>`;
+            }
             
             const blocoHtml = `<div class="bloco-semanal ${eFalta ? 'falta' : ''}">
-                <h4>${index + 1}ª Semana (${dataFormatada}) - ${eFalta ? 'FALTA REGISTRADA' : 'PRESENÇA'}</h4>
-                ${!eFalta && index > 0 ? `<p style="margin: 5px 0;"><strong>Entrevistador:</strong> ${semana.entrevistador || 'N/A'}</p>
-                <p style="margin: 5px 0;"><strong>Passe Recebido:</strong> ${semana.passeRecomendado || 'N/A'}</p>
-                <p style="margin: 5px 0;"><strong>Colegiado (DE/PARA):</strong> ${semana.passeDe || 'N/A'} -> ${semana.passePara || 'N/A'}</p>` : ''}
-                ${!eFalta && index === 0 ? `<p style="margin: 5px 0;"><strong>Passe Recebido:</strong> P2 (Automático)</p>` : ''}
+                <h4>${semanaNum}ª Semana (${dataFormatada})</h4>
+                ${detalhesHtml}
             </div>`;
             ui.historicoSemanas.innerHTML += blocoHtml;
             if(!eFalta && semana.passePara) ultimoPassePara = semana.passePara;
@@ -224,6 +243,13 @@ function inicializarPagina(user) {
         if(btnMarcarFalta) btnMarcarFalta.addEventListener('click', marcarFalta);
         const btnAltaSemanal = document.getElementById('btn-dar-alta-semanal');
         if(btnAltaSemanal) btnAltaSemanal.addEventListener('click', darAlta);
+
+        // Adiciona funcionalidade ao dropdown customizado
+        const selectBox = document.querySelector(".select-box");
+        const checkboxes = document.getElementById("retorno-encaminhamentos-opcoes");
+        if(selectBox) {
+            selectBox.addEventListener("click", () => checkboxes.classList.toggle('hidden'));
+        }
     };
 
     const criarFormularioSemanaAtual = (semanaNum, passeDe, dataSemana) => {
@@ -243,13 +269,20 @@ function inicializarPagina(user) {
             <hr><h5>Entrevista</h5><div class="form-grid"><div class="form-item"><label for="retorno-passe">Passe:</label><select id="retorno-passe" required>${gerarOpcoesPasse()}</select></div><div class="form-item"><label for="retorno-inicio">Início:</label><input type="time" id="retorno-inicio"></div><div class="form-item"><label for="retorno-fim">Fim:</label><input type="time" id="retorno-fim"></div></div>
             <div class="form-item" style="margin-top:15px;"><label>Evolução:</label><div style="display:flex; gap: 15px;"><label><input type="radio" name="evolucao" value="melhorou"> Melhorou</label><label><input type="radio" name="evolucao" value="piorou"> Piorou</label><label><input type="radio" name="evolucao" value="na_mesma" checked> Na Mesma</label></div></div>
             <hr><h5>Colegiado</h5><div class="form-grid"><div class="form-item"><label for="colegiado-de">DE:</label><select id="colegiado-de" disabled>${gerarOpcoesPasse(passeDe)}</select></div><div class="form-item"><label for="colegiado-para">PARA:</label><select id="colegiado-para">${gerarOpcoesPasse()}</select></div></div>
-            <div class="form-item" style="margin-top:15px;"><label for="retorno-encaminhamentos">Encaminhamentos:</label><select id="retorno-encaminhamentos" multiple style="height: 120px;">
-                <option value="ENL">ENL</option><option value="Leituras">Leituras</option><option value="EAE">EAE</option><option value="Voluntariado">Voluntariado</option><option value="Médico">Médico</option><option value="Alimento">Alimento</option><option value="Natureza">Natureza</option><option value="Mocidade">Mocidade</option><option value="Evangelização">Evangelização</option></select></div>
-            <div class="form-grid" style="margin-top:15px;"><div class="form-item"><label for="colegiado-data-alta">Data da Alta:</label><input type="date" id="colegiado-data-alta"></div><div class="form-item"><label for="colegiado-resp">Responsável:</label><input type="text" id="colegiado-resp"></div></div>
+            <div class="form-item" style="margin-top:15px;"><label>Encaminhamentos:</label><div class="multiselect">
+                <div class="select-box">Selecione...</div>
+                <div id="retorno-encaminhamentos-opcoes" class="checkboxes hidden">
+                    <label><input type="checkbox" value="ENL"/> ENL</label><label><input type="checkbox" value="Leituras"/> Leituras</label>
+                    <label><input type="checkbox" value="EAE"/> EAE</label><label><input type="checkbox" value="Voluntariado"/> Voluntariado</label>
+                    <label><input type="checkbox" value="Médico"/> Médico</label><label><input type="checkbox" value="Alimento"/> Alimento</label>
+                    <label><input type="checkbox" value="Natureza"/> Natureza</label><label><input type="checkbox" value="Mocidade"/> Mocidade</label>
+                    <label><input type="checkbox" value="Evangelização"/> Evangelização</label>
+                </div></div></div>
+            <div class="form-grid" style="margin-top:15px;"><div class="form-item"><label for="colegiado-data">Data:</label><input type="date" id="colegiado-data"></div><div class="form-item"><label for="colegiado-resp">Responsável:</label><input type="text" id="colegiado-resp"></div></div>
             <div class="actions-grid" style="margin-top:20px;">${botaoAltaHtml}${botaoMarcarFaltaHtml}<button id="btn-salvar-retorno" type="button" class="btn btn-primary" style="grid-column: span 2;">Salvar Semana</button></div>
         </fieldset>`;
     };
-
+    
     const validarDadosPessoais = () => {
         if (!ui.nomeInput.value || !ui.telefoneInput.value || !ui.dnInput.value) {
             alert("Por favor, preencha os campos Nome, Telefone e DN antes de continuar.");
@@ -269,18 +302,20 @@ function inicializarPagina(user) {
         return docRef.id;
     };
 
-    async function salvarRetorno() {
+    async function salvarRetorno(e) {
+        e.target.disabled = true;
         const entrevistador = document.getElementById('retorno-entrevistador').value;
-        if(!entrevistador) { alert("O nome do entrevistador é obrigatório."); return; }
+        if(!entrevistador) { alert("O nome do entrevistador é obrigatório."); e.target.disabled = false; return; }
         const batch = writeBatch(db);
-        const selectedOptions = Array.from(document.getElementById('retorno-encaminhamentos').selectedOptions).map(opt => opt.value);
+        const encaminhamentos = Array.from(document.querySelectorAll('#retorno-encaminhamentos-opcoes input:checked')).map(cb => cb.value);
         batch.set(doc(atendimentosRef), {
             assistidoId: assistidoSelecionado.id, tratamentoId: tratamentoAtivo.id, tipo: 'tratamento_semanal', dataAtendimento: serverTimestamp(),
             entrevistador: entrevistador, passeRecomendado: document.getElementById('retorno-passe').value,
             horarioInicio: document.getElementById('retorno-inicio').value, horarioFim: document.getElementById('retorno-fim').value,
             evolucao: document.querySelector('input[name="evolucao"]:checked').value,
             passeDe: document.getElementById('colegiado-de').value, passePara: document.getElementById('colegiado-para').value,
-            encaminhamentos: selectedOptions, notas: document.getElementById('retorno-notas').value
+            encaminhamentos: encaminhamentos, notas: document.getElementById('retorno-notas').value,
+            colegiadoData: document.getElementById('colegiado-data').value, colegiadoResp: document.getElementById('colegiado-resp').value
         });
         batch.set(doc(filaRef), { assistidoId: assistidoSelecionado.id, nomeAssistido: assistidoSelecionado.nome, status: 'pronto_para_chamar', passeRecomendado: document.getElementById('retorno-passe').value, tipoAtendimento: 'tratamento_semanal', chegadaEm: serverTimestamp(), recepcionista: { uid: user.uid, nome: user.displayName } });
         await batch.commit();
@@ -318,7 +353,7 @@ function inicializarPagina(user) {
         if (!tratamentoAtivo) { e.target.disabled = false; return; }
         if (confirm(`Tem certeza que deseja dar alta e finalizar o tratamento de ${assistidoSelecionado.nome}?`)) {
             const tratamentoDocRef = doc(db, 'tratamentos_ae', tratamentoAtivo.id);
-            await updateDoc(tratamentoDocRef, { status: 'concluido', dataFim: serverTimestamp(), altaResp: document.getElementById('colegiado-resp').value, altaData: document.getElementById('colegiado-data-alta').value });
+            await updateDoc(tratamentoDocRef, { status: 'concluido', dataFim: serverTimestamp(), altaResp: document.getElementById('colegiado-resp').value, altaData: document.getElementById('colegiado-data').value });
             await registrarLog({ acao: 'FINALIZOU_TRATAMENTO_AE', detalhes: { assistidoId: assistidoSelecionado.id, tratamentoId: tratamentoAtivo.id }});
             alert('Tratamento finalizado com sucesso!');
             resetarFormulario();
