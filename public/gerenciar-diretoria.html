@@ -112,13 +112,32 @@
                 if(formContainer) formContainer.style.display = 'none';
                 if(colunaAcoes) colunaAcoes.style.display = 'none';
             }
+            
+            // Objeto para mapear nomes técnicos para nomes amigáveis
+            const mapaNomesCargos = {
+                'super-admin': 'Super Administrador',
+                'diretor': 'Diretor(a)',
+                'tesoureiro': 'Tesoureiro(a)',
+                'conselheiro': 'Conselheiro(a)',
+                'produtor-evento': 'Produtor(a) de Evento',
+                'irradiador': 'Irradiador(a)',
+                'bibliotecario': 'Bibliotecário(a)',
+                'recepcionista': 'Recepcionista (AE)',
+                'entrevistador': 'Entrevistador(a) (AE)',
+                'voluntario': 'Voluntário(a)'
+            };
 
             carregarDiretoria(user.uid, userRole);
             setupLogFilters();
 
             function carregarDiretoria(uidLogado, roleLogado) {
-                // CORREÇÃO: Adicionados os novos cargos à busca
-                const q = query(collection(db, "voluntarios"), where("role", "in", ["diretor", "super-admin", "tesoureiro", "conselheiro", "bibliotecario" , "produtor-evento", "irradiador"]));
+                // Adicionados os novos cargos à busca
+                const cargosGestao = [
+                    "diretor", "super-admin", "tesoureiro", "conselheiro", 
+                    "bibliotecario", "produtor-evento", "irradiador", 
+                    "recepcionista", "entrevistador"
+                ];
+                const q = query(collection(db, "voluntarios"), where("role", "in", cargosGestao));
                 
                 onSnapshot(q, (snapshot) => {
                     tabelaDiretoria.innerHTML = '';
@@ -135,18 +154,21 @@
                             if (v.role === 'diretor') {
                                 actionsHtml += `<button class="btn-promover-tesoureiro" data-uid="${v.authUid}" data-nome="${v.nome}">Promover a Tesoureiro</button>`;
                             }
-                            // BOTÕES DE REVOGAÇÃO PARA TODOS OS CARGOS (EXCETO SUPER-ADMIN)
-                            if (v.role === 'diretor' || v.role === 'tesoureiro' || v.role === 'bibliotecario' || v.role === 'conselheiro' || v.role === 'produtor-evento' || v.role === 'irradiador') {
+                            // Adicionada a lógica para mostrar o botão de revogar para os novos cargos
+                            if (['diretor', 'tesoureiro', 'bibliotecario', 'conselheiro', 'produtor-evento', 'irradiador', 'recepcionista', 'entrevistador'].includes(v.role)) {
                                 actionsHtml += `<button class="btn-revogar-acesso" data-uid="${v.authUid}" data-nome="${v.nome}" data-role="${v.role}">Revogar Acesso</button>`;
                             }
                         }
                         
                         const acoesTd = roleLogado === 'super-admin' ? `<td>${actionsHtml}</td>` : '';
+                        
+                        // Usando o mapa para exibir o nome amigável do cargo
+                        const nomeCargo = mapaNomesCargos[v.role] || v.role;
 
                         tr.innerHTML = `
                             <td>${v.nome}</td>
                             <td>${v.email || 'N/A'}</td>
-                            <td>${v.role}</td>
+                            <td>${nomeCargo}</td>
                             ${acoesTd}
                         `;
                         tabelaDiretoria.appendChild(tr);
@@ -167,21 +189,39 @@
                     funcaoCallable = httpsCallable(functions, 'promoverParaTesoureiro');
                     mensagemConfirmacao = `Tem certeza que deseja promover ${nome} a Tesoureiro?`;
                 } else if (e.target.classList.contains('btn-revogar-acesso')) {
-                    if (role === 'conselheiro') {
-                        funcaoCallable = httpsCallable(functions, 'revogarAcessoConselheiro');
-                        mensagemConfirmacao = `Tem certeza que deseja revogar o acesso de conselheiro de ${nome}?`;
-                    } else if (role === 'produtor-evento') {
-                        funcaoCallable = httpsCallable(functions, 'revogarAcessoProdutorEvento');
-                        mensagemConfirmacao = `Tem certeza que deseja revogar o acesso de Produtor de Evento de ${nome}?`;
-                    } else if (role === 'irradiador') {
-                        funcaoCallable = httpsCallable(functions, 'revogarAcessoIrradiador');
-                        mensagemConfirmacao = `Tem certeza que deseja revogar o acesso de Irradiador de ${nome}?`;
-                    } else if (role === 'bibliotecario') {
-                        funcaoCallable = httpsCallable(functions, 'revogarAcessoBibliotecario');
-                        mensagemConfirmacao = `Tem certeza que deseja revogar o acesso de Bibliotecario de ${nome}?`;
-                    } else {
-                        funcaoCallable = httpsCallable(functions, 'revogarAcessoDiretor');
-                        mensagemConfirmacao = `Tem certeza que deseja revogar o acesso deste membro?`;
+                    // Lógica de revogação expandida
+                    switch(role) {
+                        case 'diretor':
+                        case 'tesoureiro': // Tesoureiro também é revogado para diretor
+                            funcaoCallable = httpsCallable(functions, 'revogarAcessoDiretor');
+                            mensagemConfirmacao = `Tem certeza que deseja revogar o acesso de ${nome}? Ele(a) se tornará um voluntário padrão.`;
+                            break;
+                        case 'conselheiro':
+                            funcaoCallable = httpsCallable(functions, 'revogarAcessoConselheiro');
+                            mensagemConfirmacao = `Tem certeza que deseja revogar o acesso de conselheiro de ${nome}?`;
+                            break;
+                        case 'produtor-evento':
+                            funcaoCallable = httpsCallable(functions, 'revogarAcessoProdutorEvento');
+                            mensagemConfirmacao = `Tem certeza que deseja revogar o acesso de Produtor de Evento de ${nome}?`;
+                            break;
+                        case 'irradiador':
+                            funcaoCallable = httpsCallable(functions, 'revogarAcessoIrradiador');
+                            mensagemConfirmacao = `Tem certeza que deseja revogar o acesso de Irradiador de ${nome}?`;
+                            break;
+                        case 'bibliotecario':
+                            funcaoCallable = httpsCallable(functions, 'revogarAcessoBibliotecario');
+                            mensagemConfirmacao = `Tem certeza que deseja revogar o acesso de Bibliotecário de ${nome}?`;
+                            break;
+                        case 'recepcionista':
+                            funcaoCallable = httpsCallable(functions, 'revogarAcessoRecepcionista');
+                            mensagemConfirmacao = `Tem certeza que deseja revogar o acesso de Recepcionista de ${nome}?`;
+                            break;
+                        case 'entrevistador':
+                            funcaoCallable = httpsCallable(functions, 'revogarAcessoEntrevistador');
+                            mensagemConfirmacao = `Tem certeza que deseja revogar o acesso de Entrevistador(a) de ${nome}?`;
+                            break;
+                        default:
+                            return; // Se o cargo não for reconhecido, não faz nada
                     }
                 } else {
                     return;
@@ -223,7 +263,6 @@
 
             function setupLogFilters() {
                 const hoje = new Date();
-                // CORREÇÃO: Define a data inicial para hoje também
                 document.getElementById('log-data-fim').value = hoje.toISOString().split('T')[0];
                 document.getElementById('log-data-inicio').value = hoje.toISOString().split('T')[0];
                 btnFiltrarLogs.addEventListener('click', carregarLogsDeAuditoria);
@@ -232,9 +271,16 @@
 
             async function carregarLogsDeAuditoria() {
                 tabelaLogs.innerHTML = `<tr><td colspan="4">Carregando logs...</td></tr>`;
-                const dataInicio = new Date(document.getElementById('log-data-inicio').value);
-                const dataFim = new Date(document.getElementById('log-data-fim').value);
-                dataFim.setUTCHours(23, 59, 59, 999);
+                const dataInicioInput = document.getElementById('log-data-inicio').value;
+                const dataFimInput = document.getElementById('log-data-fim').value;
+
+                if (!dataInicioInput || !dataFimInput) {
+                    tabelaLogs.innerHTML = `<tr><td colspan="4">Por favor, selecione as datas de início e fim.</td></tr>`;
+                    return;
+                }
+                
+                const dataInicio = new Date(dataInicioInput + 'T00:00:00');
+                const dataFim = new Date(dataFimInput + 'T23:59:59');
                 
                 const q = query(collection(db, "log_auditoria"), where("timestamp", ">=", Timestamp.fromDate(dataInicio)), where("timestamp", "<=", Timestamp.fromDate(dataFim)), orderBy("timestamp", "desc"));
                 try {

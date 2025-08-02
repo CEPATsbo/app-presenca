@@ -1,0 +1,413 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Encaminhamento - Atendimento Espiritual</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: #f0f2f5;
+            margin: 0;
+            padding: 20px;
+        }
+        .container-principal {
+            width: 100%;
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+        .nav-voltar {
+            margin-bottom: 20px;
+        }
+        .btn, .btn-voltar {
+            background-color: #007bff;
+            color: white;
+            border: none;
+            padding: 12px 20px;
+            border-radius: 8px;
+            font-weight: bold;
+            font-size: 1em;
+            text-decoration: none;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+        .btn-voltar { background-color: #6c757d; }
+        .btn-success { background-color: #28a745; }
+        .btn-secondary { background-color: #6c757d; }
+        .btn-danger { background-color: #dc3545; }
+        .btn:hover, .btn-voltar:hover { opacity: 0.9; }
+        
+        h1, h2 { color: #333; text-align: center; }
+        .filas-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+            gap: 20px;
+        }
+        .fila-card {
+            background-color: white;
+            padding: 20px;
+            border-radius: 12px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+        }
+        .fila-card h2 {
+            margin-top: 0;
+            border-bottom: 2px solid #eee;
+            padding-bottom: 10px;
+            font-size: 1.5em;
+        }
+        .lista-pessoas {
+            list-style-type: none;
+            padding: 0;
+            max-height: 60vh;
+            overflow-y: auto;
+        }
+        .pessoa-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 10px;
+            background-color: #f8f9fa;
+            border: 1px solid #dee2e6;
+        }
+        .pessoa-item strong { font-size: 1.2em; }
+        
+        .modal-overlay {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background-color: rgba(0,0,0,0.7);
+            display: none; justify-content: center; align-items: center; z-index: 1000;
+        }
+        .modal-content {
+            background-color: white; padding: 30px; border-radius: 10px;
+            width: 90%; max-width: 700px;
+            max-height: 90vh;
+            overflow-y: auto;
+        }
+        .modal-content h2 { margin-top: 0; }
+        .form-grid-modal {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+        }
+        .form-item { display: flex; flex-direction: column; gap: 5px; }
+        .form-item label { font-weight: bold; color: #555; }
+        .form-item input, .form-item select, .form-item textarea {
+            padding: 12px; border-radius: 6px; border: 1px solid #ccc; font-size: 1em;
+            width: 100%; box-sizing: border-box;
+        }
+        .full-width { grid-column: 1 / -1; }
+        .checkbox-group {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 10px;
+            background-color: #f8f9fa;
+            padding: 15px;
+            border-radius: 6px;
+        }
+        .checkbox-item { display: flex; align-items: center; gap: 8px; }
+        .checkbox-item input { width: auto; }
+        .modal-actions { display: flex; justify-content: space-between; gap: 10px; margin-top: 20px; }
+    </style>
+</head>
+<body>
+
+    <div class="container-principal">
+        <nav class="nav-voltar">
+            <a href="/dashboard.html" class="btn-voltar">⬅ Voltar para o Dashboard</a>
+        </nav>
+
+        <div id="acesso-negado" style="display: none;" class="fila-card">
+            <h1>Acesso Negado</h1>
+            <p>Você não tem permissão para acessar esta página. Fale com um administrador.</p>
+        </div>
+
+        <div id="main-content" style="display: none;">
+            <h1>Painel de Encaminhamento</h1>
+            <p style="text-align:center; margin-top:-10px; margin-bottom:20px;">Visualize as filas e gerencie as entrevistas e encaminhamentos.</p>
+            
+            <div class="filas-grid">
+                <div class="fila-card">
+                    <h2>Aguardando Entrevista</h2>
+                    <ul id="lista-aguardando-entrevista" class="lista-pessoas"></ul>
+                </div>
+                <div class="fila-card">
+                    <h2>Aguardando Passe</h2>
+                    <ul id="lista-aguardando-passe" class="lista-pessoas"></ul>
+                </div>
+                 <div class="fila-card">
+                    <h2>Finalizados Hoje</h2>
+                    <ul id="lista-finalizados" class="lista-pessoas"></ul>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div id="modal-entrevista" class="modal-overlay">
+        <div class="modal-content">
+            <h2>Entrevista de <span id="modal-nome-assistido" style="color: #0056b3;"></span></h2>
+            <div class="form-grid-modal">
+                <div class="form-item full-width">
+                    <label for="passe-recomendado">Encaminhar para o Passe:</label>
+                    <select id="passe-recomendado">
+                        <option value="">Selecione um passe...</option>
+                        <option value="P1">P1 - Limpeza e Harmonização</option>
+                        <option value="P2">P2 - Fortalecimento</option>
+                        <option value="P3A">P3A - Choque Anímico</option>
+                        <option value="P4B">P4B - Desobsessivo</option>
+                        </select>
+                </div>
+                
+                <div class="form-item full-width">
+                    <label>Evolução (desde o último atendimento):</label>
+                    <select id="evolucao">
+                        <option value="na_mesma">Na mesma</option>
+                        <option value="melhorou">Melhorou</option>
+                        <option value="piorou">Piorou</option>
+                    </select>
+                </div>
+
+                <div class="form-item full-width">
+                    <label>Outros Encaminhamentos:</label>
+                    <div id="encaminhamentos-group" class="checkbox-group">
+                        <div class="checkbox-item"><input type="checkbox" value="ENL"> <label>ENL</label></div>
+                        <div class="checkbox-item"><input type="checkbox" value="Leituras"> <label>Leituras</label></div>
+                        <div class="checkbox-item"><input type="checkbox" value="EAE"> <label>EAE</label></div>
+                        <div class="checkbox-item"><input type="checkbox" value="Voluntariado"> <label>Voluntariado</label></div>
+                        <div class="checkbox-item"><input type="checkbox" value="Médico"> <label>Médico</label></div>
+                        <div class="checkbox-item"><input type="checkbox" value="Alimento"> <label>Alimento</label></div>
+                        <div class="checkbox-item"><input type="checkbox" value="Natureza"> <label>Natureza</label></div>
+                        <div class="checkbox-item"><input type="checkbox" value="Mocidade"> <label>Mocidade</label></div>
+                        <div class="checkbox-item"><input type="checkbox" value="Evangelização"> <label>Evangelização</label></div>
+                    </div>
+                </div>
+                
+                <div class="form-item full-width">
+                    <label for="observacoes">Observações do Entrevistador:</label>
+                    <textarea id="observacoes" rows="4"></textarea>
+                </div>
+            </div>
+            <div class="modal-actions">
+                <button id="btn-dar-alta" class="btn btn-danger">Dar Alta do Tratamento</button>
+                <div>
+                    <button id="btn-cancelar-modal" class="btn btn-secondary">Cancelar</button>
+                    <button id="btn-finalizar-entrevista" class="btn btn-success">Finalizar e Encaminhar</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
+        import { getFirestore, collection, onSnapshot, doc, serverTimestamp, updateDoc, query, where, orderBy, Timestamp, writeBatch } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
+        import { protegerPagina } from '/auth.js';
+
+        const firebaseConfig = {
+            apiKey: "AIzaSyBV7RPjk3cFTqL-aIpflJcUojKg1ZXMLuU",
+            authDomain: "voluntarios-ativos---cepat.firebaseapp.com",
+            projectId: "voluntarios-ativos---cepat",
+            storageBucket: "voluntarios-ativos---cepat.firebasestorage.app",
+            messagingSenderId: "66122858261",
+            appId: "1:66122858261:web:7fa21f1805463b5c08331c"
+        };
+        
+        initializeApp(firebaseConfig);
+
+        const permissoes = ['entrevistador', 'diretor', 'super-admin'];
+        protegerPagina(permissoes)
+            .then(user => {
+                document.getElementById('main-content').style.display = 'block';
+                inicializarPagina(user);
+            })
+            .catch(error => {
+                document.getElementById('acesso-negado').style.display = 'block';
+                console.error(error.message);
+            });
+
+        function inicializarPagina(user) {
+            const db = getFirestore();
+            const filaRef = collection(db, 'fila_atendimento_ae');
+            const atendimentosRef = collection(db, 'atendimentos_ae');
+
+            // --- Estado ---
+            let atendimentoEmCurso = null;
+
+            // --- UI ---
+            const ui = {
+                listaAguardandoEntrevista: document.getElementById('lista-aguardando-entrevista'),
+                listaAguardandoPasse: document.getElementById('lista-aguardando-passe'),
+                listaFinalizados: document.getElementById('lista-finalizados'),
+                modal: document.getElementById('modal-entrevista'),
+                modalNome: document.getElementById('modal-nome-assistido'),
+                btnFinalizarEntrevista: document.getElementById('btn-finalizar-entrevista'),
+                btnCancelarModal: document.getElementById('btn-cancelar-modal'),
+                btnDarAlta: document.getElementById('btn-dar-alta'),
+                passeRecomendado: document.getElementById('passe-recomendado'),
+                observacoes: document.getElementById('observacoes'),
+                evolucao: document.getElementById('evolucao'),
+                encaminhamentosGroup: document.getElementById('encaminhamentos-group')
+            };
+
+            // --- Funções ---
+            const abrirModal = (atendimento) => {
+                atendimentoEmCurso = atendimento;
+                ui.modalNome.textContent = atendimento.nomeAssistido;
+                // Limpar campos do modal
+                ui.passeRecomendado.value = '';
+                ui.observacoes.value = '';
+                ui.evolucao.value = 'na_mesma';
+                ui.encaminhamentosGroup.querySelectorAll('input[type="checkbox"]').forEach(cb => cb.checked = false);
+                ui.modal.style.display = 'flex';
+            };
+
+            const fecharModal = () => {
+                atendimentoEmCurso = null;
+                ui.modal.style.display = 'none';
+            };
+
+            const chamarParaEntrevista = async (atendimento) => {
+                const filaDocRef = doc(db, 'fila_atendimento_ae', atendimento.id);
+                try {
+                    await updateDoc(filaDocRef, {
+                        status: 'em_entrevista',
+                        'entrevistador': { uid: user.uid, nome: user.displayName || user.email }
+                    });
+                    abrirModal(atendimento);
+                } catch (error) {
+                    console.error("Erro ao chamar para entrevista:", error);
+                    alert("Falha ao chamar a pessoa. Tente novamente.");
+                }
+            };
+            
+            const finalizarAtendimento = async (acaoFinal) => {
+                if (!atendimentoEmCurso) return;
+
+                const passe = ui.passeRecomendado.value;
+                if (acaoFinal === 'encaminhar' && !passe) {
+                    alert('Por favor, selecione um passe para encaminhar.');
+                    return;
+                }
+
+                const encaminhamentos = Array.from(ui.encaminhamentosGroup.querySelectorAll('input:checked')).map(cb => cb.value);
+
+                const batch = writeBatch(db);
+
+                // 1. Atualizar o item na fila de hoje
+                const filaDocRef = doc(db, 'fila_atendimento_ae', atendimentoEmCurso.id);
+                let novoStatus = '';
+                if (acaoFinal === 'encaminhar') {
+                    novoStatus = `aguardando_passe_${passe}`;
+                } else if (acaoFinal === 'alta') {
+                    novoStatus = 'alta_tratamento';
+                }
+
+                batch.update(filaDocRef, { 
+                    status: novoStatus, 
+                    passeRecomendado: passe || null,
+                    finalizadoEm: serverTimestamp() 
+                });
+
+                // 2. Criar o registro permanente do atendimento
+                // (Apenas se for 'assistencia_espiritual', 'avulso' não gera histórico detalhado)
+                if (atendimentoEmCurso.tipoAtendimento === 'assistencia_espiritual') {
+                    const novoAtendimentoRef = doc(atendimentosRef);
+                    batch.set(novoAtendimentoRef, {
+                        assistidoId: atendimentoEmCurso.assistidoId,
+                        nomeAssistido: atendimentoEmCurso.nomeAssistido,
+                        dataAtendimento: atendimentoEmCurso.chegadaEm,
+                        tipoAtendimento: atendimentoEmCurso.tipoAtendimento,
+                        entrevistador: { uid: user.uid, nome: user.displayName || user.email },
+                        passeRecomendado: passe || null,
+                        evolucao: ui.evolucao.value,
+                        encaminhamentos: encaminhamentos,
+                        observacoes: ui.observacoes.value.trim(),
+                        statusFinal: acaoFinal, // 'encaminhar' ou 'alta'
+                    });
+                }
+                
+                try {
+                    await batch.commit();
+                    alert(`Atendimento de ${atendimentoEmCurso.nomeAssistido} finalizado com sucesso!`);
+                    fecharModal();
+                } catch (error) {
+                    console.error("Erro ao finalizar atendimento: ", error);
+                    alert("Ocorreu um erro ao salvar os dados. Tente novamente.");
+                }
+            };
+
+
+            const renderizarFila = (atendimentos) => {
+                // Limpa todas as listas
+                ui.listaAguardandoEntrevista.innerHTML = '';
+                ui.listaAguardandoPasse.innerHTML = '';
+                ui.listaFinalizados.innerHTML = '';
+                
+                const placeholders = {
+                    aguardando: 'Ninguém aguardando entrevista.',
+                    passe: 'Ninguém aguardando passe.',
+                    finalizados: 'Nenhum atendimento finalizado hoje.'
+                };
+
+                atendimentos.forEach(atendimento => {
+                    const item = document.createElement('li');
+                    item.className = 'pessoa-item';
+                    
+                    if (atendimento.status === 'aguardando_entrevista') {
+                        item.innerHTML = `<strong>${atendimento.nomeAssistido}</strong> <button data-id="${atendimento.id}" class="btn btn-success btn-chamar">Chamar</button>`;
+                        ui.listaAguardandoEntrevista.appendChild(item);
+                    } else if (atendimento.status.startsWith('aguardando_passe')) {
+                        const passe = atendimento.status.replace('aguardando_passe_', '').toUpperCase();
+                        item.innerHTML = `<strong>${atendimento.nomeAssistido}</strong> <span>➡️ Passe ${passe}</span>`;
+                        ui.listaAguardandoPasse.appendChild(item);
+                    } else if (atendimento.status !== 'em_entrevista') { // Todos os outros status finalizados
+                         item.innerHTML = `<strong>${atendimento.nomeAssistido}</strong> <span style="color: #6c757d;">${atendimento.status.replace('_', ' ').toUpperCase()}</span>`;
+                         ui.listaFinalizados.appendChild(item);
+                    }
+                });
+                
+                // Adicionar placeholders se as listas estiverem vazias
+                if (ui.listaAguardandoEntrevista.children.length === 0) ui.listaAguardandoEntrevista.innerHTML = `<li class='pessoa-item'>${placeholders.aguardando}</li>`;
+                if (ui.listaAguardandoPasse.children.length === 0) ui.listaAguardandoPasse.innerHTML = `<li class='pessoa-item'>${placeholders.passe}</li>`;
+                if (ui.listaFinalizados.children.length === 0) ui.listaFinalizados.innerHTML = `<li class='pessoa-item'>${placeholders.finalizados}</li>`;
+            
+                // Adiciona o listener para os botões "Chamar" recém-criados
+                document.querySelectorAll('.btn-chamar').forEach(button => {
+                    button.addEventListener('click', (e) => {
+                        const id = e.target.dataset.id;
+                        const atendimentoSelecionado = atendimentos.find(a => a.id === id);
+                        chamarParaEntrevista(atendimentoSelecionado);
+                    });
+                });
+            };
+
+            // --- Listener Principal ---
+            const escutarFilaDoDia = () => {
+                const hoje = new Date();
+                const inicioDoDia = new Date(hoje.setHours(0, 0, 0, 0));
+
+                const q = query(filaRef,
+                    where("chegadaEm", ">=", Timestamp.fromDate(inicioDoDia)),
+                    orderBy("chegadaEm", "asc")
+                );
+
+                onSnapshot(q, (snapshot) => {
+                    const atendimentos = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                    renderizarFila(atendimentos);
+                }, (error) => {
+                    console.error("Erro ao escutar a fila:", error);
+                    ui.listaAguardandoEntrevista.innerHTML = `<li class='pessoa-item'>Erro ao carregar a fila.</li>`;
+                });
+            };
+
+            // Listeners dos botões do modal
+            ui.btnCancelarModal.addEventListener('click', fecharModal);
+            ui.btnFinalizarEntrevista.addEventListener('click', () => finalizarAtendimento('encaminhar'));
+            ui.btnDarAlta.addEventListener('click', () => finalizarAtendimento('alta'));
+
+            // Iniciar tudo
+            escutarFilaDoDia();
+        }
+    </script>
+</body>
+</html>

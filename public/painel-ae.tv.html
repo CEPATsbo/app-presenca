@@ -1,0 +1,279 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="refresh" content="3600"> <title>Painel de Chamadas - Atendimento Espiritual</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Roboto:wght@700&display=swap');
+
+        :root {
+            --cor-fundo: #0d47a1; /* Azul escuro */
+            --cor-texto-principal: #ffeb3b; /* Amarelo */
+            --cor-texto-secundario: #ffffff;
+            --cor-fundo-historico: #0a3a82; /* Azul um pouco mais escuro */
+        }
+
+        body, html {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            background-color: var(--cor-fundo);
+            color: var(--cor-texto-principal);
+            font-family: 'Roboto', sans-serif;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px 30px;
+            font-size: 2em;
+            color: var(--cor-texto-secundario);
+        }
+        
+        #logo {
+            font-weight: bold;
+        }
+
+        .chamada-principal {
+            flex-grow: 1;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            text-align: center;
+            animation: fadeIn 1s ease-in-out;
+        }
+        
+        #nome-atual {
+            font-size: clamp(4rem, 15vw, 12rem); /* Fonte responsiva */
+            font-weight: 700;
+            margin: 0;
+            line-height: 1.1;
+        }
+        
+        #sala-atual {
+            font-size: clamp(2rem, 8vw, 7rem);
+            margin-top: 10px;
+        }
+        
+        .historico-chamadas {
+            display: flex;
+            justify-content: center;
+            gap: 20px;
+            padding: 20px;
+            width: 100%;
+            box-sizing: border-box;
+        }
+
+        .historico-item {
+            background-color: var(--cor-fundo-historico);
+            color: var(--cor-texto-secundario);
+            padding: 20px;
+            border-radius: 10px;
+            width: 100%;
+            max-width: 350px;
+            text-align: center;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+            transition: opacity 0.5s;
+        }
+        
+        .historico-item .nome {
+            font-size: 2.5em;
+            font-weight: bold;
+        }
+
+        .historico-item .sala {
+            font-size: 1.5em;
+            margin-top: 5px;
+        }
+        
+        .placeholder {
+             opacity: 0.5;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: scale(0.9); }
+            to { opacity: 1; transform: scale(1); }
+        }
+
+    </style>
+</head>
+<body>
+
+    <div class="header">
+        <span id="logo">CE Paulo de Tarso</span>
+        <span id="relogio"></span>
+    </div>
+
+    <div class="chamada-principal">
+        <h1 id="nome-atual">Aguardando...</h1>
+        <p id="sala-atual"></p>
+    </div>
+
+    <div class="historico-chamadas">
+        <div id="historico-1" class="historico-item placeholder">
+            <div class="nome">Anteriores</div>
+            <div class="sala"></div>
+        </div>
+        <div id="historico-2" class="historico-item placeholder">
+            <div class="nome"></div>
+            <div class="sala"></div>
+        </div>
+        <div id="historico-3" class="historico-item placeholder">
+            <div class="nome"></div>
+            <div class="sala"></div>
+        </div>
+    </div>
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
+        import { getFirestore, collection, onSnapshot, query, where, orderBy, limit, Timestamp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
+
+        const firebaseConfig = {
+            apiKey: "AIzaSyBV7RPjk3cFTqL-aIpflJcUojKg1ZXMLuU",
+            authDomain: "voluntarios-ativos---cepat.firebaseapp.com",
+            projectId: "voluntarios-ativos---cepat",
+            storageBucket: "voluntarios-ativos---cepat.firebasestorage.app",
+            messagingSenderId: "66122858261",
+            appId: "1:66122858261:web:7fa21f1805463b5c08331c"
+        };
+        
+        const app = initializeApp(firebaseConfig);
+        const db = getFirestore(app);
+
+        const nomeAtualEl = document.getElementById('nome-atual');
+        const salaAtualEl = document.getElementById('sala-atual');
+        const historicoItems = [
+            document.getElementById('historico-1'),
+            document.getElementById('historico-2'),
+            document.getElementById('historico-3')
+        ];
+        const chamadaPrincipalEl = document.querySelector('.chamada-principal');
+
+        // --- Mapeamento de Passes para Salas ---
+        const mapaDeSalas = {
+            'SALA 1': ['P1', 'P3A', 'P3B'],
+            'SALA 2': ['P2', 'P4A', 'P4B', 'CH']
+        };
+
+        function getSalaPorPasse(passe) {
+            if (!passe) return null;
+            for (const sala in mapaDeSalas) {
+                if (mapaDeSalas[sala].includes(passe.toUpperCase())) {
+                    return sala;
+                }
+            }
+            return null;
+        }
+
+        // --- Lógica de Exibição ---
+        function atualizarPainel(chamadas) {
+            if (chamadas.length === 0) {
+                nomeAtualEl.textContent = 'Aguardando...';
+                salaAtualEl.textContent = '';
+                return;
+            }
+
+            // A chamada mais recente é a última da lista
+            const chamadaAtual = chamadas[chamadas.length - 1];
+            const historico = chamadas.slice(0, -1).reverse(); // Inverte para pegar os mais recentes primeiro
+
+            // Atualiza a chamada principal
+            nomeAtualEl.textContent = chamadaAtual.nomeAssistido.split(' ')[0]; // Apenas o primeiro nome
+            
+            let salaDestino = '';
+            if (chamadaAtual.status === 'em_entrevista') {
+                salaDestino = 'SALA DE ENTREVISTA';
+            } else {
+                salaDestino = getSalaPorPasse(chamadaAtual.passeRecomendado) || 'Encaminhamento';
+            }
+            salaAtualEl.textContent = salaDestino;
+            
+            // Adiciona a animação
+            chamadaPrincipalEl.style.animation = 'none';
+            void chamadaPrincipalEl.offsetWidth; // Trigger reflow
+            chamadaPrincipalEl.style.animation = 'fadeIn 1s ease-in-out';
+            
+            // Tocar um som de notificação
+            const som = new Audio('/notification.mp3'); // Certifique-se de ter esse arquivo na pasta public
+            som.play().catch(e => console.log("Não foi possível tocar o som de notificação."));
+
+            // Atualiza o histórico
+            historicoItems.forEach((item, index) => {
+                const chamadaHist = historico[index];
+                const nomeEl = item.querySelector('.nome');
+                const salaEl = item.querySelector('.sala');
+
+                if (chamadaHist) {
+                    item.classList.remove('placeholder');
+                    nomeEl.textContent = chamadaHist.nomeAssistido.split(' ')[0];
+                    let salaHistDestino = '';
+                    if (chamadaHist.status === 'em_entrevista') {
+                        salaHistDestino = 'SALA DE ENTREVISTA';
+                    } else {
+                        salaHistDestino = getSalaPorPasse(chamadaHist.passeRecomendado) || '';
+                    }
+                    salaEl.textContent = salaHistDestino;
+                } else {
+                    item.classList.add('placeholder');
+                    nomeEl.textContent = '';
+                    salaEl.textContent = '';
+                }
+            });
+        }
+
+
+        // --- Listener do Firestore ---
+        function escutarChamadas() {
+            const hoje = new Date();
+            const inicioDoDia = new Date(hoje.setHours(0, 0, 0, 0));
+
+            const filaRef = collection(db, 'fila_atendimento_ae');
+            const q = query(filaRef,
+                where("chegadaEm", ">=", Timestamp.fromDate(inicioDoDia)),
+                orderBy("chegadaEm")
+            );
+
+            onSnapshot(q, (snapshot) => {
+                const chamadasValidas = [];
+                snapshot.forEach(doc => {
+                    const data = doc.data();
+                    // Consideramos uma chamada válida se estiver 'em_entrevista' ou já tiver um passe recomendado
+                    if (data.status === 'em_entrevista' || data.passeRecomendado) {
+                        chamadasValidas.push(data);
+                    }
+                });
+                
+                // Pega as últimas 4 chamadas (1 principal + 3 no histórico)
+                const ultimasChamadas = chamadasValidas.slice(-4);
+                atualizarPainel(ultimasChamadas);
+
+            }, (error) => {
+                console.error("Erro ao escutar o painel:", error);
+                nomeAtualEl.textContent = 'Erro de Conexão';
+            });
+        }
+        
+        // --- Relógio ---
+        function atualizarRelogio() {
+            const relogioEl = document.getElementById('relogio');
+            const agora = new Date();
+            const horas = String(agora.getHours()).padStart(2, '0');
+            const minutos = String(agora.getMinutes()).padStart(2, '0');
+            relogioEl.textContent = `${horas}:${minutos}`;
+        }
+
+        // Iniciar tudo
+        escutarChamadas();
+        setInterval(atualizarRelogio, 1000);
+        atualizarRelogio();
+
+    </script>
+</body>
+</html>

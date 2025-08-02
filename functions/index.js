@@ -226,6 +226,51 @@ exports.promoverParaBibliotecario = functions.region(REGIAO).https.onCall(async 
     }
 });
 
+// ===================================================================
+// NOVAS FUNÇÕES PARA ATENDIMENTO ESPIRITUAL (AE)
+// ===================================================================
+exports.promoverParaRecepcionista = functions.region(REGIAO).https.onCall(async (data, context) => {
+    if (context.auth.token.role !== 'super-admin') {
+        throw new functions.https.HttpsError('permission-denied', 'Apenas o Super Admin pode promover usuários.');
+    }
+    const uidParaPromover = data.uid;
+    if (!uidParaPromover) {
+        throw new functions.https.HttpsError('invalid-argument', 'O UID do usuário é necessário.');
+    }
+    try {
+        await admin.auth().setCustomUserClaims(uidParaPromover, { role: 'recepcionista' });
+        const userQuery = await db.collection('voluntarios').where('authUid', '==', uidParaPromover).limit(1).get();
+        if (!userQuery.empty) {
+            await userQuery.docs[0].ref.update({ role: 'recepcionista' });
+        }
+        return { success: true, message: 'Usuário promovido a Recepcionista com sucesso.' };
+    } catch (error) {
+        console.error("Erro ao promover para Recepcionista:", error);
+        throw new functions.https.HttpsError('internal', 'Erro interno ao tentar promover o usuário.');
+    }
+});
+
+exports.promoverParaEntrevistador = functions.region(REGIAO).https.onCall(async (data, context) => {
+    if (context.auth.token.role !== 'super-admin') {
+        throw new functions.https.HttpsError('permission-denied', 'Apenas o Super Admin pode promover usuários.');
+    }
+    const uidParaPromover = data.uid;
+    if (!uidParaPromover) {
+        throw new functions.https.HttpsError('invalid-argument', 'O UID do usuário é necessário.');
+    }
+    try {
+        await admin.auth().setCustomUserClaims(uidParaPromover, { role: 'entrevistador' });
+        const userQuery = await db.collection('voluntarios').where('authUid', '==', uidParaPromover).limit(1).get();
+        if (!userQuery.empty) {
+            await userQuery.docs[0].ref.update({ role: 'entrevistador' });
+        }
+        return { success: true, message: 'Usuário promovido a Entrevistador(a) com sucesso.' };
+    } catch (error) {
+        console.error("Erro ao promover para Entrevistador:", error);
+        throw new functions.https.HttpsError('internal', 'Erro interno ao tentar promover o usuário.');
+    }
+});
+
 exports.revogarAcessoDiretor = functions.region(REGIAO).https.onCall(async (data, context) => {
     if (context.auth.token.role !== 'super-admin') { throw new functions.https.HttpsError('permission-denied', 'Apenas o Super Admin pode revogar acesso.'); }
     const uidParaRevogar = data.uid;
@@ -318,6 +363,51 @@ exports.revogarAcessoBibliotecario = functions.region(REGIAO).https.onCall(async
         return { success: true, message: 'Acesso de Bibliotecário(a) revogado com sucesso.' };
     } catch (error) {
         console.error("Erro ao revogar acesso de Bibliotecário:", error);
+        throw new functions.https.HttpsError('internal', 'Erro interno ao tentar revogar o acesso.');
+    }
+});
+
+// ===================================================================
+// NOVAS FUNÇÕES PARA REVOGAR ACESSO (AE)
+// ===================================================================
+exports.revogarAcessoRecepcionista = functions.region(REGIAO).https.onCall(async (data, context) => {
+    if (context.auth.token.role !== 'super-admin') {
+        throw new functions.https.HttpsError('permission-denied', 'Apenas o Super Admin pode revogar acesso.');
+    }
+    const uidParaRevogar = data.uid;
+    if (!uidParaRevogar) {
+        throw new functions.https.HttpsError('invalid-argument', 'O UID do usuário é necessário.');
+    }
+    try {
+        await admin.auth().setCustomUserClaims(uidParaRevogar, { role: 'voluntario' });
+        const userQuery = await db.collection('voluntarios').where('authUid', '==', uidParaRevogar).limit(1).get();
+        if (!userQuery.empty) {
+            await userQuery.docs[0].ref.update({ role: 'voluntario' });
+        }
+        return { success: true, message: 'Acesso de Recepcionista revogado com sucesso.' };
+    } catch (error) {
+        console.error("Erro ao revogar acesso de Recepcionista:", error);
+        throw new functions.https.HttpsError('internal', 'Erro interno ao tentar revogar o acesso.');
+    }
+});
+
+exports.revogarAcessoEntrevistador = functions.region(REGIAO).https.onCall(async (data, context) => {
+    if (context.auth.token.role !== 'super-admin') {
+        throw new functions.https.HttpsError('permission-denied', 'Apenas o Super Admin pode revogar acesso.');
+    }
+    const uidParaRevogar = data.uid;
+    if (!uidParaRevogar) {
+        throw new functions.https.HttpsError('invalid-argument', 'O UID do usuário é necessário.');
+    }
+    try {
+        await admin.auth().setCustomUserClaims(uidParaRevogar, { role: 'voluntario' });
+        const userQuery = await db.collection('voluntarios').where('authUid', '==', uidParaRevogar).limit(1).get();
+        if (!userQuery.empty) {
+            await userQuery.docs[0].ref.update({ role: 'voluntario' });
+        }
+        return { success: true, message: 'Acesso de Entrevistador(a) revogado com sucesso.' };
+    } catch (error) {
+        console.error("Erro ao revogar acesso de Entrevistador:", error);
         throw new functions.https.HttpsError('internal', 'Erro interno ao tentar revogar o acesso.');
     }
 });

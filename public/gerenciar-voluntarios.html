@@ -35,6 +35,8 @@
         .btn-promover-produtor { background-color: #6a1b9a; color: white; border-color: #6a1b9a; }
         .btn-promover-irradiador { background-color: #00695c; color: white; border-color: #00695c; }
         .btn-promover-bibliotecario { background-color: #ef6c00; color: white; border-color: #ef6c00; }
+        .btn-promover-recepcionista { background-color: #ad1457; color: white; border-color: #ad1457; }
+        .btn-promover-entrevistador { background-color: #4a148c; color: white; border-color: #4a148c; }
         .tasv-container { text-align: center; }
         .tasv-container label { font-size: 0.8em; font-weight: bold; }
         .tasv-checkbox { transform: scale(1.5); cursor: pointer; flex-shrink: 0; }
@@ -188,6 +190,12 @@
                             if (v.role !== 'bibliotecario') {
                                 botoesPromocao += `<button data-auth-uid="${v.authUid}" data-nome="${v.nome}" class="btn-promover-bibliotecario">Promover a Bibliotecário</button>`;
                             }
+                            if (v.role !== 'recepcionista') {
+                                botoesPromocao += `<button data-auth-uid="${v.authUid}" data-nome="${v.nome}" class="btn-promover-recepcionista">Promover a Recepcionista</button>`;
+                            }
+                            if (v.role !== 'entrevistador') {
+                                botoesPromocao += `<button data-auth-uid="${v.authUid}" data-nome="${v.nome}" class="btn-promover-entrevistador">Promover a Entrevistador(a)</button>`;
+                            }
                         }
 
                         li.innerHTML = `
@@ -293,6 +301,10 @@
                             functionName = 'promoverParaIrradiador'; roleName = 'Irradiador(a)'; logAction = 'PROMOVEU_IRRADIADOR';
                         } else if (target.classList.contains('btn-promover-bibliotecario')) {
                             functionName = 'promoverParaBibliotecario'; roleName = 'Bibliotecário(a)'; logAction = 'PROMOVEU_BIBLIOTECARIO';
+                        } else if (target.classList.contains('btn-promover-recepcionista')) {
+                            functionName = 'promoverParaRecepcionista'; roleName = 'Recepcionista'; logAction = 'PROMOVEU_RECEPCIONISTA';
+                        } else if (target.classList.contains('btn-promover-entrevistador')) {
+                            functionName = 'promoverParaEntrevistador'; roleName = 'Entrevistador(a)'; logAction = 'PROMOVEU_ENTREVISTADOR';
                         }
 
                         if (functionName && confirm(`Tem certeza que deseja promover ${nome} a ${roleName}?`)) {
@@ -308,7 +320,7 @@
                                 alert(`Erro: ${error.message}`);
                             } finally {
                                 target.disabled = false;
-                                target.textContent = `Promover a ${roleName}`;
+                                // O texto será atualizado automaticamente na recarga da lista
                             }
                         }
                     }
