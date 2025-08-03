@@ -156,15 +156,10 @@ function inicializarPagina(user) {
         btnRegistrarAvulso: document.getElementById('btn-registrar-avulso'),
     };
     
-    // ==========================================================
-    // FUNÇÃO DE DATA CORRIGIDA
-    // ==========================================================
     const formatarDataParaInput = (dataObj) => {
         if (!dataObj) return '';
-        const ano = dataObj.getFullYear();
-        const mes = String(dataObj.getMonth() + 1).padStart(2, '0'); // Mês é 0-indexado
-        const dia = String(dataObj.getDate()).padStart(2, '0');
-        return `${ano}-${mes}-${dia}`;
+        const data = new Date(dataObj.getTime() - (dataObj.getTimezoneOffset() * 60000));
+        return data.toISOString().split("T")[0];
     };
 
     const resetarFormulario = () => {
@@ -183,9 +178,6 @@ function inicializarPagina(user) {
     
     const renderizarPainel = async (assistido) => {
         ui.nomeInput.disabled = true;
-        ui.telefoneInput.value = assistido.telefone || '';
-        ui.dnInput.value = assistido.dn || '';
-
         const qTratamento = query(tratamentosRef, where("assistidoId", "==", assistido.id), where("status", "==", "ativo"), limit(1));
         const snapshot = await getDocs(qTratamento);
         if (snapshot.empty) {
@@ -234,10 +226,7 @@ function inicializarPagina(user) {
                                 <p style="margin: 5px 0; white-space: pre-wrap;"><strong>Descrição:</strong>\n${semana.notas || 'N/A'}</p>`;
             }
             
-            const blocoHtml = `<div class="bloco-semanal ${eFalta ? 'falta' : ''}">
-                <h4>${semanaNum}ª Semana (${dataFormatada})</h4>
-                ${detalhesHtml}
-            </div>`;
+            const blocoHtml = `<div class="bloco-semanal ${eFalta ? 'falta' : ''}"><h4>${semanaNum}ª Semana (${dataFormatada})</h4>${detalhesHtml}</div>`;
             ui.historicoSemanas.innerHTML += blocoHtml;
             if(!eFalta && semana.passePara) ultimoPassePara = semana.passePara;
         });
@@ -253,9 +242,7 @@ function inicializarPagina(user) {
         
         const selectBox = document.querySelector(".select-box");
         if(selectBox) {
-            selectBox.addEventListener("click", () => {
-                document.getElementById("retorno-encaminhamentos-opcoes").classList.toggle('hidden');
-            });
+            selectBox.addEventListener("click", () => document.getElementById("retorno-encaminhamentos-opcoes").classList.toggle('hidden'));
         }
     };
 
@@ -267,7 +254,7 @@ function inicializarPagina(user) {
             return html;
         };
 
-        const dataFormatada = formatarDataParaInput(dataSemana); // Usando a nova função
+        const dataFormatada = formatarDataParaInput(dataSemana);
         const botaoAltaHtml = semanaNum >= 4 ? `<button id="btn-dar-alta-semanal" type="button" class="btn btn-danger">Dar Alta</button>` : '';
         const botaoMarcarFaltaHtml = semanaNum > 1 ? `<button id="btn-marcar-falta-semanal" type="button" class="btn btn-warning">Marcar Falta</button>` : '';
 
