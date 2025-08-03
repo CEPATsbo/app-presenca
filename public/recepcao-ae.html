@@ -186,9 +186,6 @@ function inicializarPagina(user) {
     
     const renderizarPainel = async (assistido) => {
         ui.nomeInput.disabled = true;
-        ui.telefoneInput.value = assistido.telefone || '';
-        ui.dnInput.value = assistido.dn || '';
-
         const qTratamento = query(tratamentosRef, where("assistidoId", "==", assistido.id), where("status", "==", "ativo"), limit(1));
         const snapshot = await getDocs(qTratamento);
         if (snapshot.empty) {
@@ -214,7 +211,7 @@ function inicializarPagina(user) {
         let ultimoPassePara = '';
         let ultimaData = tratamentoAtivo.dataInicio ? tratamentoAtivo.dataInicio.toDate() : new Date();
 
-        semanasSnapshot.forEach((doc, index) => {
+        semanasSnapshot.docs.forEach((doc, index) => {
             const semana = doc.data();
             if (semana.dataAtendimento) ultimaData = semana.dataAtendimento.toDate();
             
@@ -368,7 +365,6 @@ function inicializarPagina(user) {
     }
     
     ui.telefoneInput.addEventListener('input', (e) => handlePhone(e));
-
     ui.nomeInput.addEventListener('input', async (e) => {
         const termo = e.target.value.trim().toLowerCase();
         if (termo.length < 3) { if (assistidoSelecionado) resetarFormulario(); ui.searchResults.innerHTML = ''; return; }
@@ -382,6 +378,8 @@ function inicializarPagina(user) {
             li.addEventListener('click', () => {
                 assistidoSelecionado = assistido;
                 ui.nomeInput.value = assistido.nome;
+                ui.telefoneInput.value = assistido.telefone || '';
+                ui.dnInput.value = assistido.dn || '';
                 ui.searchResults.innerHTML = '';
                 renderizarPainel(assistido);
             });
