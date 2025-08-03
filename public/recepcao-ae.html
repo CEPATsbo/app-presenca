@@ -103,347 +103,348 @@
 
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
-import { getFirestore, collection, addDoc, doc, serverTimestamp, query, where, limit, getDocs, Timestamp, orderBy, updateDoc, increment, writeBatch } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
-import { getFunctions, httpsCallable } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-functions.js";
-import { protegerPagina } from '/auth.js';
-
-const firebaseConfig = {
-    apiKey: "AIzaSyBV7RPjk3cFTqL-aIpflJcUojKg1ZXMLuU",
-    authDomain: "voluntarios-ativos---cepat.firebaseapp.com",
-    projectId: "voluntarios-ativos---cepat",
-    storageBucket: "voluntarios-ativos---cepat.firebasestorage.app",
-    messagingSenderId: "66122858261",
-    appId: "1:66122858261:web:7fa21f1805463b5c08331c"
-};
-initializeApp(firebaseConfig);
-
-const formatarDataParaInput = (dataObj) => {
-    if (!dataObj) return '';
-    const data = new Date(dataObj.getTime() - (dataObj.getTimezoneOffset() * 60000));
-    return data.toISOString().split("T")[0];
-};
-
-const handlePhone = (event) => {
-    let input = event.target.value.replace(/\D/g, '');
-    input = input.substring(0, 11);
-    if (input.length > 2) input = `(${input.substring(0, 2)}) ${input.substring(2)}`;
-    if (input.length > 9) input = `${input.substring(0, 10)}-${input.substring(10)}`;
-    event.target.value = input;
-};
-
-protegerPagina(['recepcionista', 'diretor', 'super-admin']).then(user => {
-    document.getElementById('main-content').classList.remove('hidden');
-    inicializarPagina(user);
-}).catch(err => { 
-    console.error("Erro de permissão:", err);
-    document.getElementById('acesso-negado').classList.remove('hidden');
-    document.getElementById('main-content').classList.add('hidden');
-});
-
-function inicializarPagina(user) {
-    const db = getFirestore();
-    const functions = getFunctions(undefined, 'southamerica-east1');
-    const assistidosRef = collection(db, 'assistidos');
-    const filaRef = collection(db, 'fila_atendimento_ae');
-    const tratamentosRef = collection(db, 'tratamentos_ae');
-    const atendimentosRef = collection(db, 'atendimentos_ae');
-    const registrarLog = httpsCallable(functions, 'registrarLogDeAcesso');
-
-    let assistidoSelecionado = null;
-    let tratamentoAtivo = null;
-
-    const ui = {
-        nomeInput: document.getElementById('nome'),
-        telefoneInput: document.getElementById('telefone'),
-        dnInput: document.getElementById('dn'),
-        searchResults: document.getElementById('search-results'),
-        novoAtendimentoSection: document.getElementById('novo-atendimento-section'),
-        fsPrimeiraVez: document.getElementById('fs-primeira-vez'),
-        btnIniciarTratamento: document.getElementById('btn-iniciar-tratamento'),
-        btnCancelarPrimeira: document.getElementById('btn-cancelar-primeira'),
-        btnSalvarPrimeira: document.getElementById('btn-salvar-primeira'),
-        tratamentoAtivoSection: document.getElementById('tratamento-ativo-section'),
-        legendTratamentoAtivo: document.getElementById('legend-tratamento-ativo'),
-        historicoSemanas: document.getElementById('historico-semanas'),
-        formRetornoSemana: document.getElementById('form-retorno-semana'),
-        btnLimpar: document.getElementById('btn-limpar'),
-        btnRegistrarAvulso: document.getElementById('btn-registrar-avulso'),
-    };
-    
-    const resetarFormulario = () => {
-        assistidoSelecionado = null;
-        tratamentoAtivo = null;
-        ui.nomeInput.value = '';
-        ui.telefoneInput.value = '';
-        ui.dnInput.value = '';
-        ui.searchResults.innerHTML = '';
-        ui.novoAtendimentoSection.classList.add('hidden');
-        ui.fsPrimeiraVez.classList.add('hidden');
-        ui.tratamentoAtivoSection.classList.add('hidden');
-        ui.nomeInput.disabled = false;
-        ui.nomeInput.focus();
-    };
-    
-    const renderizarPainel = async (assistido) => {
-        ui.nomeInput.disabled = true;
-        const qTratamento = query(tratamentosRef, where("assistidoId", "==", assistido.id), where("status", "==", "ativo"), limit(1));
-        const snapshot = await getDocs(qTratamento);
-        if (snapshot.empty) {
-            tratamentoAtivo = null;
-            ui.tratamentoAtivoSection.classList.add('hidden');
-            ui.novoAtendimentoSection.classList.remove('hidden');
-        } else {
-            tratamentoAtivo = { id: snapshot.docs[0].id, ...snapshot.docs[0].data() };
-            ui.novoAtendimentoSection.classList.add('hidden');
-            ui.tratamentoAtivoSection.classList.remove('hidden');
-            await renderizarHistoricoEFormularioAtual();
-        }
-    };
-
-    const renderizarHistoricoEFormularioAtual = async () => {
-        const faltas = tratamentoAtivo.faltas_acumuladas || 0;
-        ui.legendTratamentoAtivo.textContent = `Tratamento em Andamento (Faltas: ${faltas} de 2)`;
+        import { getFirestore, collection, addDoc, doc, serverTimestamp, query, where, limit, getDocs, Timestamp, orderBy, updateDoc, increment, writeBatch } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
+        import { getFunctions, httpsCallable } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-functions.js";
+        import { protegerPagina } from '/auth.js';
         
-        const qSemanas = query(atendimentosRef, where("tratamentoId", "==", tratamentoAtivo.id), orderBy("dataAtendimento", "asc"));
-        const semanasSnapshot = await getDocs(qSemanas);
-        ui.historicoSemanas.innerHTML = '';
+        const firebaseConfig = {
+            apiKey: "AIzaSyBV7RPjk3cFTqL-aIpflJcUojKg1ZXMLuU",
+            authDomain: "voluntarios-ativos---cepat.firebaseapp.com",
+            projectId: "voluntarios-ativos---cepat",
+            storageBucket: "voluntarios-ativos---cepat.firebasestorage.app",
+            messagingSenderId: "66122858261",
+            appId: "1:66122858261:web:7fa21f1805463b5c08331c"
+        };
+        initializeApp(firebaseConfig);
         
-        let ultimoPassePara = '';
-        let ultimaData = tratamentoAtivo.dataInicio ? tratamentoAtivo.dataInicio.toDate() : new Date();
-
-        semanasSnapshot.docs.forEach((doc, index) => {
-            const semana = doc.data();
-            if (semana.dataAtendimento) ultimaData = semana.dataAtendimento.toDate();
-            
-            const eFalta = semana.tipo === 'falta';
-            const dataFormatada = ultimaData.toLocaleDateString('pt-BR');
-            const semanaNum = index + 1;
-
-            let detalhesHtml = '';
-            if (eFalta) {
-                detalhesHtml = '<p>FALTA REGISTRADA</p>';
-            } else if (semanaNum === 1 && tratamentoAtivo.primeiraEntrevista) {
-                const entrevista = tratamentoAtivo.primeiraEntrevista;
-                detalhesHtml = `<p style="margin: 5px 0;"><strong>Entrevistador:</strong> ${entrevista.entrevistador || 'N/A'}</p>
-                               <p style="margin: 5px 0;"><strong>Passe Recebido:</strong> P2 (Automático)</p>
-                               <p style="margin: 5px 0; white-space: pre-wrap;"><strong>Descrição:</strong>\n${entrevista.notas || 'N/A'}</p>`;
-            } else {
-                detalhesHtml = `<p style="margin: 5px 0;"><strong>Entrevistador:</strong> ${semana.entrevistador || 'N/A'}</p>
-                                <p style="margin: 5px 0;"><strong>Passe Recebido:</strong> ${semana.passeRecomendado || 'N/A'}</p>
-                                <p style="margin: 5px 0;"><strong>Colegiado (DE/PARA):</strong> ${semana.passeDe || 'N/A'} -> ${semana.passePara || 'N/A'}</p>
-                                <p style="margin: 5px 0; white-space: pre-wrap;"><strong>Descrição:</strong>\n${semana.notas || 'N/A'}</p>`;
-            }
-            
-            const blocoHtml = `<div class="bloco-semanal ${eFalta ? 'falta' : ''}"><h4>${semanaNum}ª Semana (${dataFormatada})</h4>${detalhesHtml}</div>`;
-            ui.historicoSemanas.innerHTML += blocoHtml;
-            if(!eFalta && semana.passePara) ultimoPassePara = semana.passePara;
-        });
-        
-        const dataProximaSemana = new Date(ultimaData);
-        dataProximaSemana.setDate(dataProximaSemana.getDate() + 7);
-
-        ui.formRetornoSemana.innerHTML = criarFormularioSemanaAtual(semanasSnapshot.size + 1, ultimoPassePara || 'P2', dataProximaSemana);
-        
-        document.getElementById('btn-salvar-retorno')?.addEventListener('click', salvarRetorno);
-        document.getElementById('btn-marcar-falta-semanal')?.addEventListener('click', marcarFalta);
-        document.getElementById('btn-dar-alta-semanal')?.addEventListener('click', darAlta);
-        
-        const selectBox = document.querySelector(".select-box");
-        if(selectBox) {
-            selectBox.addEventListener("click", () => document.getElementById("retorno-encaminhamentos-opcoes").classList.toggle('hidden'));
-        }
-    };
-
-    const criarFormularioSemanaAtual = (semanaNum, passeDe, dataSemana) => {
-        const gerarOpcoesPasse = (selecionado = '') => {
-            const passes = ['P1', 'P2', 'P3A', 'P3B', 'P4A', 'P4B', 'CH'];
-            let html = '<option value="">Selecione...</option>';
-            passes.forEach(p => { html += `<option value="${p}" ${p === selecionado ? 'selected' : ''}>${p}</option>`; });
-            return html;
+        const formatarDataParaInput = (dataObj) => {
+            if (!dataObj) return '';
+            const data = new Date(dataObj.getTime() - (dataObj.getTimezoneOffset() * 60000));
+            return data.toISOString().split("T")[0];
         };
 
-        const dataFormatada = formatarDataParaInput(dataSemana);
-        const botaoAltaHtml = semanaNum >= 4 ? `<button id="btn-dar-alta-semanal" type="button" class="btn btn-danger">Dar Alta</button>` : '';
-        const botaoMarcarFaltaHtml = semanaNum > 1 ? `<button id="btn-marcar-falta-semanal" type="button" class="btn btn-warning">Marcar Falta</button>` : '';
+        const handlePhone = (event) => {
+            let input = event.target.value.replace(/\D/g, '');
+            input = input.substring(0, 11);
+            if (input.length > 2) input = `(${input.substring(0, 2)}) ${input.substring(2)}`;
+            if (input.length > 9) input = `${input.substring(0, 10)}-${input.substring(10)}`;
+            event.target.value = input;
+        };
 
-        return `<fieldset style="border-style: dashed;"><legend>Registro da ${semanaNum}ª Semana</legend>
-            <div class="form-grid"><div class="form-item"><label>Data:</label><input type="date" value="${dataFormatada}" disabled></div><div class="form-item"><label for="retorno-entrevistador">Entrevistador:</label><input type="text" id="retorno-entrevistador" required></div></div>
-            <div class="form-item" style="margin-top: 15px;"><label for="retorno-notas">Descrição da Entrevista:</label><textarea id="retorno-notas" rows="4"></textarea></div>
-            <hr><h5>Entrevista</h5><div class="form-grid"><div class="form-item"><label for="retorno-passe">Passe:</label><select id="retorno-passe" required>${gerarOpcoesPasse()}</select></div><div class="form-item"><label for="retorno-inicio">Início:</label><input type="time" id="retorno-inicio"></div><div class="form-item"><label for="retorno-fim">Fim:</label><input type="time" id="retorno-fim"></div></div>
-            <div class="form-item" style="margin-top:15px;"><label>Evolução:</label><div style="display:flex; gap: 15px;"><label><input type="radio" name="evolucao" value="melhorou"> Melhorou</label><label><input type="radio" name="evolucao" value="piorou"> Piorou</label><label><input type="radio" name="evolucao" value="na_mesma" checked> Na Mesma</label></div></div>
-            <hr><h5>Colegiado</h5><div class="form-grid"><div class="form-item"><label for="colegiado-de">DE:</label><select id="colegiado-de" disabled>${gerarOpcoesPasse(passeDe)}</select></div><div class="form-item"><label for="colegiado-para">PARA:</label><select id="colegiado-para">${gerarOpcoesPasse()}</select></div></div>
-            <div class="form-item" style="margin-top:15px;"><label>Encaminhamentos:</label><div class="multiselect">
-                <div class="select-box" tabindex="0">Selecione...</div>
-                <div id="retorno-encaminhamentos-opcoes" class="checkboxes hidden">
-                    <label><input type="checkbox" value="ENL"/> ENL</label><label><input type="checkbox" value="Leituras"/> Leituras</label>
-                    <label><input type="checkbox" value="EAE"/> EAE</label><label><input type="checkbox" value="Voluntariado"/> Voluntariado</label>
-                    <label><input type="checkbox" value="Médico"/> Médico</label><label><input type="checkbox" value="Alimento"/> Alimento</label>
-                    <label><input type="checkbox" value="Natureza"/> Natureza</label><label><input type="checkbox" value="Mocidade"/> Mocidade</label>
-                    <label><input type="checkbox" value="Evangelização"/> Evangelização</label>
-                </div></div></div>
-            <div class="form-grid" style="margin-top:15px;"><div class="form-item"><label for="colegiado-data">Data:</label><input type="date" id="colegiado-data"></div><div class="form-item"><label for="colegiado-resp">Responsável:</label><input type="text" id="colegiado-resp"></div></div>
-            <div class="actions-grid" style="margin-top:20px;">${botaoAltaHtml}${botaoMarcarFaltaHtml}<button id="btn-salvar-retorno" type="button" class="btn btn-primary" style="grid-column: span 2;">Salvar Semana</button></div>
-        </fieldset>`;
-    };
-    
-    const validarDadosPessoais = () => {
-        if (!ui.nomeInput.value || !ui.telefoneInput.value || !ui.dnInput.value) {
-            alert("Por favor, preencha os campos Nome, Telefone e DN antes de continuar.");
-            return false;
-        }
-        return true;
-    };
-
-    const criarNovoAssistidoSeNaoExistir = async () => {
-        if (assistidoSelecionado) return assistidoSelecionado.id;
-        if (!validarDadosPessoais()) throw new Error("Dados pessoais incompletos");
-        const nome = ui.nomeInput.value.trim();
-        const novoAssistidoData = { nome: nome, nome_lower: nome.toLowerCase(), telefone: ui.telefoneInput.value, dn: ui.dnInput.value, criadoEm: serverTimestamp(), criadoPor: { uid: user.uid, nome: user.displayName } };
-        const docRef = await addDoc(assistidosRef, novoAssistidoData);
-        assistidoSelecionado = { id: docRef.id, ...novoAssistidoData };
-        await registrarLog({ acao: 'CADASTROU_ASSISTIDO_AE', detalhes: { assistidoId: docRef.id, nome }});
-        return docRef.id;
-    };
-
-    async function salvarRetorno(e) {
-        e.target.disabled = true;
-        const entrevistador = document.getElementById('retorno-entrevistador').value;
-        if(!entrevistador) { alert("O nome do entrevistador é obrigatório."); e.target.disabled = false; return; }
-        const batch = writeBatch(db);
-        const encaminhamentos = Array.from(document.querySelectorAll('#retorno-encaminhamentos-opcoes input:checked')).map(cb => cb.value);
-        batch.set(doc(atendimentosRef), {
-            assistidoId: assistidoSelecionado.id, tratamentoId: tratamentoAtivo.id, tipo: 'tratamento_semanal', dataAtendimento: serverTimestamp(),
-            entrevistador: entrevistador, passeRecomendado: document.getElementById('retorno-passe').value,
-            horarioInicio: document.getElementById('retorno-inicio').value, horarioFim: document.getElementById('retorno-fim').value,
-            evolucao: document.querySelector('input[name="evolucao"]:checked').value,
-            passeDe: document.getElementById('colegiado-de').value, passePara: document.getElementById('colegiado-para').value,
-            encaminhamentos: encaminhamentos, notas: document.getElementById('retorno-notas').value,
-            colegiadoData: document.getElementById('colegiado-data').value, colegiadoResp: document.getElementById('colegiado-resp').value
+        protegerPagina(['recepcionista', 'diretor', 'super-admin']).then(user => {
+            document.getElementById('main-content').classList.remove('hidden');
+            inicializarPagina(user);
+        }).catch(err => { 
+            console.error("Erro de permissão:", err);
+            document.getElementById('acesso-negado').classList.remove('hidden');
+            document.getElementById('main-content').classList.add('hidden');
         });
-        batch.set(doc(filaRef), { assistidoId: assistidoSelecionado.id, nomeAssistido: assistidoSelecionado.nome, status: 'pronto_para_chamar', passeRecomendado: document.getElementById('retorno-passe').value, tipoAtendimento: 'tratamento_semanal', chegadaEm: serverTimestamp(), recepcionista: { uid: user.uid, nome: user.displayName } });
-        await batch.commit();
-        await registrarLog({ acao: 'REGISTROU_RETORNO_AE', detalhes: { assistidoId: assistidoSelecionado.id, tratamentoId: tratamentoAtivo.id }});
-        alert('Retorno da semana salvo com sucesso!');
-        await renderizarPainel(assistidoSelecionado);
-    }
 
-    async function marcarFalta(e) {
-        e.target.disabled = true;
-        if (!tratamentoAtivo) { e.target.disabled = false; return; }
-        if (confirm(`Confirmar uma falta para ${assistidoSelecionado.nome}?`)) {
-            const tratamentoDocRef = doc(db, 'tratamentos_ae', tratamentoAtivo.id);
-            const novoTotalFaltas = (tratamentoAtivo.faltas_acumuladas || 0) + 1;
-            const batch = writeBatch(db);
-            batch.update(tratamentoDocRef, { faltas_acumuladas: increment(1) });
-            batch.set(doc(atendimentosRef), { assistidoId: assistidoSelecionado.id, tratamentoId: tratamentoAtivo.id, tipo: 'falta', dataAtendimento: serverTimestamp() });
-            if (novoTotalFaltas > 2) {
-                batch.update(tratamentoDocRef, { status: 'encerrado_por_falta' });
+        function inicializarPagina(user) {
+            const db = getFirestore();
+            const functions = getFunctions(undefined, 'southamerica-east1');
+            const assistidosRef = collection(db, 'assistidos');
+            const filaRef = collection(db, 'fila_atendimento_ae');
+            const tratamentosRef = collection(db, 'tratamentos_ae');
+            const atendimentosRef = collection(db, 'atendimentos_ae');
+            const registrarLog = httpsCallable(functions, 'registrarLogDeAcesso');
+
+            let assistidoSelecionado = null;
+            let tratamentoAtivo = null;
+
+            const ui = {
+                nomeInput: document.getElementById('nome'),
+                telefoneInput: document.getElementById('telefone'),
+                dnInput: document.getElementById('dn'),
+                searchResults: document.getElementById('search-results'),
+                novoAtendimentoSection: document.getElementById('novo-atendimento-section'),
+                fsPrimeiraVez: document.getElementById('fs-primeira-vez'),
+                btnIniciarTratamento: document.getElementById('btn-iniciar-tratamento'),
+                btnCancelarPrimeira: document.getElementById('btn-cancelar-primeira'),
+                btnSalvarPrimeira: document.getElementById('btn-salvar-primeira'),
+                tratamentoAtivoSection: document.getElementById('tratamento-ativo-section'),
+                legendTratamentoAtivo: document.getElementById('legend-tratamento-ativo'),
+                historicoSemanas: document.getElementById('historico-semanas'),
+                formRetornoSemana: document.getElementById('form-retorno-semana'),
+                btnLimpar: document.getElementById('btn-limpar'),
+                btnRegistrarAvulso: document.getElementById('btn-registrar-avulso'),
+            };
+            
+            const resetarFormulario = () => {
+                assistidoSelecionado = null;
+                tratamentoAtivo = null;
+                ui.nomeInput.value = '';
+                ui.telefoneInput.value = '';
+                ui.dnInput.value = '';
+                ui.searchResults.innerHTML = '';
+                ui.novoAtendimentoSection.classList.add('hidden');
+                ui.fsPrimeiraVez.classList.add('hidden');
+                ui.tratamentoAtivoSection.classList.add('hidden');
+                ui.nomeInput.disabled = false;
+                ui.nomeInput.focus();
+            };
+            
+            const renderizarPainel = async (assistido) => {
+                ui.nomeInput.disabled = true;
+                const qTratamento = query(tratamentosRef, where("assistidoId", "==", assistido.id), where("status", "==", "ativo"), limit(1));
+                const snapshot = await getDocs(qTratamento);
+                if (snapshot.empty) {
+                    tratamentoAtivo = null;
+                    ui.tratamentoAtivoSection.classList.add('hidden');
+                    ui.novoAtendimentoSection.classList.remove('hidden');
+                } else {
+                    tratamentoAtivo = { id: snapshot.docs[0].id, ...snapshot.docs[0].data() };
+                    ui.novoAtendimentoSection.classList.add('hidden');
+                    ui.tratamentoAtivoSection.classList.remove('hidden');
+                    await renderizarHistoricoEFormularioAtual();
+                }
+            };
+
+            const renderizarHistoricoEFormularioAtual = async () => {
+                const faltas = tratamentoAtivo.faltas_acumuladas || 0;
+                ui.legendTratamentoAtivo.textContent = `Tratamento em Andamento (Faltas: ${faltas} de 2)`;
+                
+                const qSemanas = query(atendimentosRef, where("tratamentoId", "==", tratamentoAtivo.id), orderBy("dataAtendimento", "asc"));
+                const semanasSnapshot = await getDocs(qSemanas);
+                ui.historicoSemanas.innerHTML = '';
+                
+                let ultimoPassePara = '';
+                let ultimaData = tratamentoAtivo.dataInicio ? tratamentoAtivo.dataInicio.toDate() : new Date();
+
+                semanasSnapshot.forEach((doc, index) => {
+                    const semana = doc.data();
+                    if (semana.dataAtendimento) ultimaData = semana.dataAtendimento.toDate();
+                    
+                    const eFalta = semana.tipo === 'falta';
+                    const dataFormatada = ultimaData.toLocaleDateString('pt-BR');
+                    const semanaNum = index + 1;
+
+                    let detalhesHtml = '';
+                    if (eFalta) {
+                        detalhesHtml = '<p>FALTA REGISTRADA</p>';
+                    } else if (semanaNum === 1 && tratamentoAtivo.primeiraEntrevista) {
+                        const entrevista = tratamentoAtivo.primeiraEntrevista;
+                        detalhesHtml = `<p style="margin: 5px 0;"><strong>Entrevistador:</strong> ${entrevista.entrevistador || 'N/A'}</p>
+                                    <p style="margin: 5px 0;"><strong>Passe Recebido:</strong> P2 (Automático)</p>
+                                    <p style="margin: 5px 0; white-space: pre-wrap;"><strong>Descrição:</strong>\n${entrevista.notas || 'N/A'}</p>`;
+                    } else {
+                        detalhesHtml = `<p style="margin: 5px 0;"><strong>Entrevistador:</strong> ${semana.entrevistador || 'N/A'}</p>
+                                        <p style="margin: 5px 0;"><strong>Passe Recebido:</strong> ${semana.passeRecomendado || 'N/A'}</p>
+                                        <p style="margin: 5px 0;"><strong>Colegiado (DE/PARA):</strong> ${semana.passeDe || 'N/A'} -> ${semana.passePara || 'N/A'}</p>
+                                        <p style="margin: 5px 0; white-space: pre-wrap;"><strong>Descrição:</strong>\n${semana.notas || 'N/A'}</p>`;
+                    }
+                    
+                    const blocoHtml = `<div class="bloco-semanal ${eFalta ? 'falta' : ''}"><h4>${semanaNum}ª Semana (${dataFormatada})</h4>${detalhesHtml}</div>`;
+                    ui.historicoSemanas.innerHTML += blocoHtml;
+                    if(!eFalta && semana.passePara) ultimoPassePara = semana.passePara;
+                });
+                
+                const dataProximaSemana = new Date(ultimaData);
+                dataProximaSemana.setDate(dataProximaSemana.getDate() + 7);
+
+                ui.formRetornoSemana.innerHTML = criarFormularioSemanaAtual(semanasSnapshot.size + 1, ultimoPassePara || 'P2', dataProximaSemana);
+                
+                document.getElementById('btn-salvar-retorno')?.addEventListener('click', salvarRetorno);
+                document.getElementById('btn-marcar-falta-semanal')?.addEventListener('click', marcarFalta);
+                document.getElementById('btn-dar-alta-semanal')?.addEventListener('click', darAlta);
+                
+                const selectBox = document.querySelector(".select-box");
+                if(selectBox) {
+                    selectBox.addEventListener("click", () => document.getElementById("retorno-encaminhamentos-opcoes").classList.toggle('hidden'));
+                }
+            };
+
+            const criarFormularioSemanaAtual = (semanaNum, passeDe, dataSemana) => {
+                const gerarOpcoesPasse = (selecionado = '') => {
+                    const passes = ['P1', 'P2', 'P3A', 'P3B', 'P4A', 'P4B', 'CH'];
+                    let html = '<option value="">Selecione...</option>';
+                    passes.forEach(p => { html += `<option value="${p}" ${p === selecionado ? 'selected' : ''}>${p}</option>`; });
+                    return html;
+                };
+
+                const dataFormatada = formatarDataParaInput(dataSemana);
+                const botaoAltaHtml = semanaNum >= 4 ? `<button id="btn-dar-alta-semanal" type="button" class="btn btn-danger">Dar Alta</button>` : '';
+                const botaoMarcarFaltaHtml = semanaNum > 1 ? `<button id="btn-marcar-falta-semanal" type="button" class="btn btn-warning">Marcar Falta</button>` : '';
+
+                return `<fieldset style="border-style: dashed;"><legend>Registro da ${semanaNum}ª Semana</legend>
+                    <div class="form-grid"><div class="form-item"><label>Data:</label><input type="date" value="${dataFormatada}" disabled></div><div class="form-item"><label for="retorno-entrevistador">Entrevistador:</label><input type="text" id="retorno-entrevistador" required></div></div>
+                    <div class="form-item" style="margin-top: 15px;"><label for="retorno-notas">Descrição da Entrevista:</label><textarea id="retorno-notas" rows="4"></textarea></div>
+                    <hr><h5>Entrevista</h5><div class="form-grid"><div class="form-item"><label for="retorno-passe">Passe:</label><select id="retorno-passe" required>${gerarOpcoesPasse()}</select></div><div class="form-item"><label for="retorno-inicio">Início:</label><input type="time" id="retorno-inicio"></div><div class="form-item"><label for="retorno-fim">Fim:</label><input type="time" id="retorno-fim"></div></div>
+                    <div class="form-item" style="margin-top:15px;"><label>Evolução:</label><div style="display:flex; gap: 15px;"><label><input type="radio" name="evolucao" value="melhorou"> Melhorou</label><label><input type="radio" name="evolucao" value="piorou"> Piorou</label><label><input type="radio" name="evolucao" value="na_mesma" checked> Na Mesma</label></div></div>
+                    <hr><h5>Colegiado</h5><div class="form-grid"><div class="form-item"><label for="colegiado-de">DE:</label><select id="colegiado-de" disabled>${gerarOpcoesPasse(passeDe)}</select></div><div class="form-item"><label for="colegiado-para">PARA:</label><select id="colegiado-para">${gerarOpcoesPasse()}</select></div></div>
+                    <div class="form-item" style="margin-top:15px;"><label>Encaminhamentos:</label><div class="multiselect">
+                        <div class="select-box" tabindex="0">Selecione...</div>
+                        <div id="retorno-encaminhamentos-opcoes" class="checkboxes hidden">
+                            <label><input type="checkbox" value="ENL"/> ENL</label><label><input type="checkbox" value="Leituras"/> Leituras</label>
+                            <label><input type="checkbox" value="EAE"/> EAE</label><label><input type="checkbox" value="Voluntariado"/> Voluntariado</label>
+                            <label><input type="checkbox" value="Médico"/> Médico</label><label><input type="checkbox" value="Alimento"/> Alimento</label>
+                            <label><input type="checkbox" value="Natureza"/> Natureza</label><label><input type="checkbox" value="Mocidade"/> Mocidade</label>
+                            <label><input type="checkbox" value="Evangelização"/> Evangelização</label>
+                        </div></div></div>
+                    <div class="form-grid" style="margin-top:15px;"><div class="form-item"><label for="colegiado-data">Data:</label><input type="date" id="colegiado-data"></div><div class="form-item"><label for="colegiado-resp">Responsável:</label><input type="text" id="colegiado-resp"></div></div>
+                    <div class="actions-grid" style="margin-top:20px;">${botaoAltaHtml}${botaoMarcarFaltaHtml}<button id="btn-salvar-retorno" type="button" class="btn btn-primary" style="grid-column: span 2;">Salvar Semana</button></div>
+                </fieldset>`;
+            };
+            
+            const validarDadosPessoais = () => {
+                if (!ui.nomeInput.value || !ui.telefoneInput.value || !ui.dnInput.value) {
+                    alert("Por favor, preencha os campos Nome, Telefone e DN antes de continuar.");
+                    return false;
+                }
+                return true;
+            };
+
+            const criarNovoAssistidoSeNaoExistir = async () => {
+                if (assistidoSelecionado) return assistidoSelecionado.id;
+                if (!validarDadosPessoais()) throw new Error("Dados pessoais incompletos");
+                const nome = ui.nomeInput.value.trim();
+                const novoAssistidoData = { nome: nome, nome_lower: nome.toLowerCase(), telefone: ui.telefoneInput.value, dn: ui.dnInput.value, criadoEm: serverTimestamp(), criadoPor: { uid: user.uid, nome: user.displayName } };
+                const docRef = await addDoc(assistidosRef, novoAssistidoData);
+                assistidoSelecionado = { id: docRef.id, ...novoAssistidoData };
+                await registrarLog({ acao: 'CADASTROU_ASSISTIDO_AE', detalhes: { assistidoId: docRef.id, nome }});
+                return docRef.id;
+            };
+
+            async function salvarRetorno(e) {
+                e.target.disabled = true;
+                const entrevistador = document.getElementById('retorno-entrevistador').value;
+                if(!entrevistador) { alert("O nome do entrevistador é obrigatório."); e.target.disabled = false; return; }
+                const batch = writeBatch(db);
+                const encaminhamentos = Array.from(document.querySelectorAll('#retorno-encaminhamentos-opcoes input:checked')).map(cb => cb.value);
+                batch.set(doc(atendimentosRef), {
+                    assistidoId: assistidoSelecionado.id, tratamentoId: tratamentoAtivo.id, tipo: 'tratamento_semanal', dataAtendimento: serverTimestamp(),
+                    entrevistador: entrevistador, passeRecomendado: document.getElementById('retorno-passe').value,
+                    horarioInicio: document.getElementById('retorno-inicio').value, horarioFim: document.getElementById('retorno-fim').value,
+                    evolucao: document.querySelector('input[name="evolucao"]:checked').value,
+                    passeDe: document.getElementById('colegiado-de').value, passePara: document.getElementById('colegiado-para').value,
+                    encaminhamentos: encaminhamentos, notas: document.getElementById('retorno-notas').value,
+                    colegiadoData: document.getElementById('colegiado-data').value, colegiadoResp: document.getElementById('colegiado-resp').value
+                });
+                batch.set(doc(filaRef), { assistidoId: assistidoSelecionado.id, nomeAssistido: assistidoSelecionado.nome, status: 'pronto_para_chamar', passeRecomendado: document.getElementById('retorno-passe').value, tipoAtendimento: 'tratamento_semanal', chegadaEm: serverTimestamp(), recepcionista: { uid: user.uid, nome: user.displayName } });
                 await batch.commit();
-                alert('Falta registrada. ATENÇÃO: Tratamento encerrado automaticamente por exceder o limite de 2 faltas!');
-                resetarFormulario();
-            } else {
-                await batch.commit();
-                alert(`Falta registrada com sucesso! Total de faltas: ${novoTotalFaltas}.`);
+                await registrarLog({ acao: 'REGISTROU_RETORNO_AE', detalhes: { assistidoId: assistidoSelecionado.id, tratamentoId: tratamentoAtivo.id }});
+                alert('Retorno da semana salvo com sucesso!');
                 await renderizarPainel(assistidoSelecionado);
             }
-            await registrarLog({ acao: 'REGISTROU_FALTA_AE', detalhes: { assistidoId: assistidoSelecionado.id, tratamentoId: tratamentoAtivo.id, totalFaltas: novoTotalFaltas }});
-        }
-        e.target.disabled = false;
-    }
 
-    async function darAlta(e) {
-        e.target.disabled = true;
-        if (!tratamentoAtivo) { e.target.disabled = false; return; }
-        if (confirm(`Tem certeza que deseja dar alta e finalizar o tratamento de ${assistidoSelecionado.nome}?`)) {
-            const tratamentoDocRef = doc(db, 'tratamentos_ae', tratamentoAtivo.id);
-            await updateDoc(tratamentoDocRef, { status: 'concluido', dataFim: serverTimestamp(), altaResp: document.getElementById('colegiado-resp').value, altaData: document.getElementById('colegiado-data').value });
-            await registrarLog({ acao: 'FINALIZOU_TRATAMENTO_AE', detalhes: { assistidoId: assistidoSelecionado.id, tratamentoId: tratamentoAtivo.id }});
-            alert('Tratamento finalizado com sucesso!');
+            async function marcarFalta(e) {
+                e.target.disabled = true;
+                if (!tratamentoAtivo) { e.target.disabled = false; return; }
+                if (confirm(`Confirmar uma falta para ${assistidoSelecionado.nome}?`)) {
+                    const tratamentoDocRef = doc(db, 'tratamentos_ae', tratamentoAtivo.id);
+                    const novoTotalFaltas = (tratamentoAtivo.faltas_acumuladas || 0) + 1;
+                    const batch = writeBatch(db);
+                    batch.update(tratamentoDocRef, { faltas_acumuladas: increment(1) });
+                    batch.set(doc(atendimentosRef), { assistidoId: assistidoSelecionado.id, tratamentoId: tratamentoAtivo.id, tipo: 'falta', dataAtendimento: serverTimestamp() });
+                    if (novoTotalFaltas > 2) {
+                        batch.update(tratamentoDocRef, { status: 'encerrado_por_falta' });
+                        await batch.commit();
+                        alert('Falta registrada. ATENÇÃO: Tratamento encerrado automaticamente por exceder o limite de 2 faltas!');
+                        resetarFormulario();
+                    } else {
+                        await batch.commit();
+                        alert(`Falta registrada com sucesso! Total de faltas: ${novoTotalFaltas}.`);
+                        await renderizarPainel(assistidoSelecionado);
+                    }
+                    await registrarLog({ acao: 'REGISTROU_FALTA_AE', detalhes: { assistidoId: assistidoSelecionado.id, tratamentoId: tratamentoAtivo.id, totalFaltas: novoTotalFaltas }});
+                }
+                e.target.disabled = false;
+            }
+
+            async function darAlta(e) {
+                e.target.disabled = true;
+                if (!tratamentoAtivo) { e.target.disabled = false; return; }
+                if (confirm(`Tem certeza que deseja dar alta e finalizar o tratamento de ${assistidoSelecionado.nome}?`)) {
+                    const tratamentoDocRef = doc(db, 'tratamentos_ae', tratamentoAtivo.id);
+                    await updateDoc(tratamentoDocRef, { status: 'concluido', dataFim: serverTimestamp(), altaResp: document.getElementById('colegiado-resp').value, altaData: document.getElementById('colegiado-data').value });
+                    await registrarLog({ acao: 'FINALIZOU_TRATAMENTO_AE', detalhes: { assistidoId: assistidoSelecionado.id, tratamentoId: tratamentoAtivo.id }});
+                    alert('Tratamento finalizado com sucesso!');
+                    resetarFormulario();
+                }
+                e.target.disabled = false;
+            }
+            
+            ui.telefoneInput.addEventListener('input', (e) => handlePhone(e));
+
+            ui.nomeInput.addEventListener('input', async (e) => {
+                const termo = e.target.value.trim().toLowerCase();
+                if (termo.length < 3) { if (assistidoSelecionado) resetarFormulario(); ui.searchResults.innerHTML = ''; return; }
+                const q = query(assistidosRef, where('nome_lower', '>=', termo), where('nome_lower', '<=', termo + '\uf8ff'), limit(5));
+                const snapshot = await getDocs(q);
+                ui.searchResults.innerHTML = '';
+                snapshot.forEach(doc => {
+                    const assistido = { id: doc.id, ...doc.data() };
+                    const li = document.createElement('li');
+                    li.textContent = assistido.nome;
+                    li.addEventListener('click', () => {
+                        assistidoSelecionado = assistido;
+                        ui.nomeInput.value = assistido.nome;
+                        ui.telefoneInput.value = assistido.telefone || '';
+                        ui.dnInput.value = assistido.dn || '';
+                        ui.searchResults.innerHTML = '';
+                        renderizarPainel(assistido);
+                    });
+                    ui.searchResults.appendChild(li);
+                });
+            });
+
+            ui.nomeInput.addEventListener('blur', () => { setTimeout(() => { if (!assistidoSelecionado && ui.nomeInput.value.length > 2) { ui.novoAtendimentoSection.classList.remove('hidden'); } ui.searchResults.innerHTML = ''; }, 200); });
+            
+            ui.btnRegistrarAvulso.addEventListener('click', async (e) => {
+                e.target.disabled = true;
+                if (!validarDadosPessoais()) { e.target.disabled = false; return; }
+                try {
+                    const assistidoId = await criarNovoAssistidoSeNaoExistir();
+                    const trintaDiasAtras = new Date(); trintaDiasAtras.setDate(trintaDiasAtras.getDate() - 30);
+                    const qAvulso = query(atendimentosRef, where("assistidoId", "==", assistidoId), where("tipo", "==", "avulso"), where("dataAtendimento", ">=", Timestamp.fromDate(trintaDiasAtras)));
+                    if (!(await getDocs(qAvulso)).empty) { alert('Este assistido já recebeu um passe avulso nos últimos 30 dias.'); return; }
+                    if (confirm(`Confirmar registro de Passe Avulso (P2) para ${assistidoSelecionado.nome}?`)) {
+                        const batch = writeBatch(db);
+                        batch.set(doc(filaRef), { assistidoId: assistidoId, nomeAssistido: assistidoSelecionado.nome, status: 'pronto_para_chamar', passeRecomendado: 'P2', tipoAtendimento: 'avulso', chegadaEm: serverTimestamp(), recepcionista: { uid: user.uid, nome: user.displayName } });
+                        batch.set(doc(atendimentosRef), { assistidoId: assistidoId, tratamentoId: null, tipo: 'avulso', dataAtendimento: serverTimestamp(), passeRecomendado: 'P2' });
+                        await batch.commit();
+                        await registrarLog({ acao: 'REGISTROU_PASSE_AVULSO', detalhes: { assistidoId: assistidoId, nome: assistidoSelecionado.nome }});
+                        alert('Passe avulso registrado e enviado para a fila!');
+                        resetarFormulario();
+                    }
+                } catch(error) { console.error("Erro ao registrar passe avulso:", error); } finally { e.target.disabled = false; }
+            });
+            
+            ui.btnIniciarTratamento.addEventListener('click', () => {
+                if (!validarDadosPessoais()) return;
+                ui.novoAtendimentoSection.classList.add('hidden');
+                ui.fsPrimeiraVez.classList.remove('hidden');
+                document.getElementById('primeira-data').value = formatarDataParaInput(new Date());
+            });
+
+            ui.btnCancelarPrimeira.addEventListener('click', () => {
+                ui.novoAtendimentoSection.classList.remove('hidden');
+                ui.fsPrimeiraVez.classList.add('hidden');
+            });
+
+            ui.btnSalvarPrimeira.addEventListener('click', async (e) => {
+                e.target.disabled = true;
+                const entrevistador = document.getElementById('primeira-entrevistador').value;
+                const notas = document.getElementById('primeira-notas').value;
+                if (!entrevistador) { alert('O nome do entrevistador é obrigatório.'); e.target.disabled = false; return; }
+                try {
+                    const assistidoId = await criarNovoAssistidoSeNaoExistir();
+                    const batch = writeBatch(db);
+                    const novoTratamentoRef = doc(tratamentosRef);
+                    batch.set(novoTratamentoRef, { assistidoId: assistidoId, dataInicio: serverTimestamp(), status: 'ativo', faltas_acumuladas: 0, primeiraEntrevista: { data: Timestamp.now(), entrevistador: entrevistador, notas: notas } });
+                    batch.set(doc(atendimentosRef), { assistidoId: assistidoId, tratamentoId: novoTratamentoRef.id, tipo: 'tratamento_semanal', dataAtendimento: serverTimestamp(), entrevistador: entrevistador, passeRecomendado: 'P2' });
+                    batch.set(doc(filaRef), { assistidoId: assistidoId, nomeAssistido: assistidoSelecionado.nome, status: 'pronto_para_chamar', passeRecomendado: 'P2', tipoAtendimento: 'tratamento_semanal', chegadaEm: serverTimestamp(), recepcionista: { uid: user.uid, nome: user.displayName } });
+                    await batch.commit();
+                    await registrarLog({ acao: 'INICIOU_TRATAMENTO_AE', detalhes: { assistidoId: assistidoId, nome: assistidoSelecionado.nome }});
+                    alert('Tratamento iniciado com sucesso!');
+                    ui.fsPrimeiraVez.classList.add('hidden');
+                    await renderizarPainel(assistidoSelecionado);
+                } catch(error) { console.error("Erro ao iniciar tratamento:", error); } finally { e.target.disabled = false; }
+            });
+
+            ui.btnLimpar.addEventListener('click', resetarFormulario);
             resetarFormulario();
         }
-        e.target.disabled = false;
-    }
-    
-    ui.telefoneInput.addEventListener('input', (e) => handlePhone(e));
-    ui.nomeInput.addEventListener('input', async (e) => {
-        const termo = e.target.value.trim().toLowerCase();
-        if (termo.length < 3) { if (assistidoSelecionado) resetarFormulario(); ui.searchResults.innerHTML = ''; return; }
-        const q = query(assistidosRef, where('nome_lower', '>=', termo), where('nome_lower', '<=', termo + '\uf8ff'), limit(5));
-        const snapshot = await getDocs(q);
-        ui.searchResults.innerHTML = '';
-        snapshot.forEach(doc => {
-            const assistido = { id: doc.id, ...doc.data() };
-            const li = document.createElement('li');
-            li.textContent = assistido.nome;
-            li.addEventListener('click', () => {
-                assistidoSelecionado = assistido;
-                ui.nomeInput.value = assistido.nome;
-                ui.telefoneInput.value = assistido.telefone || '';
-                ui.dnInput.value = assistido.dn || '';
-                ui.searchResults.innerHTML = '';
-                renderizarPainel(assistido);
-            });
-            ui.searchResults.appendChild(li);
-        });
-    });
-
-    ui.nomeInput.addEventListener('blur', () => { setTimeout(() => { if (!assistidoSelecionado && ui.nomeInput.value.length > 2) { ui.novoAtendimentoSection.classList.remove('hidden'); } ui.searchResults.innerHTML = ''; }, 200); });
-    
-    ui.btnRegistrarAvulso.addEventListener('click', async (e) => {
-        e.target.disabled = true;
-        if (!validarDadosPessoais()) { e.target.disabled = false; return; }
-        try {
-            const assistidoId = await criarNovoAssistidoSeNaoExistir();
-            const trintaDiasAtras = new Date(); trintaDiasAtras.setDate(trintaDiasAtras.getDate() - 30);
-            const qAvulso = query(atendimentosRef, where("assistidoId", "==", assistidoId), where("tipo", "==", "avulso"), where("dataAtendimento", ">=", Timestamp.fromDate(trintaDiasAtras)));
-            if (!(await getDocs(qAvulso)).empty) { alert('Este assistido já recebeu um passe avulso nos últimos 30 dias.'); return; }
-            if (confirm(`Confirmar registro de Passe Avulso (P2) para ${assistidoSelecionado.nome}?`)) {
-                const batch = writeBatch(db);
-                batch.set(doc(filaRef), { assistidoId: assistidoId, nomeAssistido: assistidoSelecionado.nome, status: 'pronto_para_chamar', passeRecomendado: 'P2', tipoAtendimento: 'avulso', chegadaEm: serverTimestamp(), recepcionista: { uid: user.uid, nome: user.displayName } });
-                batch.set(doc(atendimentosRef), { assistidoId: assistidoId, tratamentoId: null, tipo: 'avulso', dataAtendimento: serverTimestamp(), passeRecomendado: 'P2' });
-                await batch.commit();
-                await registrarLog({ acao: 'REGISTROU_PASSE_AVULSO', detalhes: { assistidoId: assistidoId, nome: assistidoSelecionado.nome }});
-                alert('Passe avulso registrado e enviado para a fila!');
-                resetarFormulario();
-            }
-        } catch(error) { console.error("Erro ao registrar passe avulso:", error); } finally { e.target.disabled = false; }
-    });
-    
-    ui.btnIniciarTratamento.addEventListener('click', () => {
-        if (!validarDadosPessoais()) return;
-        ui.novoAtendimentoSection.classList.add('hidden');
-        ui.fsPrimeiraVez.classList.remove('hidden');
-        document.getElementById('primeira-data').value = formatarDataParaInput(new Date());
-    });
-
-    ui.btnCancelarPrimeira.addEventListener('click', () => {
-        ui.novoAtendimentoSection.classList.remove('hidden');
-        ui.fsPrimeiraVez.classList.add('hidden');
-    });
-
-    ui.btnSalvarPrimeira.addEventListener('click', async (e) => {
-        e.target.disabled = true;
-        const entrevistador = document.getElementById('primeira-entrevistador').value;
-        const notas = document.getElementById('primeira-notas').value;
-        if (!entrevistador) { alert('O nome do entrevistador é obrigatório.'); e.target.disabled = false; return; }
-        try {
-            const assistidoId = await criarNovoAssistidoSeNaoExistir();
-            const batch = writeBatch(db);
-            const novoTratamentoRef = doc(tratamentosRef);
-            batch.set(novoTratamentoRef, { assistidoId: assistidoId, dataInicio: serverTimestamp(), status: 'ativo', faltas_acumuladas: 0, primeiraEntrevista: { data: Timestamp.now(), entrevistador: entrevistador, notas: notas } });
-            batch.set(doc(atendimentosRef), { assistidoId: assistidoId, tratamentoId: novoTratamentoRef.id, tipo: 'tratamento_semanal', dataAtendimento: serverTimestamp(), entrevistador: entrevistador, passeRecomendado: 'P2' });
-            batch.set(doc(filaRef), { assistidoId: assistidoId, nomeAssistido: assistidoSelecionado.nome, status: 'pronto_para_chamar', passeRecomendado: 'P2', tipoAtendimento: 'tratamento_semanal', chegadaEm: serverTimestamp(), recepcionista: { uid: user.uid, nome: user.displayName } });
-            await batch.commit();
-            await registrarLog({ acao: 'INICIOU_TRATAMENTO_AE', detalhes: { assistidoId: assistidoId, nome: assistidoSelecionado.nome }});
-            alert('Tratamento iniciado com sucesso!');
-            ui.fsPrimeiraVez.classList.add('hidden');
-            await renderizarPainel(assistidoSelecionado);
-        } catch(error) { console.error("Erro ao iniciar tratamento:", error); } finally { e.target.disabled = false; }
-    });
-
-    ui.btnLimpar.addEventListener('click', resetarFormulario);
-    resetarFormulario();
-}
     </script>
 </body>
 </html>
