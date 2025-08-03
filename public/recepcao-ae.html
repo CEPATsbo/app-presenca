@@ -156,10 +156,15 @@ function inicializarPagina(user) {
         btnRegistrarAvulso: document.getElementById('btn-registrar-avulso'),
     };
     
-    const hojeFormatado = () => {
-        const hoje = new Date();
-        hoje.setMinutes(hoje.getMinutes() - hoje.getTimezoneOffset());
-        return hoje.toISOString().split('T')[0];
+    // ==========================================================
+    // FUNÇÃO DE DATA CORRIGIDA
+    // ==========================================================
+    const formatarDataParaInput = (dataObj) => {
+        if (!dataObj) return '';
+        const ano = dataObj.getFullYear();
+        const mes = String(dataObj.getMonth() + 1).padStart(2, '0'); // Mês é 0-indexado
+        const dia = String(dataObj.getDate()).padStart(2, '0');
+        return `${ano}-${mes}-${dia}`;
     };
 
     const resetarFormulario = () => {
@@ -262,7 +267,7 @@ function inicializarPagina(user) {
             return html;
         };
 
-        const dataFormatada = dataSemana.toISOString().split('T')[0];
+        const dataFormatada = formatarDataParaInput(dataSemana); // Usando a nova função
         const botaoAltaHtml = semanaNum >= 4 ? `<button id="btn-dar-alta-semanal" type="button" class="btn btn-danger">Dar Alta</button>` : '';
         const botaoMarcarFaltaHtml = semanaNum > 1 ? `<button id="btn-marcar-falta-semanal" type="button" class="btn btn-warning">Marcar Falta</button>` : '';
 
