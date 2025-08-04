@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Arquivo Geral - Atendimento Espiritual</title>
+    <style>
+        :root { --cor-primaria: #007bff; --cor-borda: #ddd; --fundo-claro: #f8f9fa; }
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background-color: #f4f6f9; margin: 0; padding: 20px; display: flex; flex-direction: column; align-items: center; }
+        .container { width: 100%; max-width: 1000px; background-color: white; padding: 30px; border-radius: 12px; box-shadow: 0 6px 24px rgba(0,0,0,0.1); margin-bottom: 20px; }
+        .nav-voltar { width: 100%; max-width: 1000px; margin-bottom: 20px; }
+        .btn-voltar { background-color: #6c757d; color: white; border: none; padding: 12px 20px; border-radius: 8px; font-weight: bold; font-size: 1em; text-decoration: none; cursor: pointer; }
+        h1, h2, h3 { color: #333; text-align: center; }
+        .form-item { display: flex; flex-direction: column; }
+        .form-item label { margin-bottom: 5px; font-weight: bold; color: #555; }
+        .form-item input { padding: 12px; border-radius: 6px; border: 1px solid #ccc; font-size: 1.1em; width: 100%; box-sizing: border-box; }
+        #search-results { list-style-type: none; padding: 0; margin-top: 5px; max-height: 250px; overflow-y: auto; border: 1px solid var(--cor-borda); border-radius: 6px; }
+        #search-results li { padding: 12px; border-bottom: 1px solid #eee; cursor: pointer; }
+        #search-results li:hover { background-color: #f0f0f0; }
+        .hidden { display: none; }
+        .info-pessoais { background-color: var(--fundo-claro); padding: 20px; border-radius: 8px; margin-top: 20px; }
+        .grid-historico { display: grid; grid-template-columns: 300px 1fr; gap: 20px; margin-top: 20px; }
+        #lista-tratamentos { list-style-type: none; padding: 0; margin: 0; max-height: 50vh; overflow-y: auto; }
+        #lista-tratamentos li { padding: 15px; border: 1px solid var(--cor-borda); border-radius: 8px; margin-bottom: 10px; cursor: pointer; transition: background-color 0.2s, border-color 0.2s; }
+        #lista-tratamentos li:hover { background-color: #e9f5ff; border-color: var(--cor-primaria); }
+        #lista-tratamentos li.ativo { background-color: #d1ecf1; border-color: #bee5eb; }
+        #lista-tratamentos li.concluido, #lista-tratamentos li.encerrado_por_falta { background-color: #d4edda; border-color: #c3e6cb; }
+        #lista-tratamentos li.selecionado { border-color: var(--cor-primaria); border-width: 2px; font-weight: bold; background-color: #cce5ff; }
+        #detalhes-tratamento { border-left: 3px solid var(--cor-primaria); padding-left: 20px; }
+        .bloco-semanal { border: 1px solid var(--cor-borda); border-radius: 8px; padding: 20px; margin-bottom: 20px; background-color: #fdfdfd; }
+        .bloco-semanal h4 { margin-top: 0; }
+        .bloco-semanal.falta { background-color: #fff3cd; border-color: #ffeeba; }
+        @media (max-width: 768px) { .grid-historico { grid-template-columns: 1fr; } #lista-tratamentos { max-height: 30vh; } }
+    </style>
+</head>
+<body>
+    <nav class="nav-voltar"><a href="/dashboard.html" class="btn-voltar">⬅ Voltar para o Dashboard</a></nav>
+    <div id="acesso-negado" class="container hidden"><h1>Acesso Negado</h1></div>
+
+    <div id="main-content" class="container hidden">
+        <h1>Arquivo Geral de Assistidos</h1>
+        
+        <div class="form-item">
+            <label for="search-nome">Buscar Assistido por Nome:</label>
+            <input type="text" id="search-nome" placeholder="Comece a digitar para buscar...">
+        </div>
+        <ul id="search-results"></ul>
+
+        <div id="ficha-assistido" class="hidden">
+            <div id="info-pessoais" class="info-pessoais"></div>
+            <hr style="margin: 30px 0;">
+            <div class="grid-historico">
+                <div id="painel-lista-tratamentos">
+                    <h3>Ciclos de Tratamento</h3>
+                    <ul id="lista-tratamentos"></ul>
+                </div>
+                <div id="detalhes-tratamento">
+                    <h3>Detalhes do Tratamento</h3>
+                    <div id="historico-semanas">
+                        <p>Selecione um ciclo de tratamento à esquerda para ver os detalhes.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
+        import { getFirestore, collection, doc, getDoc, query, where, limit, getDocs, orderBy } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
+        import { protegerPagina } from '/auth.js';
+
+        const firebaseConfig = {
+            apiKey: "AIzaSyBV7RPjk3cFTqL-aIpflJcUojKg1ZXMLuU",
+            authDomain: "voluntarios-ativos---cepat.firebaseapp.com",
+            projectId: "voluntarios-ativos---cepat",
+            storageBucket: "voluntarios-ativos---cepat.firebasestorage.app",
+            messagingSenderId: "66122858261",
+            appId: "1:66122858261:web:7fa21f1805463b5c08331c"
+        };
+        initializeApp(firebaseConfig);
+
+        const permissoes = ['super-admin', 'diretor', 'conselheiro', 'tesoureiro', 'entrevistador', 'recepcionista'];
+        
+        protegerPagina(permissoes).then(user => {
+            document.getElementById('main-content').classList.remove('hidden');
+            inicializarPagina(user);
+        }).catch(err => {
+            document.getElementById('acesso-negado').classList.remove('hidden');
+            document.getElementById('main-content').classList.add('hidden');
+        });
+
+        function inicializarPagina(user) {
+            const db = getFirestore();
+            const assistidosRef = collection(db, 'assistidos');
+            const tratamentosRef = collection(db, 'tratamentos_ae');
+            const atendimentosRef = collection(db, 'atendimentos_ae');
+
+            const ui = {
+                searchInput: document.getElementById('search-nome'),
+                searchResults: document.getElementById('search-results'),
+                fichaAssistido: document.getElementById('ficha-assistido'),
+                infoPessoais: document.getElementById('info-pessoais'),
+                listaTratamentos: document.getElementById('lista-tratamentos'),
+                historicoSemanas: document.getElementById('historico-semanas'),
+            };
+
+            const carregarTratamento = async (tratamento) => {
+                ui.historicoSemanas.innerHTML = '<h4>Carregando detalhes...</h4>';
+                const qSemanas = query(atendimentosRef, where("tratamentoId", "==", tratamento.id), orderBy("dataAtendimento", "asc"));
+                const semanasSnapshot = await getDocs(qSemanas);
+                let htmlFinal = '';
+
+                semanasSnapshot.forEach((doc, index) => {
+                    const semana = doc.data();
+                    const semanaNum = index + 1;
+                    const dataFormatada = semana.dataAtendimento.toDate().toLocaleDateString('pt-BR');
+                    const eFalta = semana.tipo === 'falta';
+
+                    let detalhesHtml = '';
+                    if (eFalta) {
+                        detalhesHtml = '<p>FALTA REGISTRADA</p>';
+                    } else if (semanaNum === 1 && tratamento.primeiraEntrevista) {
+                        const entrevista = tratamento.primeiraEntrevista;
+                        detalhesHtml = `<p><strong>Entrevistador:</strong> ${entrevista.entrevistador || 'N/A'}</p>
+                                       <p><strong>Passe Recebido:</strong> P2 (Automático)</p>
+                                       <p style="white-space: pre-wrap;"><strong>Descrição:</strong>\n${entrevista.notas || 'N/A'}</p>`;
+                    } else {
+                        detalhesHtml = `<p><strong>Entrevistador:</strong> ${semana.entrevistador || 'N/A'}</p>
+                                        <p><strong>Passe Recebido:</strong> ${semana.passeRecomendado || 'N/A'}</p>
+                                        <p><strong>Colegiado (DE/PARA):</strong> ${semana.passeDe || 'N/A'} -> ${semana.passePara || 'N/A'}</p>
+                                        <p style="white-space: pre-wrap;"><strong>Descrição:</strong>\n${semana.notas || 'N/A'}</p>`;
+                    }
+                    htmlFinal += `<div class="bloco-semanal ${eFalta ? 'falta' : ''}"><h4>${semanaNum}ª Semana (${dataFormatada})</h4>${detalhesHtml}</div>`;
+                });
+                ui.historicoSemanas.innerHTML = htmlFinal || '<p>Nenhum registro semanal para este tratamento.</p>';
+            };
+            
+            const selecionarAssistido = async (assistido) => {
+                ui.searchInput.value = '';
+                ui.searchResults.innerHTML = '';
+                ui.fichaAssistido.classList.remove('hidden');
+                ui.infoPessoais.innerHTML = `<h3>${assistido.nome}</h3><p><strong>DN:</strong> ${assistido.dn || 'N/A'} | <strong>Telefone:</strong> ${assistido.telefone || 'N/A'}</p>`;
+                
+                const qTratamentos = query(tratamentosRef, where("assistidoId", "==", assistido.id), orderBy("dataInicio", "desc"));
+                const tratamentosSnapshot = await getDocs(qTratamentos);
+                
+                ui.listaTratamentos.innerHTML = '';
+                ui.historicoSemanas.innerHTML = '<p>Selecione um ciclo de tratamento à esquerda para ver os detalhes.</p>';
+
+                if (tratamentosSnapshot.empty) {
+                    ui.listaTratamentos.innerHTML = '<li>Nenhum tratamento registrado.</li>';
+                    return;
+                }
+
+                tratamentosSnapshot.forEach(doc => {
+                    const tratamento = { id: doc.id, ...doc.data() };
+                    const li = document.createElement('li');
+                    li.className = tratamento.status;
+                    const dataInicio = tratamento.dataInicio.toDate().toLocaleDateString('pt-BR');
+                    li.innerHTML = `<strong>Início: ${dataInicio}</strong><br>Status: ${tratamento.status}`;
+                    li.addEventListener('click', (e) => {
+                        document.querySelectorAll('#lista-tratamentos li').forEach(el => el.classList.remove('selecionado'));
+                        e.currentTarget.classList.add('selecionado');
+                        carregarTratamento(tratamento);
+                    });
+                    ui.listaTratamentos.appendChild(li);
+                });
+            };
+            
+            const buscarAssistidoPorId = async (id) => {
+                const assistidoDocRef = doc(db, 'assistidos', id);
+                const assistidoDoc = await getDoc(assistidoDocRef);
+                if (assistidoDoc.exists()) {
+                    await selecionarAssistido({ id: assistidoDoc.id, ...assistidoDoc.data() });
+                } else {
+                    alert("Assistido não encontrado.");
+                }
+            };
+
+            ui.searchInput.addEventListener('input', async (e) => {
+                const termo = e.target.value.trim().toLowerCase();
+                if (termo.length < 3) { ui.searchResults.innerHTML = ''; return; }
+                const q = query(assistidosRef, where('nome_lower', '>=', termo), where('nome_lower', '<=', termo + '\uf8ff'), limit(10));
+                const snapshot = await getDocs(q);
+                ui.searchResults.innerHTML = '';
+                snapshot.forEach(doc => {
+                    const assistido = { id: doc.id, ...doc.data() };
+                    const li = document.createElement('li');
+                    li.textContent = assistido.nome;
+                    li.addEventListener('click', () => selecionarAssistido(assistido));
+                    ui.searchResults.appendChild(li);
+                });
+            });
+
+            // Lógica para carregar assistido via URL
+            const params = new URLSearchParams(window.location.search);
+            const assistidoId = params.get('id');
+            if (assistidoId) {
+                buscarAssistidoPorId(assistidoId);
+            }
+        }
+    </script>
+</body>
+</html>
