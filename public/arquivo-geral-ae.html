@@ -24,11 +24,12 @@
         #lista-historico li { padding: 15px; border: 1px solid var(--cor-borda); border-radius: 8px; margin-bottom: 10px; cursor: pointer; transition: background-color 0.2s, border-color 0.2s; }
         #lista-historico li:hover { background-color: #e9f5ff; border-color: var(--cor-primaria); }
         #lista-historico li.ativo { background-color: #d1ecf1; border-color: #bee5eb; }
-        #lista-historico li.concluido { background-color: #d4edda; border-color: #c3e6cb; }
+        #lista-historico li.concluido, #lista-historico li.encerrado_por_falta { background-color: #d4edda; border-color: #c3e6cb; }
         #lista-historico li.avulso { background-color: #fdfdfe; border-color: #c8c8c8; border-style: dashed;}
         #lista-historico li.selecionado { border-color: var(--cor-primaria); border-width: 2px; font-weight: bold; background-color: #cce5ff; }
         #detalhes-tratamento { border-left: 3px solid var(--cor-primaria); padding-left: 20px; }
         .bloco-semanal { border: 1px solid var(--cor-borda); border-radius: 8px; padding: 20px; margin-bottom: 20px; background-color: #fdfdfd; }
+        .bloco-semanal h4 { margin-top: 0; }
         .bloco-semanal.falta { background-color: #fff3cd; border-color: #ffeeba; }
         @media (max-width: 768px) { .grid-historico { grid-template-columns: 1fr; } #lista-historico { max-height: 30vh; } }
     </style>
@@ -110,28 +111,43 @@
                 const semanasSnapshot = await getDocs(qSemanas);
                 let htmlFinal = '';
 
-                semanasSnapshot.forEach((doc, index) => {
-                    const semana = doc.data();
-                    const semanaNum = index + 1;
+                if (semanasSnapshot.empty) {
+                    ui.historicoSemanas.innerHTML = '<p>Nenhum registro semanal para este tratamento.</p>';
+                    return;
+                }
+                
+                // ==========================================================
+                // LÓGICA DE EXIBIÇÃO CORRIGIDA
+                // ==========================================================
+                const primeiraSemanaDoc = semanasSnapshot.docs[0];
+                if (primeiraSemanaDoc) {
+                    const dataFormatada = primeiraSemanaDoc.data().dataAtendimento.toDate().toLocaleDateString('pt-BR');
+                    const entrevista = tratamento.primeiraEntrevista;
+                    const blocoPrimeiraSemana = `
+                        <div class="bloco-semanal">
+                            <h4>1ª Semana (${dataFormatada})</h4>
+                            <p><strong>Entrevistador:</strong> ${entrevista.entrevistador || 'N/A'}</p>
+                            <p><strong>Passe Recebido:</strong> P2 (Automático)</p>
+                            <p style="white-space: pre-wrap;"><strong>Descrição:</strong>\n${entrevista.notas || 'N/A'}</p>
+                        </div>`;
+                    htmlFinal += blocoPrimeiraSemana;
+                }
+
+                for (let i = 1; i < semanasSnapshot.docs.length; i++) {
+                    const semana = semanasSnapshot.docs[i].data();
+                    const semanaNum = i + 1;
                     const dataFormatada = semana.dataAtendimento.toDate().toLocaleDateString('pt-BR');
                     const eFalta = semana.tipo === 'falta';
-                    let detalhesHtml = '';
-                    if (eFalta) {
-                        detalhesHtml = '<p>FALTA REGISTRADA</p>';
-                    } else if (semanaNum === 1 && tratamento.primeiraEntrevista) {
-                        const entrevista = tratamento.primeiraEntrevista;
-                        detalhesHtml = `<p><strong>Entrevistador:</strong> ${entrevista.entrevistador || 'N/A'}</p>
-                                       <p><strong>Passe Recebido:</strong> P2 (Automático)</p>
-                                       <p style="white-space: pre-wrap;"><strong>Descrição:</strong>\n${entrevista.notas || 'N/A'}</p>`;
-                    } else {
-                        detalhesHtml = `<p><strong>Entrevistador:</strong> ${semana.entrevistador || 'N/A'}</p>
-                                        <p><strong>Passe Recebido:</strong> ${semana.passeRecomendado || 'N/A'}</p>
-                                        <p><strong>Colegiado (DE/PARA):</strong> ${semana.passeDe || 'N/A'} -> ${semana.passePara || 'N/A'}</p>
-                                        <p style="white-space: pre-wrap;"><strong>Descrição:</strong>\n${semana.notas || 'N/A'}</p>`;
-                    }
+                    let detalhesHtml = eFalta ? '<p>FALTA REGISTRADA</p>' : `
+                        <p><strong>Entrevistador:</strong> ${semana.entrevistador || 'N/A'}</p>
+                        <p><strong>Passe Recebido:</strong> ${semana.passeRecomendado || 'N/A'}</p>
+                        <p><strong>Colegiado (DE/PARA):</strong> ${semana.passeDe || 'N/A'} -> ${semana.passePara || 'N/A'}</p>
+                        <p style="white-space: pre-wrap;"><strong>Descrição:</strong>\n${semana.notas || 'N/A'}</p>`;
+                    
                     htmlFinal += `<div class="bloco-semanal ${eFalta ? 'falta' : ''}"><h4>${semanaNum}ª Semana (${dataFormatada})</h4>${detalhesHtml}</div>`;
-                });
-                ui.historicoSemanas.innerHTML = htmlFinal || '<p>Nenhum registro semanal para este tratamento.</p>';
+                }
+                
+                ui.historicoSemanas.innerHTML = htmlFinal;
             };
 
             const carregarDetalhesAvulso = (passeAvulso) => {
@@ -154,23 +170,16 @@
                 ui.listaHistorico.innerHTML = '<li>Carregando histórico...</li>';
                 ui.historicoSemanas.innerHTML = '<p>Selecione um item do histórico à esquerda para ver os detalhes.</p>';
 
-                // BUSCA 1: Tratamentos completos
                 const qTratamentos = query(tratamentosRef, where("assistidoId", "==", assistido.id));
-                const tratamentosSnapshot = await getDocs(qTratamentos);
-                const historicoTratamentos = tratamentosSnapshot.docs.map(doc => ({
-                    id: doc.id, tipo: 'tratamento', data: doc.data().dataInicio.toDate(), ...doc.data()
-                }));
-
-                // BUSCA 2: Passes Avulsos
                 const qAvulsos = query(atendimentosRef, where("assistidoId", "==", assistido.id), where("tipo", "==", "avulso"));
-                const avulsosSnapshot = await getDocs(qAvulsos);
-                const historicoAvulsos = avulsosSnapshot.docs.map(doc => ({
-                    id: doc.id, tipo: 'avulso', data: doc.data().dataAtendimento.toDate(), ...doc.data()
-                }));
+                
+                const [tratamentosSnapshot, avulsosSnapshot] = await Promise.all([getDocs(qTratamentos), getDocs(qAvulsos)]);
+                
+                const historicoTratamentos = tratamentosSnapshot.docs.map(doc => ({ id: doc.id, tipo: 'tratamento', data: doc.data().dataInicio.toDate(), ...doc.data() }));
+                const historicoAvulsos = avulsosSnapshot.docs.map(doc => ({ id: doc.id, tipo: 'avulso', data: doc.data().dataAtendimento.toDate(), ...doc.data() }));
 
-                // JUNTA E ORDENA TUDO
                 const historicoCompleto = [...historicoTratamentos, ...historicoAvulsos];
-                historicoCompleto.sort((a, b) => b.data - a.data); // Mais recente primeiro
+                historicoCompleto.sort((a, b) => b.data - a.data);
 
                 ui.listaHistorico.innerHTML = '';
                 if (historicoCompleto.length === 0) {
@@ -190,7 +199,7 @@
                             e.currentTarget.classList.add('selecionado');
                             carregarDetalhesTratamento(item);
                         });
-                    } else { // Passe Avulso
+                    } else {
                         li.className = 'avulso';
                         li.innerHTML = `<strong>Passe Avulso</strong><br>${dataFormatada}`;
                         li.addEventListener('click', (e) => {
