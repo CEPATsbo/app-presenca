@@ -3,35 +3,37 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Encaminhamento - Controle do Painel</title>
+    <title>Encaminhamento - Atendimento Espiritual</title>
     <style>
+        :root { --cor-primaria: #007bff; --cor-borda: #ddd; --fundo-claro: #f8f9fa; }
         body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background-color: #f0f2f5; margin: 0; padding: 20px; }
         .container-principal { width: 100%; max-width: 1200px; margin: 0 auto; }
         .nav-voltar { margin-bottom: 20px; }
-        .btn, .btn-voltar { background-color: #007bff; color: white; border: none; padding: 12px 20px; border-radius: 8px; font-weight: bold; font-size: 1em; text-decoration: none; cursor: pointer; }
+        .btn, .btn-voltar { background-color: var(--cor-primaria); color: white; border: none; padding: 12px 20px; border-radius: 8px; font-weight: bold; font-size: 1em; text-decoration: none; cursor: pointer; transition: background-color 0.3s; }
+        .btn:disabled { background-color: #ccc; cursor: not-allowed; }
         .btn-voltar { background-color: #6c757d; }
         .btn-success { background-color: #28a745; }
         .btn-info { background-color: #17a2b8; }
-        h1, h2 { color: #333; text-align: center; }
+        h1 { color: #333; text-align: center; }
         .cards-container { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 20px; }
         .assistido-card { background-color: white; padding: 20px; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); display: flex; flex-direction: column; gap: 15px; border-left: 5px solid #6c757d; }
         .assistido-card h3 { margin: 0; font-size: 1.5em; text-align: center; color: #333; }
         .assistido-card .info { text-align: center; font-size: 1.0em; color: #666; line-height: 1.5; }
         .assistido-card .actions { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
         .assistido-card .actions .btn { width: 100%; padding: 15px; font-size: 1.1em; }
-        .entrevista-chamada { border-left-color: #17a2b8; }
-        .passe-chamado { border-left-color: #28a745; background-color: #f8f9fa; opacity: 0.8; }
-        .passe-chamado h3 { text-decoration: line-through; }
+        .chamado-entrevista { border-left-color: #17a2b8; }
+        .chamado-passe { border-left-color: #28a745; background-color: #f8f9fa; opacity: 0.8; }
+        .chamado-passe h3 { text-decoration: line-through; }
     </style>
 </head>
 <body>
     <div class="container-principal">
         <nav class="nav-voltar"><a href="/dashboard.html" class="btn-voltar">⬅ Voltar para o Dashboard</a></nav>
-        <div id="acesso-negado" style="display: none;"><h1>Acesso Negado</h1></div>
+        <div id="acesso-negado" class="container hidden"><h1>Acesso Negado</h1></div>
         
-        <div id="main-content" style="display: none;">
-            <h1>Controle do Painel de Chamadas</h1>
-            <p style="text-align:center; margin-top:-10px; margin-bottom:20px;">Clique nos botões para chamar os assistidos no painel da TV.</p>
+        <div id="main-content" class="container hidden">
+            <h1>Painel de Encaminhamento</h1>
+            <p style="text-align:center; margin-top:-10px; margin-bottom:20px;">Controle as chamadas para entrevista e para as salas de passe.</p>
             <div id="cards-container" class="cards-container">
                 <p>Aguardando registros da recepção...</p>
             </div>
@@ -40,7 +42,7 @@
 
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
-        import { getFirestore, collection, onSnapshot, doc, updateDoc, query, where, orderBy, Timestamp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
+        import { getFirestore, collection, doc, getDoc, onSnapshot, updateDoc, query, where, orderBy, Timestamp, getDocs } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
         import { protegerPagina } from '/auth.js';
 
         const firebaseConfig = {
@@ -53,92 +55,123 @@
         };
         initializeApp(firebaseConfig);
 
-        protegerPagina(['entrevistador', 'tesoureiro' , 'conselheiro' , 'diretor', 'super-admin']).then(user => {
-            document.getElementById('main-content').style.display = 'block';
+        protegerPagina(['entrevistador', 'diretor', 'super-admin']).then(user => {
+            document.getElementById('main-content').classList.remove('hidden');
             inicializarPagina(user);
-        }).catch(err => { document.getElementById('acesso-negado').style.display = 'block'; });
+        }).catch(err => { 
+            document.getElementById('acesso-negado').classList.remove('hidden');
+            document.getElementById('main-content').classList.add('hidden');
+        });
 
         function inicializarPagina(user) {
             const db = getFirestore();
             const filaRef = collection(db, 'fila_atendimento_ae');
+            const tratamentosRef = collection(db, 'tratamentos_ae');
+            const atendimentosRef = collection(db, 'atendimentos_ae');
             const cardsContainer = document.getElementById('cards-container');
 
-            const hoje = new Date();
-            const inicioDoDia = new Date(hoje.setHours(0, 0, 0, 0));
-            const q = query(filaRef, where("chegadaEm", ">=", Timestamp.fromDate(inicioDoDia)), orderBy("chegadaEm", "asc"));
+            const hojeInicio = new Date();
+            hojeInicio.setHours(0, 0, 0, 0);
 
-            onSnapshot(q, (snapshot) => {
+            const qFila = query(filaRef, where("chegadaEm", ">=", Timestamp.fromDate(hojeInicio)), orderBy("chegadaEm", "asc"));
+
+            onSnapshot(qFila, async (snapshot) => {
                 cardsContainer.innerHTML = '';
                 if (snapshot.empty) {
-                    cardsContainer.innerHTML = '<p>Nenhum assistido na fila.</p>';
+                    cardsContainer.innerHTML = '<p>Nenhuma pessoa na fila de atendimento.</p>';
                     return;
                 }
-                snapshot.forEach(doc => {
-                    const atendimento = { id: doc.id, ...doc.data() };
-                    const card = document.createElement('div');
-                    card.className = 'assistido-card';
-                    card.id = `card-${atendimento.id}`;
 
-                    let buttonsHtml = '';
+                const promessas = snapshot.docs.map(doc => getContextoDoAtendimento(doc));
+                const atendimentosComContexto = await Promise.all(promessas);
 
-                    // ==========================================================
-                    // LÓGICA CORRIGIDA: VERIFICA O TIPO DE ATENDIMENTO
-                    // ==========================================================
-                    if (atendimento.tipoAtendimento === 'avulso') {
-                        // Se for Passe Avulso, mostra SÓ o botão de chamar para o passe
-                        const passeBtnDisabled = atendimento.status === 'chamado_passe';
-                        buttonsHtml = `
-                            <div class="actions" style="grid-template-columns: 1fr;"> <button class="btn btn-success btn-chamar-passe" data-id="${atendimento.id}" ${passeBtnDisabled ? 'disabled' : ''}>Chamar p/ Passe</button>
-                            </div>
-                        `;
-                        if (passeBtnDisabled) {
-                            card.classList.add('passe-chamado');
-                        }
-                    } else {
-                        // Se for tratamento normal, mantém a lógica dos dois botões
-                        let entrevistaBtnDisabled = false;
-                        let passeBtnDisabled = false;
-
-                        if (atendimento.status === 'chamado_entrevista') {
-                            entrevistaBtnDisabled = true;
-                            card.classList.add('entrevista-chamada');
-                        } else if (atendimento.status === 'chamado_passe') {
-                            entrevistaBtnDisabled = true;
-                            passeBtnDisabled = true;
-                            card.classList.add('passe-chamado');
-                        }
-                        
-                        buttonsHtml = `
-                            <div class="actions">
-                                <button class="btn btn-info btn-chamar-entrevista" data-id="${atendimento.id}" ${entrevistaBtnDisabled ? 'disabled' : ''}>Chamar p/ Entrevista</button>
-                                <button class="btn btn-success btn-chamar-passe" data-id="${atendimento.id}" ${passeBtnDisabled ? 'disabled' : ''}>Chamar p/ Passe</button>
-                            </div>
-                        `;
+                atendimentosComContexto.forEach(atendimento => {
+                    if(atendimento) {
+                        cardsContainer.appendChild(criarCard(atendimento));
                     }
-
-                    card.innerHTML = `
-                        <h3>${atendimento.nomeAssistido}</h3>
-                        <p class="info">
-                            Atendimento: <strong>${atendimento.tipoAtendimento === 'avulso' ? 'Passe Avulso' : 'Tratamento'}</strong><br>
-                            Passe Indicado: <strong>${atendimento.passeRecomendado || 'N/A'}</strong>
-                        </p>
-                        ${buttonsHtml}
-                    `;
-                    cardsContainer.appendChild(card);
-                });
-
-                document.querySelectorAll('.btn-chamar-entrevista').forEach(btn => {
-                    btn.addEventListener('click', () => chamar(btn.dataset.id, 'chamado_entrevista'));
-                });
-                document.querySelectorAll('.btn-chamar-passe').forEach(btn => {
-                    btn.addEventListener('click', () => chamar(btn.dataset.id, 'chamado_passe'));
                 });
             });
+            
+            async function getContextoDoAtendimento(doc) {
+                const atendimento = { id: doc.id, ...doc.data() };
+                if (!atendimento.tratamentoId) { // É passe avulso
+                    return { ...atendimento, precisaEntrevista: false };
+                }
 
-            async function chamar(id, novoStatus) {
-                const filaDocRef = doc(db, 'fila_atendimento_ae', id);
-                await updateDoc(filaDocRef, { status: novoStatus });
+                const tratamentoDoc = await getDoc(doc(db, 'tratamentos_ae', atendimento.tratamentoId));
+                if (!tratamentoDoc.exists()) return null;
+                const tratamento = tratamentoDoc.data();
+
+                const qSemanas = query(atendimentosRef, where("tratamentoId", "==", atendimento.tratamentoId), where("tipo", "!=", "falta"));
+                const semanasSnapshot = await getDocs(qSemanas);
+                const semanaNum = semanasSnapshot.size;
+
+                const passe = tratamento.passe_ciclo_atual;
+                let precisaEntrevista = false;
+                if (passe === 'P3A' || passe === 'P3B') {
+                    precisaEntrevista = true;
+                } else if ([1, 4, 5].includes(semanaNum)) {
+                    precisaEntrevista = true;
+                }
+
+                return { ...atendimento, precisaEntrevista, passe_ciclo_atual: passe };
             }
+
+            function criarCard(atendimento) {
+                const card = document.createElement('div');
+                card.className = 'assistido-card';
+
+                let buttonsHtml = '';
+                const entrevistaJaChamada = atendimento.status === 'chamado_entrevista';
+                const passeJaChamado = atendimento.status === 'chamado_passe';
+
+                if (atendimento.precisaEntrevista) {
+                    card.classList.toggle('chamado-entrevista', entrevistaJaChamada && !passeJaChamado);
+                    buttonsHtml = `
+                        <button class="btn btn-info btn-chamar-entrevista" data-id="${atendimento.id}" ${entrevistaJaChamada ? 'disabled' : ''}>Chamar p/ Entrevista</button>
+                        <button class="btn btn-success btn-chamar-passe" data-id="${atendimento.id}" ${passeJaChamado ? 'disabled' : ''}>Chamar p/ Passe</button>
+                    `;
+                } else {
+                    buttonsHtml = `
+                        <div style="grid-column: 1 / -1;">
+                            <button class="btn btn-success btn-chamar-passe" data-id="${atendimento.id}" ${passeJaChamado ? 'disabled' : ''}>Chamar p/ Passe</button>
+                        </div>
+                    `;
+                }
+
+                card.classList.toggle('chamado-passe', passeJaChamado);
+                
+                card.innerHTML = `
+                    <h3>${atendimento.nomeAssistido}</h3>
+                    <p class="info">
+                        Tipo: <strong>${atendimento.tratamentoId ? `Assistência (${atendimento.passe_ciclo_atual})` : 'Passe Avulso'}</strong><br>
+                        Entrevista hoje: <strong>${atendimento.precisaEntrevista ? 'Sim' : 'Não'}</strong>
+                    </p>
+                    <div class="actions">
+                        ${buttonsHtml}
+                    </div>
+                `;
+                return card;
+            }
+
+            cardsContainer.addEventListener('click', async (e) => {
+                const target = e.target;
+                const id = target.dataset.id;
+                if (!id) return;
+
+                let novoStatus = '';
+                if (target.classList.contains('btn-chamar-entrevista')) {
+                    novoStatus = 'chamado_entrevista';
+                } else if (target.classList.contains('btn-chamar-passe')) {
+                    novoStatus = 'chamado_passe';
+                }
+
+                if (novoStatus) {
+                    target.disabled = true;
+                    const filaDocRef = doc(db, 'fila_atendimento_ae', id);
+                    await updateDoc(filaDocRef, { status: novoStatus });
+                }
+            });
         }
     </script>
 </body>
