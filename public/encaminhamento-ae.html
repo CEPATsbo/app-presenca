@@ -24,12 +24,13 @@
         .chamado-entrevista { border-left-color: #17a2b8; }
         .chamado-passe { border-left-color: #28a745; background-color: #f8f9fa; opacity: 0.8; }
         .chamado-passe h3 { text-decoration: line-through; }
+        .hidden { display: none; }
     </style>
 </head>
 <body>
     <div class="container-principal">
         <nav class="nav-voltar"><a href="/dashboard.html" class="btn-voltar">⬅ Voltar para o Dashboard</a></nav>
-        <div id="acesso-negado" class="container hidden"><h1>Acesso Negado</h1></div>
+        <div id="acesso-negado" class="container"><h1>Acesso Negado</h1></div>
         
         <div id="main-content" class="container hidden">
             <h1>Painel de Encaminhamento</h1>
@@ -56,6 +57,8 @@
         initializeApp(firebaseConfig);
 
         protegerPagina(['entrevistador', 'diretor', 'super-admin']).then(user => {
+            // CORREÇÃO APLICADA AQUI: Esconde a div de acesso negado
+            document.getElementById('acesso-negado').classList.add('hidden');
             document.getElementById('main-content').classList.remove('hidden');
             inicializarPagina(user);
         }).catch(err => { 
@@ -105,11 +108,6 @@
 
                 const qSemanas = query(atendimentosRef, where("tratamentoId", "==", atendimento.tratamentoId), where("tipo", "!=", "falta"));
                 const semanasSnapshot = await getDocs(qSemanas);
-                
-                // ==========================================================
-                // CORREÇÃO APLICADA AQUI
-                // A semana atual é o número de presenças + 1
-                // ==========================================================
                 const semanaNum = semanasSnapshot.size + 1;
 
                 const passe = tratamento.passe_ciclo_atual;
