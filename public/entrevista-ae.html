@@ -32,7 +32,7 @@
         .select-box { border: 1px solid #ccc; border-radius: 6px; padding: 10px; cursor: pointer; }
         .checkboxes { position: absolute; background: white; border: 1px solid var(--cor-borda); border-radius: 6px; z-index: 100; max-height: 150px; overflow-y: auto; padding: 5px; width: 100%; box-sizing: border-box; }
         .actions-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-top: 20px; }
-        .erro { color: #dc3545; font-weight: bold; }
+        .erro { color: #dc3545; font-weight: bold; text-align: center; }
         @media (max-width: 900px) { .grid-entrevista { grid-template-columns: 1fr; } }
     </style>
 </head>
@@ -59,7 +59,7 @@
 
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
-        import { getFirestore, collection, doc, getDoc, onSnapshot, updateDoc, query, where, orderBy, Timestamp, getDocs, writeBatch, serverTimestamp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
+        import { getFirestore, collection, doc, getDoc, onSnapshot, updateDoc, query, where, orderBy, Timestamp, getDocs, writeBatch, serverTimestamp, addDoc } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
         import { protegerPagina } from '/auth.js';
 
         const firebaseConfig = {
@@ -146,15 +146,14 @@
                 if (semanaNum === 0) {
                     formHtml = criarFormularioPrimeiraVez(tratamento);
                 } else if (semanaNum === 4) {
-                    formHtml = criarFormularioSemanal(semanaNum + 1, passe, true); 
-                } else if (passe === 'P3A' || passe === 'P3B' || semanaNum === 3) {
-                    formHtml = criarFormularioSemanal(semanaNum + 1, passe, false);
+                    formHtml = criarFormularioSemanal(semanaNum + 1, passe, true, tratamento);
                 } else {
-                    formHtml = `<p>Este assistido não requer entrevista completa hoje. Apenas confirme o encaminhamento para o passe no tablet.</p>`;
+                    formHtml = criarFormularioSemanal(semanaNum + 1, passe, false, tratamento);
                 }
                 ui.formularioContainer.innerHTML = formHtml;
                 
                 document.getElementById('btn-salvar-entrevista')?.addEventListener('click', () => salvarEntrevista(atendimento, tratamento, semanaNum));
+                document.getElementById('btn-dar-alta')?.addEventListener('click', () => darAlta(atendimento, tratamento));
             }
 
             const gerarOpcoesPasse = (selecionado = '') => {
@@ -165,7 +164,7 @@
             };
             
             function criarFormularioPrimeiraVez(tratamento) {
-                const entrevistadorPadrao = user.displayName || '';
+                const entrevistadorPadrao = tratamento.primeiraEntrevista?.entrevistador || user.displayName || '';
                 return `
                     <fieldset>
                         <legend>ENTREVISTA DE 1ª VEZ OU DE REINICIO</legend>
@@ -184,41 +183,67 @@
                 `;
             }
 
-            function criarFormularioSemanal(semanaNum, passeDe, mostrarColegiado) {
-                 /* ... (código para formulário semanal completo virá aqui) ... */
+            function criarFormularioSemanal(semanaNum, passeDe, mostrarColegiado, tratamento) {
+                const dataHoje = formatarDataParaInput(new Date());
+                let colegiadoHtml = '';
+                if (mostrarColegiado) {
+                    colegiadoHtml = `<hr><h5>Colegiado</h5>
+                        <div class="form-grid"><div class="form-item"><label for="colegiado-de">DE:</label><select id="colegiado-de" disabled>${gerarOpcoesPasse(passeDe)}</select></div><div class="form-item"><label for="colegiado-para">PARA:</label><select id="colegiado-para">${gerarOpcoesPasse()}</select></div></div>
+                        <div class="form-item" style="margin-top:15px;"><label>Encaminhamentos:</label><div class="multiselect">
+                            <div class="select-box" tabindex="0">Selecione...</div>
+                            <div id="retorno-encaminhamentos-opcoes" class="checkboxes hidden">
+                                <label><input type="checkbox" value="ENL"/> ENL</label><label><input type="checkbox" value="Leituras"/> Leituras</label><label><input type="checkbox" value="EAE"/> EAE</label><label><input type="checkbox" value="Voluntariado"/> Voluntariado</label><label><input type="checkbox" value="Médico"/> Médico</label><label><input type="checkbox" value="Alimento"/> Alimento</label><label><input type="checkbox" value="Natureza"/> Natureza</label><label><input type="checkbox" value="Mocidade"/> Mocidade</label><label><input type="checkbox" value="Evangelização"/> Evangelização</label>
+                            </div></div></div>
+                        <div class="form-grid" style="margin-top:15px;"><div class="form-item"><label for="colegiado-data">Data:</label><input type="date" id="colegiado-data"></div><div class="form-item"><label for="colegiado-resp">Responsável:</label><input type="text" id="colegiado-resp"></div></div>
+                        <button id="btn-dar-alta" type="button" class="btn btn-danger" style="width: 100%; margin-top: 10px;">Dar Alta</button>`;
+                }
+                return `<fieldset><legend>Registro da ${semanaNum}ª Semana</legend>
+                    <div class="form-grid"><div class="form-item"><label>Data:</label><input type="date" value="${dataHoje}" disabled></div><div class="form-item"><label for="entrevistador-nome">Entrevistador:</label><input type="text" id="entrevistador-nome" value="${user.displayName || ''}" required></div></div>
+                    <div class="form-item" style="margin-top: 15px;"><label for="entrevista-notas">Descrição da Entrevista:</label><textarea id="entrevista-notas" rows="4"></textarea></div>
+                    <hr><h5>Entrevista</h5><div class="form-grid"><div class="form-item"><label for="retorno-passe">Passe:</label><select id="retorno-passe" required>${gerarOpcoesPasse(passeDe)}</select></div><div class="form-item"><label for="retorno-inicio">Início:</label><input type="time" id="retorno-inicio"></div><div class="form-item"><label for="retorno-fim">Fim:</label><input type="time" id="retorno-fim"></div></div>
+                    <div class="form-item" style="margin-top:15px;"><label>Evolução:</label><div style="display:flex; gap: 15px;"><label><input type="radio" name="evolucao" value="melhorou"> Melhorou</label><label><input type="radio" name="evolucao" value="piorou"> Piorou</label><label><input type="radio" name="evolucao" value="na_mesma" checked> Na Mesma</label></div></div>
+                    ${colegiadoHtml}
+                    <button id="btn-salvar-entrevista" type="button" class="btn btn-primary" style="width: 100%; margin-top: 20px;">Salvar Atendimento da Semana</button>
+                </fieldset>`;
             }
             
             async function salvarEntrevista(atendimento, tratamento, semanaNum) {
+                const btn = document.getElementById('btn-salvar-entrevista');
+                btn.disabled = true;
                 const entrevistador = document.getElementById('entrevistador-nome').value;
                 const notas = document.getElementById('entrevista-notas').value;
-                if (!entrevistador) {
-                    alert("O nome do entrevistador é obrigatório.");
-                    return;
-                }
+                if (!entrevistador) { alert("O nome do entrevistador é obrigatório."); btn.disabled = false; return; }
 
                 const batch = writeBatch(db);
+                const tratamentoDocRef = doc(db, 'tratamentos_ae', tratamento.id);
 
                 if (semanaNum === 0) { // Salvando a 1ª Semana
-                    const tratamentoDocRef = doc(db, 'tratamentos_ae', tratamento.id);
-                    batch.update(tratamentoDocRef, {
-                        "primeiraEntrevista": {
-                            data: Timestamp.now(),
-                            entrevistador: entrevistador,
-                            notas: notas
-                        }
+                    batch.update(tratamentoDocRef, { "primeiraEntrevista": { data: Timestamp.now(), entrevistador, notas } });
+                    batch.set(doc(atendimentosRef), {
+                        assistidoId: tratamento.assistidoId, tratamentoId: tratamento.id,
+                        tipo: 'tratamento_semanal', dataAtendimento: serverTimestamp(),
+                        entrevistador: entrevistador, passeRecomendado: tratamento.passe_ciclo_atual, notas: notas
+                    });
+                } else { // Salvando semanas seguintes
+                    const passePara = document.getElementById('colegiado-para')?.value;
+                    batch.set(doc(atendimentosRef), {
+                        assistidoId: tratamento.assistidoId, tratamentoId: tratamento.id, tipo: 'tratamento_semanal', dataAtendimento: serverTimestamp(),
+                        entrevistador, passeRecomendado: document.getElementById('retorno-passe').value,
+                        horarioInicio: document.getElementById('retorno-inicio').value, horarioFim: document.getElementById('retorno-fim').value,
+                        evolucao: document.querySelector('input[name="evolucao"]:checked').value,
+                        passeDe: document.getElementById('colegiado-de')?.value || null, passePara: passePara || null,
+                        encaminhamentos: Array.from(document.querySelectorAll('#retorno-encaminhamentos-opcoes input:checked')).map(cb => cb.value),
+                        notas,
                     });
                     
-                    batch.set(doc(atendimentosRef), {
-                        assistidoId: tratamento.assistidoId,
-                        tratamentoId: tratamento.id,
-                        tipo: 'tratamento_semanal',
-                        dataAtendimento: serverTimestamp(),
-                        entrevistador: entrevistador,
-                        passeRecomendado: tratamento.passe_ciclo_atual,
-                        notas: notas
-                    });
-                } else {
-                    // Lógica para salvar outras semanas (não implementada ainda)
+                    if (semanaNum === 4 && passePara) { // Reavaliação e continuação
+                        batch.update(tratamentoDocRef, { status: 'concluido', dataFim: serverTimestamp() });
+                        const novoTratamentoRef = doc(tratamentosRef);
+                        batch.set(novoTratamentoRef, {
+                            assistidoId: tratamento.assistidoId, dataInicio: serverTimestamp(), status: 'ativo',
+                            faltas_acumuladas: 0, passe_ciclo_atual: passePara
+                        });
+                    }
                 }
                 
                 const filaDocRef = doc(db, 'fila_atendimento_ae', atendimento.id);
@@ -231,7 +256,25 @@
                 } catch(error) {
                     console.error("Erro ao salvar entrevista: ", error);
                     alert("Falha ao salvar. Tente novamente.");
+                } finally {
+                    btn.disabled = false;
                 }
+            }
+            
+            async function darAlta(atendimento, tratamento) {
+                const btn = document.getElementById('btn-dar-alta');
+                btn.disabled = true;
+                if (confirm(`Tem certeza que deseja dar alta para este assistido?`)) {
+                    const tratamentoDocRef = doc(db, 'tratamentos_ae', tratamento.id);
+                    await updateDoc(tratamentoDocRef, { status: 'concluido', dataFim: serverTimestamp() });
+                    
+                    const filaDocRef = doc(db, 'fila_atendimento_ae', atendimento.id);
+                    await updateDoc(filaDocRef, { status: 'entrevista_concluida' });
+                    
+                    alert('Alta registrada com sucesso!');
+                    ui.formularioContainer.innerHTML = '<p>Selecione um assistido à esquerda.</p>';
+                }
+                btn.disabled = false;
             }
         }
     </script>
