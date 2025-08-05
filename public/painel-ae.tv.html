@@ -163,13 +163,13 @@
         };
 
         function getSalaPorPasse(passe) {
-            if (!passe) return null;
+            if (!passe) return 'Encaminhamento';
             for (const sala in mapaDeSalas) {
                 if (mapaDeSalas[sala].includes(passe.toUpperCase())) {
                     return sala;
                 }
             }
-            return 'Encaminhamento';
+            return 'Encaminhamento'; // Fallback para passes não mapeados
         }
         
         function getSalaDestino(chamada) {
@@ -179,7 +179,7 @@
             if (chamada.status === 'chamado_passe') {
                 return getSalaPorPasse(chamada.passeRecomendado);
             }
-            return '';
+            return ''; // Retorna vazio se o status não for de chamada
         }
 
         function atualizarPainel(chamadas) {
@@ -197,10 +197,10 @@
             salaAtualEl.textContent = getSalaDestino(chamadaAtual) || '';
             
             chamadaPrincipalEl.style.animation = 'none';
-            void chamadaPrincipalEl.offsetWidth;
+            void chamadaPrincipalEl.offsetWidth; // Força a re-renderização para a animação funcionar
             chamadaPrincipalEl.style.animation = 'fadeIn 1s ease-in-out';
             
-            try { new Audio('/notification.mp3').play(); } catch(e) {}
+            try { new Audio('/notification.mp3').play(); } catch(e) { /* O usuário precisa interagir com a página primeiro */ }
 
             historicoItems.forEach((item, index) => {
                 const chamadaHist = historico[index];
@@ -222,14 +222,17 @@
             const hoje = new Date();
             hoje.setHours(0, 0, 0, 0);
             const filaRef = collection(db, 'fila_atendimento_ae');
-            const q = query(filaRef, where("chegadaEm", ">=", Timestamp.fromDate(hoje)), orderBy("chegadaEm"));
+            const q = query(filaRef, 
+                where("chegadaEm", ">=", Timestamp.fromDate(hoje)), 
+                orderBy("chegadaEm")
+            );
 
             onSnapshot(q, (snapshot) => {
                 const chamadasValidas = snapshot.docs
                     .map(doc => doc.data())
-                    .filter(data => data.status && (data.status.startsWith('chamado_')));
+                    .filter(data => data.status && (data.status === 'chamado_entrevista' || data.status === 'chamado_passe'));
                 
-                const ultimasChamadas = chamadasValidas.slice(-4);
+                const ultimasChamadas = chamadasValidas.slice(-4); // Pega a última chamada e as 3 anteriores
                 atualizarPainel(ultimasChamadas);
             }, (error) => {
                 console.error("Erro ao escutar o painel:", error);
@@ -239,10 +242,12 @@
         
         function atualizarRelogio() {
             const relogioEl = document.getElementById('relogio');
-            const agora = new Date();
-            const horas = String(agora.getHours()).padStart(2, '0');
-            const minutos = String(agora.getMinutes()).padStart(2, '0');
-            relogioEl.textContent = `${horas}:${minutos}`;
+            if(relogioEl){
+                const agora = new Date();
+                const horas = String(agora.getHours()).padStart(2, '0');
+                const minutos = String(agora.getMinutes()).padStart(2, '0');
+                relogioEl.textContent = `${horas}:${minutos}`;
+            }
         }
 
         escutarChamadas();
