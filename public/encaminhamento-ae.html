@@ -30,7 +30,7 @@
 <body>
     <div class="container-principal">
         <nav class="nav-voltar"><a href="/dashboard.html" class="btn-voltar">⬅ Voltar para o Dashboard</a></nav>
-        <div id="acesso-negado" class="container"><h1>Acesso Negado</h1></div>
+        <div id="acesso-negado" class="container hidden"><h1>Acesso Negado</h1></div>
         
         <div id="main-content" class="container hidden">
             <h1>Painel de Encaminhamento</h1>
@@ -57,9 +57,8 @@
         initializeApp(firebaseConfig);
 
         protegerPagina(['entrevistador', 'diretor', 'super-admin']).then(user => {
-            // CORREÇÃO APLICADA AQUI: Esconde a div de acesso negado
-            document.getElementById('acesso-negado').classList.add('hidden');
             document.getElementById('main-content').classList.remove('hidden');
+            document.getElementById('acesso-negado').classList.add('hidden');
             inicializarPagina(user);
         }).catch(err => { 
             document.getElementById('acesso-negado').classList.remove('hidden');
@@ -108,6 +107,7 @@
 
                 const qSemanas = query(atendimentosRef, where("tratamentoId", "==", atendimento.tratamentoId), where("tipo", "!=", "falta"));
                 const semanasSnapshot = await getDocs(qSemanas);
+                
                 const semanaNum = semanasSnapshot.size + 1;
 
                 const passe = tratamento.passe_ciclo_atual;
@@ -126,24 +126,34 @@
                 card.className = 'assistido-card';
 
                 let buttonsHtml = '';
-                const entrevistaJaChamada = atendimento.status === 'chamado_entrevista';
-                const passeJaChamado = atendimento.status === 'chamado_passe';
+                const status = atendimento.status;
 
+                // ==========================================================
+                // LÓGICA DE BOTÕES CORRIGIDA PARA FORÇAR A SEQUÊNCIA
+                // ==========================================================
                 if (atendimento.precisaEntrevista) {
-                    card.classList.toggle('chamado-entrevista', entrevistaJaChamada && !passeJaChamado);
+                    const entrevistaChamada = status === 'chamado_entrevista';
+                    const passeChamado = status === 'chamado_passe';
+                    
+                    const entrevistaBtnDisabled = entrevistaChamada || passeChamado;
+                    const passeBtnDisabled = !entrevistaChamada || passeChamado; // SÓ HABILITA SE A ENTREVISTA JÁ FOI CHAMADA
+
+                    card.classList.toggle('chamado-entrevista', entrevistaChamada && !passeChamado);
+
                     buttonsHtml = `
-                        <button class="btn btn-info btn-chamar-entrevista" data-id="${atendimento.id}" ${entrevistaJaChamada ? 'disabled' : ''}>Chamar p/ Entrevista</button>
-                        <button class="btn btn-success btn-chamar-passe" data-id="${atendimento.id}" ${passeJaChamado ? 'disabled' : ''}>Chamar p/ Passe</button>
+                        <button class="btn btn-info btn-chamar-entrevista" data-id="${atendimento.id}" ${entrevistaBtnDisabled ? 'disabled' : ''}>Chamar p/ Entrevista</button>
+                        <button class="btn btn-success btn-chamar-passe" data-id="${atendimento.id}" ${passeBtnDisabled ? 'disabled' : ''}>Chamar p/ Passe</button>
                     `;
                 } else {
+                    const passeChamado = status === 'chamado_passe';
                     buttonsHtml = `
                         <div style="grid-column: 1 / -1;">
-                            <button class="btn btn-success btn-chamar-passe" data-id="${atendimento.id}" ${passeJaChamado ? 'disabled' : ''}>Chamar p/ Passe</button>
+                            <button class="btn btn-success btn-chamar-passe" data-id="${atendimento.id}" ${passeChamado ? 'disabled' : ''}>Chamar p/ Passe</button>
                         </div>
                     `;
                 }
 
-                card.classList.toggle('chamado-passe', passeJaChamado);
+                card.classList.toggle('chamado-passe', status === 'chamado_passe');
                 
                 card.innerHTML = `
                     <h3>${atendimento.nomeAssistido}</h3>
@@ -161,7 +171,7 @@
             cardsContainer.addEventListener('click', async (e) => {
                 const target = e.target;
                 const id = target.dataset.id;
-                if (!id) return;
+                if (!id || target.disabled) return;
 
                 let novoStatus = '';
                 if (target.classList.contains('btn-chamar-entrevista')) {
@@ -171,7 +181,7 @@
                 }
 
                 if (novoStatus) {
-                    target.disabled = true;
+                    target.disabled = true; // Desabilita imediatamente para evitar duplo clique
                     const filaDocRef = doc(db, 'fila_atendimento_ae', id);
                     await updateDoc(filaDocRef, { status: novoStatus });
                 }
