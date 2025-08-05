@@ -92,13 +92,9 @@
                 });
             });
             
-            // ==========================================================
-            // CORREÇÃO APLICADA AQUI
-            // O parâmetro foi renomeado de "doc" para "filaDocSnapshot" para evitar conflito
-            // ==========================================================
             async function getContextoDoAtendimento(filaDocSnapshot) {
                 const atendimento = { id: filaDocSnapshot.id, ...filaDocSnapshot.data() };
-                if (!atendimento.tratamentoId) { // É passe avulso
+                if (!atendimento.tratamentoId) {
                     return { ...atendimento, precisaEntrevista: false };
                 }
 
@@ -109,7 +105,12 @@
 
                 const qSemanas = query(atendimentosRef, where("tratamentoId", "==", atendimento.tratamentoId), where("tipo", "!=", "falta"));
                 const semanasSnapshot = await getDocs(qSemanas);
-                const semanaNum = semanasSnapshot.size;
+                
+                // ==========================================================
+                // CORREÇÃO APLICADA AQUI
+                // A semana atual é o número de presenças + 1
+                // ==========================================================
+                const semanaNum = semanasSnapshot.size + 1;
 
                 const passe = tratamento.passe_ciclo_atual;
                 let precisaEntrevista = false;
