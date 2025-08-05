@@ -82,7 +82,7 @@
                     return;
                 }
 
-                const promessas = snapshot.docs.map(doc => getContextoDoAtendimento(doc));
+                const promessas = snapshot.docs.map(docSnapshot => getContextoDoAtendimento(docSnapshot));
                 const atendimentosComContexto = await Promise.all(promessas);
 
                 atendimentosComContexto.forEach(atendimento => {
@@ -92,13 +92,18 @@
                 });
             });
             
-            async function getContextoDoAtendimento(doc) {
-                const atendimento = { id: doc.id, ...doc.data() };
+            // ==========================================================
+            // CORREÇÃO APLICADA AQUI
+            // O parâmetro foi renomeado de "doc" para "filaDocSnapshot" para evitar conflito
+            // ==========================================================
+            async function getContextoDoAtendimento(filaDocSnapshot) {
+                const atendimento = { id: filaDocSnapshot.id, ...filaDocSnapshot.data() };
                 if (!atendimento.tratamentoId) { // É passe avulso
                     return { ...atendimento, precisaEntrevista: false };
                 }
 
-                const tratamentoDoc = await getDoc(doc(db, 'tratamentos_ae', atendimento.tratamentoId));
+                const tratamentoDocRef = doc(db, 'tratamentos_ae', atendimento.tratamentoId);
+                const tratamentoDoc = await getDoc(tratamentoDocRef);
                 if (!tratamentoDoc.exists()) return null;
                 const tratamento = tratamentoDoc.data();
 
@@ -144,7 +149,7 @@
                 card.innerHTML = `
                     <h3>${atendimento.nomeAssistido}</h3>
                     <p class="info">
-                        Tipo: <strong>${atendimento.tratamentoId ? `Assistência (${atendimento.passe_ciclo_atual})` : 'Passe Avulso'}</strong><br>
+                        Tipo: <strong>${atendimento.tratamentoId ? `Assistência (${atendimento.passe_ciclo_atual || 'N/A'})` : 'Passe Avulso'}</strong><br>
                         Entrevista hoje: <strong>${atendimento.precisaEntrevista ? 'Sim' : 'Não'}</strong>
                     </p>
                     <div class="actions">
