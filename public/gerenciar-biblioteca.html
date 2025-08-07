@@ -179,7 +179,9 @@
             const isbnSpinner = document.getElementById('isbn-spinner');
 
             inputIsbn.addEventListener('change', async (e) => {
-                const isbnValue = e.target.value.trim();
+                // CORREÇÃO: Limpa o ISBN de hífens e outros caracteres, mantendo apenas números e o 'X'.
+                const isbnValue = e.target.value.replace(/[^0-9X]/gi, '').trim();
+
                 if (isbnValue.length >= 10) {
                     isbnSpinner.style.display = 'block';
                     try {
@@ -241,7 +243,7 @@
                     titulo: document.getElementById('titulo').value,
                     autor: document.getElementById('autor').value,
                     editora: document.getElementById('editora').value,
-                    isbn: document.getElementById('isbn').value,
+                    isbn: document.getElementById('isbn').value.replace(/[^0-9X]/gi, '').trim(), // Garante que o ISBN salvo também seja limpo
                     anoPublicacao: document.getElementById('anoPublicacao').value,
                     categoria: document.getElementById('categoria').value,
                     finalidade: finalidade,
