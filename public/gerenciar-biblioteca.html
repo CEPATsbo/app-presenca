@@ -32,6 +32,21 @@
         .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.6); display: none; justify-content: center; align-items: center; z-index: 1000; }
         .modal-content { background-color: white; padding: 30px; border-radius: 10px; width: 90%; max-width: 500px; }
         .modal-content h2 { margin-top: 0; }
+        .isbn-wrapper { position: relative; }
+        .spinner {
+            position: absolute;
+            right: 10px;
+            top: 50%;
+            transform: translateY(-50%);
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #007bff;
+            border-radius: 50%;
+            width: 20px;
+            height: 20px;
+            animation: spin 1s linear infinite;
+            display: none;
+        }
+        @keyframes spin { 0% { transform: translateY(-50%) rotate(0deg); } 100% { transform: translateY(-50%) rotate(360deg); } }
     </style>
 </head>
 <body>
@@ -46,10 +61,15 @@
         <form id="form-livro">
             <input type="hidden" id="livroId">
             <div class="form-grid">
+                <div class="form-item isbn-wrapper" style="grid-column: 1 / -1;">
+                    <label for="isbn">ISBN (Escaneie o Código de Barras)</label>
+                    <input type="text" id="isbn">
+                    <div class="spinner" id="isbn-spinner"></div>
+                </div>
                 <div class="form-item" style="grid-column: 1 / -1;"><label for="titulo">Título do Livro</label><input type="text" id="titulo" required></div>
                 <div class="form-item"><label for="autor">Autor(a)</label><input type="text" id="autor" required></div>
                 <div class="form-item"><label for="editora">Editora</label><input type="text" id="editora"></div>
-                <div class="form-item"><label for="isbn">ISBN (Código)</label><input type="text" id="isbn"></div>
+                <div class="form-item"><label for="anoPublicacao">Ano</label><input type="text" id="anoPublicacao"></div>
                 <div class="form-item"><label for="categoria">Categoria</label><select id="categoria"><option value="Doutrinário">Doutrinário</option><option value="Romance">Romance</option><option value="Biografia">Biografia</option><option value="Infantil">Infantil</option><option value="Outros">Outros</option></select></div>
                 <div class="form-item">
                     <label>Finalidade</label>
@@ -143,7 +163,8 @@
             const functions = getFunctions(undefined, 'southamerica-east1');
             const registrarLogDeAcesso = httpsCallable(functions, 'registrarLogDeAcesso');
             const gerarRelatorioBiblioteca = httpsCallable(functions, 'gerarRelatorioBiblioteca');
-            
+            const buscarDadosLivroPorISBN = httpsCallable(functions, 'buscarDadosLivroPorISBN');
+
             const form = document.getElementById('form-livro');
             const tabelaLivros = document.getElementById('tabela-livros').querySelector('tbody');
             const campoPreco = document.getElementById('campo-preco');
@@ -154,6 +175,29 @@
             const btnConfirmarRelatorio = document.getElementById('btn-confirmar-relatorio');
             const seletorMes = document.getElementById('relatorio-mes');
             const seletorAno = document.getElementById('relatorio-ano');
+            const inputIsbn = document.getElementById('isbn');
+            const isbnSpinner = document.getElementById('isbn-spinner');
+
+            inputIsbn.addEventListener('change', async (e) => {
+                const isbnValue = e.target.value.trim();
+                if (isbnValue.length >= 10) {
+                    isbnSpinner.style.display = 'block';
+                    try {
+                        const result = await buscarDadosLivroPorISBN({ isbn: isbnValue });
+                        const data = result.data;
+                        document.getElementById('titulo').value = data.titulo || '';
+                        document.getElementById('autor').value = data.autor || '';
+                        document.getElementById('editora').value = data.editora || '';
+                        document.getElementById('anoPublicacao').value = data.anoPublicacao || '';
+                        alert('Dados do livro preenchidos automaticamente!');
+                    } catch (error) {
+                        console.error("Erro ao buscar dados do ISBN:", error);
+                        alert(`Não foi possível encontrar dados para o ISBN ${isbnValue}. Por favor, preencha manualmente.`);
+                    } finally {
+                        isbnSpinner.style.display = 'none';
+                    }
+                }
+            });
 
             radiosFinalidade.forEach(radio => {
                 radio.addEventListener('change', () => {
@@ -173,7 +217,7 @@
                     if (livro.finalidade === 'Venda') {
                         statusPreco = Number(livro.preco || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
                     } else {
-                        statusPreco = livro.status === 'emprestado' ? `<span style="color:red; font-weight:bold;">Emprestado</span>` : `<span style="color:green;">Disponível</span>`;
+                       statusPreco = (livro.quantidade > 0) ? `<span style="color:green; font-weight:bold;">Disponível</span>` : `<span style="color:red; font-weight:bold;">Emprestado</span>`;
                     }
                     const estoqueClasse = (livro.quantidade === 0) ? 'estoque-zerado' : '';
                     tr.innerHTML = `
@@ -198,11 +242,11 @@
                     autor: document.getElementById('autor').value,
                     editora: document.getElementById('editora').value,
                     isbn: document.getElementById('isbn').value,
+                    anoPublicacao: document.getElementById('anoPublicacao').value,
                     categoria: document.getElementById('categoria').value,
                     finalidade: finalidade,
                     preco: finalidade === 'Venda' ? parseFloat(document.getElementById('preco').value) || 0 : null,
                     quantidade: parseInt(document.getElementById('quantidade').value) || 0,
-                    status: finalidade === 'Empréstimo' ? 'disponível' : null,
                 };
                 const id = document.getElementById('livroId').value;
 
@@ -237,6 +281,7 @@
                         document.getElementById('autor').value = data.autor;
                         document.getElementById('editora').value = data.editora || '';
                         document.getElementById('isbn').value = data.isbn || '';
+                        document.getElementById('anoPublicacao').value = data.anoPublicacao || '';
                         document.getElementById('categoria').value = data.categoria;
                         document.getElementById('quantidade').value = data.quantidade || 0;
                         document.querySelector(`input[name="finalidade"][value="${data.finalidade}"]`).checked = true;
@@ -270,99 +315,97 @@
                 document.getElementById('btn-cancelar').style.display = 'none';
             });
             
-            btnRelatorio.addEventListener('click', () => {
-                preencherFiltrosRelatorio();
-                modalRelatorio.style.display = 'flex';
-            });
+             btnRelatorio.addEventListener('click', () => { 
+                preencherFiltrosRelatorio(); 
+                modalRelatorio.style.display = 'flex'; 
+             }); 
 
-            btnCancelarRelatorio.addEventListener('click', () => {
-                modalRelatorio.style.display = 'none';
-            });
+             btnCancelarRelatorio.addEventListener('click', () => { 
+                modalRelatorio.style.display = 'none'; 
+             }); 
 
-            btnConfirmarRelatorio.addEventListener('click', async () => {
-                const mes = seletorMes.value;
-                const ano = seletorAno.value;
-                btnConfirmarRelatorio.disabled = true;
-                btnConfirmarRelatorio.textContent = 'Gerando...';
+             btnConfirmarRelatorio.addEventListener('click', async () => { 
+                const mes = seletorMes.value; 
+                const ano = seletorAno.value; 
+                btnConfirmarRelatorio.disabled = true; 
+                btnConfirmarRelatorio.textContent = 'Gerando...'; 
 
-                try {
-                    const resultado = await gerarRelatorioBiblioteca({ mes: parseInt(mes), ano: parseInt(ano) });
-                    gerarPDF(resultado.data, mes, ano);
-                } catch (error) {
-                    console.error("Erro ao gerar relatório:", error);
-                    alert("Não foi possível gerar o relatório. Verifique o console.");
-                } finally {
-                    btnConfirmarRelatorio.disabled = false;
-                    btnConfirmarRelatorio.textContent = 'Gerar';
-                    modalRelatorio.style.display = 'none';
-                }
-            });
-            
-            function preencherFiltrosRelatorio() {
-                const meses = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
-                seletorMes.innerHTML = meses.map((nome, index) => `<option value="${index + 1}">${nome}</option>`).join('');
+                try { 
+                    const resultado = await gerarRelatorioBiblioteca({ mes: parseInt(mes), ano: parseInt(ano) }); 
+                    gerarPDF(resultado.data, mes, ano); 
+                } catch (error) { 
+                    console.error("Erro ao gerar relatório:", error); 
+                    alert("Não foi possível gerar o relatório. Verifique o console."); 
+                } finally { 
+                    btnConfirmarRelatorio.disabled = false; 
+                    btnConfirmarRelatorio.textContent = 'Gerar'; 
+                    modalRelatorio.style.display = 'none'; 
+                } 
+             }); 
+             
+             function preencherFiltrosRelatorio() { 
+                const meses = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"]; 
+                seletorMes.innerHTML = meses.map((nome, index) => `<option value="${index + 1}">${nome}</option>`).join(''); 
                 
-                const anoAtual = new Date().getFullYear();
-                seletorAno.innerHTML = '';
-                for (let i = anoAtual; i >= anoAtual - 5; i--) {
-                    seletorAno.innerHTML += `<option value="${i}">${i}</option>`;
-                }
+                const anoAtual = new Date().getFullYear(); 
+                seletorAno.innerHTML = ''; 
+                for (let i = anoAtual; i >= anoAtual - 5; i--) { 
+                    seletorAno.innerHTML += `<option value="${i}">${i}</option>`; 
+                } 
 
-                seletorMes.value = new Date().getMonth() + 1;
-                seletorAno.value = anoAtual;
-            }
+                seletorMes.value = new Date().getMonth() + 1; 
+                seletorAno.value = anoAtual; 
+             } 
 
-            function gerarPDF(dados, mes, ano) {
-                const { jsPDF } = window.jspdf;
-                const doc = new jsPDF();
-                const meses = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
-                const mesNome = meses[mes - 1];
+             function gerarPDF(dados, mes, ano) { 
+                const { jsPDF } = window.jspdf; 
+                const doc = new jsPDF(); 
+                const meses = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"]; 
+                const mesNome = meses[mes - 1]; 
 
-                doc.setFontSize(18);
-                doc.text(`Relatório da Biblioteca - ${mesNome} de ${ano}`, 14, 22);
+                doc.setFontSize(18); 
+                doc.text(`Relatório da Biblioteca - ${mesNome} de ${ano}`, 14, 22); 
 
-                // Seção de Vendas
-                doc.setFontSize(14);
-                doc.text("Resumo de Vendas", 14, 35);
-                const corpoVendas = dados.vendas.map(v => {
-                    const dataVenda = new Date(v.registradoEm).toLocaleDateString('pt-BR');
-                    const statusVenda = v.tipoVenda === 'prazo' ? `${v.status.charAt(0).toUpperCase() + v.status.slice(1)}` : 'Recebido';
-                    return [
-                        dataVenda,
-                        v.compradorNome || 'Venda à vista',
-                        v.itens.map(i => `${i.qtd}x ${i.titulo}`).join('\n'),
-                        statusVenda,
-                        Number(v.total).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
-                    ];
-                });
-                doc.autoTable({
-                    startY: 40,
-                    head: [['Data', 'Comprador', 'Itens', 'Status', 'Total']],
-                    body: corpoVendas,
-                });
+                doc.setFontSize(14); 
+                doc.text("Resumo de Vendas", 14, 35); 
+                const corpoVendas = dados.vendas.map(v => { 
+                    const dataVenda = new Date(v.registradoEm).toLocaleDateString('pt-BR'); 
+                    const statusVenda = v.tipoVenda === 'prazo' ? `${v.status.charAt(0).toUpperCase() + v.status.slice(1)}` : 'Recebido'; 
+                    return [ 
+                        dataVenda, 
+                        v.compradorNome || 'Venda à vista', 
+                        v.itens.map(i => `${i.qtd}x ${i.titulo}`).join('\n'), 
+                        statusVenda, 
+                        Number(v.total).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) 
+                    ]; 
+                }); 
+                doc.autoTable({ 
+                    startY: 40, 
+                    head: [['Data', 'Comprador', 'Itens', 'Status', 'Total']], 
+                    body: corpoVendas, 
+                }); 
 
-                // Seção de Empréstimos
-                const finalYVendas = doc.lastAutoTable.finalY || 40;
-                doc.setFontSize(14);
-                doc.text("Resumo de Empréstimos e Devoluções", 14, finalYVendas + 15);
-                const corpoEmprestimos = dados.emprestimos.map(e => {
-                    const dataEmprestimo = new Date(e.dataEmprestimo).toLocaleDateString('pt-BR');
-                    const dataDevolucao = e.dataDevolucao ? new Date(e.dataDevolucao).toLocaleDateString('pt-BR') : 'Emprestado';
-                    return [
-                        dataEmprestimo,
-                        e.livroTitulo,
-                        e.leitor.nome,
-                        dataDevolucao
-                    ];
-                });
-                doc.autoTable({
-                    startY: finalYVendas + 20,
-                    head: [['Data Empréstimo', 'Livro', 'Leitor', 'Status / Data Devolução']],
-                    body: corpoEmprestimos,
-                });
+                const finalYVendas = doc.lastAutoTable.finalY || 40; 
+                doc.setFontSize(14); 
+                doc.text("Resumo de Empréstimos e Devoluções", 14, finalYVendas + 15); 
+                const corpoEmprestimos = dados.emprestimos.map(e => { 
+                    const dataEmprestimo = new Date(e.dataEmprestimo).toLocaleDateString('pt-BR'); 
+                    const dataDevolucao = e.dataDevolucao ? new Date(e.dataDevolucao).toLocaleDateString('pt-BR') : 'Emprestado'; 
+                    return [ 
+                        dataEmprestimo, 
+                        e.livroTitulo, 
+                        e.leitor.nome, 
+                        dataDevolucao 
+                    ]; 
+                }); 
+                doc.autoTable({ 
+                    startY: finalYVendas + 20, 
+                    head: [['Data Empréstimo', 'Livro', 'Leitor', 'Status / Data Devolução']], 
+                    body: corpoEmprestimos, 
+                }); 
 
-                doc.save(`relatorio_biblioteca_${mes}_${ano}.pdf`);
-            }
+                doc.save(`relatorio_biblioteca_${mes}_${ano}.pdf`); 
+             } 
         }
     </script>
 </body>

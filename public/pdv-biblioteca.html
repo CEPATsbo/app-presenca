@@ -39,6 +39,13 @@
         table { width: 100%; border-collapse: collapse; }
         th, td { padding: 12px; border-bottom: 1px solid #eee; text-align: left; }
         th { background-color: #f2f2f2; }
+        /* --- NOVO: Estilo para o campo de leitura de código de barras --- */
+        .leitor-barcode {
+            border: 2px solid #007bff;
+            padding: 15px;
+            font-size: 1.2em;
+            margin-bottom: 20px;
+        }
     </style>
 </head>
 <body>
@@ -55,9 +62,14 @@
         </div>
 
         <div id="tab-vendas" class="tab-content active">
+            <div class="form-item">
+                <label for="leitor-venda">Escanear Livro para Venda</label>
+                <input type="text" id="leitor-venda" class="leitor-barcode" placeholder="Aponte o leitor de código de barras aqui...">
+            </div>
+            <hr>
             <div class="grid-container">
                 <div class="form-item">
-                    <label for="busca-livro-venda">Buscar Livro para Venda</label>
+                    <label for="busca-livro-venda">Ou Busque Manualmente</label>
                     <input type="text" id="busca-livro-venda" placeholder="Digite para filtrar a lista abaixo...">
                     <div id="resultados-busca-venda"></div>
                 </div>
@@ -74,10 +86,15 @@
         </div>
 
         <div id="tab-emprestimos" class="tab-content">
+             <div class="form-item">
+                <label for="leitor-emprestimo">Escanear Livro para Empréstimo</label>
+                <input type="text" id="leitor-emprestimo" class="leitor-barcode" placeholder="Aponte o leitor de código de barras aqui...">
+            </div>
+            <hr>
             <h3>Registrar Novo Empréstimo</h3>
             <div class="grid-container">
                 <div class="form-item">
-                    <label for="busca-livro-emprestimo">Buscar Livro para Empréstimo</label>
+                    <label for="busca-livro-emprestimo">Ou Busque Manualmente</label>
                     <input type="text" id="busca-livro-emprestimo" placeholder="Digite para filtrar a lista abaixo...">
                     <div id="resultados-busca-emprestimo"></div>
                     <p><strong>Selecionado:</strong> <span id="livro-selecionado-emprestimo">Nenhum</span></p>
@@ -116,8 +133,8 @@
     </div>
 
     <script type="module">
-        import { initializeApp, getApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
-        import { getFirestore, collection, onSnapshot, doc, query, where, orderBy } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
+        import { getFirestore, collection, onSnapshot, doc, query, where, orderBy, getDocs } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
         import { getFunctions, httpsCallable } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-functions.js";
         import { protegerPagina } from '/auth.js';
 
@@ -150,19 +167,19 @@
             const registrarVendaBiblioteca = httpsCallable(functions, 'registrarVendaBiblioteca');
             const gerenciarEmprestimoBiblioteca = httpsCallable(functions, 'gerenciarEmprestimoBiblioteca');
 
+            // --- Seletores de Elementos ---
             const tabs = document.querySelectorAll('.tab-link');
             const tabContents = document.querySelectorAll('.tab-content');
+            // Vendas
+            const leitorVendaInput = document.getElementById('leitor-venda'); // NOVO
             const buscaLivroVendaInput = document.getElementById('busca-livro-venda');
             const resultadosBuscaVenda = document.getElementById('resultados-busca-venda');
             const listaCarrinho = document.getElementById('lista-carrinho');
             const totalContainer = document.getElementById('total-container');
             const btnFinalizarVista = document.getElementById('btn-finalizar-vista');
             const btnFinalizarPrazo = document.getElementById('btn-finalizar-prazo');
-            const modalPendencia = document.getElementById('modal-pendencia');
-            const seletorVoluntarioPendencia = document.getElementById('seletor-voluntario-pendencia');
-            const nomeExternoInput = document.getElementById('nome-externo');
-            const btnConfirmarPendencia = document.getElementById('btn-confirmar-pendencia');
-            const btnCancelarPendencia = document.getElementById('btn-cancelar-pendencia');
+            // Empréstimos
+            const leitorEmprestimoInput = document.getElementById('leitor-emprestimo'); // NOVO
             const buscaLivroEmprestimoInput = document.getElementById('busca-livro-emprestimo');
             const resultadosBuscaEmprestimo = document.getElementById('resultados-busca-emprestimo');
             const livroSelecionadoSpan = document.getElementById('livro-selecionado-emprestimo');
@@ -170,12 +187,20 @@
             const nomeExternoEmprestimoInput = document.getElementById('nome-externo-emprestimo');
             const btnRegistrarEmprestimo = document.getElementById('btn-registrar-emprestimo');
             const tabelaEmprestimos = document.getElementById('tabela-emprestimos').querySelector('tbody');
+            // Modal
+            const modalPendencia = document.getElementById('modal-pendencia');
+            const seletorVoluntarioPendencia = document.getElementById('seletor-voluntario-pendencia');
+            const nomeExternoInput = document.getElementById('nome-externo');
+            const btnConfirmarPendencia = document.getElementById('btn-confirmar-pendencia');
+            const btnCancelarPendencia = document.getElementById('btn-cancelar-pendencia');
 
+            // --- Variáveis de Estado ---
             let carrinho = [];
             let livroParaEmprestimo = null;
             let todosOsLivrosAVenda = [];
-            let todosOsLivrosDisponiveis = [];
+            let todosOsLivrosParaEmprestimo = [];
 
+            // --- Lógica das Abas ---
             tabs.forEach(tab => {
                 tab.addEventListener('click', () => {
                     tabs.forEach(item => item.classList.remove('active'));
@@ -186,20 +211,71 @@
                 });
             });
             
+            // --- Carregamento de Dados Iniciais ---
             onSnapshot(query(collection(db, "voluntarios"), orderBy("nome")), (snapshot) => {
                 const options = '<option value="">Selecione um voluntário</option>' + snapshot.docs.map(doc => `<option value="${doc.id}" data-nome="${doc.data().nome}">${doc.data().nome}</option>`).join('');
                 seletorVoluntarioPendencia.innerHTML = options;
                 seletorVoluntarioEmprestimo.innerHTML = options;
             });
 
-            // --- Lógica de Vendas ---
+            // --- NOVO: Lógica do Leitor de Código de Barras para VENDAS ---
+            leitorVendaInput.addEventListener('change', async (e) => {
+                const isbn = e.target.value.trim();
+                if (!isbn) return;
+
+                const q = query(collection(db, 'biblioteca_livros'), where('isbn', '==', isbn), where('finalidade', '==', 'Venda'));
+                try {
+                    const querySnapshot = await getDocs(q);
+                    if (querySnapshot.empty) {
+                        alert('Livro não encontrado no acervo ou não está disponível para venda.');
+                    } else {
+                        const livroDoc = querySnapshot.docs[0];
+                        const livro = { id: livroDoc.id, ...livroDoc.data() };
+                        adicionarAoCarrinho(livro);
+                    }
+                } catch (error) {
+                    console.error("Erro ao buscar livro por ISBN:", error);
+                    alert("Ocorreu um erro ao buscar o livro.");
+                }
+                
+                e.target.value = ''; // Limpa o campo
+                e.target.focus();   // Devolve o foco para o campo
+            });
+
+            // --- NOVO: Lógica do Leitor de Código de Barras para EMPRÉSTIMOS ---
+            leitorEmprestimoInput.addEventListener('change', async (e) => {
+                const isbn = e.target.value.trim();
+                if (!isbn) return;
+
+                const q = query(collection(db, 'biblioteca_livros'), where('isbn', '==', isbn), where('finalidade', '==', 'Empréstimo'));
+                try {
+                    const querySnapshot = await getDocs(q);
+                    if (querySnapshot.empty) {
+                        alert('Livro não encontrado no acervo ou não está disponível para empréstimo.');
+                    } else {
+                        const livroDoc = querySnapshot.docs[0];
+                        const livro = { id: livroDoc.id, ...livroDoc.data() };
+                        if (livro.quantidade > 0) {
+                            selecionarLivroParaEmprestimo(livro);
+                            alert(`Livro "${livro.titulo}" selecionado.`);
+                        } else {
+                            alert(`O livro "${livro.titulo}" não tem cópias disponíveis para empréstimo.`);
+                        }
+                    }
+                } catch (error) {
+                    console.error("Erro ao buscar livro por ISBN para empréstimo:", error);
+                    alert("Ocorreu um erro ao buscar o livro.");
+                }
+                
+                e.target.value = ''; // Limpa o campo
+                e.target.focus();   // Devolve o foco para o campo
+            });
+
+            // --- Lógica de Vendas (Manual e Carrinho) ---
             function carregarLivrosParaVenda() {
-                const q = query(collection(db, 'biblioteca_livros'), where('finalidade', '==', 'Venda'));
+                const q = query(collection(db, 'biblioteca_livros'), where('finalidade', '==', 'Venda'), orderBy('titulo'));
                 onSnapshot(q, (snapshot) => {
-                    let livros = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-                    livros = livros.filter(livro => livro.quantidade > 0);
-                    livros.sort((a, b) => a.titulo.localeCompare(b.titulo));
-                    todosOsLivrosAVenda = livros;
+                    todosOsLivrosAVenda = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
                     renderizarResultadosVenda(todosOsLivrosAVenda);
                 }, (error) => console.error("Erro ao carregar livros para venda:", error));
             }
@@ -218,11 +294,16 @@
                 livros.forEach(livro => {
                     const div = document.createElement('div');
                     div.className = 'resultado-item';
-                    div.innerHTML = `${livro.titulo} - ${livro.autor} <strong>(${Number(livro.preco || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })})</strong>`;
+                    if (livro.quantidade === 0) {
+                        div.classList.add('esgotado');
+                    }
+                    div.innerHTML = `${livro.titulo} - ${livro.autor} <strong>(Estoque: ${livro.quantidade})</strong>`;
                     div.onclick = () => {
-                        adicionarAoCarrinho(livro);
-                        buscaLivroVendaInput.value = '';
-                        renderizarResultadosVenda(todosOsLivrosAVenda);
+                        if (livro.quantidade > 0) {
+                            adicionarAoCarrinho(livro);
+                            buscaLivroVendaInput.value = '';
+                            resultadosBuscaVenda.innerHTML = '';
+                        }
                     };
                     resultadosBuscaVenda.appendChild(div);
                 });
@@ -233,7 +314,7 @@
                 const qtdNoCarrinho = itemExistente ? itemExistente.qtd : 0;
 
                 if (qtdNoCarrinho >= livro.quantidade) {
-                    alert(`Estoque esgotado para o livro "${livro.titulo}".`);
+                    alert(`Estoque máximo atingido para o livro "${livro.titulo}".`);
                     return;
                 }
 
@@ -290,10 +371,15 @@
                 if (carrinho.length === 0) return alert('O carrinho está vazio.');
                 const totalVenda = carrinho.reduce((acc, item) => acc + (item.preco * item.qtd), 0);
                 
+                // Desabilitar botões para evitar cliques duplos
+                btnConfirmarPendencia.disabled = true;
+                btnFinalizarVista.disabled = true;
+
                 try {
+                    // ATENÇÃO: A Cloud Function 'registrarVendaBiblioteca' já faz a verificação de estoque.
                     await registrarVendaBiblioteca({
                         total: totalVenda,
-                        itens: carrinho.map(i => ({livroId: i.id, titulo: i.titulo, qtd: i.qtd, precoUnitario: i.preco})),
+                        itens: carrinho.map(i => ({id: i.id, titulo: i.titulo, qtd: i.qtd, precoUnitario: i.preco})),
                         tipoVenda,
                         comprador
                     });
@@ -304,24 +390,27 @@
                     seletorVoluntarioPendencia.value = '';
                     nomeExternoInput.value = '';
                 } catch(error) {
+                    console.error("Erro detalhado ao finalizar venda:", error);
                     alert(`Erro ao registrar venda: ${error.message}`);
+                } finally {
+                    // Reabilitar botões
+                    btnConfirmarPendencia.disabled = false;
+                    btnFinalizarVista.disabled = false;
                 }
             }
 
+            // --- Lógica de Empréstimos (Manual e Tabela) ---
             function carregarLivrosParaEmprestimo() {
-                const q = query(collection(db, 'biblioteca_livros'), where('finalidade', '==', 'Empréstimo'));
+                const q = query(collection(db, 'biblioteca_livros'), where('finalidade', '==', 'Empréstimo'), orderBy('titulo'));
                 onSnapshot(q, (snapshot) => {
-                    let livros = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-                    livros = livros.filter(livro => livro.status === 'disponível' && livro.quantidade > 0);
-                    livros.sort((a, b) => a.titulo.localeCompare(b.titulo));
-                    todosOsLivrosDisponiveis = livros;
-                    renderizarResultadosEmprestimo(todosOsLivrosDisponiveis);
+                    todosOsLivrosParaEmprestimo = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                    renderizarResultadosEmprestimo(todosOsLivrosParaEmprestimo);
                 }, (error) => console.error("Erro ao carregar livros para empréstimo:", error));
             }
 
             buscaLivroEmprestimoInput.addEventListener('keyup', () => {
                 const textoBusca = buscaLivroEmprestimoInput.value.toLowerCase();
-                const livrosFiltrados = todosOsLivrosDisponiveis.filter(livro => 
+                const livrosFiltrados = todosOsLivrosParaEmprestimo.filter(livro => 
                     livro.titulo.toLowerCase().includes(textoBusca) || 
                     (livro.autor && livro.autor.toLowerCase().includes(textoBusca))
                 );
@@ -333,8 +422,15 @@
                 livros.forEach(livro => {
                     const div = document.createElement('div');
                     div.className = 'resultado-item';
-                    div.textContent = `${livro.titulo} - ${livro.autor}`;
-                    div.onclick = () => selecionarLivroParaEmprestimo(livro);
+                    if (livro.quantidade === 0) {
+                        div.classList.add('esgotado');
+                    }
+                    div.textContent = `${livro.titulo} - ${livro.autor} (Disponíveis: ${livro.quantidade})`;
+                    div.onclick = () => {
+                        if (livro.quantidade > 0) {
+                            selecionarLivroParaEmprestimo(livro);
+                        }
+                    };
                     resultadosBuscaEmprestimo.appendChild(div);
                 });
             }
@@ -363,6 +459,8 @@
                     dadosLeitor.nome = nomeExterno;
                     dadosLeitor.tipo = 'externo';
                 }
+                
+                btnRegistrarEmprestimo.disabled = true;
 
                 try {
                     await gerenciarEmprestimoBiblioteca({
@@ -378,9 +476,12 @@
                     seletorVoluntarioEmprestimo.value = '';
                 } catch (error) {
                     alert(`Erro: ${error.message}`);
+                } finally {
+                    btnRegistrarEmprestimo.disabled = false;
                 }
             });
             
+            // --- Lógica de Devoluções ---
             const qEmprestimos = query(collection(db, "biblioteca_emprestimos"), where("status", "==", "emprestado"), orderBy("dataEmprestimo", "desc"));
             onSnapshot(qEmprestimos, (snapshot) => {
                 tabelaEmprestimos.innerHTML = '';
@@ -391,26 +492,30 @@
                         <td>${emprestimo.livroTitulo}</td>
                         <td>${emprestimo.leitor.nome}</td>
                         <td>${emprestimo.dataEmprestimo.toDate().toLocaleDateString('pt-BR')}</td>
-                        <td><button class="btn-secondary" data-emprestimo-id="${doc.id}" data-livro-id="${emprestimo.livroId}">Registrar Devolução</button></td>
+                        <td><button class="btn-secondary btn-devolver" data-emprestimo-id="${doc.id}" data-livro-id="${emprestimo.livroId}">Registrar Devolução</button></td>
                     `;
                     tabelaEmprestimos.appendChild(tr);
                 });
             });
 
             tabelaEmprestimos.addEventListener('click', async (e) => {
-                if (e.target.tagName !== 'BUTTON') return;
+                if (!e.target.classList.contains('btn-devolver')) return;
                 const emprestimoId = e.target.dataset.emprestimoId;
                 const livroId = e.target.dataset.livroId;
+                
                 if (confirm("Confirmar a devolução deste livro?")) {
+                    e.target.disabled = true; // Desabilita o botão para evitar clique duplo
                     try {
                         await gerenciarEmprestimoBiblioteca({ acao: 'devolver', emprestimoId, livroId });
                         alert("Devolução registrada!");
                     } catch (error) {
                         alert(`Erro: ${error.message}`);
+                        e.target.disabled = false; // Reabilita o botão em caso de erro
                     }
                 }
             });
             
+            // --- Inicialização ---
             carregarLivrosParaVenda();
             carregarLivrosParaEmprestimo();
         }

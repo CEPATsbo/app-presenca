@@ -3,6 +3,7 @@ const admin = require("firebase-admin");
 const webpush = require("web-push");
 const cors = require("cors")({ origin: true });
 const Fuse = require("fuse.js");
+const axios = require("axios"); // NOVO: Módulo para buscar dados na internet
 const stream = require('stream');
 
 admin.initializeApp();
@@ -697,54 +698,136 @@ exports.registrarVendaCantina = functions.region(REGIAO).https.onCall(async (dat
 });
 
 // ===================================================================
-// NOVAS FUNÇÕES "ROBÔS" PARA O MÓDULO DA BIBLIOTECA
+// NOVA FUNÇÃO "ROBÔ" PARA BUSCAR DADOS DO LIVRO PELO ISBN
+// ===================================================================
+exports.buscarDadosLivroPorISBN = functions.region(REGIAO).https.onCall(async (data, context) => {
+    // Verificando permissão do usuário
+    const permissoes = ['super-admin', 'tesoureiro' , 'diretor', 'bibliotecario'];
+    if (!context.auth || !permissoes.includes(context.auth.token.role)) {
+        throw new functions.https.HttpsError('permission-denied', 'Você não tem permissão para executar esta ação.');
+    }
+
+    const isbn = data.isbn;
+    if (!isbn) {
+        throw new functions.https.HttpsError('invalid-argument', 'O código ISBN é obrigatório.');
+    }
+
+    try {
+        const url = `https://www.googleapis.com/books/v1/volumes?q=isbn:${isbn}`;
+        const response = await axios.get(url);
+
+        if (response.data.totalItems > 0) {
+            const book = response.data.items[0].volumeInfo;
+            // Retorna os dados formatados para o formulário
+            return {
+                titulo: book.title || '',
+                autor: book.authors ? book.authors.join(', ') : '',
+                editora: book.publisher || '',
+                anoPublicacao: book.publishedDate ? book.publishedDate.substring(0, 4) : ''
+            };
+        } else {
+            throw new functions.https.HttpsError('not-found', 'Nenhum livro encontrado com este ISBN.');
+        }
+    } catch (error) {
+        console.error("Erro ao buscar dados do livro na API do Google:", error);
+        throw new functions.https.HttpsError('internal', 'Não foi possível buscar os dados do livro.');
+    }
+});
+
+
+// ===================================================================
+// FUNÇÃO "ROBÔ" PARA REGISTRAR VENDAS DA BIBLIOTECA (COM CONTROLE DE ESTOQUE)
 // ===================================================================
 exports.registrarVendaBiblioteca = functions.region(REGIAO).https.onCall(async (data, context) => {
     if (!context.auth) {
         throw new functions.https.HttpsError('unauthenticated', 'A função deve ser chamada por um usuário autenticado.');
     }
-    const permissoes = ['super-admin', 'tesoureiro' , 'diretor', 'bibliotecario'];
+    const permissoes = ['super-admin', 'tesoureiro', 'diretor', 'bibliotecario'];
     if (!permissoes.includes(context.auth.token.role)) {
         throw new functions.https.HttpsError('permission-denied', 'Permissão negada.');
     }
 
     const { total, itens, tipoVenda, comprador } = data;
 
-    if (total === undefined || !itens || !tipoVenda) {
+    if (total === undefined || !itens || itens.length === 0 || !tipoVenda) {
         throw new functions.https.HttpsError('invalid-argument', 'Dados da venda incompletos.');
     }
     if (tipoVenda === 'prazo' && !comprador) {
         throw new functions.https.HttpsError('invalid-argument', 'Dados do comprador são obrigatórios para registrar pendência.');
     }
 
-    const vendaData = {
-        total,
-        itens,
-        tipoVenda, // CAMPO ADICIONADO PARA CORREÇÃO
-        registradoPor: {
-            uid: context.auth.uid,
-            nome: context.auth.token.name || context.auth.token.email
-        },
-        registradoEm: admin.firestore.FieldValue.serverTimestamp()
-    };
-
     try {
-        if (tipoVenda === 'vista') {
-            await db.collection('biblioteca_vendas_avista').add(vendaData);
-        } else if (tipoVenda === 'prazo') {
-            vendaData.compradorId = comprador.id;
-            vendaData.compradorNome = comprador.nome;
-            vendaData.compradorTipo = comprador.tipo;
-            vendaData.status = 'pendente';
-            await db.collection('biblioteca_contas_a_receber').add(vendaData);
-        }
+        await db.runTransaction(async (transaction) => {
+            const promisesEstoque = itens.map(item => {
+                const livroRef = db.collection('biblioteca_livros').doc(item.id);
+                return transaction.get(livroRef);
+            });
+
+            const docsLivros = await Promise.all(promisesEstoque);
+
+            for (let i = 0; i < docsLivros.length; i++) {
+                const docLivro = docsLivros[i];
+                const itemVenda = itens[i];
+
+                if (!docLivro.exists) {
+                    throw new functions.https.HttpsError('not-found', `O livro "${itemVenda.titulo}" não foi encontrado no acervo.`);
+                }
+
+                const estoqueAtual = docLivro.data().quantidade;
+                if (estoqueAtual < itemVenda.qtd) {
+                    throw new functions.https.HttpsError('failed-precondition', `Estoque insuficiente para "${itemVenda.titulo}". Disponível: ${estoqueAtual}, Pedido: ${itemVenda.qtd}.`);
+                }
+            }
+
+            // Se chegou até aqui, todos os livros têm estoque. Agora vamos dar baixa.
+            docsLivros.forEach((docLivro, i) => {
+                const itemVenda = itens[i];
+                const livroRef = docLivro.ref;
+                transaction.update(livroRef, {
+                    quantidade: admin.firestore.FieldValue.increment(-itemVenda.qtd)
+                });
+            });
+
+            // Agora, registrar a venda
+            const vendaData = {
+                total,
+                itens,
+                tipoVenda,
+                registradoPor: {
+                    uid: context.auth.uid,
+                    nome: context.auth.token.name || context.auth.token.email
+                },
+                registradoEm: admin.firestore.FieldValue.serverTimestamp()
+            };
+
+            if (tipoVenda === 'vista') {
+                const novaVendaRef = db.collection('biblioteca_vendas_avista').doc();
+                transaction.set(novaVendaRef, vendaData);
+            } else if (tipoVenda === 'prazo') {
+                vendaData.compradorId = comprador.id;
+                vendaData.compradorNome = comprador.nome;
+                vendaData.compradorTipo = comprador.tipo;
+                vendaData.status = 'pendente';
+                const novaVendaRef = db.collection('biblioteca_contas_a_receber').doc();
+                transaction.set(novaVendaRef, vendaData);
+            }
+        });
+
         return { success: true, message: 'Venda da biblioteca registrada com sucesso!' };
+
     } catch (error) {
         console.error("Erro ao registrar venda da biblioteca:", error);
-        throw new functions.https.HttpsError('internal', 'Ocorreu um erro ao salvar a venda.');
+        if (error instanceof functions.https.HttpsError) {
+             throw error; // Repassa o erro já formatado
+        }
+        throw new functions.https.HttpsError('internal', 'Ocorreu um erro ao salvar a venda. A operação foi cancelada.');
     }
 });
 
+
+// ===================================================================
+// FUNÇÃO "ROBÔ" PARA GERENCIAR EMPRÉSTIMOS (COM CONTROLE DE ESTOQUE)
+// ===================================================================
 exports.gerenciarEmprestimoBiblioteca = functions.region(REGIAO).https.onCall(async (data, context) => {
     if (!context.auth) {
         throw new functions.https.HttpsError('unauthenticated', 'A função deve ser chamada por um usuário autenticado.');
@@ -755,52 +838,75 @@ exports.gerenciarEmprestimoBiblioteca = functions.region(REGIAO).https.onCall(as
     }
 
     const { acao, livroId, leitor, emprestimoId } = data;
-    const livroRef = db.collection('biblioteca_livros').doc(livroId);
-
+    
     try {
         if (acao === 'emprestar') {
             if (!livroId || !leitor) throw new functions.https.HttpsError('invalid-argument', 'Dados do empréstimo incompletos.');
             
-            const livroDoc = await livroRef.get();
-            if(!livroDoc.exists || livroDoc.data().quantidade < 1 || livroDoc.data().status !== 'disponível') {
-                 throw new functions.https.HttpsError('failed-precondition', 'Este livro não está disponível para empréstimo.');
-            }
+            const livroRef = db.collection('biblioteca_livros').doc(livroId);
 
-            await db.collection('biblioteca_emprestimos').add({
-                livroId,
-                livroTitulo: livroDoc.data().titulo,
-                leitor: {
-                    id: leitor.id || null,
-                    nome: leitor.nome,
-                    tipo: leitor.tipo
-                },
-                dataEmprestimo: admin.firestore.FieldValue.serverTimestamp(),
-                status: 'emprestado'
+            return db.runTransaction(async (transaction) => {
+                const livroDoc = await transaction.get(livroRef);
+
+                if (!livroDoc.exists || livroDoc.data().finalidade !== 'Empréstimo') {
+                     throw new functions.https.HttpsError('failed-precondition', 'Este livro não é para empréstimo.');
+                }
+
+                if (livroDoc.data().quantidade < 1) {
+                    throw new functions.https.HttpsError('failed-precondition', 'Não há cópias disponíveis deste livro para empréstimo.');
+                }
+
+                const novoEmprestimoRef = db.collection('biblioteca_emprestimos').doc();
+                transaction.set(novoEmprestimoRef, {
+                    livroId,
+                    livroTitulo: livroDoc.data().titulo,
+                    leitor: {
+                        id: leitor.id || null,
+                        nome: leitor.nome,
+                        tipo: leitor.tipo
+                    },
+                    dataEmprestimo: admin.firestore.FieldValue.serverTimestamp(),
+                    status: 'emprestado'
+                });
+                
+                transaction.update(livroRef, {
+                    quantidade: admin.firestore.FieldValue.increment(-1)
+                });
+
+                return { success: true, message: 'Empréstimo registrado com sucesso!' };
             });
-            await livroRef.update({ 
-                status: 'emprestado',
-                quantidade: admin.firestore.FieldValue.increment(-1)
-            });
-            return { success: true, message: 'Empréstimo registrado com sucesso!' };
 
         } else if (acao === 'devolver') {
             if (!emprestimoId || !livroId) throw new functions.https.HttpsError('invalid-argument', 'Dados da devolução incompletos.');
             
             const emprestimoRef = db.collection('biblioteca_emprestimos').doc(emprestimoId);
-            await emprestimoRef.update({ 
-                status: 'devolvido',
-                dataDevolucao: admin.firestore.FieldValue.serverTimestamp()
+            const livroRef = db.collection('biblioteca_livros').doc(livroId);
+
+            return db.runTransaction(async (transaction) => {
+                const emprestimoDoc = await transaction.get(emprestimoRef);
+                if (!emprestimoDoc.exists || emprestimoDoc.data().status !== 'emprestado') {
+                    throw new functions.https.HttpsError('failed-precondition', 'Este empréstimo não está ativo ou não foi encontrado.');
+                }
+                
+                transaction.update(emprestimoRef, {
+                    status: 'devolvido',
+                    dataDevolucao: admin.firestore.FieldValue.serverTimestamp()
+                });
+
+                transaction.update(livroRef, {
+                    quantidade: admin.firestore.FieldValue.increment(1)
+                });
+
+                return { success: true, message: 'Devolução registrada com sucesso!' };
             });
-            await livroRef.update({ 
-                status: 'disponível',
-                quantidade: admin.firestore.FieldValue.increment(1)
-            });
-            return { success: true, message: 'Devolução registrada com sucesso!' };
         }
         throw new functions.https.HttpsError('invalid-argument', 'Ação desconhecida.');
     } catch (error) {
         console.error("Erro ao gerenciar empréstimo:", error);
-        throw new functions.https.HttpsError('internal', 'Ocorreu um erro na operação.');
+         if (error instanceof functions.https.HttpsError) {
+             throw error;
+        }
+        throw new functions.https.HttpsError('internal', 'Ocorreu um erro na operação de empréstimo/devolução.');
     }
 });
 
