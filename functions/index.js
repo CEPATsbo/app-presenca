@@ -1012,3 +1012,79 @@ exports.uploadAtaParaStorage = functions.region(REGIAO).https.onCall(async (data
         throw new functions.https.HttpsError('internal', 'Não foi possível enviar o arquivo.');
     }
 });
+
+// ===================================================================
+// NOVAS FUNÇÕES PARA O CRACHÁ DE VOLUNTÁRIO
+// ===================================================================
+
+// ROBO 1: Atribui um código único para cada NOVO voluntário.
+exports.atribuirCodigoVoluntario = functions.region(REGIAO).firestore
+    .document('voluntarios/{voluntarioId}')
+    .onCreate(async (snap, context) => {
+        const dados = snap.data();
+        // Se por algum motivo o código já existir, não faz nada.
+        if (dados.codigoVoluntario) {
+            return null;
+        }
+
+        const counterRef = db.doc('counters/voluntarios');
+
+        return db.runTransaction(async (transaction) => {
+            const counterDoc = await transaction.get(counterRef);
+            let nextCode = 1001; // O código inicial será 1001
+
+            if (counterDoc.exists) {
+                nextCode = counterDoc.data().lastCode + 1;
+            }
+
+            transaction.update(snap.ref, { codigoVoluntario: nextCode });
+            transaction.set(counterRef, { lastCode: nextCode }, { merge: true });
+        });
+    });
+
+// ROBO 2: Função para atribuir códigos a TODOS os voluntários existentes que ainda não têm um.
+exports.atribuirCodigosVoluntarios = functions.region(REGIAO).https.onCall(async (data, context) => {
+    const permissoes = ['super-admin', 'diretor', 'tesoureiro'];
+    if (!context.auth || !permissoes.includes(context.auth.token.role)) {
+        throw new functions.https.HttpsError('permission-denied', 'Permissão negada.');
+    }
+
+    const voluntariosRef = db.collection('voluntarios');
+    const counterRef = db.doc('counters/voluntarios');
+
+    try {
+        let voluntariosProcessados = 0;
+
+        await db.runTransaction(async (transaction) => {
+            // Pega o último código usado do contador
+            const counterDoc = await transaction.get(counterRef);
+            let nextCode = counterDoc.exists ? counterDoc.data().lastCode : 1000;
+
+            // Busca todos os voluntários que NÃO TÊM o campo 'codigoVoluntario'
+            const snapshot = await voluntariosRef.where('codigoVoluntario', '==', null).get();
+
+            if (snapshot.empty) {
+                throw new functions.https.HttpsError('not-found', 'Todos os voluntários já possuem um código.');
+            }
+
+            snapshot.forEach(doc => {
+                nextCode++;
+                transaction.update(doc.ref, { codigoVoluntario: nextCode });
+                voluntariosProcessados++;
+            });
+
+            // Atualiza o contador com o último código usado
+            if (voluntariosProcessados > 0) {
+                transaction.set(counterRef, { lastCode: nextCode }, { merge: true });
+            }
+        });
+
+        return { success: true, message: `${voluntariosProcessados} voluntários foram atualizados com novos códigos.` };
+    } catch (error) {
+        console.error("Erro ao atribuir códigos:", error);
+        if (error instanceof functions.https.HttpsError) {
+            throw error;
+        }
+        throw new functions.https.HttpsError('internal', 'Ocorreu um erro ao processar os voluntários.');
+    }
+});

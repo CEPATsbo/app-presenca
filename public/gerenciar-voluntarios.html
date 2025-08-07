@@ -16,6 +16,7 @@
         .form-item { display: flex; flex-direction: column; }
         .form-item label { margin-bottom: 5px; font-weight: bold; color: #555; }
         .form-item input { padding: 10px; border-radius: 6px; border: 1px solid #ccc; font-size: 1em; }
+        .form-item input:disabled { background-color: #e9ecef; } /* NOVO: Estilo para campos desabilitados */
         .add-button { grid-column: 1 / -1; padding: 12px; background-color: #2e7d32; color: white; border: none; border-radius: 6px; font-size: 1.1em; font-weight: bold; cursor: pointer; margin-top: 10px; }
         #lista-voluntarios { list-style-type: none; padding: 0; margin: 20px 0; }
         .item-voluntario { display: flex; justify-content: space-between; align-items: center; padding: 15px; border-bottom: 1px solid #eee; gap: 15px; border-left-width: 8px; border-left-style: solid; transition: border-left-color 0.3s ease-in-out; margin-bottom: 8px; border-radius: 0 8px 8px 0; background-color: #fafafa; }
@@ -25,6 +26,7 @@
         .voluntario-info { flex-grow: 1; word-break: break-word; }
         .voluntario-info strong { font-size: 1.2em; display: block; margin-bottom: 4px;}
         .voluntario-info small { color: #777; }
+        .codigo-voluntario { font-weight: bold; color: #007bff; font-size: 0.9em; } /* NOVO */
         .actions { display: flex; flex-direction: column; gap: 8px; align-items: center; }
         .actions-buttons { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
         .actions-buttons button { padding: 8px 12px; border-radius: 4px; cursor: pointer; border: 1px solid #ccc; font-size: 0.9em; }
@@ -44,6 +46,7 @@
         .modal-content { background-color: white; padding: 30px; border-radius: 10px; width: 90%; max-width: 600px; }
         .modal-content h2 { margin-top: 0; }
         .modal-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 20px; }
+        #btn-atribuir-codigos { background-color: #d32f2f; color: white; border: none; padding: 10px 15px; border-radius: 6px; cursor: pointer; margin-left: 20px; } /* NOVO */
     </style>
 </head>
 <body>
@@ -65,13 +68,20 @@
             <button id="btn-adicionar" class="add-button">Adicionar Voluntário</button>
         </div>
         <div class="container lista-container">
-            <h2 id="titulo-lista">Lista de Voluntários Cadastrados</h2>
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+                <h2 id="titulo-lista">Lista de Voluntários Cadastrados</h2>
+                <button id="btn-atribuir-codigos" style="display: none;">Atribuir Códigos Iniciais</button>
+            </div>
             <ul id="lista-voluntarios"><li>Carregando...</li></ul>
         </div>
         <div id="edit-modal" class="modal-overlay">
             <div class="modal-content">
                 <h2>Editar Voluntário</h2>
                 <div class="form-grid">
+                    <div class="form-item" style="grid-column: 1 / -1;">
+                        <label>Código do Voluntário (para crachá)</label>
+                        <input type="text" id="edit-codigo" disabled>
+                    </div>
                     <div class="form-item"><label for="edit-nome">Nome Completo:</label><input type="text" id="edit-nome" required></div>
                     <div class="form-item"><label for="edit-endereco">Endereço:</label><input type="text" id="edit-endereco"></div>
                     <div class="form-item"><label for="edit-telefone">Telefone:</label><input type="tel" id="edit-telefone" maxlength="15"></div>
@@ -88,7 +98,6 @@
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
         import { getFirestore, collection, onSnapshot, addDoc, deleteDoc, doc, getDoc, getDocs, orderBy, query, serverTimestamp, updateDoc, where } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
-        import { getAuth } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-auth.js";
         import { getFunctions, httpsCallable } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-functions.js";
         import { protegerPagina } from '/auth.js';
         
@@ -116,7 +125,8 @@
         function inicializarPagina(user) {
             const db = getFirestore();
             const functions = getFunctions(undefined, 'southamerica-east1');
-            
+            const atribuirCodigosVoluntarios = httpsCallable(functions, 'atribuirCodigosVoluntarios'); // NOVO
+
             const voluntariosCollection = collection(db, 'voluntarios');
             const logAuditoriaCollection = collection(db, 'log_auditoria');
             
@@ -129,15 +139,22 @@
                 listaUl: document.getElementById('lista-voluntarios'),
                 tituloLista: document.getElementById('titulo-lista'),
                 editModal: document.getElementById('edit-modal'),
+                editCodigo: document.getElementById('edit-codigo'), // NOVO
                 editNome: document.getElementById('edit-nome'),
                 editEndereco: document.getElementById('edit-endereco'),
                 editTelefone: document.getElementById('edit-telefone'),
                 editAniversario: document.getElementById('edit-aniversario'),
                 btnSalvar: document.getElementById('btn-salvar-edicao'),
                 btnCancelar: document.getElementById('btn-cancelar-edicao'),
+                btnAtribuirCodigos: document.getElementById('btn-atribuir-codigos') // NOVO
             };
             let currentEditingId = null;
             const userRole = user.claims.role;
+
+            // NOVO: Exibe o botão de atribuição para admins
+            if (['super-admin', 'diretor'].includes(userRole)) {
+                ui.btnAtribuirCodigos.style.display = 'inline-block';
+            }
 
             async function registrarLog(acao, detalhes) {
                 if (!user) return;
@@ -198,10 +215,12 @@
                             }
                         }
 
+                        // NOVO: Adiciona a exibição do código do voluntário
                         li.innerHTML = `
                             <div class="voluntario-info">
                                 <strong>${v.nome}</strong>
                                 <small>${v.endereco || 'N/A'} | ${v.telefone || 'N/A'} | Aniversário: ${v.aniversario || 'N/A'} | Cargo: ${v.role || 'voluntario'}</small>
+                                <div class="codigo-voluntario">Código para Crachá: ${v.codigoVoluntario || 'Não atribuído'}</div>
                             </div>
                             <div class="tasv-container">
                                 <label for="tasv-${id}">TASV ${anoVigente}</label>
@@ -239,6 +258,7 @@
                     if (!novoVoluntario.nome) return alert("O campo 'Nome Completo' é obrigatório.");
                     try {
                         const docRef = await addDoc(voluntariosCollection, novoVoluntario);
+                        // O código do voluntário será adicionado pelo trigger do Firebase, não precisamos mais nos preocupar aqui.
                         await registrarLog("CRIOU_VOLUNTARIO", { voluntarioId: docRef.id, nome: novoVoluntario.nome });
                         ui.nome.value = ''; ui.endereco.value = ''; ui.telefone.value = ''; ui.aniversario.value = '';
                     } catch (error) { console.error("Erro ao adicionar voluntário:", error); }
@@ -266,6 +286,7 @@
                             if (docSnap.exists()) {
                                 const data = docSnap.data();
                                 currentEditingId = docId;
+                                ui.editCodigo.value = data.codigoVoluntario || 'N/A'; // NOVO: Popula o código no modal
                                 ui.editNome.value = data.nome || '';
                                 ui.editEndereco.value = data.endereco || '';
                                 ui.editTelefone.value = phoneMask(data.telefone || '');
@@ -320,7 +341,6 @@
                                 alert(`Erro: ${error.message}`);
                             } finally {
                                 target.disabled = false;
-                                // O texto será atualizado automaticamente na recarga da lista
                             }
                         }
                     }
@@ -341,6 +361,25 @@
                 });
 
                 ui.btnCancelar.addEventListener('click', () => { ui.editModal.style.display = 'none'; currentEditingId = null; });
+
+                // NOVO: Event listener para o botão de atribuir códigos
+                ui.btnAtribuirCodigos.addEventListener('click', async () => {
+                    if (!confirm("Esta ação irá atribuir um código sequencial para todos os voluntários antigos que ainda não possuem um. Deseja continuar? Esta ação é segura e só afeta voluntários sem código.")) {
+                        return;
+                    }
+                    ui.btnAtribuirCodigos.disabled = true;
+                    ui.btnAtribuirCodigos.textContent = "Processando...";
+                    try {
+                        const resultado = await atribuirCodigosVoluntarios();
+                        alert(resultado.data.message);
+                    } catch (error) {
+                        console.error("Erro ao atribuir códigos iniciais:", error);
+                        alert(`Erro: ${error.message}`);
+                    } finally {
+                        ui.btnAtribuirCodigos.disabled = false;
+                        ui.btnAtribuirCodigos.textContent = "Atribuir Códigos Iniciais";
+                    }
+                });
             }
             
             setupEventListeners();
