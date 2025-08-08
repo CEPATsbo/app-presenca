@@ -83,22 +83,19 @@
                     cardsContainer.innerHTML = '<p>Nenhuma pessoa na fila de atendimento.</p>';
                     return;
                 }
-
                 const promessas = snapshot.docs.map(docSnapshot => getContextoDoAtendimento(docSnapshot));
                 const atendimentosComContexto = await Promise.all(promessas);
-
                 atendimentosComContexto.forEach(atendimento => {
-                    if(atendimento) {
-                        cardsContainer.appendChild(criarCard(atendimento));
-                    }
+                    if(atendimento) cardsContainer.appendChild(criarCard(atendimento));
                 });
             });
             
             async function getContextoDoAtendimento(filaDocSnapshot) {
                 const atendimento = { id: filaDocSnapshot.id, ...filaDocSnapshot.data() };
-                if (!atendimento.tratamentoId) {
+                if (atendimento.tipoAtendimento === 'avulso') {
                     return { ...atendimento, precisaEntrevista: false };
                 }
+                if (!atendimento.tratamentoId) return null;
 
                 const tratamentoDocRef = doc(db, 'tratamentos_ae', atendimento.tratamentoId);
                 const tratamentoDoc = await getDoc(tratamentoDocRef);
@@ -107,64 +104,48 @@
 
                 const qSemanas = query(atendimentosRef, where("tratamentoId", "==", atendimento.tratamentoId), where("tipo", "!=", "falta"));
                 const semanasSnapshot = await getDocs(qSemanas);
-                
                 const semanaNum = semanasSnapshot.size + 1;
-
                 const passe = tratamento.passe_ciclo_atual;
                 let precisaEntrevista = false;
-                if (passe === 'P3A' || passe === 'P3B') {
-                    precisaEntrevista = true;
-                } else if ([1, 4, 5].includes(semanaNum)) {
+                if (passe === 'P3A' || passe === 'P3B' || [1, 4, 5].includes(semanaNum)) {
                     precisaEntrevista = true;
                 }
-
                 return { ...atendimento, precisaEntrevista, passe_ciclo_atual: passe };
             }
 
             function criarCard(atendimento) {
                 const card = document.createElement('div');
                 card.className = 'assistido-card';
-
-                let buttonsHtml = '';
                 const status = atendimento.status;
-
-                // ==========================================================
-                // LÓGICA DE BOTÕES CORRIGIDA PARA FORÇAR A SEQUÊNCIA
-                // ==========================================================
+                let buttonsHtml = '';
+                
                 if (atendimento.precisaEntrevista) {
                     const entrevistaChamada = status === 'chamado_entrevista';
                     const passeChamado = status === 'chamado_passe';
-                    
-                    const entrevistaBtnDisabled = entrevistaChamada || passeChamado;
-                    const passeBtnDisabled = !entrevistaChamada || passeChamado; // SÓ HABILITA SE A ENTREVISTA JÁ FOI CHAMADA
-
+                    const passeBtnDisabled = !entrevistaChamada || passeChamado;
                     card.classList.toggle('chamado-entrevista', entrevistaChamada && !passeChamado);
-
                     buttonsHtml = `
-                        <button class="btn btn-info btn-chamar-entrevista" data-id="${atendimento.id}" ${entrevistaBtnDisabled ? 'disabled' : ''}>Chamar p/ Entrevista</button>
-                        <button class="btn btn-success btn-chamar-passe" data-id="${atendimento.id}" ${passeBtnDisabled ? 'disabled' : ''}>Chamar p/ Passe</button>
-                    `;
+                        <button class="btn btn-info btn-chamar-entrevista" data-id="${atendimento.id}" ${entrevistaChamada ? 'disabled' : ''}>Chamar p/ Entrevista</button>
+                        <button class="btn btn-success btn-chamar-passe" data-id="${atendimento.id}" ${passeBtnDisabled ? 'disabled' : ''}>Chamar p/ Passe</button>`;
                 } else {
                     const passeChamado = status === 'chamado_passe';
-                    buttonsHtml = `
-                        <div style="grid-column: 1 / -1;">
-                            <button class="btn btn-success btn-chamar-passe" data-id="${atendimento.id}" ${passeChamado ? 'disabled' : ''}>Chamar p/ Passe</button>
-                        </div>
-                    `;
+                    buttonsHtml = `<div style="grid-column: 1 / -1;"><button class="btn btn-success btn-chamar-passe" data-id="${atendimento.id}" ${passeChamado ? 'disabled' : ''}>Chamar p/ Passe</button></div>`;
                 }
 
                 card.classList.toggle('chamado-passe', status === 'chamado_passe');
                 
+                let tipoLabel = `Assistência (${atendimento.passe_ciclo_atual || 'N/A'})`;
+                if(atendimento.tipoAtendimento === 'avulso'){
+                    tipoLabel = `Passe Avulso (${atendimento.passeRecomendado || 'N/A'})`;
+                }
+
                 card.innerHTML = `
                     <h3>${atendimento.nomeAssistido}</h3>
                     <p class="info">
-                        Tipo: <strong>${atendimento.tratamentoId ? `Assistência (${atendimento.passe_ciclo_atual || 'N/A'})` : 'Passe Avulso'}</strong><br>
+                        Tipo: <strong>${tipoLabel}</strong><br>
                         Entrevista hoje: <strong>${atendimento.precisaEntrevista ? 'Sim' : 'Não'}</strong>
                     </p>
-                    <div class="actions">
-                        ${buttonsHtml}
-                    </div>
-                `;
+                    <div class="actions">${buttonsHtml}</div>`;
                 return card;
             }
 
@@ -174,16 +155,12 @@
                 if (!id || target.disabled) return;
 
                 let novoStatus = '';
-                if (target.classList.contains('btn-chamar-entrevista')) {
-                    novoStatus = 'chamado_entrevista';
-                } else if (target.classList.contains('btn-chamar-passe')) {
-                    novoStatus = 'chamado_passe';
-                }
+                if (target.classList.contains('btn-chamar-entrevista')) novoStatus = 'chamado_entrevista';
+                else if (target.classList.contains('btn-chamar-passe')) novoStatus = 'chamado_passe';
 
                 if (novoStatus) {
-                    target.disabled = true; // Desabilita imediatamente para evitar duplo clique
-                    const filaDocRef = doc(db, 'fila_atendimento_ae', id);
-                    await updateDoc(filaDocRef, { status: novoStatus });
+                    target.disabled = true;
+                    await updateDoc(doc(db, 'fila_atendimento_ae', id), { status: novoStatus });
                 }
             });
         }

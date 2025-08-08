@@ -3,14 +3,12 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta http-equiv="refresh" content="3600">
     <title>Painel de Chamadas - Atendimento Espiritual</title>
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Roboto:wght@400;700&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Roboto:wght@700&display=swap');
         :root { --cor-fundo: #0d47a1; --cor-texto-principal: #ffeb3b; --cor-texto-secundario: #ffffff; --cor-fundo-historico: #0a3a82; }
         body, html { margin: 0; padding: 0; width: 100%; height: 100%; background-color: var(--cor-fundo); color: var(--cor-texto-principal); font-family: 'Roboto', sans-serif; overflow: hidden; }
         .hidden { display: none !important; }
-        #tela-inicial { display: flex; justify-content: center; align-items: center; width: 100%; height: 100%; font-size: 3em; color: var(--cor-texto-secundario); cursor: pointer; background-color: var(--cor-fundo); position: absolute; z-index: 100; }
         #painel-principal { display: flex; flex-direction: column; width: 100%; height: 100%; }
         .header { display: flex; justify-content: space-between; align-items: center; padding: 10px 30px; font-size: 2em; color: var(--cor-texto-secundario); }
         .chamada-principal { flex-grow: 1; display: flex; flex-direction: column; justify-content: center; align-items: center; text-align: center; }
@@ -25,9 +23,7 @@
     </style>
 </head>
 <body>
-
-    <div id="tela-inicial"><p>Toque para iniciar</p></div>
-    <div id="painel-principal" class="hidden">
+    <div id="painel-principal">
         <div class="header"><span id="logo">CE Paulo de Tarso</span><span id="relogio"></span></div>
         <div class="chamada-principal"><h1 id="nome-atual">Aguardando...</h1><p id="sala-atual"></p></div>
         <div class="historico-chamadas">
@@ -53,19 +49,17 @@
         initializeApp(firebaseConfig);
         const db = getFirestore();
 
-        const telaInicial = document.getElementById('tela-inicial');
-        const painelPrincipal = document.getElementById('painel-principal');
         const nomeAtualEl = document.getElementById('nome-atual');
         const salaAtualEl = document.getElementById('sala-atual');
         const historicoItems = [ document.getElementById('historico-1'), document.getElementById('historico-2'), document.getElementById('historico-3') ];
         const chamadaPrincipalEl = document.querySelector('.chamada-principal');
 
         let ultimoNomeChamado = '';
-        let somNotificacao = new Audio('/notification.mp3');
-        somNotificacao.onerror = () => {
-            console.warn("Arquivo notification.mp3 não encontrado. Os alertas sonoros não funcionarão.");
-            somNotificacao = null;
-        };
+        let somNotificacao = null;
+        try {
+            somNotificacao = new Audio('/notification.mp3');
+            somNotificacao.onerror = () => { somNotificacao = null; };
+        } catch (e) { somNotificacao = null; }
 
         const mapaDeSalas = {
             'SALA 1': ['P1', 'P3A', 'P3B'],
@@ -75,9 +69,7 @@
         function getSalaPorPasse(passe) {
             if (!passe) return 'Encaminhamento';
             for (const sala in mapaDeSalas) {
-                if (mapaDeSalas[sala].includes(passe.toUpperCase())) {
-                    return sala;
-                }
+                if (mapaDeSalas[sala].includes(passe.toUpperCase())) { return sala; }
             }
             return 'Encaminhamento';
         }
@@ -97,7 +89,7 @@
                 const salaDestino = getSalaDestino(chamadaAtual) || '';
                 
                 if (ultimoNomeChamado !== nomeCompleto) {
-                    if (somNotificacao) somNotificacao.play().catch(e => {}); // Tenta tocar o som
+                    if (somNotificacao) somNotificacao.play().catch(e => {});
                     chamadaPrincipalEl.classList.remove('fade-in');
                     void chamadaPrincipalEl.offsetWidth; 
                     chamadaPrincipalEl.classList.add('fade-in');
@@ -155,19 +147,16 @@
             }
         }
 
-        telaInicial.addEventListener('click', () => {
-            telaInicial.classList.add('hidden');
-            painelPrincipal.classList.remove('hidden');
-            if (somNotificacao) {
-                somNotificacao.load(); 
+        document.body.addEventListener('click', () => {
+            if(somNotificacao) {
                 somNotificacao.play().catch(e => {});
                 somNotificacao.pause();
-                somNotificacao.currentTime = 0;
             }
-            escutarChamadas();
-            setInterval(atualizarRelogio, 1000);
-            atualizarRelogio();
         }, { once: true });
+
+        escutarChamadas();
+        setInterval(atualizarRelogio, 1000);
+        atualizarRelogio();
     </script>
 </body>
 </html>
