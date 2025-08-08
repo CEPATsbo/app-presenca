@@ -12,21 +12,40 @@
         .btn, .btn-voltar { background-color: var(--cor-primaria); color: white; border: none; padding: 12px 20px; border-radius: 8px; font-weight: bold; font-size: 1em; text-decoration: none; cursor: pointer; transition: background-color 0.3s; }
         .btn:disabled { background-color: #ccc; cursor: not-allowed; }
         .btn-voltar { background-color: #6c757d; }
+        .btn-success { background-color: #28a745; }
+        .btn-secondary { background-color: #6c757d; }
+        .btn-danger { background-color: #dc3545; }
+        .btn-info { background-color: #17a2b8; }
+        .btn-warning { background-color: #ffc107; color: #212529; }
         h1, h2, h3, h4 { color: #333; text-align: center; }
         fieldset { border: 1px solid var(--cor-borda); border-radius: 8px; padding: 20px; margin-bottom: 20px; }
+        fieldset:disabled { background-color: var(--fundo-desabilitado); opacity: 0.6; }
         legend { font-weight: bold; font-size: 1.2em; color: #0056b3; padding: 0 10px; }
         .form-item { display: flex; flex-direction: column; }
         .form-item label { margin-bottom: 5px; font-weight: bold; color: #555; }
-        .form-item input { padding: 10px; border-radius: 6px; border: 1px solid #ccc; font-size: 1em; width: 100%; box-sizing: border-box; }
+        .form-item input, .form-item select, .form-item textarea { padding: 10px; border-radius: 6px; border: 1px solid #ccc; font-size: 1em; width: 100%; box-sizing: border-box; }
         .form-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; align-items: end; }
+        #search-results-container { position: relative; }
+        #search-results { list-style-type: none; padding: 0; margin: 0; position: absolute; background: white; border: 1px solid var(--cor-borda); border-top: none; width: 100%; max-height: 200px; overflow-y: auto; z-index: 10; border-radius: 0 0 6px 6px; }
+        #search-results li { padding: 10px; cursor: pointer; }
+        #search-results li:hover { background-color: #f0f0f0; }
+        .actions-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-top: 20px; }
         .hidden { display: none; }
+        .bloco-semanal { border: 1px solid var(--cor-borda); border-radius: 8px; padding: 20px; margin-bottom: 20px; background-color: #fdfdfd; }
+        .bloco-semanal h4 { margin-top: 0; }
+        .bloco-semanal.falta { background-color: #fff3cd; border-color: #ffeeba; }
+        .multiselect { position: relative; }
+        .select-box { border: 1px solid #ccc; border-radius: 6px; padding: 10px; cursor: pointer; }
+        .checkboxes { position: absolute; background: white; border: 1px solid var(--cor-borda); border-radius: 6px; z-index: 100; max-height: 150px; overflow-y: auto; padding: 10px; min-width: 200px; }
+        .checkboxes label { display: block; padding: 5px; }
+        .checkboxes label:hover { background-color: #f0f0f0; }
         #lista-ativos { list-style-type: none; padding: 0; display: flex; flex-wrap: wrap; gap: 10px; }
         #lista-ativos li { background-color: #6c757d; color: white; padding: 10px 15px; border-radius: 20px; cursor: pointer; transition: background-color 0.2s; font-size: 0.9em; }
         #lista-ativos li:hover { opacity: 0.8; }
         #lista-ativos li.status-presente { background-color: #28a745; }
         #lista-ativos li.status-ausente { background-color: #ffc107; color: #212529; }
-        .actions-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-top: 20px; }
         .actions-grid-freq { display: flex; gap: 15px; margin-top: 10px; }
+        .btn-historico { font-size: 1.5em; text-decoration: none; margin-left: 15px; cursor: pointer; }
     </style>
 </head>
 <body>
@@ -34,10 +53,8 @@
     <div id="acesso-negado" class="container hidden"><h1>Acesso Negado</h1></div>
 
     <div id="main-content" class="container">
-        <h1>Recepção do Atendimento Espiritual</h1>
-
         <fieldset>
-            <legend>Tratamentos Ativos (Controle de Frequência)</legend>
+            <legend>Tratamentos Ativos (Acesso Rápido)</legend>
             <ul id="lista-ativos"><li>Carregando...</li></ul>
             <div id="painel-acoes-frequencia" class="hidden" style="margin-top: 20px; padding-top: 20px; border-top: 1px solid #eee;">
                 <h4>Registrar Frequência para: <span id="nome-frequencia"></span></h4>
@@ -47,12 +64,14 @@
                 </div>
             </div>
         </fieldset>
-        
         <hr style="width:100%; margin: 30px 0; border: 1px solid #eee;">
-
+        
         <form id="ficha-atendimento" onsubmit="return false;">
-            <fieldset>
-                <legend>Busca ou Novo Cadastro</legend>
+            <fieldset id="fs-dados-pessoais">
+                <legend style="display: flex; align-items: center;">
+                    Dados Pessoais (Busca ou Novo Cadastro)
+                    <a id="btn-ver-historico" class="btn-historico hidden" title="Ver histórico completo do assistido">📜</a>
+                </legend>
                 <div class="form-grid">
                     <div class="form-item" style="grid-column: 1 / -1;"><label for="nome">NOME:</label><div id="search-results-container"><input type="text" id="nome" autocomplete="off" required><ul id="search-results"></ul></div></div>
                     <div class="form-item"><label for="telefone">TELEFONE:</label><input type="tel" id="telefone" required></div>
@@ -67,322 +86,323 @@
 
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
-import { getFirestore, collection, addDoc, doc, getDoc, serverTimestamp, query, where, limit, getDocs, Timestamp, orderBy, updateDoc, increment, writeBatch } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
-import { getFunctions, httpsCallable } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-functions.js";
-import { protegerPagina } from '/auth.js';
+        import { getFirestore, collection, addDoc, doc, getDoc, serverTimestamp, query, where, limit, getDocs, Timestamp, orderBy, updateDoc, increment, writeBatch } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
+        import { getFunctions, httpsCallable } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-functions.js";
+        import { protegerPagina } from '/auth.js';
+        
+        const firebaseConfig = {
+            apiKey: "AIzaSyBV7RPjk3cFTqL-aIpflJcUojKg1ZXMLuU",
+            authDomain: "voluntarios-ativos---cepat.firebaseapp.com",
+            projectId: "voluntarios-ativos---cepat",
+            storageBucket: "voluntarios-ativos---cepat.firebasestorage.app",
+            messagingSenderId: "66122858261",
+            appId: "1:66122858261:web:7fa21f1805463b5c08331c"
+        };
+        initializeApp(firebaseConfig);
+        
+        const handlePhone = (event) => {
+            let input = event.target.value.replace(/\D/g, '');
+            input = input.substring(0, 11);
+            if (input.length > 2) input = `(${input.substring(0, 2)}) ${input.substring(2)}`;
+            if (input.length > 9) input = `${input.substring(0, 10)}-${input.substring(10)}`;
+            event.target.value = input;
+        };
 
-const firebaseConfig = {
-    apiKey: "AIzaSyBV7RPjk3cFTqL-aIpflJcUojKg1ZXMLuU",
-    authDomain: "voluntarios-ativos---cepat.firebaseapp.com",
-    projectId: "voluntarios-ativos---cepat",
-    storageBucket: "voluntarios-ativos---cepat.firebasestorage.app",
-    messagingSenderId: "66122858261",
-    appId: "1:66122858261:web:7fa21f1805463b5c08331c"
-};
-initializeApp(firebaseConfig);
+        protegerPagina(['recepcionista', 'diretor', 'super-admin']).then(user => {
+            document.getElementById('main-content').classList.remove('hidden');
+            inicializarPagina(user);
+        }).catch(err => { 
+            document.getElementById('acesso-negado').classList.remove('hidden');
+            document.getElementById('main-content').classList.add('hidden');
+        });
 
-const handlePhone = (event) => {
-    let input = event.target.value.replace(/\D/g, '');
-    input = input.substring(0, 11);
-    if (input.length > 2) input = `(${input.substring(0, 2)}) ${input.substring(2)}`;
-    if (input.length > 9) input = `${input.substring(0, 10)}-${input.substring(10)}`;
-    event.target.value = input;
-};
+        function inicializarPagina(user) {
+            const db = getFirestore();
+            const functions = getFunctions(undefined, 'southamerica-east1');
+            const assistidosRef = collection(db, 'assistidos');
+            const filaRef = collection(db, 'fila_atendimento_ae');
+            const tratamentosRef = collection(db, 'tratamentos_ae');
+            const atendimentosRef = collection(db, 'atendimentos_ae');
+            const registrarLog = httpsCallable(functions, 'registrarLogDeAcesso');
 
-protegerPagina(['recepcionista', 'diretor', 'super-admin']).then(user => {
-    document.getElementById('main-content').classList.remove('hidden');
-    inicializarPagina(user);
-}).catch(err => { 
-    document.getElementById('acesso-negado').classList.remove('hidden');
-    document.getElementById('main-content').classList.add('hidden');
-});
+            let assistidoSelecionado = null;
+            let tratamentoAtivoSelecionado = null;
 
-function inicializarPagina(user) {
-    const db = getFirestore();
-    const functions = getFunctions(undefined, 'southamerica-east1');
-    const assistidosRef = collection(db, 'assistidos');
-    const filaRef = collection(db, 'fila_atendimento_ae');
-    const tratamentosRef = collection(db, 'tratamentos_ae');
-    const atendimentosRef = collection(db, 'atendimentos_ae');
-    const registrarLog = httpsCallable(functions, 'registrarLogDeAcesso');
-
-    let assistidoSelecionado = null;
-    let tratamentoAtivoSelecionado = null;
-
-    const ui = {
-        nomeInput: document.getElementById('nome'),
-        telefoneInput: document.getElementById('telefone'),
-        dnInput: document.getElementById('dn'),
-        searchResults: document.getElementById('search-results'),
-        novoAtendimentoSection: document.getElementById('novo-atendimento-section'),
-        btnIniciarTratamento: document.getElementById('btn-iniciar-tratamento'),
-        btnRegistrarAvulso: document.getElementById('btn-registrar-avulso'),
-        btnLimpar: document.getElementById('btn-limpar'),
-        listaAtivos: document.getElementById('lista-ativos'),
-        painelAcoesFrequencia: document.getElementById('painel-acoes-frequencia'),
-        nomeFrequencia: document.getElementById('nome-frequencia'),
-        btnMarcarPresenca: document.getElementById('btn-marcar-presenca'),
-        btnMarcarFaltaRapido: document.getElementById('btn-marcar-falta-rapido'),
-        btnVerHistorico: document.getElementById('btn-ver-historico'),
-    };
-    
-    const resetarFormularioBusca = () => {
-        assistidoSelecionado = null;
-        tratamentoAtivoSelecionado = null;
-        ui.nomeInput.value = '';
-        ui.telefoneInput.value = '';
-        ui.dnInput.value = '';
-        ui.searchResults.innerHTML = '';
-        ui.novoAtendimentoSection.classList.add('hidden');
-        ui.nomeInput.disabled = false;
-        ui.nomeInput.focus();
-    };
-    
-    const validarDadosPessoais = () => {
-        if (!ui.nomeInput.value || !ui.telefoneInput.value || !ui.dnInput.value) {
-            alert("Por favor, preencha os campos Nome, Telefone e DN antes de continuar.");
-            return false;
-        }
-        return true;
-    };
-
-    const criarNovoAssistidoSeNaoExistir = async () => {
-        if (assistidoSelecionado) return assistidoSelecionado.id;
-        if (!validarDadosPessoais()) throw new Error("Dados pessoais incompletos");
-        const nome = ui.nomeInput.value.trim();
-        const novoAssistidoData = { nome: nome, nome_lower: nome.toLowerCase(), telefone: ui.telefoneInput.value, dn: ui.dnInput.value, criadoEm: serverTimestamp(), criadoPor: { uid: user.uid, nome: user.displayName } };
-        const docRef = await addDoc(assistidosRef, novoAssistidoData);
-        assistidoSelecionado = { id: docRef.id, ...novoAssistidoData };
-        await registrarLog({ acao: 'CADASTROU_ASSISTIDO_AE', detalhes: { assistidoId: docRef.id, nome }});
-        return docRef.id;
-    };
-    
-    const checarHistoricoEExibirBotao = async (assistidoId) => {
-        const qTratamentos = query(tratamentosRef, where("assistidoId", "==", assistidoId), limit(1));
-        const snapshot = await getDocs(qTratamentos);
-        if (!snapshot.empty) {
-            ui.btnVerHistorico.classList.remove('hidden');
-            ui.btnVerHistorico.onclick = () => {
-                window.open(`/arquivo-geral-ae.html?id=${assistidoId}`, '_blank');
+            const ui = {
+                nomeInput: document.getElementById('nome'),
+                telefoneInput: document.getElementById('telefone'),
+                dnInput: document.getElementById('dn'),
+                searchResults: document.getElementById('search-results'),
+                novoAtendimentoSection: document.getElementById('novo-atendimento-section'),
+                btnIniciarTratamento: document.getElementById('btn-iniciar-tratamento'),
+                btnRegistrarAvulso: document.getElementById('btn-registrar-avulso'),
+                btnLimpar: document.getElementById('btn-limpar'),
+                listaAtivos: document.getElementById('lista-ativos'),
+                painelAcoesFrequencia: document.getElementById('painel-acoes-frequencia'),
+                nomeFrequencia: document.getElementById('nome-frequencia'),
+                btnMarcarPresenca: document.getElementById('btn-marcar-presenca'),
+                btnMarcarFaltaRapido: document.getElementById('btn-marcar-falta-rapido'),
+                btnVerHistorico: document.getElementById('btn-ver-historico'),
             };
-        } else {
-            ui.btnVerHistorico.classList.add('hidden');
-        }
-    };
-    
-    const carregarTratamentosAtivos = async () => {
-        ui.listaAtivos.innerHTML = '<li>Carregando...</li>';
-        const q = query(tratamentosRef, where("status", "==", "ativo"));
-        const snapshot = await getDocs(q);
-        
-        if (snapshot.empty) {
-            ui.listaAtivos.innerHTML = '<li>Nenhum tratamento ativo no momento.</li>';
-            return;
-        }
-
-        const hojeInicio = new Date();
-        hojeInicio.setHours(0, 0, 0, 0);
-        const hojeFim = new Date();
-        hojeFim.setHours(23, 59, 59, 999);
-
-        const promessas = snapshot.docs.map(async (tratamentoDoc) => {
-            const tratamento = { id: tratamentoDoc.id, ...tratamentoDoc.data()};
-            if (!tratamento.assistidoId) return null;
             
-            const assistidoDocRef = doc(db, 'assistidos', tratamento.assistidoId);
-            const qFrequenciaHoje = query(atendimentosRef, 
-                where("tratamentoId", "==", tratamento.id),
-                where("dataAtendimento", ">=", Timestamp.fromDate(hojeInicio)),
-                where("dataAtendimento", "<=", Timestamp.fromDate(hojeFim)),
-                limit(1)
-            );
-            
-            const [assistidoDoc, frequenciaSnapshot] = await Promise.all([getDoc(assistidoDocRef), getDocs(qFrequenciaHoje)]);
-            
-            let statusHoje = 'pendente';
-            if (!frequenciaSnapshot.empty) {
-                statusHoje = frequenciaSnapshot.docs[0].data().tipo === 'falta' ? 'ausente' : 'presente';
-            }
-            
-            return assistidoDoc.exists() ? { assistido: {id: assistidoDoc.id, ...assistidoDoc.data()}, tratamento, statusHoje } : null;
-        });
-
-        const itensLista = (await Promise.all(promessas)).filter(item => item !== null);
-        itensLista.sort((a, b) => a.assistido.nome.localeCompare(b.assistido.nome));
-
-        ui.listaAtivos.innerHTML = '';
-        itensLista.forEach(item => {
-            const li = document.createElement('li');
-            li.textContent = item.assistido.nome;
-            li.className = `status-${item.statusHoje}`;
-            li.addEventListener('click', () => {
-                tratamentoAtivoSelecionado = item.tratamento;
-                assistidoSelecionado = item.assistido;
-                ui.nomeFrequencia.textContent = item.assistido.nome;
-                ui.painelAcoesFrequencia.classList.remove('hidden');
-            });
-            ui.listaAtivos.appendChild(li);
-        });
-    };
-    
-    ui.btnMarcarPresenca.addEventListener('click', async (e) => {
-        e.target.disabled = true;
-        const hojeInicio = new Date();
-        hojeInicio.setHours(0, 0, 0, 0);
-        const qCheck = query(filaRef, 
-            where("assistidoId", "==", assistidoSelecionado.id),
-            where("chegadaEm", ">=", Timestamp.fromDate(hojeInicio)),
-            limit(1)
-        );
-        const checkSnapshot = await getDocs(qCheck);
-        if(!checkSnapshot.empty) {
-            alert(`${assistidoSelecionado.nome} já teve a presença registrada hoje.`);
-            e.target.disabled = false;
-            return;
-        }
-
-        const passeDoCiclo = tratamentoAtivoSelecionado.passe_ciclo_atual;
-
-        await addDoc(filaRef, {
-            assistidoId: assistidoSelecionado.id,
-            nomeAssistido: assistidoSelecionado.nome,
-            tratamentoId: tratamentoAtivoSelecionado.id,
-            status: 'aguardando_entrevista_ou_passe',
-            passeRecomendado: passeDoCiclo,
-            chegadaEm: serverTimestamp(),
-            recepcionista: { uid: user.uid, nome: user.displayName }
-        });
-        
-        await registrarLog({ acao: 'REGISTROU_PRESENCA_AE', detalhes: { assistidoId: assistidoSelecionado.id, nome: assistidoSelecionado.nome }});
-        alert(`Presença de ${assistidoSelecionado.nome} registrada com sucesso!`);
-        ui.painelAcoesFrequencia.classList.add('hidden');
-        await carregarTratamentosAtivos();
-        e.target.disabled = false;
-    });
-
-    ui.btnMarcarFaltaRapido.addEventListener('click', async (e) => {
-        e.target.disabled = true;
-        if (confirm(`Confirmar uma falta para ${assistidoSelecionado.nome}?`)) {
-            const tratamentoDocRef = doc(db, 'tratamentos_ae', tratamentoAtivoSelecionado.id);
-            const novoTotalFaltas = (tratamentoAtivoSelecionado.faltas_acumuladas || 0) + 1;
-            const batch = writeBatch(db);
-            batch.update(tratamentoDocRef, { faltas_acumuladas: increment(1) });
-            batch.set(doc(atendimentosRef), { assistidoId: assistidoSelecionado.id, tratamentoId: tratamentoAtivoSelecionado.id, tipo: 'falta', dataAtendimento: serverTimestamp() });
-            
-            if (novoTotalFaltas > 2) {
-                batch.update(tratamentoDocRef, { status: 'encerrado_por_falta' });
-                await batch.commit();
-                alert('Falta registrada. ATENÇÃO: Tratamento encerrado automaticamente por exceder o limite de 2 faltas!');
-            } else {
-                await batch.commit();
-                alert(`Falta registrada com sucesso! Total de faltas: ${novoTotalFaltas}.`);
-            }
-            await registrarLog({ acao: 'REGISTROU_FALTA_AE', detalhes: { assistidoId: assistidoSelecionado.id, tratamentoId: tratamentoAtivoSelecionado.id, totalFaltas: novoTotalFaltas }});
-            ui.painelAcoesFrequencia.classList.add('hidden');
-            await carregarTratamentosAtivos();
-        }
-        e.target.disabled = false;
-    });
-
-    ui.nomeInput.addEventListener('input', async (e) => {
-        const termo = e.target.value.trim().toLowerCase();
-        if (termo.length < 3) { if (assistidoSelecionado) resetarFormularioBusca(); ui.searchResults.innerHTML = ''; return; }
-        const q = query(assistidosRef, where('nome_lower', '>=', termo), where('nome_lower', '<=', termo + '\uf8ff'), limit(5));
-        const snapshot = await getDocs(q);
-        ui.searchResults.innerHTML = '';
-        snapshot.forEach(doc => {
-            const assistido = { id: doc.id, ...doc.data() };
-            const li = document.createElement('li');
-            li.textContent = assistido.nome;
-            li.addEventListener('click', async () => {
-                assistidoSelecionado = assistido;
-                ui.nomeInput.value = assistido.nome;
-                ui.telefoneInput.value = assistido.telefone || '';
-                ui.dnInput.value = assistido.dn || '';
+            const resetarFormularioBusca = () => {
+                assistidoSelecionado = null;
+                tratamentoAtivoSelecionado = null;
+                ui.nomeInput.value = '';
+                ui.telefoneInput.value = '';
+                ui.dnInput.value = '';
                 ui.searchResults.innerHTML = '';
-                ui.novoAtendimentoSection.classList.remove('hidden');
-                await checarHistoricoEExibirBotao(assistido.id);
-            });
-            ui.searchResults.appendChild(li);
-        });
-    });
+                ui.novoAtendimentoSection.classList.add('hidden');
+                ui.btnVerHistorico.classList.add('hidden');
+                ui.nomeInput.disabled = false;
+                ui.nomeInput.focus();
+            };
+            
+            const validarDadosPessoais = () => {
+                if (!ui.nomeInput.value || !ui.telefoneInput.value || !ui.dnInput.value) {
+                    alert("Por favor, preencha os campos Nome, Telefone e DN antes de continuar.");
+                    return false;
+                }
+                return true;
+            };
 
-    ui.nomeInput.addEventListener('blur', () => {
-        setTimeout(() => { 
-            if (!assistidoSelecionado && ui.nomeInput.value.length > 2) { 
-                ui.novoAtendimentoSection.classList.remove('hidden');
-            } 
-            ui.searchResults.innerHTML = ''; 
-        }, 200);
-    });
+            const criarNovoAssistidoSeNaoExistir = async () => {
+                if (assistidoSelecionado) return assistidoSelecionado.id;
+                if (!validarDadosPessoais()) throw new Error("Dados pessoais incompletos");
+                const nome = ui.nomeInput.value.trim();
+                const novoAssistidoData = { nome: nome, nome_lower: nome.toLowerCase(), telefone: ui.telefoneInput.value, dn: ui.dnInput.value, criadoEm: serverTimestamp(), criadoPor: { uid: user.uid, nome: user.displayName } };
+                const docRef = await addDoc(assistidosRef, novoAssistidoData);
+                assistidoSelecionado = { id: docRef.id, ...novoAssistidoData };
+                await registrarLog({ acao: 'CADASTROU_ASSISTIDO_AE', detalhes: { assistidoId: docRef.id, nome }});
+                return docRef.id;
+            };
+            
+            const checarHistoricoEExibirBotao = async (assistidoId) => {
+                const qTratamentos = query(tratamentosRef, where("assistidoId", "==", assistidoId), limit(1));
+                const snapshot = await getDocs(qTratamentos);
+                if (!snapshot.empty) {
+                    ui.btnVerHistorico.classList.remove('hidden');
+                    ui.btnVerHistorico.onclick = () => {
+                        window.open(`/arquivo-geral-ae.html?id=${assistidoId}`, '_blank');
+                    };
+                } else {
+                    ui.btnVerHistorico.classList.add('hidden');
+                }
+            };
+            
+            const carregarTratamentosAtivos = async () => {
+                ui.listaAtivos.innerHTML = '<li>Carregando...</li>';
+                const q = query(tratamentosRef, where("status", "==", "ativo"));
+                const snapshot = await getDocs(q);
+                
+                if (snapshot.empty) {
+                    ui.listaAtivos.innerHTML = '<li>Nenhum tratamento ativo no momento.</li>';
+                    return;
+                }
 
-    ui.btnRegistrarAvulso.addEventListener('click', async (e) => {
-        e.target.disabled = true;
-        if (!validarDadosPessoais()) { e.target.disabled = false; return; }
-        try {
-            const assistidoId = await criarNovoAssistidoSeNaoExistir();
-            const trintaDiasAtras = new Date(); trintaDiasAtras.setDate(trintaDiasAtras.getDate() - 30);
-            const qAvulso = query(atendimentosRef, where("assistidoId", "==", assistidoId), where("tipo", "==", "avulso"), where("dataAtendimento", ">=", Timestamp.fromDate(trintaDiasAtras)));
-            const avulsoSnapshot = await getDocs(qAvulso);
-            if (!avulsoSnapshot.empty) { 
-                alert('Este assistido já recebeu um passe avulso nos últimos 30 dias.');
-                e.target.disabled = false; return; 
-            }
-            if (confirm(`Confirmar registro de Passe Avulso para ${assistidoSelecionado?.nome || ui.nomeInput.value}?`)) {
-                const idadeDate = new Date(ui.dnInput.value);
-                const diffMs = Date.now() - idadeDate.getTime();
-                const idade = new Date(diffMs).getUTCFullYear() - 1970;
-                const passeAvulso = idade >= 12 ? 'P2' : 'P4A';
+                const hojeInicio = new Date();
+                hojeInicio.setHours(0, 0, 0, 0);
+                const hojeFim = new Date();
+                hojeFim.setHours(23, 59, 59, 999);
 
-                const batch = writeBatch(db);
-                batch.set(doc(filaRef), { assistidoId: assistidoId, nomeAssistido: assistidoSelecionado?.nome || ui.nomeInput.value, status: 'pronto_para_chamar', passeRecomendado: passeAvulso, tipoAtendimento: 'avulso', chegadaEm: serverTimestamp(), recepcionista: { uid: user.uid, nome: user.displayName } });
-                batch.set(doc(atendimentosRef), { assistidoId: assistidoId, tratamentoId: null, tipo: 'avulso', dataAtendimento: serverTimestamp(), passeRecomendado: passeAvulso });
-                await batch.commit();
-                await registrarLog({ acao: 'REGISTROU_PASSE_AVULSO', detalhes: { assistidoId: assistidoId, nome: assistidoSelecionado?.nome || ui.nomeInput.value, passe: passeAvulso }});
-                alert('Passe avulso registrado e enviado para a fila!');
-                resetarFormularioBusca();
+                const promessas = snapshot.docs.map(async (tratamentoDoc) => {
+                    const tratamento = { id: tratamentoDoc.id, ...tratamentoDoc.data()};
+                    if (!tratamento.assistidoId) return null;
+                    
+                    const assistidoDocRef = doc(db, 'assistidos', tratamento.assistidoId);
+                    const qFrequenciaHoje = query(atendimentosRef, 
+                        where("tratamentoId", "==", tratamento.id),
+                        where("dataAtendimento", ">=", Timestamp.fromDate(hojeInicio)),
+                        where("dataAtendimento", "<=", Timestamp.fromDate(hojeFim)),
+                        limit(1)
+                    );
+                    
+                    const [assistidoDoc, frequenciaSnapshot] = await Promise.all([getDoc(assistidoDocRef), getDocs(qFrequenciaHoje)]);
+                    
+                    let statusHoje = 'pendente';
+                    if (!frequenciaSnapshot.empty) {
+                        statusHoje = frequenciaSnapshot.docs[0].data().tipo === 'falta' ? 'ausente' : 'presente';
+                    }
+                    
+                    return assistidoDoc.exists() ? { assistido: {id: assistidoDoc.id, ...assistidoDoc.data()}, tratamento, statusHoje } : null;
+                });
+
+                const itensLista = (await Promise.all(promessas)).filter(item => item !== null);
+                itensLista.sort((a, b) => a.assistido.nome.localeCompare(b.assistido.nome));
+
+                ui.listaAtivos.innerHTML = '';
+                itensLista.forEach(item => {
+                    const li = document.createElement('li');
+                    li.textContent = item.assistido.nome;
+                    li.className = `status-${item.statusHoje}`;
+                    li.addEventListener('click', () => {
+                        tratamentoAtivoSelecionado = item.tratamento;
+                        assistidoSelecionado = item.assistido;
+                        ui.nomeFrequencia.textContent = item.assistido.nome;
+                        ui.painelAcoesFrequencia.classList.remove('hidden');
+                    });
+                    ui.listaAtivos.appendChild(li);
+                });
+            };
+            
+            ui.btnMarcarPresenca.addEventListener('click', async (e) => {
+                e.target.disabled = true;
+                const hojeInicio = new Date();
+                hojeInicio.setHours(0, 0, 0, 0);
+                const qCheck = query(filaRef, 
+                    where("assistidoId", "==", assistidoSelecionado.id),
+                    where("chegadaEm", ">=", Timestamp.fromDate(hojeInicio)),
+                    limit(1)
+                );
+                const checkSnapshot = await getDocs(qCheck);
+                if(!checkSnapshot.empty) {
+                    alert(`${assistidoSelecionado.nome} já teve a presença registrada hoje.`);
+                    e.target.disabled = false;
+                    return;
+                }
+
+                const passeDoCiclo = tratamentoAtivoSelecionado.passe_ciclo_atual;
+
+                await addDoc(filaRef, {
+                    assistidoId: assistidoSelecionado.id,
+                    nomeAssistido: assistidoSelecionado.nome,
+                    tratamentoId: tratamentoAtivoSelecionado.id,
+                    status: 'aguardando_entrevista_ou_passe',
+                    passeRecomendado: passeDoCiclo,
+                    chegadaEm: serverTimestamp(),
+                    recepcionista: { uid: user.uid, nome: user.displayName }
+                });
+                
+                await registrarLog({ acao: 'REGISTROU_PRESENCA_AE', detalhes: { assistidoId: assistidoSelecionado.id, nome: assistidoSelecionado.nome }});
+                alert(`Presença de ${assistidoSelecionado.nome} registrada com sucesso!`);
+                ui.painelAcoesFrequencia.classList.add('hidden');
                 await carregarTratamentosAtivos();
-            } else {
                 e.target.disabled = false;
-            }
-        } catch(error) { 
-            console.error("Erro ao registrar passe avulso:", error); 
-            e.target.disabled = false;
-        }
-    });
-    
-    ui.btnIniciarTratamento.addEventListener('click', async (e) => {
-        e.target.disabled = true;
-        if (!validarDadosPessoais()) { e.target.disabled = false; return; }
-        try {
-            const assistidoId = await criarNovoAssistidoSeNaoExistir();
-            const idadeDate = new Date(ui.dnInput.value);
-            const diffMs = Date.now() - idadeDate.getTime();
-            const idade = new Date(diffMs).getUTCFullYear() - 1970;
-            const passeInicial = idade >= 12 ? 'P2' : 'P4A';
-            
-            const batch = writeBatch(db);
-            const novoTratamentoRef = doc(tratamentosRef);
-            batch.set(novoTratamentoRef, { assistidoId: assistidoId, dataInicio: serverTimestamp(), status: 'ativo', faltas_acumuladas: 0, passe_ciclo_atual: passeInicial });
-            batch.set(doc(filaRef), { assistidoId: assistidoId, nomeAssistido: assistidoSelecionado.nome, tratamentoId: novoTratamentoRef.id, status: 'aguardando_entrevista_ou_passe', chegadaEm: serverTimestamp(), recepcionista: { uid: user.uid, nome: user.displayName } });
-            
-            await batch.commit();
-            await registrarLog({ acao: 'INICIOU_ASSISTENCIA_AE', detalhes: { assistidoId: assistidoId, nome: assistidoSelecionado.nome }});
-            alert('Assistência Espiritual iniciada com sucesso e enviada para a fila!');
-            resetarFormularioBusca();
-            await carregarTratamentosAtivos();
-        } catch(error) { 
-            console.error("Erro ao iniciar assistência:", error); 
-            e.target.disabled = false;
-        }
-    });
-    
-    ui.btnLimpar.addEventListener('click', resetarFormularioBusca);
-    ui.telefoneInput.addEventListener('input', handlePhone);
+            });
 
-    resetarFormularioBusca();
-    carregarTratamentosAtivos();
-}
+            ui.btnMarcarFaltaRapido.addEventListener('click', async (e) => {
+                e.target.disabled = true;
+                if (confirm(`Confirmar uma falta para ${assistidoSelecionado.nome}?`)) {
+                    const tratamentoDocRef = doc(db, 'tratamentos_ae', tratamentoAtivoSelecionado.id);
+                    const novoTotalFaltas = (tratamentoAtivoSelecionado.faltas_acumuladas || 0) + 1;
+                    const batch = writeBatch(db);
+                    batch.update(tratamentoDocRef, { faltas_acumuladas: increment(1) });
+                    batch.set(doc(atendimentosRef), { assistidoId: assistidoSelecionado.id, tratamentoId: tratamentoAtivoSelecionado.id, tipo: 'falta', dataAtendimento: serverTimestamp() });
+                    
+                    if (novoTotalFaltas > 2) {
+                        batch.update(tratamentoDocRef, { status: 'encerrado_por_falta' });
+                        await batch.commit();
+                        alert('Falta registrada. ATENÇÃO: Tratamento encerrado automaticamente por exceder o limite de 2 faltas!');
+                    } else {
+                        await batch.commit();
+                        alert(`Falta registrada com sucesso! Total de faltas: ${novoTotalFaltas}.`);
+                    }
+                    await registrarLog({ acao: 'REGISTROU_FALTA_AE', detalhes: { assistidoId: assistidoSelecionado.id, tratamentoId: tratamentoAtivoSelecionado.id, totalFaltas: novoTotalFaltas }});
+                    ui.painelAcoesFrequencia.classList.add('hidden');
+                    await carregarTratamentosAtivos();
+                }
+                e.target.disabled = false;
+            });
+
+            ui.nomeInput.addEventListener('input', async (e) => {
+                const termo = e.target.value.trim().toLowerCase();
+                if (termo.length < 3) { if (assistidoSelecionado) resetarFormularioBusca(); ui.searchResults.innerHTML = ''; return; }
+                const q = query(assistidosRef, where('nome_lower', '>=', termo), where('nome_lower', '<=', termo + '\uf8ff'), limit(5));
+                const snapshot = await getDocs(q);
+                ui.searchResults.innerHTML = '';
+                snapshot.forEach(doc => {
+                    const assistido = { id: doc.id, ...doc.data() };
+                    const li = document.createElement('li');
+                    li.textContent = assistido.nome;
+                    li.addEventListener('click', async () => {
+                        assistidoSelecionado = assistido;
+                        ui.nomeInput.value = assistido.nome;
+                        ui.telefoneInput.value = assistido.telefone || '';
+                        ui.dnInput.value = assistido.dn || '';
+                        ui.searchResults.innerHTML = '';
+                        ui.novoAtendimentoSection.classList.remove('hidden');
+                        await checarHistoricoEExibirBotao(assistido.id);
+                    });
+                    ui.searchResults.appendChild(li);
+                });
+            });
+
+            ui.nomeInput.addEventListener('blur', () => {
+                setTimeout(() => { 
+                    if (!assistidoSelecionado && ui.nomeInput.value.length > 2) { 
+                        ui.novoAtendimentoSection.classList.remove('hidden');
+                    } 
+                    ui.searchResults.innerHTML = ''; 
+                }, 200);
+            });
+
+            ui.btnRegistrarAvulso.addEventListener('click', async (e) => {
+                e.target.disabled = true;
+                if (!validarDadosPessoais()) { e.target.disabled = false; return; }
+                try {
+                    const assistidoId = await criarNovoAssistidoSeNaoExistir();
+                    const trintaDiasAtras = new Date(); trintaDiasAtras.setDate(trintaDiasAtras.getDate() - 30);
+                    const qAvulso = query(atendimentosRef, where("assistidoId", "==", assistidoId), where("tipo", "==", "avulso"), where("dataAtendimento", ">=", Timestamp.fromDate(trintaDiasAtras)));
+                    const avulsoSnapshot = await getDocs(qAvulso);
+                    if (!avulsoSnapshot.empty) { 
+                        alert('Este assistido já recebeu um passe avulso nos últimos 30 dias.');
+                        e.target.disabled = false; return; 
+                    }
+                    if (confirm(`Confirmar registro de Passe Avulso para ${assistidoSelecionado?.nome || ui.nomeInput.value}?`)) {
+                        const idadeDate = new Date(ui.dnInput.value);
+                        const diffMs = Date.now() - idadeDate.getTime();
+                        const idade = new Date(diffMs).getUTCFullYear() - 1970;
+                        const passeAvulso = idade >= 12 ? 'P2' : 'P4A';
+
+                        const batch = writeBatch(db);
+                        batch.set(doc(filaRef), { assistidoId: assistidoId, nomeAssistido: assistidoSelecionado?.nome || ui.nomeInput.value, status: 'pronto_para_chamar', passeRecomendado: passeAvulso, tipoAtendimento: 'avulso', chegadaEm: serverTimestamp(), recepcionista: { uid: user.uid, nome: user.displayName } });
+                        batch.set(doc(atendimentosRef), { assistidoId: assistidoId, tratamentoId: null, tipo: 'avulso', dataAtendimento: serverTimestamp(), passeRecomendado: passeAvulso });
+                        await batch.commit();
+                        await registrarLog({ acao: 'REGISTROU_PASSE_AVULSO', detalhes: { assistidoId: assistidoId, nome: assistidoSelecionado?.nome || ui.nomeInput.value, passe: passeAvulso }});
+                        alert('Passe avulso registrado e enviado para a fila!');
+                        resetarFormularioBusca();
+                        await carregarTratamentosAtivos();
+                    } else {
+                        e.target.disabled = false;
+                    }
+                } catch(error) { 
+                    console.error("Erro ao registrar passe avulso:", error); 
+                    e.target.disabled = false;
+                }
+            });
+            
+            ui.btnIniciarTratamento.addEventListener('click', async (e) => {
+                e.target.disabled = true;
+                if (!validarDadosPessoais()) { e.target.disabled = false; return; }
+                try {
+                    const assistidoId = await criarNovoAssistidoSeNaoExistir();
+                    const idadeDate = new Date(ui.dnInput.value);
+                    const diffMs = Date.now() - idadeDate.getTime();
+                    const idade = new Date(diffMs).getUTCFullYear() - 1970;
+                    const passeInicial = idade >= 12 ? 'P2' : 'P4A';
+                    
+                    const batch = writeBatch(db);
+                    const novoTratamentoRef = doc(tratamentosRef);
+                    batch.set(novoTratamentoRef, { assistidoId: assistidoId, dataInicio: serverTimestamp(), status: 'ativo', faltas_acumuladas: 0, passe_ciclo_atual: passeInicial });
+                    batch.set(doc(filaRef), { assistidoId: assistidoId, nomeAssistido: assistidoSelecionado.nome, tratamentoId: novoTratamentoRef.id, status: 'aguardando_entrevista_ou_passe', chegadaEm: serverTimestamp(), recepcionista: { uid: user.uid, nome: user.displayName } });
+                    
+                    await batch.commit();
+                    await registrarLog({ acao: 'INICIOU_ASSISTENCIA_AE', detalhes: { assistidoId: assistidoId, nome: assistidoSelecionado.nome }});
+                    alert('Assistência Espiritual iniciada com sucesso e enviada para a fila!');
+                    resetarFormularioBusca();
+                    await carregarTratamentosAtivos();
+                } catch(error) { 
+                    console.error("Erro ao iniciar assistência:", error); 
+                    e.target.disabled = false;
+                }
+            });
+            
+            ui.btnLimpar.addEventListener('click', resetarFormularioBusca);
+            ui.telefoneInput.addEventListener('input', handlePhone);
+
+            resetarFormularioBusca();
+            carregarTratamentosAtivos();
+        }
     </script>
 </body>
 </html>
