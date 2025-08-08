@@ -39,7 +39,6 @@
         table { width: 100%; border-collapse: collapse; }
         th, td { padding: 12px; border-bottom: 1px solid #eee; text-align: left; }
         th { background-color: #f2f2f2; }
-        /* --- NOVO: Estilo para o campo de leitura de código de barras --- */
         .leitor-barcode {
             border: 2px solid #007bff;
             padding: 15px;
@@ -88,22 +87,24 @@
         <div id="tab-emprestimos" class="tab-content">
              <div class="form-item">
                 <label for="leitor-emprestimo">Escanear Livro para Empréstimo</label>
-                <input type="text" id="leitor-emprestimo" class="leitor-barcode" placeholder="Aponte o leitor de código de barras aqui...">
+                <input type="text" id="leitor-emprestimo" class="leitor-barcode" placeholder="Aponte o leitor de código de barras do LIVRO aqui...">
             </div>
             <hr>
             <h3>Registrar Novo Empréstimo</h3>
             <div class="grid-container">
                 <div class="form-item">
-                    <label for="busca-livro-emprestimo">Ou Busque Manualmente</label>
+                    <label for="busca-livro-emprestimo">Ou Busque o Livro Manualmente</label>
                     <input type="text" id="busca-livro-emprestimo" placeholder="Digite para filtrar a lista abaixo...">
                     <div id="resultados-busca-emprestimo"></div>
-                    <p><strong>Selecionado:</strong> <span id="livro-selecionado-emprestimo">Nenhum</span></p>
+                    <p><strong>Livro Selecionado:</strong> <span id="livro-selecionado-emprestimo">Nenhum</span></p>
                 </div>
                 <div class="form-item">
-                    <label for="seletor-voluntario-emprestimo">Emprestar para o Voluntário:</label>
-                    <select id="seletor-voluntario-emprestimo"></select>
+                    <label for="leitor-cracha-emprestimo">Escanear Crachá do Voluntário</label>
+                    <input type="text" id="leitor-cracha-emprestimo" class="leitor-barcode" style="border-color: #28a745;" placeholder="Aponte o leitor para o CRACHÁ aqui...">
                     <hr style="margin: 20px 0;">
-                    <label for="nome-externo-emprestimo">Ou digite o nome do leitor:</label>
+                    <label for="seletor-voluntario-emprestimo">Ou Selecione o Voluntário:</label>
+                    <select id="seletor-voluntario-emprestimo"></select>
+                    <label for="nome-externo-emprestimo" style="margin-top: 15px;">Ou digite o nome do leitor (visitante):</label>
                     <input type="text" id="nome-externo-emprestimo" placeholder="Nome do visitante...">
                 </div>
             </div>
@@ -120,10 +121,14 @@
     <div id="modal-pendencia" class="modal-overlay">
         <div class="modal-content">
             <h2>Registrar Pendência</h2>
-            <p>Selecione o voluntário para registrar esta conta:</p>
-            <select id="seletor-voluntario-pendencia"></select>
+            <div class="form-item">
+                 <label for="leitor-cracha-pendencia">Escanear Crachá do Comprador</label>
+                 <input type="text" id="leitor-cracha-pendencia" class="leitor-barcode" style="border-color: #ffc107;" placeholder="Aponte o leitor para o CRACHÁ aqui...">
+            </div>
             <hr style="margin: 20px 0;">
-            <label for="nome-externo">Ou digite o nome do comprador:</label>
+            <p>Ou selecione o voluntário manualmente:</p>
+            <select id="seletor-voluntario-pendencia"></select>
+            <label for="nome-externo" style="margin-top: 15px;">Ou digite o nome do comprador (visitante):</label>
             <input type="text" id="nome-externo" placeholder="Nome do visitante...">
             <div style="text-align: right; margin-top: 20px;">
                 <button type="button" id="btn-cancelar-pendencia" class="btn-secondary">Cancelar</button>
@@ -171,7 +176,7 @@
             const tabs = document.querySelectorAll('.tab-link');
             const tabContents = document.querySelectorAll('.tab-content');
             // Vendas
-            const leitorVendaInput = document.getElementById('leitor-venda'); // NOVO
+            const leitorVendaInput = document.getElementById('leitor-venda');
             const buscaLivroVendaInput = document.getElementById('busca-livro-venda');
             const resultadosBuscaVenda = document.getElementById('resultados-busca-venda');
             const listaCarrinho = document.getElementById('lista-carrinho');
@@ -179,16 +184,18 @@
             const btnFinalizarVista = document.getElementById('btn-finalizar-vista');
             const btnFinalizarPrazo = document.getElementById('btn-finalizar-prazo');
             // Empréstimos
-            const leitorEmprestimoInput = document.getElementById('leitor-emprestimo'); // NOVO
+            const leitorEmprestimoInput = document.getElementById('leitor-emprestimo');
             const buscaLivroEmprestimoInput = document.getElementById('busca-livro-emprestimo');
             const resultadosBuscaEmprestimo = document.getElementById('resultados-busca-emprestimo');
             const livroSelecionadoSpan = document.getElementById('livro-selecionado-emprestimo');
+            const leitorCrachaEmprestimoInput = document.getElementById('leitor-cracha-emprestimo'); // NOVO
             const seletorVoluntarioEmprestimo = document.getElementById('seletor-voluntario-emprestimo');
             const nomeExternoEmprestimoInput = document.getElementById('nome-externo-emprestimo');
             const btnRegistrarEmprestimo = document.getElementById('btn-registrar-emprestimo');
             const tabelaEmprestimos = document.getElementById('tabela-emprestimos').querySelector('tbody');
-            // Modal
+            // Modal Pendência
             const modalPendencia = document.getElementById('modal-pendencia');
+            const leitorCrachaPendenciaInput = document.getElementById('leitor-cracha-pendencia'); // NOVO
             const seletorVoluntarioPendencia = document.getElementById('seletor-voluntario-pendencia');
             const nomeExternoInput = document.getElementById('nome-externo');
             const btnConfirmarPendencia = document.getElementById('btn-confirmar-pendencia');
@@ -218,11 +225,10 @@
                 seletorVoluntarioEmprestimo.innerHTML = options;
             });
 
-            // --- NOVO: Lógica do Leitor de Código de Barras para VENDAS ---
+            // --- Leitor de Código de Barras para LIVROS (Vendas) ---
             leitorVendaInput.addEventListener('change', async (e) => {
-                const isbn = e.target.value.trim();
+                const isbn = e.target.value.replace(/[^0-9X]/gi, '').trim();
                 if (!isbn) return;
-
                 const q = query(collection(db, 'biblioteca_livros'), where('isbn', '==', isbn), where('finalidade', '==', 'Venda'));
                 try {
                     const querySnapshot = await getDocs(q);
@@ -234,19 +240,15 @@
                         adicionarAoCarrinho(livro);
                     }
                 } catch (error) {
-                    console.error("Erro ao buscar livro por ISBN:", error);
                     alert("Ocorreu um erro ao buscar o livro.");
                 }
-                
-                e.target.value = ''; // Limpa o campo
-                e.target.focus();   // Devolve o foco para o campo
+                e.target.value = ''; e.target.focus();
             });
 
-            // --- NOVO: Lógica do Leitor de Código de Barras para EMPRÉSTIMOS ---
+            // --- Leitor de Código de Barras para LIVROS (Empréstimos) ---
             leitorEmprestimoInput.addEventListener('change', async (e) => {
-                const isbn = e.target.value.trim();
+                const isbn = e.target.value.replace(/[^0-9X]/gi, '').trim();
                 if (!isbn) return;
-
                 const q = query(collection(db, 'biblioteca_livros'), where('isbn', '==', isbn), where('finalidade', '==', 'Empréstimo'));
                 try {
                     const querySnapshot = await getDocs(q);
@@ -263,13 +265,55 @@
                         }
                     }
                 } catch (error) {
-                    console.error("Erro ao buscar livro por ISBN para empréstimo:", error);
                     alert("Ocorreu um erro ao buscar o livro.");
                 }
-                
-                e.target.value = ''; // Limpa o campo
-                e.target.focus();   // Devolve o foco para o campo
+                e.target.value = ''; e.target.focus();
             });
+
+            // --- NOVO: Leitor de Código de Barras para CRACHÁS (Empréstimos) ---
+            leitorCrachaEmprestimoInput.addEventListener('change', async (e) => {
+                const codigo = parseInt(e.target.value.trim(), 10);
+                if (isNaN(codigo)) { e.target.value = ''; return; }
+
+                const q = query(collection(db, 'voluntarios'), where('codigoVoluntario', '==', codigo));
+                try {
+                    const querySnapshot = await getDocs(q);
+                    if (querySnapshot.empty) {
+                        alert('Voluntário não encontrado com este código.');
+                    } else {
+                        const voluntarioDoc = querySnapshot.docs[0];
+                        seletorVoluntarioEmprestimo.value = voluntarioDoc.id; // Seleciona o voluntário no dropdown
+                        nomeExternoEmprestimoInput.value = ''; // Limpa o campo de visitante
+                        alert(`Voluntário "${voluntarioDoc.data().nome}" selecionado.`);
+                    }
+                } catch (error) {
+                    alert("Ocorreu um erro ao buscar o voluntário.");
+                }
+                e.target.value = ''; e.target.focus();
+            });
+
+            // --- NOVO: Leitor de Código de Barras para CRACHÁS (Pendência de Venda) ---
+            leitorCrachaPendenciaInput.addEventListener('change', async (e) => {
+                const codigo = parseInt(e.target.value.trim(), 10);
+                if (isNaN(codigo)) { e.target.value = ''; return; }
+                
+                const q = query(collection(db, 'voluntarios'), where('codigoVoluntario', '==', codigo));
+                try {
+                    const querySnapshot = await getDocs(q);
+                    if (querySnapshot.empty) {
+                        alert('Voluntário não encontrado com este código.');
+                    } else {
+                        const voluntarioDoc = querySnapshot.docs[0];
+                        seletorVoluntarioPendencia.value = voluntarioDoc.id; // Seleciona o voluntário no dropdown
+                        nomeExternoInput.value = ''; // Limpa o campo de visitante
+                        alert(`Comprador "${voluntarioDoc.data().nome}" selecionado.`);
+                    }
+                } catch (error) {
+                    alert("Ocorreu um erro ao buscar o voluntário.");
+                }
+                e.target.value = ''; e.target.focus();
+            });
+
 
             // --- Lógica de Vendas (Manual e Carrinho) ---
             function carregarLivrosParaVenda() {
@@ -277,16 +321,15 @@
                 onSnapshot(q, (snapshot) => {
                     todosOsLivrosAVenda = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
                     renderizarResultadosVenda(todosOsLivrosAVenda);
-                }, (error) => console.error("Erro ao carregar livros para venda:", error));
+                });
             }
             
             buscaLivroVendaInput.addEventListener('keyup', () => {
                 const textoBusca = buscaLivroVendaInput.value.toLowerCase();
-                const livrosFiltrados = todosOsLivrosAVenda.filter(livro => 
+                renderizarResultadosVenda(todosOsLivrosAVenda.filter(livro => 
                     livro.titulo.toLowerCase().includes(textoBusca) || 
                     (livro.autor && livro.autor.toLowerCase().includes(textoBusca))
-                );
-                renderizarResultadosVenda(livrosFiltrados);
+                ));
             });
 
             function renderizarResultadosVenda(livros) {
@@ -294,9 +337,7 @@
                 livros.forEach(livro => {
                     const div = document.createElement('div');
                     div.className = 'resultado-item';
-                    if (livro.quantidade === 0) {
-                        div.classList.add('esgotado');
-                    }
+                    if (livro.quantidade === 0) div.classList.add('esgotado');
                     div.innerHTML = `${livro.titulo} - ${livro.autor} <strong>(Estoque: ${livro.quantidade})</strong>`;
                     div.onclick = () => {
                         if (livro.quantidade > 0) {
@@ -312,12 +353,10 @@
             function adicionarAoCarrinho(livro) {
                 const itemExistente = carrinho.find(i => i.id === livro.id);
                 const qtdNoCarrinho = itemExistente ? itemExistente.qtd : 0;
-
                 if (qtdNoCarrinho >= livro.quantidade) {
                     alert(`Estoque máximo atingido para o livro "${livro.titulo}".`);
                     return;
                 }
-
                 if (itemExistente) { itemExistente.qtd++; } 
                 else { carrinho.push({ ...livro, qtd: 1 }); }
                 renderizarCarrinho();
@@ -370,13 +409,9 @@
             async function finalizarVenda(tipoVenda, comprador = null) {
                 if (carrinho.length === 0) return alert('O carrinho está vazio.');
                 const totalVenda = carrinho.reduce((acc, item) => acc + (item.preco * item.qtd), 0);
-                
-                // Desabilitar botões para evitar cliques duplos
                 btnConfirmarPendencia.disabled = true;
                 btnFinalizarVista.disabled = true;
-
                 try {
-                    // ATENÇÃO: A Cloud Function 'registrarVendaBiblioteca' já faz a verificação de estoque.
                     await registrarVendaBiblioteca({
                         total: totalVenda,
                         itens: carrinho.map(i => ({id: i.id, titulo: i.titulo, qtd: i.qtd, precoUnitario: i.preco})),
@@ -390,10 +425,8 @@
                     seletorVoluntarioPendencia.value = '';
                     nomeExternoInput.value = '';
                 } catch(error) {
-                    console.error("Erro detalhado ao finalizar venda:", error);
                     alert(`Erro ao registrar venda: ${error.message}`);
                 } finally {
-                    // Reabilitar botões
                     btnConfirmarPendencia.disabled = false;
                     btnFinalizarVista.disabled = false;
                 }
@@ -405,16 +438,15 @@
                 onSnapshot(q, (snapshot) => {
                     todosOsLivrosParaEmprestimo = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
                     renderizarResultadosEmprestimo(todosOsLivrosParaEmprestimo);
-                }, (error) => console.error("Erro ao carregar livros para empréstimo:", error));
+                });
             }
 
             buscaLivroEmprestimoInput.addEventListener('keyup', () => {
                 const textoBusca = buscaLivroEmprestimoInput.value.toLowerCase();
-                const livrosFiltrados = todosOsLivrosParaEmprestimo.filter(livro => 
+                renderizarResultadosEmprestimo(todosOsLivrosParaEmprestimo.filter(livro => 
                     livro.titulo.toLowerCase().includes(textoBusca) || 
                     (livro.autor && livro.autor.toLowerCase().includes(textoBusca))
-                );
-                renderizarResultadosEmprestimo(livrosFiltrados);
+                ));
             });
 
             function renderizarResultadosEmprestimo(livros) {
@@ -422,14 +454,10 @@
                 livros.forEach(livro => {
                     const div = document.createElement('div');
                     div.className = 'resultado-item';
-                    if (livro.quantidade === 0) {
-                        div.classList.add('esgotado');
-                    }
+                    if (livro.quantidade === 0) div.classList.add('esgotado');
                     div.textContent = `${livro.titulo} - ${livro.autor} (Disponíveis: ${livro.quantidade})`;
                     div.onclick = () => {
-                        if (livro.quantidade > 0) {
-                            selecionarLivroParaEmprestimo(livro);
-                        }
+                        if (livro.quantidade > 0) selecionarLivroParaEmprestimo(livro);
                     };
                     resultadosBuscaEmprestimo.appendChild(div);
                 });
@@ -445,7 +473,6 @@
             btnRegistrarEmprestimo.addEventListener('click', async () => {
                 const voluntarioId = seletorVoluntarioEmprestimo.value;
                 const nomeExterno = nomeExternoEmprestimoInput.value.trim();
-
                 if (!livroParaEmprestimo) return alert("Selecione um livro para emprestar.");
                 if (!voluntarioId && !nomeExterno) return alert("Selecione um voluntário ou digite o nome do leitor.");
                 
@@ -461,7 +488,6 @@
                 }
                 
                 btnRegistrarEmprestimo.disabled = true;
-
                 try {
                     await gerenciarEmprestimoBiblioteca({
                         acao: 'emprestar',
@@ -504,13 +530,13 @@
                 const livroId = e.target.dataset.livroId;
                 
                 if (confirm("Confirmar a devolução deste livro?")) {
-                    e.target.disabled = true; // Desabilita o botão para evitar clique duplo
+                    e.target.disabled = true;
                     try {
                         await gerenciarEmprestimoBiblioteca({ acao: 'devolver', emprestimoId, livroId });
                         alert("Devolução registrada!");
                     } catch (error) {
                         alert(`Erro: ${error.message}`);
-                        e.target.disabled = false; // Reabilita o botão em caso de erro
+                        e.target.disabled = false;
                     }
                 }
             });

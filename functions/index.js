@@ -1,16 +1,34 @@
-const functions = require("firebase-functions");
+// Teste final de deploy
+// // ===================================================================
+// IMPORTAÇÕES (Atualizadas para a nova sintaxe v2)
+// ===================================================================
+const { onCall, HttpsError } = require("firebase-functions/v2/https");
+const { onDocumentCreated, onDocumentWritten } = require("firebase-functions/v2/firestore");
+const { onSchedule } = require("firebase-functions/v2/scheduler");
+const { onRequest } = require("firebase-functions/v2/https");
+const functions = require("firebase-functions"); // Necessário para functions.config()
+
+// Pacotes que não mudam
 const admin = require("firebase-admin");
 const webpush = require("web-push");
 const cors = require("cors")({ origin: true });
 const Fuse = require("fuse.js");
-const axios = require("axios"); // NOVO: Módulo para buscar dados na internet
+const axios = require("axios");
 const stream = require('stream');
 
 admin.initializeApp();
 const db = admin.firestore();
 const storage = admin.storage();
-const REGIAO = 'southamerica-east1';
 
+// Constantes e Opções Globais para as Funções
+const REGIAO = 'southamerica-east1';
+const OPCOES_FUNCAO = { region: REGIAO };
+const OPCOES_FUNCAO_SAOPAULO = { region: REGIAO, timeZone: 'America/Sao_Paulo' };
+
+
+// ===================================================================
+// Funções Auxiliares (Não mudam)
+// ===================================================================
 function calcularCicloVibracoes(dataBase) {
     const agora = new Date(dataBase);
     const proximaQuinta = new Date(agora);
@@ -62,25 +80,32 @@ async function enviarNotificacoesParaTodos(titulo, corpo) {
     return { successCount, failureCount, totalCount: inscricoesSnapshot.size };
 }
 
-exports.sincronizarStatusVoluntario = functions.region(REGIAO).firestore.document('presencas/{presencaId}').onWrite(async (change, context) => {
-    const dadosPresenca = change.after.exists ? change.after.data() : null;
-    const dadosAntigos = change.before.exists ? change.before.data() : null;
+const promoverUsuario = async (uid, novoPapel) => {
+    if (!uid) return;
+    await admin.auth().setCustomUserClaims(uid, { role: novoPapel });
+    const userQuery = await db.collection('voluntarios').where('authUid', '==', uid).limit(1).get();
+    if (!userQuery.empty) await userQuery.docs[0].ref.update({ role: novoPapel });
+};
+
+
+// ===================================================================
+// Funções Principais (Convertidas e Corrigidas para a Nova Sintaxe v2)
+// ===================================================================
+
+exports.sincronizarStatusVoluntario = onDocumentWritten({ ...OPCOES_FUNCAO, document: 'presencas/{presencaId}' }, async (event) => {
+    const dadosPresenca = event.data.after.exists ? event.data.after.data() : null;
+    const dadosAntigos = event.data.before.exists ? event.data.before.data() : null;
     if (!dadosPresenca || dadosPresenca.status !== 'presente') { return null; }
     if (dadosAntigos && dadosAntigos.status === 'presente') { return null; }
     const nomeVoluntario = dadosPresenca.nome;
-    const dataPresenca = dadosPresenca.data;
     const voluntariosRef = db.collection('voluntarios');
     const q = voluntariosRef.where('nome', '==', nomeVoluntario).limit(1);
     const snapshot = await q.get();
     if (snapshot.empty) { return null; }
-    const voluntarioDocRef = snapshot.docs[0].ref;
-    try {
-        await voluntarioDocRef.update({ ultimaPresenca: dataPresenca, statusVoluntario: 'ativo' });
-    } catch (error) { console.error(`SINCRONIZADOR: Erro ao atualizar a ficha de '${nomeVoluntario}':`, error); }
-    return null;
+    return snapshot.docs[0].ref.update({ ultimaPresenca: dadosPresenca.data, statusVoluntario: 'ativo' });
 });
 
-exports.definirSuperAdmin = functions.region(REGIAO).https.onRequest(async (req, res) => {
+exports.definirSuperAdmin = onRequest(OPCOES_FUNCAO, async (req, res) => {
     if (req.query.senha !== "amorcaridade") { return res.status(401).send('Acesso não autorizado.'); }
     const email = req.query.email;
     if (!email) { return res.status(400).send('Forneça um parâmetro de email.'); }
@@ -94,340 +119,152 @@ exports.definirSuperAdmin = functions.region(REGIAO).https.onRequest(async (req,
     } catch (error) { return res.status(500).send(`Erro: ${error.message}`); }
 });
 
-exports.convidarDiretor = functions.region(REGIAO).https.onCall(async (data, context) => {
-    if (context.auth.token.role !== 'super-admin') { throw new functions.https.HttpsError('permission-denied', 'Apenas o super-admin pode executar esta ação.'); }
-    const { email, nome } = data;
-    if (!email || !nome) { throw new functions.https.HttpsError('invalid-argument', 'Email e nome são obrigatórios.'); }
+exports.convidarDiretor = onCall(OPCOES_FUNCAO, async (request) => {
+    if (request.auth.token.role !== 'super-admin') { throw new HttpsError('permission-denied', 'Apenas o super-admin pode executar esta ação.'); }
+    const { email, nome } = request.data;
+    if (!email || !nome) { throw new HttpsError('invalid-argument', 'Email e nome são obrigatórios.'); }
     try {
         const userRecord = await admin.auth().createUser({ email, displayName: nome });
-        await admin.auth().setCustomUserClaims(userRecord.uid, { role: 'diretor' });
+        await promoverUsuario(userRecord.uid, 'diretor');
         const linkDeReset = await admin.auth().generatePasswordResetLink(email);
         console.log(`IMPORTANTE: Envie este link para ${nome} (${email}) para definir a senha: ${linkDeReset}`);
-        const voluntariosRef = db.collection('voluntarios');
-        const voluntariosSnapshot = await voluntariosRef.get();
-        const listaDeVoluntarios = voluntariosSnapshot.docs.map(d => ({ id: d.id, ...d.data() }));
-        const fuse = new Fuse(listaDeVoluntarios, { keys: ['nome'], includeScore: true, threshold: 0.4 });
-        const resultados = fuse.search(nome);
-        if (resultados.length > 0 && resultados[0].score < 0.3) {
-            await voluntariosRef.doc(resultados[0].item.id).update({ email, authUid: userRecord.uid, role: 'diretor' });
-        } else {
-            await voluntariosRef.doc(userRecord.uid).set({ nome, email, authUid: userRecord.uid, role: 'diretor', statusVoluntario: 'ativo', criadoEm: admin.firestore.FieldValue.serverTimestamp() });
-        }
         return { success: true, message: `Diretor ${nome} convidado com sucesso!` };
     } catch (error) {
-        if (error.code === 'auth/email-already-exists') throw new functions.https.HttpsError('already-exists', 'Este email já está em uso.');
-        throw new functions.https.HttpsError('internal', 'Ocorreu um erro ao criar o novo diretor.');
+        if (error.code === 'auth/email-already-exists') { throw new HttpsError('already-exists', 'Este email já está em uso.'); }
+        throw new HttpsError('internal', 'Ocorreu um erro ao criar o novo diretor.');
     }
 });
 
-exports.promoverParaTesoureiro = functions.region(REGIAO).https.onCall(async (data, context) => {
-    if (context.auth.token.role !== 'super-admin') { throw new functions.https.HttpsError('permission-denied', 'Apenas o Super Admin pode promover usuários.'); }
-    const uidParaPromover = data.uid;
-    if (!uidParaPromover) { throw new functions.https.HttpsError('invalid-argument', 'O UID do diretor é necessário.'); }
-    try {
-        await admin.auth().setCustomUserClaims(uidParaPromover, { role: 'tesoureiro' });
-        const userQuery = await db.collection('voluntarios').where('authUid', '==', uidParaPromover).limit(1).get();
-        if (!userQuery.empty) { await userQuery.docs[0].ref.update({ role: 'tesoureiro' }); }
-        return { success: true, message: 'Usuário promovido a tesoureiro com sucesso.' };
-    } catch (error) { console.error("Erro ao promover para tesoureiro:", error); throw new functions.https.HttpsError('internal', 'Erro interno ao tentar promover o usuário.'); }
+exports.promoverParaTesoureiro = onCall(OPCOES_FUNCAO, async (request) => {
+    if (request.auth.token.role !== 'super-admin') { throw new HttpsError('permission-denied', 'Apenas o Super Admin pode promover usuários.'); }
+    const uidParaPromover = request.data.uid;
+    if (!uidParaPromover) { throw new HttpsError('invalid-argument', 'O UID do diretor é necessário.'); }
+    await promoverUsuario(uidParaPromover, 'tesoureiro');
+    return { success: true, message: 'Usuário promovido a tesoureiro com sucesso.' };
 });
 
-exports.promoverParaConselheiro = functions.region(REGIAO).https.onCall(async (data, context) => {
-    if (context.auth.token.role !== 'super-admin') { 
-        throw new functions.https.HttpsError('permission-denied', 'Apenas o Super Admin pode promover usuários.'); 
-    }
+exports.promoverParaConselheiro = onCall(OPCOES_FUNCAO, async (request) => {
+    if (request.auth.token.role !== 'super-admin') { throw new HttpsError('permission-denied', 'Apenas o Super Admin pode promover usuários.'); }
     const conselheirosQuery = db.collection('voluntarios').where('role', '==', 'conselheiro');
     const conselheirosSnapshot = await conselheirosQuery.get();
-    if (conselheirosSnapshot.size >= 5) {
-        throw new functions.https.HttpsError('failed-precondition', 'O limite de 5 conselheiros já foi atingido. Não é possível promover um novo membro.');
-    }
-    const uidParaPromover = data.uid;
-    if (!uidParaPromover) { 
-        throw new functions.https.HttpsError('invalid-argument', 'O UID do usuário é necessário.'); 
-    }
-    try {
-        await admin.auth().setCustomUserClaims(uidParaPromover, { role: 'conselheiro' });
-        const userQuery = await db.collection('voluntarios').where('authUid', '==', uidParaPromover).limit(1).get();
-        if (!userQuery.empty) { 
-            await userQuery.docs[0].ref.update({ role: 'conselheiro' }); 
-        }
-        return { success: true, message: 'Usuário promovido a conselheiro com sucesso.' };
-    } catch (error) { 
-        console.error("Erro ao promover para conselheiro:", error); 
-        throw new functions.https.HttpsError('internal', 'Erro interno ao tentar promover o usuário.'); 
-    }
+    if (conselheirosSnapshot.size >= 5) { throw new HttpsError('failed-precondition', 'O limite de 5 conselheiros já foi atingido.'); }
+    const uidParaPromover = request.data.uid;
+    if (!uidParaPromover) { throw new HttpsError('invalid-argument', 'O UID do usuário é necessário.'); }
+    await promoverUsuario(uidParaPromover, 'conselheiro');
+    return { success: true, message: 'Usuário promovido a conselheiro com sucesso.' };
 });
 
-exports.promoverParaProdutorEvento = functions.region(REGIAO).https.onCall(async (data, context) => {
-    if (context.auth.token.role !== 'super-admin') { 
-        throw new functions.https.HttpsError('permission-denied', 'Apenas o Super Admin pode promover usuários.'); 
-    }
-    const uidParaPromover = data.uid;
-    if (!uidParaPromover) { 
-        throw new functions.https.HttpsError('invalid-argument', 'O UID do usuário é necessário.'); 
-    }
-    try {
-        await admin.auth().setCustomUserClaims(uidParaPromover, { role: 'produtor-evento' });
-        const userQuery = await db.collection('voluntarios').where('authUid', '==', uidParaPromover).limit(1).get();
-        if (!userQuery.empty) { 
-            await userQuery.docs[0].ref.update({ role: 'produtor-evento' }); 
-        }
-        return { success: true, message: 'Usuário promovido a Produtor de Evento com sucesso.' };
-    } catch (error) { 
-        console.error("Erro ao promover para Produtor de Evento:", error); 
-        throw new functions.https.HttpsError('internal', 'Erro interno ao tentar promover o usuário.'); 
-    }
+exports.promoverParaProdutorEvento = onCall(OPCOES_FUNCAO, async (request) => {
+    if (request.auth.token.role !== 'super-admin') { throw new HttpsError('permission-denied', 'Apenas o Super Admin pode promover usuários.'); }
+    const uidParaPromover = request.data.uid;
+    if (!uidParaPromover) { throw new HttpsError('invalid-argument', 'O UID do usuário é necessário.'); }
+    await promoverUsuario(uidParaPromover, 'produtor-evento');
+    return { success: true, message: 'Usuário promovido a Produtor de Evento com sucesso.' };
 });
 
-// ===================================================================
-// NOVA FUNÇÃO "ROBÔ" PARA PROMOVER A IRRADIADOR
-// ===================================================================
-exports.promoverParaIrradiador = functions.region(REGIAO).https.onCall(async (data, context) => {
-    if (context.auth.token.role !== 'super-admin') { 
-        throw new functions.https.HttpsError('permission-denied', 'Apenas o Super Admin pode promover usuários.'); 
-    }
-    const uidParaPromover = data.uid;
-    if (!uidParaPromover) { 
-        throw new functions.https.HttpsError('invalid-argument', 'O UID do usuário é necessário.'); 
-    }
-    try {
-        await admin.auth().setCustomUserClaims(uidParaPromover, { role: 'irradiador' });
-        const userQuery = await db.collection('voluntarios').where('authUid', '==', uidParaPromover).limit(1).get();
-        if (!userQuery.empty) { 
-            await userQuery.docs[0].ref.update({ role: 'irradiador' }); 
-        }
-        return { success: true, message: 'Usuário promovido a Irradiador com sucesso.' };
-    } catch (error) { 
-        console.error("Erro ao promover para Irradiador:", error); 
-        throw new functions.https.HttpsError('internal', 'Erro interno ao tentar promover o usuário.'); 
-    }
+exports.promoverParaIrradiador = onCall(OPCOES_FUNCAO, async (request) => {
+    if (request.auth.token.role !== 'super-admin') { throw new HttpsError('permission-denied', 'Apenas o Super Admin pode promover usuários.'); }
+    const uidParaPromover = request.data.uid;
+    if (!uidParaPromover) { throw new HttpsError('invalid-argument', 'O UID do usuário é necessário.'); }
+    await promoverUsuario(uidParaPromover, 'irradiador');
+    return { success: true, message: 'Usuário promovido a Irradiador com sucesso.' };
 });
 
-// ===================================================================
-// NOVA FUNÇÃO "ROBÔ" PARA PROMOVER A BIBLIOTECÁRIO
-// ===================================================================
-exports.promoverParaBibliotecario = functions.region(REGIAO).https.onCall(async (data, context) => {
-    if (context.auth.token.role !== 'super-admin') { 
-        throw new functions.https.HttpsError('permission-denied', 'Apenas o Super Admin pode promover usuários.'); 
-    }
-    const uidParaPromover = data.uid;
-    if (!uidParaPromover) { 
-        throw new functions.https.HttpsError('invalid-argument', 'O UID do usuário é necessário.'); 
-    }
-    try {
-        await admin.auth().setCustomUserClaims(uidParaPromover, { role: 'bibliotecario' });
-        const userQuery = await db.collection('voluntarios').where('authUid', '==', uidParaPromover).limit(1).get();
-        if (!userQuery.empty) { 
-            await userQuery.docs[0].ref.update({ role: 'bibliotecario' }); 
-        }
-        return { success: true, message: 'Usuário promovido a Bibliotecário(a) com sucesso.' };
-    } catch (error) { 
-        console.error("Erro ao promover para Bibliotecário:", error); 
-        throw new functions.https.HttpsError('internal', 'Erro interno ao tentar promover o usuário.'); 
-    }
+exports.promoverParaBibliotecario = onCall(OPCOES_FUNCAO, async (request) => {
+    if (request.auth.token.role !== 'super-admin') { throw new HttpsError('permission-denied', 'Apenas o Super Admin pode promover usuários.'); }
+    const uidParaPromover = request.data.uid;
+    if (!uidParaPromover) { throw new HttpsError('invalid-argument', 'O UID do usuário é necessário.'); }
+    await promoverUsuario(uidParaPromover, 'bibliotecario');
+    return { success: true, message: 'Usuário promovido a Bibliotecário(a) com sucesso.' };
 });
 
-// ===================================================================
-// NOVAS FUNÇÕES PARA ATENDIMENTO ESPIRITUAL (AE)
-// ===================================================================
-exports.promoverParaRecepcionista = functions.region(REGIAO).https.onCall(async (data, context) => {
-    if (context.auth.token.role !== 'super-admin') {
-        throw new functions.https.HttpsError('permission-denied', 'Apenas o Super Admin pode promover usuários.');
-    }
-    const uidParaPromover = data.uid;
-    if (!uidParaPromover) {
-        throw new functions.https.HttpsError('invalid-argument', 'O UID do usuário é necessário.');
-    }
-    try {
-        await admin.auth().setCustomUserClaims(uidParaPromover, { role: 'recepcionista' });
-        const userQuery = await db.collection('voluntarios').where('authUid', '==', uidParaPromover).limit(1).get();
-        if (!userQuery.empty) {
-            await userQuery.docs[0].ref.update({ role: 'recepcionista' });
-        }
-        return { success: true, message: 'Usuário promovido a Recepcionista com sucesso.' };
-    } catch (error) {
-        console.error("Erro ao promover para Recepcionista:", error);
-        throw new functions.https.HttpsError('internal', 'Erro interno ao tentar promover o usuário.');
-    }
+exports.promoverParaRecepcionista = onCall(OPCOES_FUNCAO, async (request) => {
+    if (request.auth.token.role !== 'super-admin') { throw new HttpsError('permission-denied', 'Apenas o Super Admin pode promover usuários.'); }
+    const uidParaPromover = request.data.uid;
+    if (!uidParaPromover) { throw new HttpsError('invalid-argument', 'O UID do usuário é necessário.'); }
+    await promoverUsuario(uidParaPromover, 'recepcionista');
+    return { success: true, message: 'Usuário promovido a Recepcionista com sucesso.' };
 });
 
-exports.promoverParaEntrevistador = functions.region(REGIAO).https.onCall(async (data, context) => {
-    if (context.auth.token.role !== 'super-admin') {
-        throw new functions.https.HttpsError('permission-denied', 'Apenas o Super Admin pode promover usuários.');
-    }
-    const uidParaPromover = data.uid;
-    if (!uidParaPromover) {
-        throw new functions.https.HttpsError('invalid-argument', 'O UID do usuário é necessário.');
-    }
-    try {
-        await admin.auth().setCustomUserClaims(uidParaPromover, { role: 'entrevistador' });
-        const userQuery = await db.collection('voluntarios').where('authUid', '==', uidParaPromover).limit(1).get();
-        if (!userQuery.empty) {
-            await userQuery.docs[0].ref.update({ role: 'entrevistador' });
-        }
-        return { success: true, message: 'Usuário promovido a Entrevistador(a) com sucesso.' };
-    } catch (error) {
-        console.error("Erro ao promover para Entrevistador:", error);
-        throw new functions.https.HttpsError('internal', 'Erro interno ao tentar promover o usuário.');
-    }
+exports.promoverParaEntrevistador = onCall(OPCOES_FUNCAO, async (request) => {
+    if (request.auth.token.role !== 'super-admin') { throw new HttpsError('permission-denied', 'Apenas o Super Admin pode promover usuários.'); }
+    const uidParaPromover = request.data.uid;
+    if (!uidParaPromover) { throw new HttpsError('invalid-argument', 'O UID do usuário é necessário.'); }
+    await promoverUsuario(uidParaPromover, 'entrevistador');
+    return { success: true, message: 'Usuário promovido a Entrevistador(a) com sucesso.' };
 });
 
-exports.revogarAcessoDiretor = functions.region(REGIAO).https.onCall(async (data, context) => {
-    if (context.auth.token.role !== 'super-admin') { throw new functions.https.HttpsError('permission-denied', 'Apenas o Super Admin pode revogar acesso.'); }
-    const uidParaRevogar = data.uid;
-    if (!uidParaRevogar) { throw new functions.https.HttpsError('invalid-argument', 'O UID do diretor é necessário.'); }
-    try {
-        await admin.auth().setCustomUserClaims(uidParaRevogar, { role: 'voluntario' });
-        const userQuery = await db.collection('voluntarios').where('authUid', '==', uidParaRevogar).limit(1).get();
-        if (!userQuery.empty) { await userQuery.docs[0].ref.update({ role: 'voluntario' }); }
-        return { success: true, message: 'Acesso de diretor revogado com sucesso.' };
-    } catch (error) { console.error("Erro ao revogar acesso de diretor:", error); throw new functions.https.HttpsError('internal', 'Erro interno ao tentar revogar o acesso.'); }
+exports.revogarAcessoDiretor = onCall(OPCOES_FUNCAO, async (request) => {
+    if (request.auth.token.role !== 'super-admin') { throw new HttpsError('permission-denied', 'Apenas o Super Admin pode revogar acesso.'); }
+    const uidParaRevogar = request.data.uid;
+    if (!uidParaRevogar) { throw new HttpsError('invalid-argument', 'O UID do diretor é necessário.'); }
+    await promoverUsuario(uidParaRevogar, 'voluntario');
+    return { success: true, message: 'Acesso de diretor revogado com sucesso.' };
 });
 
-exports.revogarAcessoConselheiro = functions.region(REGIAO).https.onCall(async (data, context) => {
-    if (context.auth.token.role !== 'super-admin') {
-        throw new functions.https.HttpsError('permission-denied', 'Apenas o Super Admin pode revogar acesso de conselheiros.');
-    }
-    const uidParaRevogar = data.uid;
-    if (!uidParaRevogar) {
-        throw new functions.https.HttpsError('invalid-argument', 'O UID do conselheiro é necessário.');
-    }
-    try {
-        await admin.auth().setCustomUserClaims(uidParaRevogar, { role: 'voluntario' });
-        const userQuery = await db.collection('voluntarios').where('authUid', '==', uidParaRevogar).limit(1).get();
-        if (!userQuery.empty) {
-            await userQuery.docs[0].ref.update({ role: 'voluntario' });
-        }
-        return { success: true, message: 'Acesso de conselheiro revogado com sucesso. O usuário agora é um voluntário padrão.' };
-    } catch (error) {
-        console.error("Erro ao revogar acesso de conselheiro:", error);
-        throw new functions.https.HttpsError('internal', 'Erro interno ao tentar revogar o acesso do conselheiro.');
-    }
+exports.revogarAcessoConselheiro = onCall(OPCOES_FUNCAO, async (request) => {
+    if (request.auth.token.role !== 'super-admin') { throw new HttpsError('permission-denied', 'Apenas o Super Admin pode revogar acesso.'); }
+    const uidParaRevogar = request.data.uid;
+    if (!uidParaRevogar) { throw new HttpsError('invalid-argument', 'O UID do conselheiro é necessário.'); }
+    await promoverUsuario(uidParaRevogar, 'voluntario');
+    return { success: true, message: 'Acesso de conselheiro revogado com sucesso.' };
 });
 
-exports.revogarAcessoProdutorEvento = functions.region(REGIAO).https.onCall(async (data, context) => {
-    if (context.auth.token.role !== 'super-admin') {
-        throw new functions.https.HttpsError('permission-denied', 'Apenas o Super Admin pode revogar acesso.');
-    }
-    const uidParaRevogar = data.uid;
-    if (!uidParaRevogar) {
-        throw new functions.https.HttpsError('invalid-argument', 'O UID do usuário é necessário.');
-    }
-    try {
-        await admin.auth().setCustomUserClaims(uidParaRevogar, { role: 'voluntario' });
-        const userQuery = await db.collection('voluntarios').where('authUid', '==', uidParaRevogar).limit(1).get();
-        if (!userQuery.empty) {
-            await userQuery.docs[0].ref.update({ role: 'voluntario' });
-        }
-        return { success: true, message: 'Acesso de Produtor de Evento revogado com sucesso.' };
-    } catch (error) {
-        console.error("Erro ao revogar acesso de Produtor de Evento:", error);
-        throw new functions.https.HttpsError('internal', 'Erro interno ao tentar revogar o acesso.');
-    }
+exports.revogarAcessoProdutorEvento = onCall(OPCOES_FUNCAO, async (request) => {
+    if (request.auth.token.role !== 'super-admin') { throw new HttpsError('permission-denied', 'Apenas o Super Admin pode revogar acesso.'); }
+    const uidParaRevogar = request.data.uid;
+    if (!uidParaRevogar) { throw new HttpsError('invalid-argument', 'O UID do usuário é necessário.'); }
+    await promoverUsuario(uidParaRevogar, 'voluntario');
+    return { success: true, message: 'Acesso de Produtor de Evento revogado com sucesso.' };
 });
 
-exports.revogarAcessoIrradiador = functions.region(REGIAO).https.onCall(async (data, context) => {
-    if (context.auth.token.role !== 'super-admin') {
-        throw new functions.https.HttpsError('permission-denied', 'Apenas o Super Admin pode revogar acesso.');
-    }
-    const uidParaRevogar = data.uid;
-    if (!uidParaRevogar) {
-        throw new functions.https.HttpsError('invalid-argument', 'O UID do usuário é necessário.');
-    }
-    try {
-        await admin.auth().setCustomUserClaims(uidParaRevogar, { role: 'voluntario' });
-        const userQuery = await db.collection('voluntarios').where('authUid', '==', uidParaRevogar).limit(1).get();
-        if (!userQuery.empty) {
-            await userQuery.docs[0].ref.update({ role: 'voluntario' });
-        }
-        return { success: true, message: 'Acesso de Irradiador revogado com sucesso.' };
-    } catch (error) {
-        console.error("Erro ao revogar acesso de Irradiador:", error);
-        throw new functions.https.HttpsError('internal', 'Erro interno ao tentar revogar o acesso.');
-    }
+exports.revogarAcessoIrradiador = onCall(OPCOES_FUNCAO, async (request) => {
+    if (request.auth.token.role !== 'super-admin') { throw new HttpsError('permission-denied', 'Apenas o Super Admin pode revogar acesso.'); }
+    const uidParaRevogar = request.data.uid;
+    if (!uidParaRevogar) { throw new HttpsError('invalid-argument', 'O UID do usuário é necessário.'); }
+    await promoverUsuario(uidParaRevogar, 'voluntario');
+    return { success: true, message: 'Acesso de Irradiador revogado com sucesso.' };
 });
 
-exports.revogarAcessoBibliotecario = functions.region(REGIAO).https.onCall(async (data, context) => {
-    if (context.auth.token.role !== 'super-admin') {
-        throw new functions.https.HttpsError('permission-denied', 'Apenas o Super Admin pode revogar acesso.');
-    }
-    const uidParaRevogar = data.uid;
-    if (!uidParaRevogar) {
-        throw new functions.https.HttpsError('invalid-argument', 'O UID do usuário é necessário.');
-    }
-    try {
-        await admin.auth().setCustomUserClaims(uidParaRevogar, { role: 'voluntario' });
-        const userQuery = await db.collection('voluntarios').where('authUid', '==', uidParaRevogar).limit(1).get();
-        if (!userQuery.empty) {
-            await userQuery.docs[0].ref.update({ role: 'voluntario' });
-        }
-        return { success: true, message: 'Acesso de Bibliotecário(a) revogado com sucesso.' };
-    } catch (error) {
-        console.error("Erro ao revogar acesso de Bibliotecário:", error);
-        throw new functions.https.HttpsError('internal', 'Erro interno ao tentar revogar o acesso.');
-    }
+exports.revogarAcessoBibliotecario = onCall(OPCOES_FUNCAO, async (request) => {
+    if (request.auth.token.role !== 'super-admin') { throw new HttpsError('permission-denied', 'Apenas o Super Admin pode revogar acesso.'); }
+    const uidParaRevogar = request.data.uid;
+    if (!uidParaRevogar) { throw new HttpsError('invalid-argument', 'O UID do usuário é necessário.'); }
+    await promoverUsuario(uidParaRevogar, 'voluntario');
+    return { success: true, message: 'Acesso de Bibliotecário(a) revogado com sucesso.' };
 });
 
-// ===================================================================
-// NOVAS FUNÇÕES PARA REVOGAR ACESSO (AE)
-// ===================================================================
-exports.revogarAcessoRecepcionista = functions.region(REGIAO).https.onCall(async (data, context) => {
-    if (context.auth.token.role !== 'super-admin') {
-        throw new functions.https.HttpsError('permission-denied', 'Apenas o Super Admin pode revogar acesso.');
-    }
-    const uidParaRevogar = data.uid;
-    if (!uidParaRevogar) {
-        throw new functions.https.HttpsError('invalid-argument', 'O UID do usuário é necessário.');
-    }
-    try {
-        await admin.auth().setCustomUserClaims(uidParaRevogar, { role: 'voluntario' });
-        const userQuery = await db.collection('voluntarios').where('authUid', '==', uidParaRevogar).limit(1).get();
-        if (!userQuery.empty) {
-            await userQuery.docs[0].ref.update({ role: 'voluntario' });
-        }
-        return { success: true, message: 'Acesso de Recepcionista revogado com sucesso.' };
-    } catch (error) {
-        console.error("Erro ao revogar acesso de Recepcionista:", error);
-        throw new functions.https.HttpsError('internal', 'Erro interno ao tentar revogar o acesso.');
-    }
+exports.revogarAcessoRecepcionista = onCall(OPCOES_FUNCAO, async (request) => {
+    if (request.auth.token.role !== 'super-admin') { throw new HttpsError('permission-denied', 'Apenas o Super Admin pode revogar acesso.'); }
+    const uidParaRevogar = request.data.uid;
+    if (!uidParaRevogar) { throw new HttpsError('invalid-argument', 'O UID do usuário é necessário.'); }
+    await promoverUsuario(uidParaRevogar, 'voluntario');
+    return { success: true, message: 'Acesso de Recepcionista revogado com sucesso.' };
 });
 
-exports.revogarAcessoEntrevistador = functions.region(REGIAO).https.onCall(async (data, context) => {
-    if (context.auth.token.role !== 'super-admin') {
-        throw new functions.https.HttpsError('permission-denied', 'Apenas o Super Admin pode revogar acesso.');
-    }
-    const uidParaRevogar = data.uid;
-    if (!uidParaRevogar) {
-        throw new functions.https.HttpsError('invalid-argument', 'O UID do usuário é necessário.');
-    }
-    try {
-        await admin.auth().setCustomUserClaims(uidParaRevogar, { role: 'voluntario' });
-        const userQuery = await db.collection('voluntarios').where('authUid', '==', uidParaRevogar).limit(1).get();
-        if (!userQuery.empty) {
-            await userQuery.docs[0].ref.update({ role: 'voluntario' });
-        }
-        return { success: true, message: 'Acesso de Entrevistador(a) revogado com sucesso.' };
-    } catch (error) {
-        console.error("Erro ao revogar acesso de Entrevistador:", error);
-        throw new functions.https.HttpsError('internal', 'Erro interno ao tentar revogar o acesso.');
-    }
+exports.revogarAcessoEntrevistador = onCall(OPCOES_FUNCAO, async (request) => {
+    if (request.auth.token.role !== 'super-admin') { throw new HttpsError('permission-denied', 'Apenas o Super Admin pode revogar acesso.'); }
+    const uidParaRevogar = request.data.uid;
+    if (!uidParaRevogar) { throw new HttpsError('invalid-argument', 'O UID do usuário é necessário.'); }
+    await promoverUsuario(uidParaRevogar, 'voluntario');
+    return { success: true, message: 'Acesso de Entrevistador(a) revogado com sucesso.' };
 });
 
-exports.registrarVotoConselho = functions.region(REGIAO).https.onCall(async (data, context) => {
-    if (!context.auth) { throw new functions.https.HttpsError('unauthenticated', 'A função deve ser chamada por um usuário autenticado.'); }
-    const userRole = context.auth.token.role;
-    if (!['conselheiro', 'super-admin'].includes(userRole)) { throw new functions.https.HttpsError('permission-denied', 'Apenas membros do conselho ou super-admin podem votar.'); }
-    const { balanceteId, voto, mensagem } = data;
-    if (!balanceteId || !voto) { throw new functions.https.HttpsError('invalid-argument', 'ID do balancete e voto são obrigatórios.'); }
+exports.registrarVotoConselho = onCall(OPCOES_FUNCAO, async (request) => {
+    if (!request.auth) { throw new HttpsError('unauthenticated', 'A função deve ser chamada por um usuário autenticado.'); }
+    const userRole = request.auth.token.role;
+    if (!['conselheiro', 'super-admin'].includes(userRole)) { throw new HttpsError('permission-denied', 'Apenas membros do conselho ou super-admin podem votar.'); }
+    const { balanceteId, voto, mensagem } = request.data;
+    if (!balanceteId || !voto) { throw new HttpsError('invalid-argument', 'ID do balancete e voto são obrigatórios.'); }
     const balanceteRef = db.collection('balancetes').doc(balanceteId);
     const logAuditoriaCollection = db.collection('log_auditoria');
-    const autor = { uid: context.auth.uid, nome: context.auth.token.name || context.auth.token.email };
+    const autor = { uid: request.auth.uid, nome: request.auth.token.name || request.auth.token.email };
     try {
         const balanceteDoc = await balanceteRef.get();
-        if (!balanceteDoc.exists) { throw new functions.https.HttpsError('not-found', 'Balancete não encontrado.'); }
+        if (!balanceteDoc.exists) { throw new HttpsError('not-found', 'Balancete não encontrado.'); }
         const balanceteData = balanceteDoc.data();
-        if (balanceteData.status !== 'em revisão') { throw new functions.https.HttpsError('failed-precondition', 'Este balancete não está mais aberto para revisão.'); }
-        if (balanceteData.aprovacoes && balanceteData.aprovacoes[autor.uid]) { throw new functions.https.HttpsError('already-exists', 'Você já votou neste balancete.'); }
+        if (balanceteData.status !== 'em revisão') { throw new HttpsError('failed-precondition', 'Este balancete não está mais aberto para revisão.'); }
+        if (balanceteData.aprovacoes && balanceteData.aprovacoes[autor.uid]) { throw new HttpsError('already-exists', 'Você já votou neste balancete.'); }
         let updateData = {};
         let logDetalhes = {};
         if (voto === 'aprovado') {
@@ -435,7 +272,7 @@ exports.registrarVotoConselho = functions.region(REGIAO).https.onCall(async (dat
             updateData[campoAprovacao] = { nome: autor.nome, data: admin.firestore.FieldValue.serverTimestamp() };
             logDetalhes = { balanceteId, voto: 'APROVADO' };
         } else if (voto === 'reprovado') {
-            if (!mensagem) { throw new functions.https.HttpsError('invalid-argument', 'Uma mensagem com a ressalva é obrigatória para reprovar.'); }
+            if (!mensagem) { throw new HttpsError('invalid-argument', 'Uma mensagem com a ressalva é obrigatória para reprovar.'); }
             updateData.status = 'com_ressalva';
             updateData.mensagens = admin.firestore.FieldValue.arrayUnion({ autor, texto: mensagem, data: new Date(), isResposta: false });
             logDetalhes = { balanceteId, voto: 'REPROVADO', ressalva: mensagem };
@@ -445,30 +282,26 @@ exports.registrarVotoConselho = functions.region(REGIAO).https.onCall(async (dat
         return { success: true, message: 'Ação registrada com sucesso!' };
     } catch (error) {
         console.error("Erro interno ao registrar voto do conselho:", error);
-        throw new functions.https.HttpsError('internal', 'Ocorreu um erro interno ao processar seu voto.');
+        throw new HttpsError('internal', 'Ocorreu um erro interno ao processar seu voto.');
     }
 });
 
-exports.verificarAprovacaoFinal = functions.region(REGIAO).firestore.document('balancetes/{balanceteId}').onUpdate(async (change, context) => {
-    const balanceteNovo = change.after.data();
-    const balanceteAntigo = change.before.data();
+exports.verificarAprovacaoFinal = onDocumentWritten({ ...OPCOES_FUNCAO, document: 'balancetes/{balanceteId}' }, async (event) => {
+    if (!event.data.after.exists) return null;
+    const balanceteNovo = event.data.after.data();
     if (balanceteNovo.status !== 'em revisão') { return null; }
-    const aprovacoesNovas = balanceteNovo.aprovacoes || {};
-    const aprovacoesAntigas = balanceteAntigo.aprovacoes || {};
-    if (Object.keys(aprovacoesNovas).length === Object.keys(aprovacoesAntigas).length) { return null; }
-    const NUMERO_DE_VOTOS_PARA_APROVAR = 3;
-    const totalAprovacoes = Object.keys(aprovacoesNovas).length;
-    if (totalAprovacoes >= NUMERO_DE_VOTOS_PARA_APROVAR) {
-        await db.collection('balancetes').doc(context.params.balanceteId).update({ status: 'aprovado' });
-        await db.collection('log_auditoria').add({ acao: "BALANCETE_APROVADO_AUTO", autor: { nome: 'SISTEMA' }, timestamp: admin.firestore.FieldValue.serverTimestamp(), detalhes: { balanceteId: context.params.balanceteId, totalVotos: totalAprovacoes } });
+    const totalAprovacoes = Object.keys(balanceteNovo.aprovacoes || {}).length;
+    if (totalAprovacoes >= 3) {
+        await event.data.after.ref.update({ status: 'aprovado' });
+        await db.collection('log_auditoria').add({ acao: "BALANCETE_APROVADO_AUTO", autor: { nome: 'SISTEMA' }, timestamp: admin.firestore.FieldValue.serverTimestamp(), detalhes: { balanceteId: event.params.balanceteId, totalVotos: totalAprovacoes } });
     }
     return null;
 });
 
-exports.enviarNotificacaoImediata = functions.region(REGIAO).https.onRequest((req, res) => {
+exports.enviarNotificacaoImediata = onRequest(OPCOES_FUNCAO, (req, res) => {
     cors(req, res, async () => {
-        if (req.method !== 'POST') { return res.status(405).send({ error: 'Método não permitido!' });}
-        if (!configurarWebPush()) { return res.status(500).json({ error: 'Falha na configuração VAPID.' });}
+        if (req.method !== 'POST') { return res.status(405).send({ error: 'Método não permitido!' }); }
+        if (!configurarWebPush()) { return res.status(500).json({ error: 'Falha na configuração VAPID.' }); }
         try {
             const { titulo, corpo } = req.body;
             if (!titulo || !corpo) { return res.status(400).json({ error: 'Título e corpo são obrigatórios.' }); }
@@ -478,15 +311,15 @@ exports.enviarNotificacaoImediata = functions.region(REGIAO).https.onRequest((re
     });
 });
 
-exports.verificarAgendamentosAgendados = functions.region(REGIAO).pubsub.schedule('every 1 hours').timeZone('America/Sao_Paulo').onRun(async (context) => {
+exports.verificarAgendamentosAgendados = onSchedule({ ...OPCOES_FUNCAO_SAOPAULO, schedule: 'every 1 hours' }, async (event) => {
     if (!configurarWebPush()) { return null; }
     const agoraSP = new Date();
     const agoraTimestamp = admin.firestore.Timestamp.fromDate(agoraSP);
     const agendamentosRef = db.collection('notificacoes_agendadas');
     const unicosSnap = await agendamentosRef.where('tipo', '==', 'unico').where('status', '==', 'pendente').where('enviarEm', '<=', agoraTimestamp).get();
-    for (const doc of unicosSnap.docs) { 
-        await enviarNotificacoesParaTodos(doc.data().titulo, doc.data().corpo); 
-        await doc.ref.update({ status: 'enviada' }); 
+    for (const doc of unicosSnap.docs) {
+        await enviarNotificacoesParaTodos(doc.data().titulo, doc.data().corpo);
+        await doc.ref.update({ status: 'enviada' });
     }
     const diaDaSemana = agoraSP.getDay();
     const minutosAgora = agoraSP.getHours() * 60 + agoraSP.getMinutes();
@@ -504,7 +337,7 @@ exports.verificarAgendamentosAgendados = functions.region(REGIAO).pubsub.schedul
     return null;
 });
 
-exports.verificarInatividadeVoluntarios = functions.region(REGIAO).pubsub.schedule('5 4 * * *').timeZone('America/Sao_Paulo').onRun(async (context) => {
+exports.verificarInatividadeVoluntarios = onSchedule({ ...OPCOES_FUNCAO_SAOPAULO, schedule: '5 4 * * *' }, async (event) => {
     const dataLimite = new Date();
     dataLimite.setDate(dataLimite.getDate() - 45);
     const dataLimiteFormatada = dataLimite.toISOString().split('T')[0];
@@ -517,7 +350,7 @@ exports.verificarInatividadeVoluntarios = functions.region(REGIAO).pubsub.schedu
     return null;
 });
 
-exports.resetarTasvAnual = functions.region(REGIAO).pubsub.schedule('0 4 1 1 *').timeZone('America/Sao_Paulo').onRun(async (context) => {
+exports.resetarTasvAnual = onSchedule({ ...OPCOES_FUNCAO_SAOPAULO, schedule: '0 4 1 1 *' }, async (event) => {
     const voluntariosRef = db.collection('voluntarios');
     const snapshot = await voluntariosRef.get();
     if (snapshot.empty) { return null; }
@@ -527,7 +360,7 @@ exports.resetarTasvAnual = functions.region(REGIAO).pubsub.schedule('0 4 1 1 *')
     return null;
 });
 
-exports.arquivarVibracoesConcluidas = functions.region(REGIAO).pubsub.schedule('30 22 * * 4').timeZone('America/Sao_Paulo').onRun(async (context) => {
+exports.arquivarVibracoesConcluidas = onSchedule({ ...OPCOES_FUNCAO_SAOPAULO, schedule: '30 22 * * 4' }, async (event) => {
     console.log("Iniciando o arquivamento de pedidos de vibração concluídos.");
     const agora = admin.firestore.Timestamp.now();
     const colecoes = ['encarnados', 'desencarnados'];
@@ -557,7 +390,7 @@ exports.arquivarVibracoesConcluidas = functions.region(REGIAO).pubsub.schedule('
     return null;
 });
 
-exports.ativarNovosPedidos = functions.region(REGIAO).pubsub.schedule('31 22 * * 4').timeZone('America/Sao_Paulo').onRun(async (context) => {
+exports.ativarNovosPedidos = onSchedule({ ...OPCOES_FUNCAO_SAOPAULO, schedule: '31 22 * * 4' }, async (event) => {
     console.log("Iniciando a ativação de novos pedidos de vibração.");
     const colecoes = ['encarnados', 'desencarnados'];
     const promises = [];
@@ -582,11 +415,9 @@ exports.ativarNovosPedidos = functions.region(REGIAO).pubsub.schedule('31 22 * *
     return null;
 });
 
-exports.enviarPedidoVibracao = functions.region(REGIAO).https.onCall(async (data, context) => {
-    const { nome, endereco, tipo } = data;
-    if (!nome || !tipo || (tipo === 'encarnado' && !endereco)) {
-        throw new functions.https.HttpsError('invalid-argument', 'Dados do pedido incompletos.');
-    }
+exports.enviarPedidoVibracao = onCall(OPCOES_FUNCAO, async (request) => {
+    const { nome, endereco, tipo } = request.data;
+    if (!nome || !tipo || (tipo === 'encarnado' && !endereco)) { throw new HttpsError('invalid-argument', 'Dados do pedido incompletos.'); }
     const agoraSP = new Date(new Date().toLocaleString("en-US", { timeZone: "America/Sao_Paulo" }));
     const diaDaSemana = agoraSP.getDay();
     const horas = agoraSP.getHours();
@@ -597,89 +428,39 @@ exports.enviarPedidoVibracao = functions.region(REGIAO).https.onCall(async (data
     }
     const { dataArquivamento } = calcularCicloVibracoes(agoraSP);
     const colecaoAlvo = tipo === 'encarnado' ? 'encarnados' : 'desencarnados';
-    const dadosParaSalvar = {
-        nome: nome.trim(),
-        dataCriacao: admin.firestore.FieldValue.serverTimestamp(),
-        status: statusFinal,
-        dataArquivamento: dataArquivamento
-    };
-    if (tipo === 'encarnado') {
-        dadosParaSalvar.endereco = endereco.trim();
-    }
+    const dadosParaSalvar = { nome: nome.trim(), dataCriacao: admin.firestore.FieldValue.serverTimestamp(), status: statusFinal, dataArquivamento: dataArquivamento };
+    if (tipo === 'encarnado') { dadosParaSalvar.endereco = endereco.trim(); }
     try {
         await db.collection(colecaoAlvo).add(dadosParaSalvar);
         return { success: true, message: 'Pedido enviado com sucesso!' };
     } catch (error) {
         console.error("Erro ao salvar pedido de vibração:", error);
-        throw new functions.https.HttpsError('internal', 'Ocorreu um erro ao salvar o pedido.');
+        throw new HttpsError('internal', 'Ocorreu um erro ao salvar o pedido.');
     }
 });
 
-// ===================================================================
-// NOVA FUNÇÃO "ROBÔ" PARA REGISTRAR LOGS DE ACESSO
-// ===================================================================
-exports.registrarLogDeAcesso = functions.region(REGIAO).https.onCall(async (data, context) => {
-    if (!context.auth) {
-        throw new functions.https.HttpsError('unauthenticated', 'A função deve ser chamada por um usuário autenticado.');
-    }
-
-    const { acao, detalhes } = data;
-    if (!acao) {
-        throw new functions.https.HttpsError('invalid-argument', 'A ação é obrigatória para o log.');
-    }
-
-    const autor = {
-        uid: context.auth.uid,
-        nome: context.auth.token.name || context.auth.token.email
-    };
-
+exports.registrarLogDeAcesso = onCall(OPCOES_FUNCAO, async (request) => {
+    if (!request.auth) { throw new HttpsError('unauthenticated', 'A função deve ser chamada por um usuário autenticado.'); }
+    const { acao, detalhes } = request.data;
+    if (!acao) { throw new HttpsError('invalid-argument', 'A ação é obrigatória para o log.'); }
+    const autor = { uid: request.auth.uid, nome: request.auth.token.name || request.auth.token.email };
     try {
-        await db.collection('log_auditoria').add({
-            acao,
-            autor,
-            detalhes: detalhes || {},
-            timestamp: admin.firestore.FieldValue.serverTimestamp()
-        });
+        await db.collection('log_auditoria').add({ acao, autor, detalhes: detalhes || {}, timestamp: admin.firestore.FieldValue.serverTimestamp() });
         return { success: true };
     } catch (error) {
         console.error("Erro ao registrar log de acesso:", error);
-        throw new functions.https.HttpsError('internal', 'Não foi possível registrar o log.');
+        throw new HttpsError('internal', 'Não foi possível registrar o log.');
     }
 });
 
-// ===================================================================
-// FUNÇÃO "ROBÔ" PARA REGISTRAR VENDAS DA CANTINA (PDV) ATUALIZADA
-// ===================================================================
-exports.registrarVendaCantina = functions.region(REGIAO).https.onCall(async (data, context) => {
-    if (!context.auth) {
-        throw new functions.https.HttpsError('unauthenticated', 'A função deve ser chamada por um usuário autenticado.');
-    }
+exports.registrarVendaCantina = onCall(OPCOES_FUNCAO, async (request) => {
+    if (!request.auth) { throw new HttpsError('unauthenticated', 'A função deve ser chamada por um usuário autenticado.'); }
     const permissoes = ['super-admin', 'diretor', 'tesoureiro', 'conselheiro', 'produtor-evento'];
-    if (!permissoes.includes(context.auth.token.role)) {
-        throw new functions.https.HttpsError('permission-denied', 'Permissão negada.');
-    }
-
-    const { eventoId, eventoTitulo, total, itens, tipoVenda, comprador } = data;
-
-    if (!eventoId || !eventoTitulo || total === undefined || !itens || !tipoVenda) {
-        throw new functions.https.HttpsError('invalid-argument', 'Dados da venda incompletos.');
-    }
-    if (tipoVenda === 'prazo' && !comprador) {
-        throw new functions.https.HttpsError('invalid-argument', 'Dados do comprador são obrigatórios para registrar pendência.');
-    }
-
-    const vendaData = {
-        eventoId,
-        eventoTitulo,
-        total,
-        itens,
-        registradoPor: {
-            uid: context.auth.uid,
-            nome: context.auth.token.name || context.auth.token.email
-        },
-        registradoEm: admin.firestore.FieldValue.serverTimestamp()
-    };
-
+    if (!permissoes.includes(request.auth.token.role)) { throw new HttpsError('permission-denied', 'Permissão negada.'); }
+    const { eventoId, eventoTitulo, total, itens, tipoVenda, comprador } = request.data;
+    if (!eventoId || !eventoTitulo || total === undefined || !itens || !tipoVenda) { throw new HttpsError('invalid-argument', 'Dados da venda incompletos.'); }
+    if (tipoVenda === 'prazo' && !comprador) { throw new HttpsError('invalid-argument', 'Dados do comprador são obrigatórios para registrar pendência.'); }
+    const vendaData = { eventoId, eventoTitulo, total, itens, registradoPor: { uid: request.auth.uid, nome: request.auth.token.name || request.auth.token.email }, registradoEm: admin.firestore.FieldValue.serverTimestamp() };
     try {
         if (tipoVenda === 'vista') {
             await db.collection('cantina_vendas_avista').add(vendaData);
@@ -693,32 +474,20 @@ exports.registrarVendaCantina = functions.region(REGIAO).https.onCall(async (dat
         return { success: true, message: 'Venda registrada com sucesso!' };
     } catch (error) {
         console.error("Erro ao registrar venda da cantina:", error);
-        throw new functions.https.HttpsError('internal', 'Ocorreu um erro ao salvar a venda.');
+        throw new HttpsError('internal', 'Ocorreu um erro ao salvar a venda.');
     }
 });
 
-// ===================================================================
-// NOVA FUNÇÃO "ROBÔ" PARA BUSCAR DADOS DO LIVRO PELO ISBN
-// ===================================================================
-exports.buscarDadosLivroPorISBN = functions.region(REGIAO).https.onCall(async (data, context) => {
-    // Verificando permissão do usuário
-    const permissoes = ['super-admin', 'tesoureiro' , 'diretor', 'bibliotecario'];
-    if (!context.auth || !permissoes.includes(context.auth.token.role)) {
-        throw new functions.https.HttpsError('permission-denied', 'Você não tem permissão para executar esta ação.');
-    }
-
-    const isbn = data.isbn;
-    if (!isbn) {
-        throw new functions.https.HttpsError('invalid-argument', 'O código ISBN é obrigatório.');
-    }
-
+exports.buscarDadosLivroPorISBN = onCall(OPCOES_FUNCAO, async (request) => {
+    const permissoes = ['super-admin', 'tesoureiro', 'diretor', 'bibliotecario'];
+    if (!request.auth || !permissoes.includes(request.auth.token.role)) { throw new HttpsError('permission-denied', 'Você não tem permissão para executar esta ação.'); }
+    const isbn = request.data.isbn;
+    if (!isbn) { throw new HttpsError('invalid-argument', 'O código ISBN é obrigatório.'); }
     try {
         const url = `https://www.googleapis.com/books/v1/volumes?q=isbn:${isbn}`;
         const response = await axios.get(url);
-
         if (response.data.totalItems > 0) {
             const book = response.data.items[0].volumeInfo;
-            // Retorna os dados formatados para o formulário
             return {
                 titulo: book.title || '',
                 autor: book.authors ? book.authors.join(', ') : '',
@@ -726,354 +495,152 @@ exports.buscarDadosLivroPorISBN = functions.region(REGIAO).https.onCall(async (d
                 anoPublicacao: book.publishedDate ? book.publishedDate.substring(0, 4) : ''
             };
         } else {
-            throw new functions.https.HttpsError('not-found', 'Nenhum livro encontrado com este ISBN.');
+            throw new HttpsError('not-found', 'Nenhum livro encontrado com este ISBN.');
         }
     } catch (error) {
         console.error("Erro ao buscar dados do livro na API do Google:", error);
-        throw new functions.https.HttpsError('internal', 'Não foi possível buscar os dados do livro.');
+        throw new HttpsError('internal', 'Não foi possível buscar os dados do livro.');
     }
 });
 
-
-// ===================================================================
-// FUNÇÃO "ROBÔ" PARA REGISTRAR VENDAS DA BIBLIOTECA (COM CONTROLE DE ESTOQUE)
-// ===================================================================
-exports.registrarVendaBiblioteca = functions.region(REGIAO).https.onCall(async (data, context) => {
-    if (!context.auth) {
-        throw new functions.https.HttpsError('unauthenticated', 'A função deve ser chamada por um usuário autenticado.');
-    }
+exports.registrarVendaBiblioteca = onCall(OPCOES_FUNCAO, async (request) => {
+    if (!request.auth) { throw new HttpsError('unauthenticated', 'A função deve ser chamada por um usuário autenticado.'); }
     const permissoes = ['super-admin', 'tesoureiro', 'diretor', 'bibliotecario'];
-    if (!permissoes.includes(context.auth.token.role)) {
-        throw new functions.https.HttpsError('permission-denied', 'Permissão negada.');
-    }
-
-    const { total, itens, tipoVenda, comprador } = data;
-
-    if (total === undefined || !itens || itens.length === 0 || !tipoVenda) {
-        throw new functions.https.HttpsError('invalid-argument', 'Dados da venda incompletos.');
-    }
-    if (tipoVenda === 'prazo' && !comprador) {
-        throw new functions.https.HttpsError('invalid-argument', 'Dados do comprador são obrigatórios para registrar pendência.');
-    }
-
+    if (!permissoes.includes(request.auth.token.role)) { throw new HttpsError('permission-denied', 'Permissão negada.'); }
+    const { total, itens, tipoVenda, comprador } = request.data;
+    if (total === undefined || !itens || itens.length === 0 || !tipoVenda) { throw new HttpsError('invalid-argument', 'Dados da venda incompletos.'); }
+    if (tipoVenda === 'prazo' && !comprador) { throw new HttpsError('invalid-argument', 'Dados do comprador são obrigatórios para registrar pendência.'); }
     try {
         await db.runTransaction(async (transaction) => {
-            const promisesEstoque = itens.map(item => {
-                const livroRef = db.collection('biblioteca_livros').doc(item.id);
-                return transaction.get(livroRef);
-            });
-
-            const docsLivros = await Promise.all(promisesEstoque);
-
+            const docsLivros = await Promise.all(itens.map(item => transaction.get(db.collection('biblioteca_livros').doc(item.id))));
             for (let i = 0; i < docsLivros.length; i++) {
                 const docLivro = docsLivros[i];
-                const itemVenda = itens[i];
-
-                if (!docLivro.exists) {
-                    throw new functions.https.HttpsError('not-found', `O livro "${itemVenda.titulo}" não foi encontrado no acervo.`);
-                }
-
-                const estoqueAtual = docLivro.data().quantidade;
-                if (estoqueAtual < itemVenda.qtd) {
-                    throw new functions.https.HttpsError('failed-precondition', `Estoque insuficiente para "${itemVenda.titulo}". Disponível: ${estoqueAtual}, Pedido: ${itemVenda.qtd}.`);
-                }
+                if (!docLivro.exists) throw new HttpsError('not-found', `O livro "${itens[i].titulo}" não foi encontrado.`);
+                if (docLivro.data().quantidade < itens[i].qtd) throw new HttpsError('failed-precondition', `Estoque insuficiente para "${itens[i].titulo}".`);
             }
-
-            // Se chegou até aqui, todos os livros têm estoque. Agora vamos dar baixa.
-            docsLivros.forEach((docLivro, i) => {
-                const itemVenda = itens[i];
-                const livroRef = docLivro.ref;
-                transaction.update(livroRef, {
-                    quantidade: admin.firestore.FieldValue.increment(-itemVenda.qtd)
-                });
-            });
-
-            // Agora, registrar a venda
-            const vendaData = {
-                total,
-                itens,
-                tipoVenda,
-                registradoPor: {
-                    uid: context.auth.uid,
-                    nome: context.auth.token.name || context.auth.token.email
-                },
-                registradoEm: admin.firestore.FieldValue.serverTimestamp()
-            };
-
+            docsLivros.forEach((docLivro, i) => transaction.update(docLivro.ref, { quantidade: admin.firestore.FieldValue.increment(-itens[i].qtd) }));
+            const vendaData = { total, itens, tipoVenda, registradoPor: { uid: request.auth.uid, nome: request.auth.token.name || request.auth.token.email }, registradoEm: admin.firestore.FieldValue.serverTimestamp() };
             if (tipoVenda === 'vista') {
-                const novaVendaRef = db.collection('biblioteca_vendas_avista').doc();
-                transaction.set(novaVendaRef, vendaData);
-            } else if (tipoVenda === 'prazo') {
+                transaction.set(db.collection('biblioteca_vendas_avista').doc(), vendaData);
+            } else {
                 vendaData.compradorId = comprador.id;
                 vendaData.compradorNome = comprador.nome;
                 vendaData.compradorTipo = comprador.tipo;
                 vendaData.status = 'pendente';
-                const novaVendaRef = db.collection('biblioteca_contas_a_receber').doc();
-                transaction.set(novaVendaRef, vendaData);
+                transaction.set(db.collection('biblioteca_contas_a_receber').doc(), vendaData);
             }
         });
-
         return { success: true, message: 'Venda da biblioteca registrada com sucesso!' };
-
     } catch (error) {
         console.error("Erro ao registrar venda da biblioteca:", error);
-        if (error instanceof functions.https.HttpsError) {
-             throw error; // Repassa o erro já formatado
-        }
-        throw new functions.https.HttpsError('internal', 'Ocorreu um erro ao salvar a venda. A operação foi cancelada.');
+        if (error instanceof HttpsError) { throw error; }
+        throw new HttpsError('internal', 'Ocorreu um erro ao salvar a venda.');
     }
 });
 
-
-// ===================================================================
-// FUNÇÃO "ROBÔ" PARA GERENCIAR EMPRÉSTIMOS (COM CONTROLE DE ESTOQUE)
-// ===================================================================
-exports.gerenciarEmprestimoBiblioteca = functions.region(REGIAO).https.onCall(async (data, context) => {
-    if (!context.auth) {
-        throw new functions.https.HttpsError('unauthenticated', 'A função deve ser chamada por um usuário autenticado.');
-    }
+exports.gerenciarEmprestimoBiblioteca = onCall(OPCOES_FUNCAO, async (request) => {
+    if (!request.auth) { throw new HttpsError('unauthenticated', 'A função deve ser chamada por um usuário autenticado.'); }
     const permissoes = ['super-admin', 'diretor', 'bibliotecario'];
-    if (!permissoes.includes(context.auth.token.role)) {
-        throw new functions.https.HttpsError('permission-denied', 'Permissão negada.');
+    if (!permissoes.includes(request.auth.token.role)) { throw new HttpsError('permission-denied', 'Permissão negada.'); }
+    const { acao, livroId, leitor, emprestimoId } = request.data;
+    const livroRef = db.collection('biblioteca_livros').doc(livroId);
+    if (acao === 'emprestar') {
+        if (!livroId || !leitor) throw new HttpsError('invalid-argument', 'Dados do empréstimo incompletos.');
+        await db.runTransaction(async (transaction) => {
+            const livroDoc = await transaction.get(livroRef);
+            if (!livroDoc.exists || livroDoc.data().finalidade !== 'Empréstimo') throw new HttpsError('failed-precondition', 'Este livro não é para empréstimo.');
+            if (livroDoc.data().quantidade < 1) throw new HttpsError('failed-precondition', 'Não há cópias disponíveis.');
+            const emprestimoData = { livroId, livroTitulo: livroDoc.data().titulo, leitor: { id: leitor.id || null, nome: leitor.nome, tipo: leitor.tipo }, dataEmprestimo: admin.firestore.FieldValue.serverTimestamp(), status: 'emprestado' };
+            transaction.set(db.collection('biblioteca_emprestimos').doc(), emprestimoData);
+            transaction.update(livroRef, { quantidade: admin.firestore.FieldValue.increment(-1) });
+        });
+        return { success: true, message: 'Empréstimo registrado com sucesso!' };
+    } else if (acao === 'devolver') {
+        if (!emprestimoId || !livroId) throw new HttpsError('invalid-argument', 'Dados da devolução incompletos.');
+        const emprestimoRef = db.collection('biblioteca_emprestimos').doc(emprestimoId);
+        await db.runTransaction(async (transaction) => {
+            const emprestimoDoc = await transaction.get(emprestimoRef);
+            if (!emprestimoDoc.exists || emprestimoDoc.data().status !== 'emprestado') throw new HttpsError('failed-precondition', 'Este empréstimo não está ativo.');
+            transaction.update(emprestimoRef, { status: 'devolvido', dataDevolucao: admin.firestore.FieldValue.serverTimestamp() });
+            transaction.update(livroRef, { quantidade: admin.firestore.FieldValue.increment(1) });
+        });
+        return { success: true, message: 'Devolução registrada com sucesso!' };
     }
-
-    const { acao, livroId, leitor, emprestimoId } = data;
-    
-    try {
-        if (acao === 'emprestar') {
-            if (!livroId || !leitor) throw new functions.https.HttpsError('invalid-argument', 'Dados do empréstimo incompletos.');
-            
-            const livroRef = db.collection('biblioteca_livros').doc(livroId);
-
-            return db.runTransaction(async (transaction) => {
-                const livroDoc = await transaction.get(livroRef);
-
-                if (!livroDoc.exists || livroDoc.data().finalidade !== 'Empréstimo') {
-                     throw new functions.https.HttpsError('failed-precondition', 'Este livro não é para empréstimo.');
-                }
-
-                if (livroDoc.data().quantidade < 1) {
-                    throw new functions.https.HttpsError('failed-precondition', 'Não há cópias disponíveis deste livro para empréstimo.');
-                }
-
-                const novoEmprestimoRef = db.collection('biblioteca_emprestimos').doc();
-                transaction.set(novoEmprestimoRef, {
-                    livroId,
-                    livroTitulo: livroDoc.data().titulo,
-                    leitor: {
-                        id: leitor.id || null,
-                        nome: leitor.nome,
-                        tipo: leitor.tipo
-                    },
-                    dataEmprestimo: admin.firestore.FieldValue.serverTimestamp(),
-                    status: 'emprestado'
-                });
-                
-                transaction.update(livroRef, {
-                    quantidade: admin.firestore.FieldValue.increment(-1)
-                });
-
-                return { success: true, message: 'Empréstimo registrado com sucesso!' };
-            });
-
-        } else if (acao === 'devolver') {
-            if (!emprestimoId || !livroId) throw new functions.https.HttpsError('invalid-argument', 'Dados da devolução incompletos.');
-            
-            const emprestimoRef = db.collection('biblioteca_emprestimos').doc(emprestimoId);
-            const livroRef = db.collection('biblioteca_livros').doc(livroId);
-
-            return db.runTransaction(async (transaction) => {
-                const emprestimoDoc = await transaction.get(emprestimoRef);
-                if (!emprestimoDoc.exists || emprestimoDoc.data().status !== 'emprestado') {
-                    throw new functions.https.HttpsError('failed-precondition', 'Este empréstimo não está ativo ou não foi encontrado.');
-                }
-                
-                transaction.update(emprestimoRef, {
-                    status: 'devolvido',
-                    dataDevolucao: admin.firestore.FieldValue.serverTimestamp()
-                });
-
-                transaction.update(livroRef, {
-                    quantidade: admin.firestore.FieldValue.increment(1)
-                });
-
-                return { success: true, message: 'Devolução registrada com sucesso!' };
-            });
-        }
-        throw new functions.https.HttpsError('invalid-argument', 'Ação desconhecida.');
-    } catch (error) {
-        console.error("Erro ao gerenciar empréstimo:", error);
-         if (error instanceof functions.https.HttpsError) {
-             throw error;
-        }
-        throw new functions.https.HttpsError('internal', 'Ocorreu um erro na operação de empréstimo/devolução.');
-    }
+    throw new HttpsError('invalid-argument', 'Ação desconhecida.');
 });
 
-// ===================================================================
-// NOVA FUNÇÃO "ROBÔ" PARA GERAR RELATÓRIOS DA BIBLIOTECA
-// ===================================================================
-exports.gerarRelatorioBiblioteca = functions.region(REGIAO).https.onCall(async (data, context) => {
-    if (!context.auth) {
-        throw new functions.https.HttpsError('unauthenticated', 'A função deve ser chamada por um usuário autenticado.');
-    }
+exports.gerarRelatorioBiblioteca = onCall(OPCOES_FUNCAO, async (request) => {
+    if (!request.auth) { throw new HttpsError('unauthenticated', 'A função deve ser chamada por um usuário autenticado.'); }
     const permissoes = ['super-admin', 'diretor', 'bibliotecario'];
-    if (!permissoes.includes(context.auth.token.role)) {
-        throw new functions.https.HttpsError('permission-denied', 'Permissão negada.');
-    }
-
-    const { ano, mes } = data;
-    if (!ano || !mes) {
-        throw new functions.https.HttpsError('invalid-argument', 'Mês e ano são obrigatórios.');
-    }
-
+    if (!permissoes.includes(request.auth.token.role)) { throw new HttpsError('permission-denied', 'Permissão negada.'); }
+    const { ano, mes } = request.data;
+    if (!ano || !mes) { throw new HttpsError('invalid-argument', 'Mês e ano são obrigatórios.'); }
     const inicioDoMes = new Date(ano, mes - 1, 1);
     const fimDoMes = new Date(ano, mes, 0, 23, 59, 59);
-
     try {
-        const qVista = db.collection('biblioteca_vendas_avista')
-            .where('registradoEm', '>=', inicioDoMes)
-            .where('registradoEm', '<=', fimDoMes);
-        const snapshotVista = await qVista.get();
-        const vendasVista = snapshotVista.docs.map(doc => {
-            const data = doc.data();
-            return { ...data, registradoEm: data.registradoEm.toDate().toISOString() };
-        });
-
-        const qPrazo = db.collection('biblioteca_contas_a_receber')
-            .where('registradoEm', '>=', inicioDoMes)
-            .where('registradoEm', '<=', fimDoMes);
-        const snapshotPrazo = await qPrazo.get();
-        const vendasPrazo = snapshotPrazo.docs.map(doc => {
-            const data = doc.data();
-            return { ...data, registradoEm: data.registradoEm.toDate().toISOString() };
-        });
-
-        const qEmprestimos = db.collection('biblioteca_emprestimos')
-            .where('dataEmprestimo', '>=', inicioDoMes)
-            .where('dataEmprestimo', '<=', fimDoMes);
-        const snapshotEmprestimos = await qEmprestimos.get();
-        const emprestimos = snapshotEmprestimos.docs.map(doc => {
-            const data = doc.data();
-            return { 
-                ...data, 
-                dataEmprestimo: data.dataEmprestimo.toDate().toISOString(),
-                dataDevolucao: data.dataDevolucao ? data.dataDevolucao.toDate().toISOString() : null
-            };
-        });
-
-        return {
-            vendas: [...vendasVista, ...vendasPrazo],
-            emprestimos: emprestimos
-        };
-
+        const qVista = db.collection('biblioteca_vendas_avista').where('registradoEm', '>=', inicioDoMes).where('registradoEm', '<=', fimDoMes);
+        const qPrazo = db.collection('biblioteca_contas_a_receber').where('registradoEm', '>=', inicioDoMes).where('registradoEm', '<=', fimDoMes);
+        const qEmprestimos = db.collection('biblioteca_emprestimos').where('dataEmprestimo', '>=', inicioDoMes).where('dataEmprestimo', '<=', fimDoMes);
+        const [snapshotVista, snapshotPrazo, snapshotEmprestimos] = await Promise.all([qVista.get(), qPrazo.get(), qEmprestimos.get()]);
+        const vendasVista = snapshotVista.docs.map(doc => ({ ...doc.data(), registradoEm: doc.data().registradoEm.toDate().toISOString() }));
+        const vendasPrazo = snapshotPrazo.docs.map(doc => ({ ...doc.data(), registradoEm: doc.data().registradoEm.toDate().toISOString() }));
+        const emprestimos = snapshotEmprestimos.docs.map(doc => ({ ...doc.data(), dataEmprestimo: doc.data().dataEmprestimo.toDate().toISOString(), dataDevolucao: doc.data().dataDevolucao ? doc.data().dataDevolucao.toDate().toISOString() : null }));
+        return { vendas: [...vendasVista, ...vendasPrazo], emprestimos: emprestimos };
     } catch (error) {
         console.error("Erro ao gerar relatório da biblioteca:", error);
-        throw new functions.https.HttpsError('internal', 'Ocorreu um erro ao buscar os dados do relatório.');
+        throw new HttpsError('internal', 'Ocorreu um erro ao buscar os dados do relatório.');
     }
 });
 
-exports.uploadAtaParaStorage = functions.region(REGIAO).https.onCall(async (data, context) => {
-    if (!context.auth) {
-        throw new functions.https.HttpsError('unauthenticated', 'A função deve ser chamada por um usuário autenticado.');
-    }
-    const permissoes = ['super-admin', 'diretor', 'tesoureiro']; 
-    if (!permissoes.includes(context.auth.token.role)) {
-        throw new functions.https.HttpsError('permission-denied', 'Permissão negada.');
-    }
-    const { fileName, fileType, fileData, tituloAta, dataReuniao } = data;
-    if (!fileName || !fileType || !fileData || !tituloAta || !dataReuniao) {
-        throw new functions.https.HttpsError('invalid-argument', 'Dados incompletos para o upload.');
-    }
-    try {
-        const bucket = storage.bucket();
-        const filePath = `atas/${Date.now()}-${fileName}`;
-        const file = bucket.file(filePath);
-        const buffer = Buffer.from(fileData.split(',')[1], 'base64');
-        await file.save(buffer, {
-            metadata: { contentType: fileType },
-            public: true
-        });
-        const publicUrl = file.publicUrl();
-        await db.collection('atas').add({
-            titulo: tituloAta,
-            dataReuniao: new Date(dataReuniao),
-            storagePath: filePath,
-            fileUrl: publicUrl,
-            enviadoPor: {
-                uid: context.auth.uid,
-                nome: context.auth.token.name || context.auth.token.email
-            },
-            criadoEm: admin.firestore.FieldValue.serverTimestamp()
-        });
-        return { success: true, message: 'Ata arquivada com sucesso!' };
-    } catch (error) {
-        console.error("Erro ao fazer upload para o Firebase Storage:", error);
-        throw new functions.https.HttpsError('internal', 'Não foi possível enviar o arquivo.');
-    }
-});
-
-// ===================================================================
-// NOVAS FUNÇÕES PARA O CRACHÁ DE VOLUNTÁRIO
-// ===================================================================
-
-// ROBO 1: Atribui um código único para cada NOVO voluntário.
-exports.atribuirCodigoVoluntario = functions.region(REGIAO).firestore
-    .document('voluntarios/{voluntarioId}')
-    .onCreate(async (snap, context) => {
-        const dados = snap.data();
-        // Se por algum motivo o código já existir, não faz nada.
-        if (dados.codigoVoluntario) {
-            return null;
+exports.atribuirCodigoVoluntario = onDocumentCreated({ ...OPCOES_FUNCAO, document: 'voluntarios/{voluntarioId}' }, async (event) => {
+    const snap = event.data;
+    if (!snap) return null;
+    const dados = snap.data();
+    if (dados.codigoVoluntario) return null;
+    const counterRef = db.doc('counters/voluntarios');
+    return db.runTransaction(async (transaction) => {
+        const counterDoc = await transaction.get(counterRef);
+        let nextCode = 1001;
+        if (counterDoc.exists && counterDoc.data().lastCode) {
+            nextCode = counterDoc.data().lastCode + 1;
         }
-
-        const counterRef = db.doc('counters/voluntarios');
-
-        return db.runTransaction(async (transaction) => {
-            const counterDoc = await transaction.get(counterRef);
-            let nextCode = 1001; // O código inicial será 1001
-
-            if (counterDoc.exists) {
-                nextCode = counterDoc.data().lastCode + 1;
-            }
-
-            transaction.update(snap.ref, { codigoVoluntario: nextCode });
-            transaction.set(counterRef, { lastCode: nextCode }, { merge: true });
-        });
+        transaction.update(snap.ref, { codigoVoluntario: nextCode });
+        transaction.set(counterRef, { lastCode: nextCode }, { merge: true });
     });
+});
 
-// ROBO 2: Função para atribuir códigos a TODOS os voluntários existentes que ainda não têm um.
-exports.atribuirCodigosVoluntarios = functions.region(REGIAO).https.onCall(async (data, context) => {
+// ROBO 2: Função para atribuir códigos a TODOS os voluntários existentes que ainda não têm um. (VERSÃO CORRIGIDA)
+exports.atribuirCodigosVoluntarios = onCall(OPCOES_FUNCAO, async (request) => {
     const permissoes = ['super-admin', 'diretor', 'tesoureiro'];
-    if (!context.auth || !permissoes.includes(context.auth.token.role)) {
-        throw new functions.https.HttpsError('permission-denied', 'Permissão negada.');
+    if (!request.auth || !permissoes.includes(request.auth.token.role)) {
+        throw new HttpsError('permission-denied', 'Permissão negada.');
     }
 
     const voluntariosRef = db.collection('voluntarios');
     const counterRef = db.doc('counters/voluntarios');
 
     try {
+        // 1. Pega TODOS os voluntários
+        const snapshot = await voluntariosRef.get();
+        
+        // 2. Filtra na memória para encontrar apenas aqueles onde o campo 'codigoVoluntario' não existe.
+        const voluntariosSemCodigo = snapshot.docs.filter(doc => !doc.data().codigoVoluntario);
+
+        if (voluntariosSemCodigo.length === 0) {
+            throw new HttpsError('not-found', 'Todos os voluntários já possuem um código.');
+        }
+
         let voluntariosProcessados = 0;
-
         await db.runTransaction(async (transaction) => {
-            // Pega o último código usado do contador
             const counterDoc = await transaction.get(counterRef);
-            let nextCode = counterDoc.exists ? counterDoc.data().lastCode : 1000;
+            let nextCode = counterDoc.exists && counterDoc.data().lastCode ? counterDoc.data().lastCode : 1000;
 
-            // Busca todos os voluntários que NÃO TÊM o campo 'codigoVoluntario'
-            const snapshot = await voluntariosRef.where('codigoVoluntario', '==', null).get();
-
-            if (snapshot.empty) {
-                throw new functions.https.HttpsError('not-found', 'Todos os voluntários já possuem um código.');
-            }
-
-            snapshot.forEach(doc => {
+            voluntariosSemCodigo.forEach(doc => {
                 nextCode++;
                 transaction.update(doc.ref, { codigoVoluntario: nextCode });
                 voluntariosProcessados++;
             });
 
-            // Atualiza o contador com o último código usado
             if (voluntariosProcessados > 0) {
                 transaction.set(counterRef, { lastCode: nextCode }, { merge: true });
             }
@@ -1082,9 +649,35 @@ exports.atribuirCodigosVoluntarios = functions.region(REGIAO).https.onCall(async
         return { success: true, message: `${voluntariosProcessados} voluntários foram atualizados com novos códigos.` };
     } catch (error) {
         console.error("Erro ao atribuir códigos:", error);
-        if (error instanceof functions.https.HttpsError) {
-            throw error;
-        }
-        throw new functions.https.HttpsError('internal', 'Ocorreu um erro ao processar os voluntários.');
+        if (error instanceof HttpsError) { throw error; }
+        throw new HttpsError('internal', 'Ocorreu um erro ao processar os voluntários.');
+    }
+});
+
+exports.uploadAtaParaStorage = onCall(OPCOES_FUNCAO, async (request) => {
+    if (!request.auth) { throw new HttpsError('unauthenticated', 'A função deve ser chamada por um usuário autenticado.'); }
+    const permissoes = ['super-admin', 'diretor', 'tesoureiro'];
+    if (!permissoes.includes(request.auth.token.role)) { throw new HttpsError('permission-denied', 'Permissão negada.'); }
+    const { fileName, fileType, fileData, tituloAta, dataReuniao } = request.data;
+    if (!fileName || !fileType || !fileData || !tituloAta || !dataReuniao) { throw new HttpsError('invalid-argument', 'Dados incompletos para o upload.'); }
+    try {
+        const bucket = storage.bucket();
+        const filePath = `atas/${Date.now()}-${fileName}`;
+        const file = bucket.file(filePath);
+        const buffer = Buffer.from(fileData.split(',')[1], 'base64');
+        await file.save(buffer, { metadata: { contentType: fileType }, public: true });
+        const publicUrl = file.publicUrl();
+        await db.collection('atas').add({
+            titulo: tituloAta,
+            dataReuniao: new Date(dataReuniao),
+            storagePath: filePath,
+            fileUrl: publicUrl,
+            enviadoPor: { uid: request.auth.uid, nome: request.auth.token.name || request.auth.token.email },
+            criadoEm: admin.firestore.FieldValue.serverTimestamp()
+        });
+        return { success: true, message: 'Ata arquivada com sucesso!' };
+    } catch (error) {
+        console.error("Erro ao fazer upload para o Firebase Storage:", error);
+        throw new HttpsError('internal', 'Não foi possível enviar o arquivo.');
     }
 });
