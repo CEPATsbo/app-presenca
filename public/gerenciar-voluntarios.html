@@ -16,7 +16,7 @@
         .form-item { display: flex; flex-direction: column; }
         .form-item label { margin-bottom: 5px; font-weight: bold; color: #555; }
         .form-item input { padding: 10px; border-radius: 6px; border: 1px solid #ccc; font-size: 1em; }
-        .form-item input:disabled { background-color: #e9ecef; } /* NOVO: Estilo para campos desabilitados */
+        .form-item input:disabled { background-color: #e9ecef; }
         .add-button { grid-column: 1 / -1; padding: 12px; background-color: #2e7d32; color: white; border: none; border-radius: 6px; font-size: 1.1em; font-weight: bold; cursor: pointer; margin-top: 10px; }
         #lista-voluntarios { list-style-type: none; padding: 0; margin: 20px 0; }
         .item-voluntario { display: flex; justify-content: space-between; align-items: center; padding: 15px; border-bottom: 1px solid #eee; gap: 15px; border-left-width: 8px; border-left-style: solid; transition: border-left-color 0.3s ease-in-out; margin-bottom: 8px; border-radius: 0 8px 8px 0; background-color: #fafafa; }
@@ -26,19 +26,14 @@
         .voluntario-info { flex-grow: 1; word-break: break-word; }
         .voluntario-info strong { font-size: 1.2em; display: block; margin-bottom: 4px;}
         .voluntario-info small { color: #777; }
-        .codigo-voluntario { font-weight: bold; color: #007bff; font-size: 0.9em; } /* NOVO */
+        .codigo-voluntario { font-weight: bold; color: #007bff; font-size: 0.9em; margin-top: 5px;}
         .actions { display: flex; flex-direction: column; gap: 8px; align-items: center; }
         .actions-buttons { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
         .actions-buttons button { padding: 8px 12px; border-radius: 4px; cursor: pointer; border: 1px solid #ccc; font-size: 0.9em; }
         .btn-edit { background-color: #1976d2; color: white; border-color: #1976d2;}
         .btn-toggle { background-color: #ffb300; }
         .btn-delete { background-color: #c62828; color: white; border-color: #c62828; }
-        .btn-promover-conselheiro { background-color: #0277BD; color: white; border-color: #0277BD; }
-        .btn-promover-produtor { background-color: #6a1b9a; color: white; border-color: #6a1b9a; }
-        .btn-promover-irradiador { background-color: #00695c; color: white; border-color: #00695c; }
-        .btn-promover-bibliotecario { background-color: #ef6c00; color: white; border-color: #ef6c00; }
-        .btn-promover-recepcionista { background-color: #ad1457; color: white; border-color: #ad1457; }
-        .btn-promover-entrevistador { background-color: #4a148c; color: white; border-color: #4a148c; }
+        .btn-gerar-cracha { background-color: #007bff; color: white; border-color: #007bff; }
         .tasv-container { text-align: center; }
         .tasv-container label { font-size: 0.8em; font-weight: bold; }
         .tasv-checkbox { transform: scale(1.5); cursor: pointer; flex-shrink: 0; }
@@ -46,7 +41,10 @@
         .modal-content { background-color: white; padding: 30px; border-radius: 10px; width: 90%; max-width: 600px; }
         .modal-content h2 { margin-top: 0; }
         .modal-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 20px; }
-        #btn-atribuir-codigos { background-color: #d32f2f; color: white; border: none; padding: 10px 15px; border-radius: 6px; cursor: pointer; margin-left: 20px; } /* NOVO */
+        #btn-atribuir-codigos, #btn-backfill-nomes { background-color: #d32f2f; color: white; border: none; padding: 10px 15px; border-radius: 6px; cursor: pointer; margin-left: 10px; }
+        #loader-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); display: none; justify-content: center; align-items: center; z-index: 2000; color: white; font-size: 1.5em; flex-direction: column; }
+        .spinner { border: 8px solid #f3f3f3; border-top: 8px solid #007bff; border-radius: 50%; width: 60px; height: 60px; animation: spin 1s linear infinite; margin-bottom: 20px; }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
     </style>
 </head>
 <body>
@@ -56,6 +54,12 @@
     <div id="acesso-negado" style="display: none;">
         <h1>Acesso Negado</h1>
     </div>
+
+    <div id="loader-overlay">
+        <div class="spinner"></div>
+        <span>Gerando crachá, aguarde...</span>
+    </div>
+    
     <div id="main-content" style="display: none;">
         <div class="container form-container">
             <h1>Adicionar Novo Voluntário</h1>
@@ -68,9 +72,12 @@
             <button id="btn-adicionar" class="add-button">Adicionar Voluntário</button>
         </div>
         <div class="container lista-container">
-            <div style="display: flex; justify-content: space-between; align-items: center;">
+            <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
                 <h2 id="titulo-lista">Lista de Voluntários Cadastrados</h2>
-                <button id="btn-atribuir-codigos" style="display: none;">Atribuir Códigos Iniciais</button>
+                <div>
+                    <button id="btn-backfill-nomes" style="display: none;">Sincronizar Nomes Crachá</button>
+                    <button id="btn-atribuir-codigos" style="display: none;">Atribuir Códigos Iniciais</button>
+                </div>
             </div>
             <ul id="lista-voluntarios"><li>Carregando...</li></ul>
         </div>
@@ -125,7 +132,9 @@
         function inicializarPagina(user) {
             const db = getFirestore();
             const functions = getFunctions(undefined, 'southamerica-east1');
-            const atribuirCodigosVoluntarios = httpsCallable(functions, 'atribuirCodigosVoluntarios'); // NOVO
+            const atribuirCodigosVoluntarios = httpsCallable(functions, 'atribuirCodigosVoluntarios');
+            const gerarCracha = httpsCallable(functions, 'gerarCracha');
+            const backfillNomesCracha = httpsCallable(functions, 'backfillNomesCracha');
 
             const voluntariosCollection = collection(db, 'voluntarios');
             const logAuditoriaCollection = collection(db, 'log_auditoria');
@@ -139,21 +148,23 @@
                 listaUl: document.getElementById('lista-voluntarios'),
                 tituloLista: document.getElementById('titulo-lista'),
                 editModal: document.getElementById('edit-modal'),
-                editCodigo: document.getElementById('edit-codigo'), // NOVO
+                editCodigo: document.getElementById('edit-codigo'),
                 editNome: document.getElementById('edit-nome'),
                 editEndereco: document.getElementById('edit-endereco'),
                 editTelefone: document.getElementById('edit-telefone'),
                 editAniversario: document.getElementById('edit-aniversario'),
                 btnSalvar: document.getElementById('btn-salvar-edicao'),
                 btnCancelar: document.getElementById('btn-cancelar-edicao'),
-                btnAtribuirCodigos: document.getElementById('btn-atribuir-codigos') // NOVO
+                btnAtribuirCodigos: document.getElementById('btn-atribuir-codigos'),
+                btnBackfillNomes: document.getElementById('btn-backfill-nomes'),
+                loader: document.getElementById('loader-overlay')
             };
             let currentEditingId = null;
             const userRole = user.claims.role;
 
-            // NOVO: Exibe o botão de atribuição para admins
             if (['super-admin', 'diretor'].includes(userRole)) {
                 ui.btnAtribuirCodigos.style.display = 'inline-block';
+                ui.btnBackfillNomes.style.display = 'inline-block';
             }
 
             async function registrarLog(acao, detalhes) {
@@ -173,15 +184,20 @@
             async function carregarVoluntarios() {
                 const anoVigente = new Date().getFullYear();
                 
-                const queryConselheiros = query(voluntariosCollection, where("role", "==", "conselheiro"));
-                const conselheirosSnapshot = await getDocs(queryConselheiros);
-                const totalConselheiros = conselheirosSnapshot.size;
-
                 const q = query(voluntariosCollection, orderBy("nome"));
-                onSnapshot(q, (snapshot) => {
+                onSnapshot(q, async (snapshot) => {
+                    // Lógica para contar conselheiros (necessária para os botões)
+                    const queryConselheiros = query(voluntariosCollection, where("role", "==", "conselheiro"));
+                    const conselheirosSnapshot = await getDocs(queryConselheiros);
+                    const totalConselheiros = conselheirosSnapshot.size;
+
                     ui.tituloLista.textContent = `Lista de Voluntários Cadastrados (TOTAL = ${snapshot.size}) | Conselheiros Ativos: ${totalConselheiros}/5`;
                     ui.listaUl.innerHTML = '';
-                    if (snapshot.empty) { ui.listaUl.innerHTML = '<li>Nenhum voluntário cadastrado.</li>'; return; }
+
+                    if (snapshot.empty) {
+                        ui.listaUl.innerHTML = '<li>Nenhum voluntário cadastrado.</li>';
+                        return;
+                    }
                     
                     snapshot.forEach(docSnapshot => {
                         const v = docSnapshot.data();
@@ -193,8 +209,9 @@
                         const li = document.createElement('li');
                         li.className = `item-voluntario ${statusClasse}`;
                         
+                        // --- LÓGICA DOS BOTÕES DE PROMOÇÃO (RESTAURADA) ---
                         let botoesPromocao = '';
-                        if (userRole === 'super-admin' && v.authUid) {
+                         if (userRole === 'super-admin' && v.authUid) {
                             if (v.role !== 'conselheiro' && totalConselheiros < 5) {
                                 botoesPromocao += `<button data-auth-uid="${v.authUid}" data-nome="${v.nome}" class="btn-promover-conselheiro">Promover a Conselheiro</button>`;
                             }
@@ -214,13 +231,21 @@
                                 botoesPromocao += `<button data-auth-uid="${v.authUid}" data-nome="${v.nome}" class="btn-promover-entrevistador">Promover a Entrevistador(a)</button>`;
                             }
                         }
+                        
+                        // Lógica do botão de crachá
+                        let botaoCracha = '';
+                        if (v.codigoVoluntario && v.nomeParaCracha) {
+                            botaoCracha = `<button data-codigo="${v.codigoVoluntario}" data-nome-cracha="${v.nomeParaCracha}" class="btn-gerar-cracha">Gerar Crachá</button>`;
+                        }
 
-                        // NOVO: Adiciona a exibição do código do voluntário
+                        // Template final com todos os botões
                         li.innerHTML = `
                             <div class="voluntario-info">
                                 <strong>${v.nome}</strong>
-                                <small>${v.endereco || 'N/A'} | ${v.telefone || 'N/A'} | Aniversário: ${v.aniversario || 'N/A'} | Cargo: ${v.role || 'voluntario'}</small>
-                                <div class="codigo-voluntario">Código para Crachá: ${v.codigoVoluntario || 'Não atribuído'}</div>
+                                <small>${v.endereco || 'N/A'} | ${v.telefone || 'N/A'} | Cargo: ${v.role || 'voluntario'}</small>
+                                <div class="codigo-voluntario">
+                                    Cód: ${v.codigoVoluntario || 'N/A'} | Nome Crachá: <strong>${v.nomeParaCracha || 'Pendente (sincronize)'}</strong>
+                                </div>
                             </div>
                             <div class="tasv-container">
                                 <label for="tasv-${id}">TASV ${anoVigente}</label>
@@ -228,6 +253,7 @@
                             </div>
                             <div class="actions">
                                 <div class="actions-buttons">
+                                    ${botaoCracha}
                                     <button data-doc-id="${id}" class="btn-edit">Editar</button>
                                     <button data-doc-id="${id}" data-nome="${v.nome}" class="btn-delete">Apagar</button>
                                     ${botoesPromocao}
@@ -258,7 +284,6 @@
                     if (!novoVoluntario.nome) return alert("O campo 'Nome Completo' é obrigatório.");
                     try {
                         const docRef = await addDoc(voluntariosCollection, novoVoluntario);
-                        // O código do voluntário será adicionado pelo trigger do Firebase, não precisamos mais nos preocupar aqui.
                         await registrarLog("CRIOU_VOLUNTARIO", { voluntarioId: docRef.id, nome: novoVoluntario.nome });
                         ui.nome.value = ''; ui.endereco.value = ''; ui.telefone.value = ''; ui.aniversario.value = '';
                     } catch (error) { console.error("Erro ao adicionar voluntário:", error); }
@@ -277,7 +302,30 @@
                 ui.listaUl.addEventListener('click', async (e) => {
                     const target = e.target;
                     const docId = target.dataset.docId;
-                    const authUid = target.dataset.authUid;
+                    
+                    if (target.classList.contains('btn-gerar-cracha')) {
+                        target.disabled = true;
+                        ui.loader.style.display = 'flex';
+                        
+                        const codigo = target.dataset.codigo;
+                        const nomeCracha = target.dataset.nomeCracha;
+
+                        try {
+                            const result = await gerarCracha({ codigoVoluntario: codigo, nomeParaCracha: nomeCracha });
+                            if (result.data.success) {
+                                const imageBase64 = result.data.imageBase64;
+                                const imageUrl = `data:image/png;base64,${imageBase64}`;
+                                window.open(imageUrl, '_blank');
+                            }
+                        } catch (error) {
+                            console.error("Erro ao gerar crachá:", error);
+                            alert(`Não foi possível gerar o crachá: ${error.message}`);
+                        } finally {
+                            ui.loader.style.display = 'none';
+                            target.disabled = false;
+                        }
+                        return; // Impede que outros eventos de clique sejam disparados
+                    }
 
                     if (docId) {
                         const docRef = doc(db, 'voluntarios', docId);
@@ -286,7 +334,7 @@
                             if (docSnap.exists()) {
                                 const data = docSnap.data();
                                 currentEditingId = docId;
-                                ui.editCodigo.value = data.codigoVoluntario || 'N/A'; // NOVO: Popula o código no modal
+                                ui.editCodigo.value = data.codigoVoluntario || 'N/A';
                                 ui.editNome.value = data.nome || '';
                                 ui.editEndereco.value = data.endereco || '';
                                 ui.editTelefone.value = phoneMask(data.telefone || '');
@@ -304,44 +352,6 @@
                             const novoStatus = target.dataset.status === 'ativo' ? 'inativo' : 'ativo';
                             await updateDoc(docRef, { statusVoluntario: novoStatus });
                             await registrarLog("ALTEROU_STATUS_VOLUNTARIO", { voluntarioId: docId, novoStatus: novoStatus });
-                        }
-                        return;
-                    }
-
-                    if (authUid) {
-                        const nome = target.dataset.nome;
-                        let functionName = '';
-                        let roleName = '';
-                        let logAction = '';
-
-                        if (target.classList.contains('btn-promover-conselheiro')) {
-                            functionName = 'promoverParaConselheiro'; roleName = 'Conselheiro'; logAction = 'PROMOVEU_CONSELHEIRO';
-                        } else if (target.classList.contains('btn-promover-produtor')) {
-                            functionName = 'promoverParaProdutorEvento'; roleName = 'Produtor de Evento'; logAction = 'PROMOVEU_PRODUTOR_EVENTO';
-                        } else if (target.classList.contains('btn-promover-irradiador')) {
-                            functionName = 'promoverParaIrradiador'; roleName = 'Irradiador(a)'; logAction = 'PROMOVEU_IRRADIADOR';
-                        } else if (target.classList.contains('btn-promover-bibliotecario')) {
-                            functionName = 'promoverParaBibliotecario'; roleName = 'Bibliotecário(a)'; logAction = 'PROMOVEU_BIBLIOTECARIO';
-                        } else if (target.classList.contains('btn-promover-recepcionista')) {
-                            functionName = 'promoverParaRecepcionista'; roleName = 'Recepcionista'; logAction = 'PROMOVEU_RECEPCIONISTA';
-                        } else if (target.classList.contains('btn-promover-entrevistador')) {
-                            functionName = 'promoverParaEntrevistador'; roleName = 'Entrevistador(a)'; logAction = 'PROMOVEU_ENTREVISTADOR';
-                        }
-
-                        if (functionName && confirm(`Tem certeza que deseja promover ${nome} a ${roleName}?`)) {
-                            target.disabled = true;
-                            target.textContent = "Promovendo...";
-                            try {
-                                const promoteFunction = httpsCallable(functions, functionName);
-                                const resultado = await promoteFunction({ uid: authUid });
-                                alert(resultado.data.message);
-                                await registrarLog(logAction, { alvo: { nome, uid: authUid } });
-                            } catch (error) {
-                                console.error(`Erro ao promover:`, error);
-                                alert(`Erro: ${error.message}`);
-                            } finally {
-                                target.disabled = false;
-                            }
                         }
                     }
                 });
@@ -362,11 +372,8 @@
 
                 ui.btnCancelar.addEventListener('click', () => { ui.editModal.style.display = 'none'; currentEditingId = null; });
 
-                // NOVO: Event listener para o botão de atribuir códigos
                 ui.btnAtribuirCodigos.addEventListener('click', async () => {
-                    if (!confirm("Esta ação irá atribuir um código sequencial para todos os voluntários antigos que ainda não possuem um. Deseja continuar? Esta ação é segura e só afeta voluntários sem código.")) {
-                        return;
-                    }
+                    if (!confirm("Esta ação irá atribuir um código sequencial para todos os voluntários antigos que ainda não possuem um. Deseja continuar?")) return;
                     ui.btnAtribuirCodigos.disabled = true;
                     ui.btnAtribuirCodigos.textContent = "Processando...";
                     try {
@@ -378,6 +385,21 @@
                     } finally {
                         ui.btnAtribuirCodigos.disabled = false;
                         ui.btnAtribuirCodigos.textContent = "Atribuir Códigos Iniciais";
+                    }
+                });
+
+                ui.btnBackfillNomes.addEventListener('click', async () => {
+                    if (!confirm("Esta ação irá varrer todos os voluntários para criar o 'Nome para Crachá' otimizado. Deseja continuar?")) return;
+                    ui.btnBackfillNomes.disabled = true;
+                    ui.btnBackfillNomes.textContent = 'Processando...';
+                    try {
+                        const resultado = await backfillNomesCracha();
+                        alert(resultado.data.message);
+                    } catch (error) {
+                        alert(`Erro: ${error.message}`);
+                    } finally {
+                        ui.btnBackfillNomes.disabled = false;
+                        ui.btnBackfillNomes.textContent = 'Sincronizar Nomes Crachá';
                     }
                 });
             }

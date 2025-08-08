@@ -6,8 +6,7 @@ const { onCall, HttpsError } = require("firebase-functions/v2/https");
 const { onDocumentCreated, onDocumentWritten } = require("firebase-functions/v2/firestore");
 const { onSchedule } = require("firebase-functions/v2/scheduler");
 const { onRequest } = require("firebase-functions/v2/https");
-const functions = require("firebase-functions"); // Necessário para functions.config()
-
+const functions = require("firebase-functions"); 
 // Pacotes que não mudam
 const admin = require("firebase-admin");
 const webpush = require("web-push");
@@ -15,6 +14,8 @@ const cors = require("cors")({ origin: true });
 const Fuse = require("fuse.js");
 const axios = require("axios");
 const stream = require('stream');
+const sharp = require('sharp'); // Para manipulação de imagem
+const bwipjs = require('bwip-js'); // Para gerar código de barras
 
 admin.initializeApp();
 const db = admin.firestore();
@@ -49,18 +50,23 @@ function calcularCicloVibracoes(dataBase) {
     };
 }
 
+// ===================================================================
+// FUNÇÃO CORRIGIDA PARA LER VARIÁVEIS DE AMBIENTE
+// ===================================================================
 function configurarWebPush() {
     try {
-        const vapidConfig = functions.config().vapid;
-        if (vapidConfig && vapidConfig.public_key && vapidConfig.private_key) {
-            webpush.setVapidDetails("mailto:cepaulodetarso.sbo@gmail.com", vapidConfig.public_key, vapidConfig.private_key);
+        const publicKey = process.env.VAPID_PUBLIC_KEY;
+        const privateKey = process.env.VAPID_PRIVATE_KEY;
+
+        if (publicKey && privateKey) {
+            webpush.setVapidDetails("mailto:cepaulodetarso.sbo@gmail.com", publicKey, privateKey);
             return true;
         } else {
-            console.error("ERRO CRÍTICO: As chaves VAPID não estão configuradas no ambiente.");
+            console.error("ERRO CRÍTICO: As chaves VAPID não estão configuradas nas variáveis de ambiente.");
             return false;
         }
     } catch (error) {
-        console.error("ERRO ao ler a configuração VAPID:", error);
+        console.error("ERRO ao configurar o WebPush:", error);
         return false;
     }
 }
@@ -680,4 +686,159 @@ exports.uploadAtaParaStorage = onCall(OPCOES_FUNCAO, async (request) => {
         console.error("Erro ao fazer upload para o Firebase Storage:", error);
         throw new HttpsError('internal', 'Não foi possível enviar o arquivo.');
     }
+});
+
+// ===================================================================
+// ===== NOVAS FUNÇÕES PARA GERAÇÃO DE CRACHÁS =======================
+// ===================================================================
+
+// ROBO DE NOMES: Roda sempre que um voluntário é criado ou seu nome é alterado.
+exports.atualizarNomesParaCracha = onDocumentWritten({ ...OPCOES_FUNCAO, document: 'voluntarios/{voluntarioId}' }, async (event) => {
+    const dadosNovos = event.data.after.data();
+    const dadosAntigos = event.data.before ? event.data.before.data() : null;
+
+    // Se o documento foi apagado ou o nome não mudou, não faz nada.
+    if (!event.data.after.exists || (dadosAntigos && dadosNovos.nome === dadosAntigos.nome)) {
+        return null;
+    }
+
+    const nomeCompleto = dadosNovos.nome;
+    if (!nomeCompleto) return null;
+
+    const partesNome = nomeCompleto.trim().split(' ');
+    const primeiroNome = partesNome[0];
+
+    // Encontra todos os voluntários com o mesmo primeiro nome
+    const voluntariosComMesmoNomeRef = db.collection('voluntarios').where('primeiroNome', '==', primeiroNome);
+    const snapshot = await voluntariosComMesmoNomeRef.get();
+
+    const batch = db.batch();
+
+    if (snapshot.size <= 1 && !snapshot.empty) {
+        // Se só há um (ou nenhum) com este primeiro nome, o nome do crachá é só o primeiro nome
+        const doc = snapshot.docs[0];
+        batch.update(doc.ref, { nomeParaCracha: primeiroNome });
+
+    } else if (snapshot.size > 1) {
+        // Se há múltiplos, atualiza todos para "PrimeiroNome Sobrenome"
+        snapshot.docs.forEach(doc => {
+            const v = doc.data();
+            const partes = v.nome.trim().split(' ');
+            const pNome = partes[0];
+            const uNome = partes.length > 1 ? partes[partes.length - 1] : '';
+            const nomeCracha = `${pNome} ${uNome}`.trim();
+            batch.update(doc.ref, { nomeParaCracha: nomeCracha });
+        });
+    }
+    
+    // Atualiza o campo 'primeiroNome' do voluntário atual para futuras buscas
+    batch.update(event.data.after.ref, { primeiroNome: primeiroNome });
+    
+    return batch.commit();
+});
+
+// FUNÇÃO DE GERAÇÃO: Cria a imagem do crachá sob demanda
+exports.gerarCracha = onCall({ ...OPCOES_FUNCAO, memory: '1GiB' }, async (request) => {
+    const { nomeParaCracha, codigoVoluntario } = request.data;
+    if (!nomeParaCracha || !codigoVoluntario) {
+        throw new HttpsError('invalid-argument', 'Nome e código são obrigatórios.');
+    }
+
+    try {
+        const bucket = storage.bucket();
+        
+        // Baixar template e fonte do Firebase Storage
+        const [templateBuffer] = await bucket.file('template_cracha.png').download();
+        const [fonteBuffer] = await bucket.file('fonte_cracha.ttf').download();
+
+        // Gerar código de barras em memória
+        const barcodePngBuffer = await bwipjs.toBuffer({
+            bcid: 'code128',
+            text: String(codigoVoluntario),
+            scale: 3,
+            height: 12,
+            includetext: true,
+            textxalign: 'center',
+            textcolor: '56ad59', // Verde do seu design
+            barcolor: '56ad59'
+        });
+
+        // Criar o texto do nome como um SVG para ter mais controle
+        const textoSvg = `
+        <svg width="1011" height="150">
+          <style>
+            .title { fill: #56ad59; font-size: 70px; font-weight: bold; font-family: "CrachaFont"; }
+          </style>
+          <text x="50%" y="50%" dominant-baseline="middle" text-anchor="middle" class="title">${nomeParaCracha.toUpperCase()}</text>
+        </svg>`;
+        const textoBuffer = Buffer.from(textoSvg);
+
+        // Usar Sharp para compor a imagem final
+        const crachaFinalBuffer = await sharp(templateBuffer)
+            .composite([
+                { input: textoBuffer, top: 380, left: 0 },
+                { input: barcodePngBuffer, top: 520, left: 320 } // Posições ajustadas
+            ])
+            .png()
+            .toBuffer();
+
+        // Retornar a imagem como uma string Base64
+        return { success: true, imageBase64: crachaFinalBuffer.toString('base64') };
+
+    } catch (error) {
+        console.error("Erro ao gerar crachá:", error);
+        throw new HttpsError('internal', 'Não foi possível gerar a imagem do crachá.');
+    }
+});
+
+
+// FUNÇÃO UTILITÁRIA: Roda uma vez para criar nomes para voluntários antigos
+exports.backfillNomesCracha = onCall(OPCOES_FUNCAO, async (request) => {
+    // ... (código da função de backfill - incluirei no arquivo completo)
+    // Este código garante que todos os voluntários existentes tenham o campo `nomeParaCracha`
+    const snapshot = await db.collection('voluntarios').get();
+    const grupos = {};
+    
+    // Agrupa voluntários por primeiro nome
+    snapshot.docs.forEach(doc => {
+        const nome = doc.data().nome;
+        if (!nome) return;
+        const primeiroNome = nome.trim().split(' ')[0];
+        if (!grupos[primeiroNome]) {
+            grupos[primeiroNome] = [];
+        }
+        grupos[primeiroNome].push({ id: doc.id, ...doc.data() });
+    });
+
+    const batch = db.batch();
+    let atualizacoes = 0;
+
+    // Determina o nome para o crachá
+    for (const primeiroNome in grupos) {
+        const voluntarios = grupos[primeiroNome];
+        
+        // Atualiza o campo 'primeiroNome' para todos para consistência
+        voluntarios.forEach(v => {
+            const docRef = db.collection('voluntarios').doc(v.id);
+            batch.update(docRef, { primeiroNome: primeiroNome });
+        });
+
+        if (voluntarios.length === 1) {
+            const docRef = db.collection('voluntarios').doc(voluntarios[0].id);
+            batch.update(docRef, { nomeParaCracha: primeiroNome });
+            atualizacoes++;
+        } else {
+            voluntarios.forEach(v => {
+                const docRef = db.collection('voluntarios').doc(v.id);
+                const partes = v.nome.trim().split(' ');
+                const uNome = partes.length > 1 ? partes[partes.length - 1] : '';
+                const nomeCracha = `${primeiroNome} ${uNome}`.trim();
+                batch.update(docRef, { nomeParaCracha: nomeCracha });
+                atualizacoes++;
+            });
+        }
+    }
+
+    await batch.commit();
+    return { success: true, message: `${atualizacoes} voluntários foram processados.` };
 });
