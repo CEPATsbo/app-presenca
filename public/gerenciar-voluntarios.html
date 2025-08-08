@@ -300,31 +300,45 @@
                 });
 
                 ui.listaUl.addEventListener('click', async (e) => {
-                    const target = e.target;
-                    const docId = target.dataset.docId;
-                    
-                    if (target.classList.contains('btn-gerar-cracha')) {
+                    if (e.target.classList.contains('btn-gerar-cracha')) {
+                        const target = e.target;
                         target.disabled = true;
                         ui.loader.style.display = 'flex';
+                        
+                        // 1. Abre a nova aba IMEDIATAMENTE, em branco. O navegador permite isso.
+                        const newWindow = window.open('', '_blank');
+                        newWindow.document.write('Gerando crachá, por favor aguarde...');
                         
                         const codigo = target.dataset.codigo;
                         const nomeCracha = target.dataset.nomeCracha;
 
                         try {
+                            // 2. Espera a função na nuvem fazer o trabalho dela
                             const result = await gerarCracha({ codigoVoluntario: codigo, nomeParaCracha: nomeCracha });
+                            
+                            // 3. Prepara a URL da imagem
                             if (result.data.success) {
                                 const imageBase64 = result.data.imageBase64;
                                 const imageUrl = `data:image/png;base64,${imageBase64}`;
-                                window.open(imageUrl, '_blank');
+                                
+                                // 4. Em vez de abrir uma nova janela, nós NAVEGAMOS na janela que já foi aberta.
+                                newWindow.location.href = imageUrl;
+                            } else {
+                                newWindow.document.write('Erro ao gerar imagem.');
+                                newWindow.close();
+                                alert('A função retornou um erro ao gerar o crachá.');
                             }
                         } catch (error) {
+                            // Se der erro, a gente fecha a janela que abrimos
+                            newWindow.close();
                             console.error("Erro ao gerar crachá:", error);
                             alert(`Não foi possível gerar o crachá: ${error.message}`);
                         } finally {
+                            // 5. Esconde o loader e reativa o botão na tela principal
                             ui.loader.style.display = 'none';
                             target.disabled = false;
                         }
-                        return; // Impede que outros eventos de clique sejam disparados
+                        return; 
                     }
 
                     if (docId) {
