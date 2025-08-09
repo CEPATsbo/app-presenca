@@ -12,7 +12,7 @@
         .form-item { display: flex; flex-direction: column; margin-bottom: 20px; }
         .form-item label { margin-bottom: 8px; font-weight: bold; color: #555; }
         .form-item input, .form-item select { padding: 12px; border-radius: 6px; border: 1px solid #ccc; font-size: 1em; width: 100%; box-sizing: border-box; }
-        .btn { background-color: #dc3545; color: white; border: none; padding: 15px 20px; border-radius: 8px; font-weight: bold; font-size: 1.1em; cursor: pointer; transition: background-color 0.3s; width: 100%; }
+        .btn { background-color: #007bff; color: white; border: none; padding: 15px 20px; border-radius: 8px; font-weight: bold; font-size: 1.1em; cursor: pointer; transition: background-color 0.3s; width: 100%; }
         .btn:disabled { background-color: #ccc; }
         #log { margin-top: 20px; background-color: #212529; color: #f8f9fa; padding: 15px; border-radius: 8px; font-family: 'Courier New', Courier, monospace; white-space: pre-wrap; word-wrap: break-word; }
     </style>
@@ -24,8 +24,8 @@
     </div>
 
     <div id="main-content" class="container hidden">
-        <h1>Máquina do Tempo (Simulação de Eventos)</h1>
-        <p style="text-align: center; color: #666;">Use esta página para registrar presenças ou faltas em datas específicas, simulando a passagem do tempo para testes.</p>
+        <h1>Máquina do Tempo (Simulação de Fila)</h1>
+        <p style="text-align: center; color: #666;">Use esta página para adicionar um assistido à fila de atendimento em uma data específica.</p>
 
         <div class="form-item">
             <label for="assistido-id">ID do Assistido:</label>
@@ -33,19 +33,11 @@
         </div>
 
         <div class="form-item">
-            <label for="acao">Ação a Simular:</label>
-            <select id="acao">
-                <option value="presenca">Marcar Presença (Simula um atendimento completo)</option>
-                <option value="falta">Marcar Falta</option>
-            </select>
-        </div>
-
-        <div class="form-item">
-            <label for="data-simulacao">Data da Simulação:</label>
+            <label for="data-simulacao">Adicionar à Fila do Dia:</label>
             <input type="date" id="data-simulacao">
         </div>
 
-        <button id="btn-simular" class="btn">Simular Ação</button>
+        <button id="btn-simular" class="btn">Adicionar à Fila</button>
 
         <div id="log" style="display: none;"></div>
     </div>
@@ -53,7 +45,6 @@
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
         import { getFirestore, collection, doc, getDoc, query, where, getDocs, addDoc, writeBatch, Timestamp, increment, orderBy, limit } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
-        // ADICIONADO: Importar a função de proteção da página
         import { protegerPagina } from '/auth.js';
 
         const firebaseConfig = {
@@ -67,21 +58,16 @@
         initializeApp(firebaseConfig);
         const db = getFirestore();
 
-        // ADICIONADO: "Portão de Segurança"
         protegerPagina(['diretor', 'super-admin']).then(user => {
-            // Se o usuário for autorizado, mostra o conteúdo principal e inicia a página
             document.getElementById('main-content').classList.remove('hidden');
             inicializarPagina(user);
         }).catch(err => {
-            // Se não for autorizado, mostra a mensagem de acesso negado
             document.getElementById('acesso-negado').classList.remove('hidden');
         });
 
-        // ADICIONADO: Todo o código funcional agora fica dentro desta função
         function inicializarPagina(user) {
             const ui = {
                 assistidoIdInput: document.getElementById('assistido-id'),
-                acaoSelect: document.getElementById('acao'),
                 dataInput: document.getElementById('data-simulacao'),
                 btnSimular: document.getElementById('btn-simular'),
                 logDiv: document.getElementById('log'),
@@ -101,17 +87,25 @@
                 log('Iniciando simulação...');
 
                 const assistidoId = ui.assistidoIdInput.value.trim();
-                const acao = ui.acaoSelect.value;
                 const dataSimulada = ui.dataInput.value;
 
                 if (!assistidoId || !dataSimulada) {
                     log('Erro: Preencha o ID do Assistido e a Data da Simulação.', true);
                     ui.btnSimular.disabled = false;
-                    ui.btnSimular.textContent = 'Simular Ação';
+                    ui.btnSimular.textContent = 'Adicionar à Fila';
                     return;
                 }
 
                 try {
+                    // Passo 1: Buscar o documento do assistido para pegar o nome
+                    const assistidoRef = doc(db, 'assistidos', assistidoId);
+                    const assistidoDoc = await getDoc(assistidoRef);
+                    if (!assistidoDoc.exists()) {
+                        throw new Error(`Assistido com ID ${assistidoId} não encontrado.`);
+                    }
+                    const nomeAssistido = assistidoDoc.data().nome;
+
+                    // Passo 2: Encontrar o tratamento ATIVO para o assistido
                     const qTratamento = query(
                         collection(db, 'tratamentos_ae'),
                         where('assistidoId', '==', assistidoId),
@@ -120,52 +114,39 @@
                         limit(1)
                     );
                     const tratamentoSnapshot = await getDocs(qTratamento);
-
                     if (tratamentoSnapshot.empty) {
                         throw new Error(`Nenhum tratamento ATIVO encontrado para o ID: ${assistidoId}`);
                     }
                     const tratamentoDoc = tratamentoSnapshot.docs[0];
                     const tratamento = { id: tratamentoDoc.id, ...tratamentoDoc.data() };
 
+                    // Passo 3: Preparar o documento para a FILA
                     const dataTimestamp = Timestamp.fromDate(new Date(dataSimulada + 'T12:00:00'));
+                    
+                    const docParaFila = {
+                        assistidoId: assistidoId,
+                        nomeAssistido: nomeAssistido,
+                        tratamentoId: tratamento.id,
+                        status: 'aguardando_entrevista_ou_passe',
+                        passeRecomendado: tratamento.passe_ciclo_atual,
+                        chegadaEm: dataTimestamp, // USA A DATA SIMULADA
+                        recepcionista: { 
+                            uid: user.uid, 
+                            nome: `Simulação por ${user.displayName}` 
+                        }
+                    };
 
-                    const batch = writeBatch(db);
+                    // Passo 4: Adicionar o documento na coleção correta (`fila_atendimento_ae`)
+                    await addDoc(collection(db, 'fila_atendimento_ae'), docParaFila);
 
-                    if (acao === 'presenca') {
-                        const novoAtendimento = {
-                            assistidoId: assistidoId,
-                            tratamentoId: tratamento.id,
-                            tipo: 'tratamento_semanal',
-                            dataAtendimento: dataTimestamp,
-                            passeRecomendado: tratamento.passe_ciclo_atual,
-                            entrevistador: `Simulação por ${user.displayName}`,
-                            notas: `Presença simulada em ${new Date(dataSimulada).toLocaleDateString()}`
-                        };
-                        batch.set(doc(collection(db, 'atendimentos_ae')), novoAtendimento);
-                        log(`Sucesso: Presença para o tratamento ${tratamento.id} simulada em ${dataSimulada}.`);
-
-                    } else if (acao === 'falta') {
-                        const novoAtendimentoFalta = {
-                            assistidoId: assistidoId,
-                            tratamentoId: tratamento.id,
-                            tipo: 'falta',
-                            dataAtendimento: dataTimestamp,
-                        };
-                        batch.set(doc(collection(db, 'atendimentos_ae')), novoAtendimentoFalta);
-                        
-                        const tratamentoRef = doc(db, 'tratamentos_ae', tratamento.id);
-                        batch.update(tratamentoRef, { faltas_acumuladas: increment(1) });
-                        log(`Sucesso: Falta para o tratamento ${tratamento.id} simulada em ${dataSimulada}. Faltas acumuladas incrementadas.`);
-                    }
-
-                    await batch.commit();
+                    log(`Sucesso: '${nomeAssistido}' adicionado à fila do dia ${new Date(dataSimulada + 'T12:00:00').toLocaleDateString()}.`);
 
                 } catch (error) {
                     console.error("Erro na simulação:", error);
                     log(`ERRO: ${error.message}`, true);
                 } finally {
                     ui.btnSimular.disabled = false;
-                    ui.btnSimular.textContent = 'Simular Ação';
+                    ui.btnSimular.textContent = 'Adicionar à Fila';
                 }
             });
         }
