@@ -43,7 +43,7 @@
 
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
-        import { getFirestore, collection, doc, getDoc, onSnapshot, updateDoc, query, where, orderBy, Timestamp, getDocs, setDoc } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
+        import { getFirestore, collection, doc, getDoc, onSnapshot, updateDoc, query, where, orderBy, Timestamp, getDocs, setDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
         import { protegerPagina } from '/auth.js';
 
         const firebaseConfig = {
@@ -70,10 +70,10 @@
             const filaRef = collection(db, 'fila_atendimento_ae');
             const tratamentosRef = collection(db, 'tratamentos_ae');
             const atendimentosRef = collection(db, 'atendimentos_ae');
-            const painelEstadoRef = doc(db, 'painel_estado', 'atual'); // Referência ao novo "quadro de avisos"
+            const painelEstadoRef = doc(db, 'painel_estado', 'atual');
             const cardsContainer = document.getElementById('cards-container');
 
-            let atendimentosDoDia = []; // Armazena todos os atendimentos para construir o histórico
+            let atendimentosDoDia = [];
 
             const hojeInicio = new Date();
             hojeInicio.setHours(0, 0, 0, 0);
@@ -126,10 +126,8 @@
                 if (atendimento.precisaEntrevista) {
                     const entrevistaChamada = status === 'chamado_entrevista';
                     const passeChamado = status === 'chamado_passe';
-                    
                     const entrevistaBtnDisabled = entrevistaChamada || passeChamado;
                     const passeBtnDisabled = !entrevistaChamada || passeChamado;
-
                     card.classList.toggle('chamado-entrevista', entrevistaChamada && !passeChamado);
                     buttonsHtml = `
                         <button class="btn btn-info btn-chamar-entrevista" data-id="${atendimento.id}" ${entrevistaBtnDisabled ? 'disabled' : ''}>Chamar p/ Entrevista</button>
@@ -168,19 +166,20 @@
                 
                 const salaDestino = novoStatus === 'chamado_entrevista' ? 'SALA DE ENTREVISTA' : getSalaPorPasse(chamadaAtual.passeRecomendado);
                 
-                // Constrói o histórico a partir dos dados já carregados
-                const chamadasAnteriores = atendimentosDoDia.filter(a => a.id !== chamadaAtual.id && (a.status === 'chamado_entrevista' || a.status === 'chamado_passe'));
-                const historico = chamadasAnteriores.slice(-3).map(a => ({
+                const chamadasAnteriores = atendimentosDoDia
+                    .filter(a => a.id !== chamadaAtual.id && (a.status === 'chamado_entrevista' || a.status === 'chamado_passe'))
+                    .sort((a,b) => b.chegadaEm - a.chegadaEm);
+                    
+                const historico = chamadasAnteriores.slice(0, 3).map(a => ({
                     nome: a.nomeAssistido,
                     sala: a.status === 'chamado_entrevista' ? 'SALA DE ENTREVISTA' : getSalaPorPasse(a.passeRecomendado)
                 }));
 
-                // Escreve a "ordem" completa para a TV
                 await setDoc(painelEstadoRef, {
                     nome: chamadaAtual.nomeAssistido,
                     sala: salaDestino,
                     historico: historico,
-                    timestamp: serverTimestamp() // Para garantir que é a chamada mais recente
+                    timestamp: serverTimestamp()
                 });
             }
 
@@ -194,11 +193,10 @@
                 else if (target.classList.contains('btn-chamar-passe')) novoStatus = 'chamado_passe';
 
                 if (novoStatus) {
-                    target.disabled = true;
                     const atendimentoChamado = atendimentosDoDia.find(a => a.id === id);
                     if (atendimentoChamado) {
-                        await atualizarPainelTV(atendimentoChamado, novoStatus); // Envia a ordem para a TV
-                        await updateDoc(doc(db, 'fila_atendimento_ae', id), { status: novoStatus }); // Atualiza o status na fila
+                        await atualizarPainelTV(atendimentoChamado, novoStatus);
+                        await updateDoc(doc(db, 'fila_atendimento_ae', id), { status: novoStatus });
                     }
                 }
             });

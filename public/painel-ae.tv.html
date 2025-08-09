@@ -37,7 +37,14 @@
         import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
         import { getFirestore, doc, onSnapshot } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
 
-        const firebaseConfig = { /* ... seu config ... */ };
+        const firebaseConfig = {
+            apiKey: "AIzaSyBV7RPjk3cFTqL-aIpflJcUojKg1ZXMLuU",
+            authDomain: "voluntarios-ativos---cepat.firebaseapp.com",
+            projectId: "voluntarios-ativos---cepat",
+            storageBucket: "voluntarios-ativos---cepat.firebasestorage.app",
+            messagingSenderId: "66122858261",
+            appId: "1:66122858261:web:7fa21f1805463b5c08331c"
+        };
         initializeApp(firebaseConfig);
         const db = getFirestore();
 
@@ -51,14 +58,13 @@
         try {
             somNotificacao = new Audio('/notification.mp3');
             somNotificacao.onerror = () => { somNotificacao = null; };
-        } catch(e) { somNotificacao = null; }
+        } catch (e) { somNotificacao = null; }
 
         function atualizarPainel(dados) {
             const nome = dados.nome || 'Aguardando...';
             const sala = dados.sala || '';
             const historico = dados.historico || [];
 
-            // Dispara a animação e o som apenas se for uma nova chamada
             if (dados.timestamp && dados.timestamp !== ultimoTimestamp) {
                 if (somNotificacao) somNotificacao.play().catch(()=>{});
                 chamadaPrincipalEl.classList.remove('fade-in');
@@ -89,7 +95,7 @@
             if (doc.exists()) {
                 atualizarPainel(doc.data());
             } else {
-                atualizarPainel({}); // Limpa o painel se o documento for apagado
+                atualizarPainel({});
             }
         });
         
