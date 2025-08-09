@@ -22,8 +22,9 @@
         .assistido-card .actions { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
         .assistido-card .actions .btn { width: 100%; padding: 15px; font-size: 1.1em; }
         .chamado-entrevista { border-left-color: #17a2b8; }
+        .entrevista-concluida { border-left-color: #ffc107; }
         .chamado-passe { border-left-color: #28a745; background-color: #f8f9fa; opacity: 0.8; }
-        .chamado-passe h3 { text-decoration: line-through; }
+        .chamado-passe h3, .chamado-passe .info, .chamado-passe .actions { text-decoration: line-through; }
         .hidden { display: none; }
         .filtro-data { text-align: center; margin-bottom: 25px; background-color: #fff; padding: 15px; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.05); }
         .filtro-data label { font-weight: bold; margin-right: 10px; }
@@ -159,21 +160,28 @@
                 const status = atendimento.status;
                 let buttonsHtml = '';
                 
+                const passeChamado = status === 'chamado_passe';
+                
+                // LÓGICA DE BOTÕES CORRIGIDA
                 if (atendimento.precisaEntrevista) {
                     const entrevistaChamada = status === 'chamado_entrevista';
-                    const passeChamado = status === 'chamado_passe';
-                    const entrevistaBtnDisabled = entrevistaChamada || passeChamado;
-                    const passeBtnDisabled = !entrevistaChamada || passeChamado;
-                    card.classList.toggle('chamado-entrevista', entrevistaChamada && !passeChamado);
+                    const entrevistaConcluida = status === 'entrevista_concluida';
+                    
+                    const entrevistaBtnDisabled = entrevistaChamada || entrevistaConcluida || passeChamado;
+                    const passeBtnDisabled = !(entrevistaChamada || entrevistaConcluida) || passeChamado;
+
                     buttonsHtml = `
                         <button class="btn btn-info btn-chamar-entrevista" data-id="${atendimento.id}" ${entrevistaBtnDisabled ? 'disabled' : ''}>Chamar p/ Entrevista</button>
                         <button class="btn btn-success btn-chamar-passe" data-id="${atendimento.id}" ${passeBtnDisabled ? 'disabled' : ''}>Chamar p/ Passe</button>`;
                 } else {
-                    const passeChamado = status === 'chamado_passe';
                     buttonsHtml = `<div style="grid-column: 1 / -1;"><button class="btn btn-success btn-chamar-passe" data-id="${atendimento.id}" ${passeChamado ? 'disabled' : ''}>Chamar p/ Passe</button></div>`;
                 }
 
-                card.classList.toggle('chamado-passe', status === 'chamado_passe');
+                // LÓGICA DE ESTILO CORRIGIDA
+                if (status === 'chamado_entrevista') card.classList.add('chamado-entrevista');
+                if (status === 'entrevista_concluida') card.classList.add('entrevista-concluida');
+                if (status === 'chamado_passe') card.classList.add('chamado-passe');
+                
                 let tipoLabel = `Assistência (${atendimento.passe_ciclo_atual || 'N/A'})`;
                 if(atendimento.tipoAtendimento === 'avulso'){
                     tipoLabel = `Passe Avulso (${atendimento.passeRecomendado || 'N/A'})`;
@@ -181,13 +189,13 @@
 
                 card.innerHTML = `
                     <h3>${atendimento.nomeAssistido}</h3>
-                    <p class="info">Tipo: <strong>${tipoLabel}</strong><br>Semana: <strong>${atendimento.semana_atual || 1}</strong><br>Entrevista hoje: <strong>${atendimento.precisaEntrevista ? 'Sim' : 'Não'}</strong></p>`;
+                    <p class="info">
+                        Tipo: <strong>${tipoLabel}</strong><br>
+                        Semana: <strong>${atendimento.semana_atual || 1}</strong><br>
+                        Entrevista hoje: <strong>${atendimento.precisaEntrevista ? 'Sim' : 'Não'}</strong>
+                    </p>
+                    <div class="actions">${buttonsHtml}</div>`;
                 
-                // Adiciona o container de ações apenas se o atendimento não foi concluído
-                if (status !== 'chamado_passe' && status !== 'entrevista_concluida') {
-                    card.innerHTML += `<div class="actions">${buttonsHtml}</div>`;
-                }
-
                 return card;
             }
 
@@ -205,15 +213,16 @@
                 const salaDestino = novoStatus === 'chamado_entrevista' ? 'SALA DE ENTREVISTA' : getSalaPorPasse(passeParaTV);
                 
                 const chamadasAnteriores = atendimentosDoDia
-                    .filter(a => a.id !== chamadaAtual.id && (a.status === 'chamado_entrevista' || a.status === 'chamado_passe'))
+                    .filter(a => a.id !== chamadaAtual.id && (a.status === 'chamado_entrevista' || a.status === 'chamado_passe' || a.status === 'entrevista_concluida'))
                     .sort((a,b) => b.chegadaEm.toMillis() - a.chegadaEm.toMillis());
                     
                 const historico = chamadasAnteriores.slice(0, 3).map(a => {
                     const passeHist = a.passe_ciclo_atual || a.passeRecomendado;
-                    return {
-                        nome: a.nomeAssistido,
-                        sala: a.status === 'chamado_entrevista' ? 'SALA DE ENTREVISTA' : getSalaPorPasse(passeHist)
-                    };
+                    let salaHist = getSalaPorPasse(passeHist);
+                    if (a.status === 'chamado_entrevista' || a.status === 'entrevista_concluida') {
+                        salaHist = 'SALA DE ENTREVISTA';
+                    }
+                    return { nome: a.nomeAssistido, sala: salaHist };
                 });
 
                 await setDoc(painelEstadoRef, {
@@ -226,7 +235,7 @@
 
             cardsContainer.addEventListener('click', async (e) => {
                 const target = e.target;
-                target.disabled = true; // Desabilita o botão imediatamente
+                target.disabled = true;
                 
                 const id = target.dataset.id;
                 if (!id) return;
@@ -246,34 +255,30 @@
                         await atualizarPainelTV(atendimentoChamado, 'chamado_passe');
                         
                         const batch = writeBatch(db);
-
-                        // Atualiza o status na fila para 'chamado_passe'
                         const filaDocRef = doc(db, 'fila_atendimento_ae', id);
                         batch.update(filaDocRef, { status: 'chamado_passe' });
 
-                        // *** A CORREÇÃO ESTÁ AQUI ***
-                        // Se o atendimento não precisava de entrevista, cria o registro permanente agora.
-                        if (!atendimentoChamado.precisaEntrevista) {
+                        // Se o atendimento não precisava de entrevista OU se a entrevista já foi concluída
+                        if (!atendimentoChamado.precisaEntrevista || atendimentoChamado.status === 'entrevista_concluida') {
                             const atendimentoRecord = {
                                 assistidoId: atendimentoChamado.assistidoId,
                                 tratamentoId: atendimentoChamado.tratamentoId,
                                 tipo: 'tratamento_semanal',
                                 dataAtendimento: atendimentoChamado.chegadaEm,
                                 semana: atendimentoChamado.semana_atual,
-                                entrevistador: "Passe Direto",
+                                entrevistador: atendimentoChamado.status === 'entrevista_concluida' ? 'Entrevista Realizada' : 'Passe Direto',
                                 passeRecomendado: atendimentoChamado.passe_ciclo_atual,
-                                notas: "Atendimento direto para o passe, sem entrevista."
+                                notas: atendimentoChamado.status === 'entrevista_concluida' ? 'Atendimento pós-entrevista.' : 'Atendimento direto para o passe, sem entrevista.'
                             };
                             const novoAtendimentoRef = doc(collection(db, 'atendimentos_ae'));
                             batch.set(novoAtendimentoRef, atendimentoRecord);
                         }
-
                         await batch.commit();
                     }
                 } catch (error) {
                     console.error("Erro ao processar chamada:", error);
                     alert("Ocorreu um erro. Tente novamente.");
-                    target.disabled = false; // Reabilita o botão em caso de erro
+                    target.disabled = false;
                 }
             });
         }
