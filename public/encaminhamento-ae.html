@@ -47,13 +47,13 @@
         import { protegerPagina } from '/auth.js';
 
         const firebaseConfig = {
-            apiKey: "AIzaSyBV7RPjk3cFTqL-aIpflJcUojKg1ZXMLuU",
-            authDomain: "voluntarios-ativos---cepat.firebaseapp.com",
-            projectId: "voluntarios-ativos---cepat",
-            storageBucket: "voluntarios-ativos---cepat.firebasestorage.app",
-            messagingSenderId: "66122858261",
-            appId: "1:66122858261:web:7fa21f1805463b5c08331c"
-        };
+        apiKey: "AIzaSyBV7RPjk3cFTqL-aIpflJcUojKg1ZXMLuU",
+        authDomain: "voluntarios-ativos---cepat.firebaseapp.com",
+        projectId: "voluntarios-ativos---cepat",
+        storageBucket: "voluntarios-ativos---cepat.firebasestorage.app",
+        messagingSenderId: "66122858261",
+        appId: "1:66122858261:web:7fa21f1805463b5c08331c"
+    };
         initializeApp(firebaseConfig);
 
         protegerPagina(['entrevistador', 'diretor', 'super-admin']).then(user => {
@@ -138,7 +138,6 @@
                 }
 
                 card.classList.toggle('chamado-passe', status === 'chamado_passe');
-                
                 let tipoLabel = `Assistência (${atendimento.passe_ciclo_atual || 'N/A'})`;
                 if(atendimento.tipoAtendimento === 'avulso'){
                     tipoLabel = `Passe Avulso (${atendimento.passeRecomendado || 'N/A'})`;
@@ -146,10 +145,7 @@
 
                 card.innerHTML = `
                     <h3>${atendimento.nomeAssistido}</h3>
-                    <p class="info">
-                        Tipo: <strong>${tipoLabel}</strong><br>
-                        Entrevista hoje: <strong>${atendimento.precisaEntrevista ? 'Sim' : 'Não'}</strong>
-                    </p>
+                    <p class="info">Tipo: <strong>${tipoLabel}</strong><br>Entrevista hoje: <strong>${atendimento.precisaEntrevista ? 'Sim' : 'Não'}</strong></p>
                     <div class="actions">${buttonsHtml}</div>`;
                 return card;
             }
@@ -168,7 +164,7 @@
                 
                 const chamadasAnteriores = atendimentosDoDia
                     .filter(a => a.id !== chamadaAtual.id && (a.status === 'chamado_entrevista' || a.status === 'chamado_passe'))
-                    .sort((a,b) => b.chegadaEm - a.chegadaEm);
+                    .sort((a,b) => b.chegadaEm.toMillis() - a.chegadaEm.toMillis());
                     
                 const historico = chamadasAnteriores.slice(0, 3).map(a => ({
                     nome: a.nomeAssistido,
