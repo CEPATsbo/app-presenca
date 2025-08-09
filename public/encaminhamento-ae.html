@@ -52,7 +52,7 @@
 
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
-        import { getFirestore, collection, doc, getDoc, onSnapshot, updateDoc, query, where, orderBy, Timestamp, getDocs, setDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
+        import { getFirestore, collection, doc, getDoc, onSnapshot, updateDoc, query, where, orderBy, Timestamp, getDocs, setDoc, serverTimestamp, writeBatch } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
         import { protegerPagina } from '/auth.js';
 
         const firebaseConfig = {
@@ -84,25 +84,22 @@
             const seletorData = document.getElementById('seletor-data');
 
             let atendimentosDoDia = [];
-            let unsubscribeFila; // Variável para controlar o listener em tempo real
+            let unsubscribeFila; 
 
-            // Define a data de hoje no seletor e inicia o monitoramento
             seletorData.value = new Date().toISOString().split("T")[0];
             monitorarFila(seletorData.value);
 
-            // Adiciona um listener para quando a data for alterada
             seletorData.addEventListener('change', () => {
                 monitorarFila(seletorData.value);
             });
 
             function monitorarFila(dataString) {
-                // Se já existe um monitoramento ativo, cancela ele antes de criar um novo
                 if (unsubscribeFila) {
                     unsubscribeFila();
                 }
                 cardsContainer.innerHTML = `<p>Buscando fila para o dia ${new Date(dataString + 'T12:00:00').toLocaleDateString()}...</p>`;
 
-                const dataSelecionada = new Date(dataString + 'T12:00:00'); // Usar T12:00:00 para evitar problemas de fuso
+                const dataSelecionada = new Date(dataString + 'T12:00:00');
                 const inicioDoDia = new Date(dataSelecionada.setHours(0, 0, 0, 0));
                 const fimDoDia = new Date(dataSelecionada.setHours(23, 59, 59, 999));
                 
@@ -184,8 +181,13 @@
 
                 card.innerHTML = `
                     <h3>${atendimento.nomeAssistido}</h3>
-                    <p class="info">Tipo: <strong>${tipoLabel}</strong><br>Entrevista hoje: <strong>${atendimento.precisaEntrevista ? 'Sim' : 'Não'}</strong></p>
-                    <div class="actions">${buttonsHtml}</div>`;
+                    <p class="info">Tipo: <strong>${tipoLabel}</strong><br>Semana: <strong>${atendimento.semana_atual || 1}</strong><br>Entrevista hoje: <strong>${atendimento.precisaEntrevista ? 'Sim' : 'Não'}</strong></p>`;
+                
+                // Adiciona o container de ações apenas se o atendimento não foi concluído
+                if (status !== 'chamado_passe' && status !== 'entrevista_concluida') {
+                    card.innerHTML += `<div class="actions">${buttonsHtml}</div>`;
+                }
+
                 return card;
             }
 
@@ -224,19 +226,54 @@
 
             cardsContainer.addEventListener('click', async (e) => {
                 const target = e.target;
+                target.disabled = true; // Desabilita o botão imediatamente
+                
                 const id = target.dataset.id;
-                if (!id || target.disabled) return;
+                if (!id) return;
 
-                let novoStatus = '';
-                if (target.classList.contains('btn-chamar-entrevista')) novoStatus = 'chamado_entrevista';
-                else if (target.classList.contains('btn-chamar-passe')) novoStatus = 'chamado_passe';
+                const atendimentoChamado = atendimentosDoDia.find(a => a.id === id);
+                if (!atendimentoChamado) {
+                    target.disabled = false;
+                    return;
+                }
 
-                if (novoStatus) {
-                    const atendimentoChamado = atendimentosDoDia.find(a => a.id === id);
-                    if (atendimentoChamado) {
-                        await atualizarPainelTV(atendimentoChamado, novoStatus);
-                        await updateDoc(doc(db, 'fila_atendimento_ae', id), { status: novoStatus });
+                try {
+                    if (target.classList.contains('btn-chamar-entrevista')) {
+                        await atualizarPainelTV(atendimentoChamado, 'chamado_entrevista');
+                        await updateDoc(doc(db, 'fila_atendimento_ae', id), { status: 'chamado_entrevista' });
+                    
+                    } else if (target.classList.contains('btn-chamar-passe')) {
+                        await atualizarPainelTV(atendimentoChamado, 'chamado_passe');
+                        
+                        const batch = writeBatch(db);
+
+                        // Atualiza o status na fila para 'chamado_passe'
+                        const filaDocRef = doc(db, 'fila_atendimento_ae', id);
+                        batch.update(filaDocRef, { status: 'chamado_passe' });
+
+                        // *** A CORREÇÃO ESTÁ AQUI ***
+                        // Se o atendimento não precisava de entrevista, cria o registro permanente agora.
+                        if (!atendimentoChamado.precisaEntrevista) {
+                            const atendimentoRecord = {
+                                assistidoId: atendimentoChamado.assistidoId,
+                                tratamentoId: atendimentoChamado.tratamentoId,
+                                tipo: 'tratamento_semanal',
+                                dataAtendimento: atendimentoChamado.chegadaEm,
+                                semana: atendimentoChamado.semana_atual,
+                                entrevistador: "Passe Direto",
+                                passeRecomendado: atendimentoChamado.passe_ciclo_atual,
+                                notas: "Atendimento direto para o passe, sem entrevista."
+                            };
+                            const novoAtendimentoRef = doc(collection(db, 'atendimentos_ae'));
+                            batch.set(novoAtendimentoRef, atendimentoRecord);
+                        }
+
+                        await batch.commit();
                     }
+                } catch (error) {
+                    console.error("Erro ao processar chamada:", error);
+                    alert("Ocorreu um erro. Tente novamente.");
+                    target.disabled = false; // Reabilita o botão em caso de erro
                 }
             });
         }
