@@ -132,41 +132,19 @@
 
             async function getContextoDoAtendimento(filaDocSnapshot) {
                 const atendimento = { id: filaDocSnapshot.id, ...filaDocSnapshot.data() };
-                
-                // --- INÍCIO DOS ESPIÕES DE DEPURAÇÃO ---
-                console.log(`--- Iniciando depuração para: ${atendimento.nomeAssistido} ---`);
-
                 if (atendimento.tipoAtendimento === 'avulso') {
                     return { ...atendimento, precisaEntrevista: false };
                 }
-                if (!atendimento.tratamentoId) {
-                     console.log("ERRO DE DADOS: Atendimento na fila não possui tratamentoId.");
-                    return null;
-                }
+                if (!atendimento.tratamentoId) return null;
 
                 const tratamentoDocRef = doc(db, 'tratamentos_ae', atendimento.tratamentoId);
                 const tratamentoDoc = await getDoc(tratamentoDocRef);
-                if (!tratamentoDoc.exists()) {
-                    console.log(`ERRO DE DADOS: Tratamento com ID ${atendimento.tratamentoId} não foi encontrado.`);
-                    return null;
-                }
+                if (!tratamentoDoc.exists()) return null;
                 const tratamento = tratamentoDoc.data();
-
-                // ESPIONANDO O ID DO TRATAMENTO USADO NA BUSCA
-                console.log(`Buscando atendimentos para o tratamentoId: ${atendimento.tratamentoId}`);
 
                 const qSemanas = query(atendimentosRef, where("tratamentoId", "==", atendimento.tratamentoId), where("tipo", "!=", "falta"));
                 const semanasSnapshot = await getDocs(qSemanas);
-                
-                // ESPIONANDO QUANTOS ATENDIMENTOS FORAM ENCONTRADOS
-                console.log(`Número de atendimentos passados encontrados: ${semanasSnapshot.size}`);
-
                 const semanaNum = semanasSnapshot.size + 1;
-
-                // ESPIONANDO O RESULTADO FINAL DO CÁLCULO DA SEMANA
-                console.log(`Cálculo final -> Semana atual é: ${semanaNum}`);
-                // --- FIM DOS ESPIÕES DE DEPURAÇÃO ---
-                
                 const passe = tratamento.passe_ciclo_atual;
                 let precisaEntrevista = false;
                 
@@ -278,16 +256,19 @@
                         const filaDocRef = doc(db, 'fila_atendimento_ae', id);
                         batch.update(filaDocRef, { status: 'chamado_passe' });
 
-                        if (!atendimentoChamado.precisaEntrevista || atendimentoChamado.status === 'entrevista_concluida') {
+                        // *** LÓGICA CORRIGIDA ***
+                        // Cria um registro permanente APENAS se for um "Passe Direto" (sem necessidade de entrevista).
+                        // O registro do atendimento pós-entrevista já foi criado na página de Entrevista.
+                        if (!atendimentoChamado.precisaEntrevista) {
                             const atendimentoRecord = {
                                 assistidoId: atendimentoChamado.assistidoId,
                                 tratamentoId: atendimentoChamado.tratamentoId,
                                 tipo: 'tratamento_semanal',
                                 dataAtendimento: atendimentoChamado.chegadaEm,
                                 semana: atendimentoChamado.semana_atual,
-                                entrevistador: atendimentoChamado.status === 'entrevista_concluida' ? 'Entrevista Realizada' : 'Passe Direto',
+                                entrevistador: 'Passe Direto',
                                 passeRecomendado: atendimentoChamado.passe_ciclo_atual,
-                                notas: atendimentoChamado.status === 'entrevista_concluida' ? 'Atendimento pós-entrevista.' : 'Atendimento direto para o passe, sem entrevista.'
+                                notas: 'Atendimento direto para o passe, sem entrevista.'
                             };
                             const novoAtendimentoRef = doc(collection(db, 'atendimentos_ae'));
                             batch.set(novoAtendimentoRef, atendimentoRecord);
