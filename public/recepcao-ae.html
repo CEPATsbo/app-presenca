@@ -19,33 +19,22 @@
         .btn-warning { background-color: #ffc107; color: #212529; }
         h1, h2, h3, h4 { color: #333; text-align: center; }
         fieldset { border: 1px solid var(--cor-borda); border-radius: 8px; padding: 20px; margin-bottom: 20px; }
-        fieldset:disabled { background-color: var(--fundo-desabilitado); opacity: 0.6; }
-        legend { font-weight: bold; font-size: 1.2em; color: #0056b3; padding: 0 10px; }
         .form-item { display: flex; flex-direction: column; }
         .form-item label { margin-bottom: 5px; font-weight: bold; color: #555; }
-        .form-item input, .form-item select, .form-item textarea { padding: 10px; border-radius: 6px; border: 1px solid #ccc; font-size: 1em; width: 100%; box-sizing: border-box; }
+        .form-item input { padding: 10px; border-radius: 6px; border: 1px solid #ccc; font-size: 1em; width: 100%; box-sizing: border-box; }
         .form-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; align-items: end; }
-        #search-results-container { position: relative; }
-        #search-results { list-style-type: none; padding: 0; margin: 0; position: absolute; background: white; border: 1px solid var(--cor-borda); border-top: none; width: 100%; max-height: 200px; overflow-y: auto; z-index: 10; border-radius: 0 0 6px 6px; }
-        #search-results li { padding: 10px; cursor: pointer; }
-        #search-results li:hover { background-color: #f0f0f0; }
-        .actions-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-top: 20px; }
         .hidden { display: none; }
-        .bloco-semanal { border: 1px solid var(--cor-borda); border-radius: 8px; padding: 20px; margin-bottom: 20px; background-color: #fdfdfd; }
-        .bloco-semanal h4 { margin-top: 0; }
-        .bloco-semanal.falta { background-color: #fff3cd; border-color: #ffeeba; }
-        .multiselect { position: relative; }
-        .select-box { border: 1px solid #ccc; border-radius: 6px; padding: 10px; cursor: pointer; }
-        .checkboxes { position: absolute; background: white; border: 1px solid var(--cor-borda); border-radius: 6px; z-index: 100; max-height: 150px; overflow-y: auto; padding: 10px; min-width: 200px; }
-        .checkboxes label { display: block; padding: 5px; }
-        .checkboxes label:hover { background-color: #f0f0f0; }
         #lista-ativos { list-style-type: none; padding: 0; display: flex; flex-wrap: wrap; gap: 10px; }
         #lista-ativos li { background-color: #6c757d; color: white; padding: 10px 15px; border-radius: 20px; cursor: pointer; transition: background-color 0.2s; font-size: 0.9em; }
         #lista-ativos li:hover { opacity: 0.8; }
         #lista-ativos li.status-presente { background-color: #28a745; }
         #lista-ativos li.status-ausente { background-color: #ffc107; color: #212529; }
+        .actions-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-top: 20px; }
         .actions-grid-freq { display: flex; gap: 15px; margin-top: 10px; }
-        .btn-historico { font-size: 1.5em; text-decoration: none; margin-left: 15px; cursor: pointer; }
+        #search-results-container { position: relative; }
+        #search-results { list-style-type: none; padding: 0; margin: 0; position: absolute; background: white; border: 1px solid var(--cor-borda); border-top: none; width: 100%; max-height: 200px; overflow-y: auto; z-index: 10; border-radius: 0 0 6px 6px; }
+        #search-results li { padding: 10px; cursor: pointer; }
+        #search-results li:hover { background-color: #f0f0f0; }
     </style>
 </head>
 <body>
@@ -53,8 +42,10 @@
     <div id="acesso-negado" class="container hidden"><h1>Acesso Negado</h1></div>
 
     <div id="main-content" class="container">
+        <h1>Recepção do Atendimento Espiritual</h1>
+
         <fieldset>
-            <legend>Tratamentos Ativos (Acesso Rápido)</legend>
+            <legend>Tratamentos Ativos (Controle de Frequência)</legend>
             <ul id="lista-ativos"><li>Carregando...</li></ul>
             <div id="painel-acoes-frequencia" class="hidden" style="margin-top: 20px; padding-top: 20px; border-top: 1px solid #eee;">
                 <h4>Registrar Frequência para: <span id="nome-frequencia"></span></h4>
@@ -64,21 +55,19 @@
                 </div>
             </div>
         </fieldset>
-        <hr style="width:100%; margin: 30px 0; border: 1px solid #eee;">
         
+        <hr style="width:100%; margin: 30px 0; border: 1px solid #eee;">
+
         <form id="ficha-atendimento" onsubmit="return false;">
-            <fieldset id="fs-dados-pessoais">
-                <legend style="display: flex; align-items: center;">
-                    Dados Pessoais (Busca ou Novo Cadastro)
-                    <a id="btn-ver-historico" class="btn-historico hidden" title="Ver histórico completo do assistido">📜</a>
-                </legend>
+            <fieldset>
+                <legend>Busca ou Novo Cadastro</legend>
                 <div class="form-grid">
                     <div class="form-item" style="grid-column: 1 / -1;"><label for="nome">NOME:</label><div id="search-results-container"><input type="text" id="nome" autocomplete="off" required><ul id="search-results"></ul></div></div>
                     <div class="form-item"><label for="telefone">TELEFONE:</label><input type="tel" id="telefone" required></div>
                     <div class="form-item"><label for="dn">DN:</label><input type="date" id="dn" required></div>
                 </div>
             </fieldset>
-            <div id="novo-atendimento-section" class="hidden"><fieldset id="fs-acoes-iniciais"><legend>Novo Atendimento</legend><div class="actions-grid"><button id="btn-registrar-avulso" type="button" class="btn btn-info">Registrar Passe Avulso</button><button id="btn-iniciar-tratamento" type="button" class="btn btn-success">Iniciar Assistência</button></div></fieldset></div>
+            <div id="novo-atendimento-section" class="hidden"><fieldset><legend>Novo Atendimento</legend><div class="actions-grid"><button id="btn-registrar-avulso" type="button" class="btn btn-info">Registrar Passe Avulso</button><button id="btn-iniciar-tratamento" type="button" class="btn btn-success">Iniciar Assistência</button></div></fieldset></div>
         </form>
 
         <button id="btn-limpar" class="btn btn-secondary" style="margin-top: 20px; width: 100%;">Limpar Busca</button>
@@ -142,7 +131,6 @@
                 nomeFrequencia: document.getElementById('nome-frequencia'),
                 btnMarcarPresenca: document.getElementById('btn-marcar-presenca'),
                 btnMarcarFaltaRapido: document.getElementById('btn-marcar-falta-rapido'),
-                btnVerHistorico: document.getElementById('btn-ver-historico'),
             };
             
             const resetarFormularioBusca = () => {
@@ -153,7 +141,6 @@
                 ui.dnInput.value = '';
                 ui.searchResults.innerHTML = '';
                 ui.novoAtendimentoSection.classList.add('hidden');
-                ui.btnVerHistorico.classList.add('hidden');
                 ui.nomeInput.disabled = false;
                 ui.nomeInput.focus();
             };
@@ -175,19 +162,6 @@
                 assistidoSelecionado = { id: docRef.id, ...novoAssistidoData };
                 await registrarLog({ acao: 'CADASTROU_ASSISTIDO_AE', detalhes: { assistidoId: docRef.id, nome }});
                 return docRef.id;
-            };
-            
-            const checarHistoricoEExibirBotao = async (assistidoId) => {
-                const qTratamentos = query(tratamentosRef, where("assistidoId", "==", assistidoId), limit(1));
-                const snapshot = await getDocs(qTratamentos);
-                if (!snapshot.empty) {
-                    ui.btnVerHistorico.classList.remove('hidden');
-                    ui.btnVerHistorico.onclick = () => {
-                        window.open(`/arquivo-geral-ae.html?id=${assistidoId}`, '_blank');
-                    };
-                } else {
-                    ui.btnVerHistorico.classList.add('hidden');
-                }
             };
             
             const carregarTratamentosAtivos = async () => {

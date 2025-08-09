@@ -777,7 +777,7 @@ exports.gerarCracha = onCall({ ...OPCOES_FUNCAO, memory: '1GiB' }, async (reques
         const crachaFinalBuffer = await sharp(templateBuffer)
             .composite([
                 { input: textoBuffer, top: 380, left: 0 },
-                { input: barcodePngBuffer, top: 520, left: 320 } // Posições ajustadas
+                { input: barcodePngBuffer, top: 510, left: 425 } // Posições ajustadas
             ])
             .png()
             .toBuffer();
