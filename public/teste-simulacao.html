@@ -7,6 +7,7 @@
     <style>
         body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background-color: #f4f6f9; margin: 0; padding: 20px; display: flex; flex-direction: column; align-items: center; }
         .container { width: 100%; max-width: 600px; background-color: white; padding: 30px; border-radius: 12px; box-shadow: 0 6px 24px rgba(0,0,0,0.1); }
+        .hidden { display: none; }
         h1 { color: #333; text-align: center; }
         .form-item { display: flex; flex-direction: column; margin-bottom: 20px; }
         .form-item label { margin-bottom: 8px; font-weight: bold; color: #555; }
@@ -17,7 +18,12 @@
     </style>
 </head>
 <body>
-    <div class="container">
+    <div id="acesso-negado" class="container hidden">
+        <h1>Acesso Negado</h1>
+        <p style="text-align:center;">Você precisa ser 'diretor' ou 'super-admin' para acessar esta página.</p>
+    </div>
+
+    <div id="main-content" class="container hidden">
         <h1>Máquina do Tempo (Simulação de Eventos)</h1>
         <p style="text-align: center; color: #666;">Use esta página para registrar presenças ou faltas em datas específicas, simulando a passagem do tempo para testes.</p>
 
@@ -47,6 +53,8 @@
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
         import { getFirestore, collection, doc, getDoc, query, where, getDocs, addDoc, writeBatch, Timestamp, increment, orderBy, limit } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
+        // ADICIONADO: Importar a função de proteção da página
+        import { protegerPagina } from '/auth.js';
 
         const firebaseConfig = {
             apiKey: "AIzaSyBV7RPjk3cFTqL-aIpflJcUojKg1ZXMLuU",
@@ -59,100 +67,108 @@
         initializeApp(firebaseConfig);
         const db = getFirestore();
 
-        const ui = {
-            assistidoIdInput: document.getElementById('assistido-id'),
-            acaoSelect: document.getElementById('acao'),
-            dataInput: document.getElementById('data-simulacao'),
-            btnSimular: document.getElementById('btn-simular'),
-            logDiv: document.getElementById('log'),
-        };
-
-        // Define a data de hoje no campo de data por padrão
-        ui.dataInput.value = new Date().toISOString().split("T")[0];
-
-        function log(message, isError = false) {
-            ui.logDiv.style.display = 'block';
-            ui.logDiv.style.backgroundColor = isError ? '#8d2430' : '#212529';
-            ui.logDiv.textContent = message;
-        }
-
-        ui.btnSimular.addEventListener('click', async () => {
-            ui.btnSimular.disabled = true;
-            ui.btnSimular.textContent = 'Processando...';
-            log('Iniciando simulação...');
-
-            const assistidoId = ui.assistidoIdInput.value.trim();
-            const acao = ui.acaoSelect.value;
-            const dataSimulada = ui.dataInput.value;
-
-            if (!assistidoId || !dataSimulada) {
-                log('Erro: Preencha o ID do Assistido e a Data da Simulação.', true);
-                ui.btnSimular.disabled = false;
-                ui.btnSimular.textContent = 'Simular Ação';
-                return;
-            }
-
-            try {
-                // 1. Encontrar o tratamento ATIVO para o assistido
-                const qTratamento = query(
-                    collection(db, 'tratamentos_ae'),
-                    where('assistidoId', '==', assistidoId),
-                    where('status', '==', 'ativo'),
-                    orderBy('dataInicio', 'desc'),
-                    limit(1)
-                );
-                const tratamentoSnapshot = await getDocs(qTratamento);
-
-                if (tratamentoSnapshot.empty) {
-                    throw new Error(`Nenhum tratamento ATIVO encontrado para o ID: ${assistidoId}`);
-                }
-                const tratamentoDoc = tratamentoSnapshot.docs[0];
-                const tratamento = { id: tratamentoDoc.id, ...tratamentoDoc.data() };
-
-                const dataTimestamp = Timestamp.fromDate(new Date(dataSimulada + 'T12:00:00')); // Adiciona meio-dia para evitar problemas de fuso
-
-                const batch = writeBatch(db);
-
-                if (acao === 'presenca') {
-                    // Simula uma presença completa
-                    const novoAtendimento = {
-                        assistidoId: assistidoId,
-                        tratamentoId: tratamento.id,
-                        tipo: 'tratamento_semanal',
-                        dataAtendimento: dataTimestamp, // USA A DATA SIMULADA
-                        passeRecomendado: tratamento.passe_ciclo_atual,
-                        entrevistador: "Simulação",
-                        notas: `Presença simulada em ${new Date(dataSimulada).toLocaleDateString()}`
-                    };
-                    batch.set(doc(collection(db, 'atendimentos_ae')), novoAtendimento);
-                    log(`Sucesso: Presença para o tratamento ${tratamento.id} simulada em ${dataSimulada}.`);
-
-                } else if (acao === 'falta') {
-                    // Simula uma falta
-                    const novoAtendimentoFalta = {
-                        assistidoId: assistidoId,
-                        tratamentoId: tratamento.id,
-                        tipo: 'falta',
-                        dataAtendimento: dataTimestamp, // USA A DATA SIMULADA
-                    };
-                    batch.set(doc(collection(db, 'atendimentos_ae')), novoAtendimentoFalta);
-                    
-                    // Incrementa as faltas no tratamento
-                    const tratamentoRef = doc(db, 'tratamentos_ae', tratamento.id);
-                    batch.update(tratamentoRef, { faltas_acumuladas: increment(1) });
-                    log(`Sucesso: Falta para o tratamento ${tratamento.id} simulada em ${dataSimulada}. Faltas acumuladas incrementadas.`);
-                }
-
-                await batch.commit();
-
-            } catch (error) {
-                console.error("Erro na simulação:", error);
-                log(`ERRO: ${error.message}`, true);
-            } finally {
-                ui.btnSimular.disabled = false;
-                ui.btnSimular.textContent = 'Simular Ação';
-            }
+        // ADICIONADO: "Portão de Segurança"
+        protegerPagina(['diretor', 'super-admin']).then(user => {
+            // Se o usuário for autorizado, mostra o conteúdo principal e inicia a página
+            document.getElementById('main-content').classList.remove('hidden');
+            inicializarPagina(user);
+        }).catch(err => {
+            // Se não for autorizado, mostra a mensagem de acesso negado
+            document.getElementById('acesso-negado').classList.remove('hidden');
         });
+
+        // ADICIONADO: Todo o código funcional agora fica dentro desta função
+        function inicializarPagina(user) {
+            const ui = {
+                assistidoIdInput: document.getElementById('assistido-id'),
+                acaoSelect: document.getElementById('acao'),
+                dataInput: document.getElementById('data-simulacao'),
+                btnSimular: document.getElementById('btn-simular'),
+                logDiv: document.getElementById('log'),
+            };
+
+            ui.dataInput.value = new Date().toISOString().split("T")[0];
+
+            function log(message, isError = false) {
+                ui.logDiv.style.display = 'block';
+                ui.logDiv.style.backgroundColor = isError ? '#8d2430' : '#212529';
+                ui.logDiv.textContent = message;
+            }
+
+            ui.btnSimular.addEventListener('click', async () => {
+                ui.btnSimular.disabled = true;
+                ui.btnSimular.textContent = 'Processando...';
+                log('Iniciando simulação...');
+
+                const assistidoId = ui.assistidoIdInput.value.trim();
+                const acao = ui.acaoSelect.value;
+                const dataSimulada = ui.dataInput.value;
+
+                if (!assistidoId || !dataSimulada) {
+                    log('Erro: Preencha o ID do Assistido e a Data da Simulação.', true);
+                    ui.btnSimular.disabled = false;
+                    ui.btnSimular.textContent = 'Simular Ação';
+                    return;
+                }
+
+                try {
+                    const qTratamento = query(
+                        collection(db, 'tratamentos_ae'),
+                        where('assistidoId', '==', assistidoId),
+                        where('status', '==', 'ativo'),
+                        orderBy('dataInicio', 'desc'),
+                        limit(1)
+                    );
+                    const tratamentoSnapshot = await getDocs(qTratamento);
+
+                    if (tratamentoSnapshot.empty) {
+                        throw new Error(`Nenhum tratamento ATIVO encontrado para o ID: ${assistidoId}`);
+                    }
+                    const tratamentoDoc = tratamentoSnapshot.docs[0];
+                    const tratamento = { id: tratamentoDoc.id, ...tratamentoDoc.data() };
+
+                    const dataTimestamp = Timestamp.fromDate(new Date(dataSimulada + 'T12:00:00'));
+
+                    const batch = writeBatch(db);
+
+                    if (acao === 'presenca') {
+                        const novoAtendimento = {
+                            assistidoId: assistidoId,
+                            tratamentoId: tratamento.id,
+                            tipo: 'tratamento_semanal',
+                            dataAtendimento: dataTimestamp,
+                            passeRecomendado: tratamento.passe_ciclo_atual,
+                            entrevistador: `Simulação por ${user.displayName}`,
+                            notas: `Presença simulada em ${new Date(dataSimulada).toLocaleDateString()}`
+                        };
+                        batch.set(doc(collection(db, 'atendimentos_ae')), novoAtendimento);
+                        log(`Sucesso: Presença para o tratamento ${tratamento.id} simulada em ${dataSimulada}.`);
+
+                    } else if (acao === 'falta') {
+                        const novoAtendimentoFalta = {
+                            assistidoId: assistidoId,
+                            tratamentoId: tratamento.id,
+                            tipo: 'falta',
+                            dataAtendimento: dataTimestamp,
+                        };
+                        batch.set(doc(collection(db, 'atendimentos_ae')), novoAtendimentoFalta);
+                        
+                        const tratamentoRef = doc(db, 'tratamentos_ae', tratamento.id);
+                        batch.update(tratamentoRef, { faltas_acumuladas: increment(1) });
+                        log(`Sucesso: Falta para o tratamento ${tratamento.id} simulada em ${dataSimulada}. Faltas acumuladas incrementadas.`);
+                    }
+
+                    await batch.commit();
+
+                } catch (error) {
+                    console.error("Erro na simulação:", error);
+                    log(`ERRO: ${error.message}`, true);
+                } finally {
+                    ui.btnSimular.disabled = false;
+                    ui.btnSimular.textContent = 'Simular Ação';
+                }
+            });
+        }
     </script>
 </body>
 </html>
