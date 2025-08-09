@@ -25,6 +25,9 @@
         .chamado-passe { border-left-color: #28a745; background-color: #f8f9fa; opacity: 0.8; }
         .chamado-passe h3 { text-decoration: line-through; }
         .hidden { display: none; }
+        .filtro-data { text-align: center; margin-bottom: 25px; background-color: #fff; padding: 15px; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.05); }
+        .filtro-data label { font-weight: bold; margin-right: 10px; }
+        .filtro-data input { padding: 8px; border: 1px solid #ccc; border-radius: 6px; font-size: 1em; }
     </style>
 </head>
 <body>
@@ -35,6 +38,12 @@
         <div id="main-content" class="container hidden">
             <h1>Painel de Encaminhamento</h1>
             <p style="text-align:center; margin-top:-10px; margin-bottom:20px;">Controle as chamadas para entrevista e para as salas de passe.</p>
+
+            <div class="filtro-data">
+                <label for="seletor-data">Visualizando Fila do Dia:</label>
+                <input type="date" id="seletor-data">
+            </div>
+
             <div id="cards-container" class="cards-container">
                 <p>Aguardando registros da recepção...</p>
             </div>
@@ -72,28 +81,57 @@
             const atendimentosRef = collection(db, 'atendimentos_ae');
             const painelEstadoRef = doc(db, 'painel_estado', 'atual');
             const cardsContainer = document.getElementById('cards-container');
+            const seletorData = document.getElementById('seletor-data');
 
             let atendimentosDoDia = [];
+            let unsubscribeFila; // Variável para controlar o listener em tempo real
 
-            const hojeInicio = new Date();
-            hojeInicio.setHours(0, 0, 0, 0);
+            // Define a data de hoje no seletor e inicia o monitoramento
+            seletorData.value = new Date().toISOString().split("T")[0];
+            monitorarFila(seletorData.value);
 
-            const qFila = query(filaRef, where("chegadaEm", ">=", Timestamp.fromDate(hojeInicio)), orderBy("chegadaEm", "asc"));
+            // Adiciona um listener para quando a data for alterada
+            seletorData.addEventListener('change', () => {
+                monitorarFila(seletorData.value);
+            });
 
-            onSnapshot(qFila, async (snapshot) => {
-                const promessas = snapshot.docs.map(docSnapshot => getContextoDoAtendimento(docSnapshot));
-                atendimentosDoDia = await Promise.all(promessas.filter(p => p !== null));
+            function monitorarFila(dataString) {
+                // Se já existe um monitoramento ativo, cancela ele antes de criar um novo
+                if (unsubscribeFila) {
+                    unsubscribeFila();
+                }
+                cardsContainer.innerHTML = `<p>Buscando fila para o dia ${new Date(dataString + 'T12:00:00').toLocaleDateString()}...</p>`;
+
+                const dataSelecionada = new Date(dataString + 'T12:00:00'); // Usar T12:00:00 para evitar problemas de fuso
+                const inicioDoDia = new Date(dataSelecionada.setHours(0, 0, 0, 0));
+                const fimDoDia = new Date(dataSelecionada.setHours(23, 59, 59, 999));
                 
+                const qFila = query(
+                    filaRef, 
+                    where("chegadaEm", ">=", Timestamp.fromDate(inicioDoDia)), 
+                    where("chegadaEm", "<=", Timestamp.fromDate(fimDoDia)), 
+                    orderBy("chegadaEm", "asc")
+                );
+
+                unsubscribeFila = onSnapshot(qFila, async (snapshot) => {
+                    const promessas = snapshot.docs.map(docSnapshot => getContextoDoAtendimento(docSnapshot));
+                    atendimentosDoDia = await Promise.all(promessas.filter(p => p !== null));
+                    
+                    renderizarCards();
+                });
+            }
+            
+            function renderizarCards() {
                 cardsContainer.innerHTML = '';
                 if (atendimentosDoDia.length === 0) {
-                    cardsContainer.innerHTML = '<p>Nenhuma pessoa na fila de atendimento.</p>';
+                    cardsContainer.innerHTML = '<p>Nenhuma pessoa na fila de atendimento para este dia.</p>';
                     return;
                 }
                 atendimentosDoDia.forEach(atendimento => {
                     if(atendimento) cardsContainer.appendChild(criarCard(atendimento));
                 });
-            });
-            
+            }
+
             async function getContextoDoAtendimento(filaDocSnapshot) {
                 const atendimento = { id: filaDocSnapshot.id, ...filaDocSnapshot.data() };
                 if (atendimento.tipoAtendimento === 'avulso') {
@@ -108,11 +146,10 @@
 
                 const qSemanas = query(atendimentosRef, where("tratamentoId", "==", atendimento.tratamentoId), where("tipo", "!=", "falta"));
                 const semanasSnapshot = await getDocs(qSemanas);
-                const semanaNum = semanasSnapshot.size + 1; // Contagem em base 1 (Semana 1, 2, 3...)
+                const semanaNum = semanasSnapshot.size + 1;
                 const passe = tratamento.passe_ciclo_atual;
                 let precisaEntrevista = false;
                 
-                // Regras de entrevista
                 if (passe === 'P3A' || passe === 'P3B' || [1, 4, 5].includes(semanaNum)) {
                     precisaEntrevista = true;
                 }
@@ -162,7 +199,6 @@
                     return 'Encaminhamento';
                 };
                 
-                // CORREÇÃO: Usar o passe do ciclo ou o recomendado para garantir que a sala seja encontrada.
                 const passeParaTV = chamadaAtual.passe_ciclo_atual || chamadaAtual.passeRecomendado;
                 const salaDestino = novoStatus === 'chamado_entrevista' ? 'SALA DE ENTREVISTA' : getSalaPorPasse(passeParaTV);
                 
@@ -171,7 +207,6 @@
                     .sort((a,b) => b.chegadaEm.toMillis() - a.chegadaEm.toMillis());
                     
                 const historico = chamadasAnteriores.slice(0, 3).map(a => {
-                    // CORREÇÃO: Lógica robusta também para o histórico.
                     const passeHist = a.passe_ciclo_atual || a.passeRecomendado;
                     return {
                         nome: a.nomeAssistido,
