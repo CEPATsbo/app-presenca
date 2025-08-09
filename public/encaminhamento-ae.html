@@ -132,19 +132,41 @@
 
             async function getContextoDoAtendimento(filaDocSnapshot) {
                 const atendimento = { id: filaDocSnapshot.id, ...filaDocSnapshot.data() };
+                
+                // --- INÍCIO DOS ESPIÕES DE DEPURAÇÃO ---
+                console.log(`--- Iniciando depuração para: ${atendimento.nomeAssistido} ---`);
+
                 if (atendimento.tipoAtendimento === 'avulso') {
                     return { ...atendimento, precisaEntrevista: false };
                 }
-                if (!atendimento.tratamentoId) return null;
+                if (!atendimento.tratamentoId) {
+                     console.log("ERRO DE DADOS: Atendimento na fila não possui tratamentoId.");
+                    return null;
+                }
 
                 const tratamentoDocRef = doc(db, 'tratamentos_ae', atendimento.tratamentoId);
                 const tratamentoDoc = await getDoc(tratamentoDocRef);
-                if (!tratamentoDoc.exists()) return null;
+                if (!tratamentoDoc.exists()) {
+                    console.log(`ERRO DE DADOS: Tratamento com ID ${atendimento.tratamentoId} não foi encontrado.`);
+                    return null;
+                }
                 const tratamento = tratamentoDoc.data();
+
+                // ESPIONANDO O ID DO TRATAMENTO USADO NA BUSCA
+                console.log(`Buscando atendimentos para o tratamentoId: ${atendimento.tratamentoId}`);
 
                 const qSemanas = query(atendimentosRef, where("tratamentoId", "==", atendimento.tratamentoId), where("tipo", "!=", "falta"));
                 const semanasSnapshot = await getDocs(qSemanas);
+                
+                // ESPIONANDO QUANTOS ATENDIMENTOS FORAM ENCONTRADOS
+                console.log(`Número de atendimentos passados encontrados: ${semanasSnapshot.size}`);
+
                 const semanaNum = semanasSnapshot.size + 1;
+
+                // ESPIONANDO O RESULTADO FINAL DO CÁLCULO DA SEMANA
+                console.log(`Cálculo final -> Semana atual é: ${semanaNum}`);
+                // --- FIM DOS ESPIÕES DE DEPURAÇÃO ---
+                
                 const passe = tratamento.passe_ciclo_atual;
                 let precisaEntrevista = false;
                 
@@ -162,7 +184,6 @@
                 
                 const passeChamado = status === 'chamado_passe';
                 
-                // LÓGICA DE BOTÕES CORRIGIDA
                 if (atendimento.precisaEntrevista) {
                     const entrevistaChamada = status === 'chamado_entrevista';
                     const entrevistaConcluida = status === 'entrevista_concluida';
@@ -177,7 +198,6 @@
                     buttonsHtml = `<div style="grid-column: 1 / -1;"><button class="btn btn-success btn-chamar-passe" data-id="${atendimento.id}" ${passeChamado ? 'disabled' : ''}>Chamar p/ Passe</button></div>`;
                 }
 
-                // LÓGICA DE ESTILO CORRIGIDA
                 if (status === 'chamado_entrevista') card.classList.add('chamado-entrevista');
                 if (status === 'entrevista_concluida') card.classList.add('entrevista-concluida');
                 if (status === 'chamado_passe') card.classList.add('chamado-passe');
@@ -258,7 +278,6 @@
                         const filaDocRef = doc(db, 'fila_atendimento_ae', id);
                         batch.update(filaDocRef, { status: 'chamado_passe' });
 
-                        // Se o atendimento não precisava de entrevista OU se a entrevista já foi concluída
                         if (!atendimentoChamado.precisaEntrevista || atendimentoChamado.status === 'entrevista_concluida') {
                             const atendimentoRecord = {
                                 assistidoId: atendimentoChamado.assistidoId,
