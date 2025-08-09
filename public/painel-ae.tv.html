@@ -35,16 +35,9 @@
 
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
-        import { getFirestore, collection, onSnapshot, query, where, orderBy, Timestamp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
+        import { getFirestore, doc, onSnapshot } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
 
-        const firebaseConfig = {
-            apiKey: "AIzaSyBV7RPjk3cFTqL-aIpflJcUojKg1ZXMLuU",
-            authDomain: "voluntarios-ativos---cepat.firebaseapp.com",
-            projectId: "voluntarios-ativos---cepat",
-            storageBucket: "voluntarios-ativos---cepat.firebasestorage.app",
-            messagingSenderId: "66122858261",
-            appId: "1:66122858261:web:7fa21f1805463b5c08331c"
-        };
+        const firebaseConfig = { /* ... seu config ... */ };
         initializeApp(firebaseConfig);
         const db = getFirestore();
 
@@ -52,65 +45,38 @@
         const salaAtualEl = document.getElementById('sala-atual');
         const historicoItems = [ document.getElementById('historico-1'), document.getElementById('historico-2'), document.getElementById('historico-3') ];
         const chamadaPrincipalEl = document.querySelector('.chamada-principal');
-
+        
+        let ultimoTimestamp = null;
         let somNotificacao = null;
         try {
             somNotificacao = new Audio('/notification.mp3');
             somNotificacao.onerror = () => { somNotificacao = null; };
-        } catch (e) { somNotificacao = null; }
+        } catch(e) { somNotificacao = null; }
 
-        const mapaDeSalas = {
-            'SALA 1': ['P1', 'P3A', 'P3B'],
-            'SALA 2': ['P2', 'P4A', 'P4B', 'CH']
-        };
+        function atualizarPainel(dados) {
+            const nome = dados.nome || 'Aguardando...';
+            const sala = dados.sala || '';
+            const historico = dados.historico || [];
 
-        function getSalaPorPasse(passe) {
-            if (!passe) return 'Encaminhamento';
-            for (const sala in mapaDeSalas) {
-                if (mapaDeSalas[sala].includes(passe.toUpperCase())) { return sala; }
+            // Dispara a animação e o som apenas se for uma nova chamada
+            if (dados.timestamp && dados.timestamp !== ultimoTimestamp) {
+                if (somNotificacao) somNotificacao.play().catch(()=>{});
+                chamadaPrincipalEl.classList.remove('fade-in');
+                void chamadaPrincipalEl.offsetWidth;
+                chamadaPrincipalEl.classList.add('fade-in');
+                ultimoTimestamp = dados.timestamp;
             }
-            return 'Encaminhamento';
-        }
 
-        function getSalaDestino(chamada) {
-            if (chamada.status === 'chamado_entrevista') return 'SALA DE ENTREVISTA';
-            if (chamada.status === 'chamado_passe') return getSalaPorPasse(chamada.passeRecomendado);
-            return '';
-        }
-
-        function atualizarPainel(chamadas) {
-            const chamadaAtual = chamadas.length > 0 ? chamadas[chamadas.length - 1] : null;
-            const historico = chamadas.slice(0, -1).reverse();
-
-            if (chamadaAtual) {
-                const nomeCompleto = chamadaAtual.nomeAssistido || '';
-                const salaDestino = getSalaDestino(chamadaAtual) || '';
-                const idChamadaAtual = (chamadaAtual.chegadaEm?.seconds || '') + (chamadaAtual.status || '');
-                const idChamadaAntiga = nomeAtualEl.dataset.idChamada || '';
-
-                if (idChamadaAtual !== idChamadaAntiga) {
-                    if (somNotificacao) somNotificacao.play().catch(e => {});
-                    chamadaPrincipalEl.classList.remove('fade-in');
-                    void chamadaPrincipalEl.offsetWidth; 
-                    chamadaPrincipalEl.classList.add('fade-in');
-                    nomeAtualEl.dataset.idChamada = idChamadaAtual;
-                }
-                nomeAtualEl.textContent = nomeCompleto;
-                salaAtualEl.textContent = salaDestino;
-
-            } else {
-                nomeAtualEl.textContent = 'Aguardando...';
-                salaAtualEl.textContent = '';
-                nomeAtualEl.dataset.idChamada = '';
-            }
+            nomeAtualEl.textContent = nome;
+            salaAtualEl.textContent = sala;
 
             historicoItems.forEach((item, index) => {
                 const chamadaHist = historico[index];
                 const nomeEl = item.querySelector('.nome');
                 const salaEl = item.querySelector('.sala');
                 if (chamadaHist) {
-                    nomeEl.textContent = chamadaHist.nomeAssistido || '';
-                    salaEl.textContent = getSalaDestino(chamadaHist) || '';
+                    nomeEl.textContent = chamadaHist.nome || '';
+                    salaEl.textContent = chamadaHist.sala || '';
                 } else {
                     nomeEl.textContent = '';
                     salaEl.textContent = '';
@@ -118,25 +84,15 @@
             });
         }
 
-        function escutarChamadas() {
-            const hoje = new Date();
-            hoje.setHours(0, 0, 0, 0);
-            const filaRef = collection(db, 'fila_atendimento_ae');
-            const q = query(filaRef, where("chegadaEm", ">=", Timestamp.fromDate(hoje)), orderBy("chegadaEm"));
-
-            onSnapshot(q, (snapshot) => {
-                const chamadasValidas = snapshot.docs
-                    .map(doc => doc.data())
-                    .filter(data => data.status && (data.status === 'chamado_entrevista' || data.status === 'chamado_passe'));
-                
-                const ultimasChamadas = chamadasValidas.slice(-4);
-                atualizarPainel(ultimasChamadas);
-            }, (error) => {
-                console.error("Erro ao escutar o painel:", error);
-                nomeAtualEl.textContent = 'Erro de Conexão';
-            });
-        }
-
+        const painelEstadoRef = doc(db, 'painel_estado', 'atual');
+        onSnapshot(painelEstadoRef, (doc) => {
+            if (doc.exists()) {
+                atualizarPainel(doc.data());
+            } else {
+                atualizarPainel({}); // Limpa o painel se o documento for apagado
+            }
+        });
+        
         function atualizarRelogio() {
             const relogioEl = document.getElementById('relogio');
             if(relogioEl){
@@ -146,16 +102,15 @@
                 relogioEl.textContent = `${horas}:${minutos}`;
             }
         }
-
+        
         document.body.addEventListener('click', () => {
             if(somNotificacao) {
-                somNotificacao.play().catch(e => {});
+                somNotificacao.play().catch(()=>{});
                 somNotificacao.pause();
                 somNotificacao.currentTime = 0;
             }
         }, { once: true });
 
-        escutarChamadas();
         setInterval(atualizarRelogio, 1000);
         atualizarRelogio();
     </script>

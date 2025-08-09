@@ -43,7 +43,7 @@
 
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
-        import { getFirestore, collection, doc, getDoc, onSnapshot, updateDoc, query, where, orderBy, Timestamp, getDocs } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
+        import { getFirestore, collection, doc, getDoc, onSnapshot, updateDoc, query, where, orderBy, Timestamp, getDocs, setDoc } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
         import { protegerPagina } from '/auth.js';
 
         const firebaseConfig = {
@@ -70,7 +70,10 @@
             const filaRef = collection(db, 'fila_atendimento_ae');
             const tratamentosRef = collection(db, 'tratamentos_ae');
             const atendimentosRef = collection(db, 'atendimentos_ae');
+            const painelEstadoRef = doc(db, 'painel_estado', 'atual'); // Referência ao novo "quadro de avisos"
             const cardsContainer = document.getElementById('cards-container');
+
+            let atendimentosDoDia = []; // Armazena todos os atendimentos para construir o histórico
 
             const hojeInicio = new Date();
             hojeInicio.setHours(0, 0, 0, 0);
@@ -78,14 +81,15 @@
             const qFila = query(filaRef, where("chegadaEm", ">=", Timestamp.fromDate(hojeInicio)), orderBy("chegadaEm", "asc"));
 
             onSnapshot(qFila, async (snapshot) => {
+                const promessas = snapshot.docs.map(docSnapshot => getContextoDoAtendimento(docSnapshot));
+                atendimentosDoDia = await Promise.all(promessas.filter(p => p !== null));
+                
                 cardsContainer.innerHTML = '';
-                if (snapshot.empty) {
+                if (atendimentosDoDia.length === 0) {
                     cardsContainer.innerHTML = '<p>Nenhuma pessoa na fila de atendimento.</p>';
                     return;
                 }
-                const promessas = snapshot.docs.map(docSnapshot => getContextoDoAtendimento(docSnapshot));
-                const atendimentosComContexto = await Promise.all(promessas);
-                atendimentosComContexto.forEach(atendimento => {
+                atendimentosDoDia.forEach(atendimento => {
                     if(atendimento) cardsContainer.appendChild(criarCard(atendimento));
                 });
             });
@@ -152,6 +156,34 @@
                 return card;
             }
 
+            async function atualizarPainelTV(chamadaAtual, novoStatus) {
+                const mapaDeSalas = { 'SALA 1': ['P1', 'P3A', 'P3B'], 'SALA 2': ['P2', 'P4A', 'P4B', 'CH'] };
+                const getSalaPorPasse = (passe) => {
+                    if (!passe) return 'Encaminhamento';
+                    for (const sala in mapaDeSalas) {
+                        if (mapaDeSalas[sala].includes(passe.toUpperCase())) return sala;
+                    }
+                    return 'Encaminhamento';
+                };
+                
+                const salaDestino = novoStatus === 'chamado_entrevista' ? 'SALA DE ENTREVISTA' : getSalaPorPasse(chamadaAtual.passeRecomendado);
+                
+                // Constrói o histórico a partir dos dados já carregados
+                const chamadasAnteriores = atendimentosDoDia.filter(a => a.id !== chamadaAtual.id && (a.status === 'chamado_entrevista' || a.status === 'chamado_passe'));
+                const historico = chamadasAnteriores.slice(-3).map(a => ({
+                    nome: a.nomeAssistido,
+                    sala: a.status === 'chamado_entrevista' ? 'SALA DE ENTREVISTA' : getSalaPorPasse(a.passeRecomendado)
+                }));
+
+                // Escreve a "ordem" completa para a TV
+                await setDoc(painelEstadoRef, {
+                    nome: chamadaAtual.nomeAssistido,
+                    sala: salaDestino,
+                    historico: historico,
+                    timestamp: serverTimestamp() // Para garantir que é a chamada mais recente
+                });
+            }
+
             cardsContainer.addEventListener('click', async (e) => {
                 const target = e.target;
                 const id = target.dataset.id;
@@ -163,7 +195,11 @@
 
                 if (novoStatus) {
                     target.disabled = true;
-                    await updateDoc(doc(db, 'fila_atendimento_ae', id), { status: novoStatus });
+                    const atendimentoChamado = atendimentosDoDia.find(a => a.id === id);
+                    if (atendimentoChamado) {
+                        await atualizarPainelTV(atendimentoChamado, novoStatus); // Envia a ordem para a TV
+                        await updateDoc(doc(db, 'fila_atendimento_ae', id), { status: novoStatus }); // Atualiza o status na fila
+                    }
                 }
             });
         }
