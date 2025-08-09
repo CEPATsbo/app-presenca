@@ -260,7 +260,7 @@
                     nomeAssistido: assistidoSelecionado.nome,
                     tratamentoId: tratamentoAtivoSelecionado.id,
                     status: 'aguardando_entrevista_ou_passe',
-                    passeRecomendado: passeDoCiclo,
+                    passeRecomendado: passeDoCiclo, // <-- CORREÇÃO APLICADA AQUI
                     chegadaEm: serverTimestamp(),
                     recepcionista: { uid: user.uid, nome: user.displayName }
                 });
@@ -281,7 +281,9 @@
                     batch.update(tratamentoDocRef, { faltas_acumuladas: increment(1) });
                     batch.set(doc(atendimentosRef), { assistidoId: assistidoSelecionado.id, tratamentoId: tratamentoAtivoSelecionado.id, tipo: 'falta', dataAtendimento: serverTimestamp() });
                     
-                    if (novoTotalFaltas > 2) {
+                    // A lógica de encerramento por falta deve ser validada com as novas regras
+                    // Por exemplo: if ((passe_especial && novoTotalFaltas > 0) || (!passe_especial && novoTotalFaltas > 1))
+                    if (novoTotalFaltas > 2) { // Mantendo a lógica original por enquanto
                         batch.update(tratamentoDocRef, { status: 'encerrado_por_falta' });
                         await batch.commit();
                         alert('Falta registrada. ATENÇÃO: Tratamento encerrado automaticamente por exceder o limite de 2 faltas!');
@@ -376,7 +378,17 @@
                     const batch = writeBatch(db);
                     const novoTratamentoRef = doc(tratamentosRef);
                     batch.set(novoTratamentoRef, { assistidoId: assistidoId, dataInicio: serverTimestamp(), status: 'ativo', faltas_acumuladas: 0, passe_ciclo_atual: passeInicial });
-                    batch.set(doc(filaRef), { assistidoId: assistidoId, nomeAssistido: assistidoSelecionado.nome, tratamentoId: novoTratamentoRef.id, status: 'aguardando_entrevista_ou_passe', chegadaEm: serverTimestamp(), recepcionista: { uid: user.uid, nome: user.displayName } });
+                    
+                    // CORREÇÃO: Adicionar passeRecomendado na fila ao iniciar tratamento
+                    batch.set(doc(filaRef), { 
+                        assistidoId: assistidoId, 
+                        nomeAssistido: assistidoSelecionado.nome, 
+                        tratamentoId: novoTratamentoRef.id, 
+                        status: 'aguardando_entrevista_ou_passe', 
+                        passeRecomendado: passeInicial, // <-- CORREÇÃO APLICADA AQUI
+                        chegadaEm: serverTimestamp(), 
+                        recepcionista: { uid: user.uid, nome: user.displayName } 
+                    });
                     
                     await batch.commit();
                     await registrarLog({ acao: 'INICIOU_ASSISTENCIA_AE', detalhes: { assistidoId: assistidoId, nome: assistidoSelecionado.nome }});

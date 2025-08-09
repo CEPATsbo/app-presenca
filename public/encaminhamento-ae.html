@@ -47,13 +47,13 @@
         import { protegerPagina } from '/auth.js';
 
         const firebaseConfig = {
-        apiKey: "AIzaSyBV7RPjk3cFTqL-aIpflJcUojKg1ZXMLuU",
-        authDomain: "voluntarios-ativos---cepat.firebaseapp.com",
-        projectId: "voluntarios-ativos---cepat",
-        storageBucket: "voluntarios-ativos---cepat.firebasestorage.app",
-        messagingSenderId: "66122858261",
-        appId: "1:66122858261:web:7fa21f1805463b5c08331c"
-    };
+            apiKey: "AIzaSyBV7RPjk3cFTqL-aIpflJcUojKg1ZXMLuU",
+            authDomain: "voluntarios-ativos---cepat.firebaseapp.com",
+            projectId: "voluntarios-ativos---cepat",
+            storageBucket: "voluntarios-ativos---cepat.firebasestorage.app",
+            messagingSenderId: "66122858261",
+            appId: "1:66122858261:web:7fa21f1805463b5c08331c"
+        };
         initializeApp(firebaseConfig);
 
         protegerPagina(['entrevistador', 'diretor', 'super-admin']).then(user => {
@@ -108,13 +108,15 @@
 
                 const qSemanas = query(atendimentosRef, where("tratamentoId", "==", atendimento.tratamentoId), where("tipo", "!=", "falta"));
                 const semanasSnapshot = await getDocs(qSemanas);
-                const semanaNum = semanasSnapshot.size + 1;
+                const semanaNum = semanasSnapshot.size + 1; // Contagem em base 1 (Semana 1, 2, 3...)
                 const passe = tratamento.passe_ciclo_atual;
                 let precisaEntrevista = false;
+                
+                // Regras de entrevista
                 if (passe === 'P3A' || passe === 'P3B' || [1, 4, 5].includes(semanaNum)) {
                     precisaEntrevista = true;
                 }
-                return { ...atendimento, precisaEntrevista, passe_ciclo_atual: passe };
+                return { ...atendimento, precisaEntrevista, passe_ciclo_atual: passe, semana_atual: semanaNum };
             }
 
             function criarCard(atendimento) {
@@ -160,16 +162,22 @@
                     return 'Encaminhamento';
                 };
                 
-                const salaDestino = novoStatus === 'chamado_entrevista' ? 'SALA DE ENTREVISTA' : getSalaPorPasse(chamadaAtual.passeRecomendado);
+                // CORREÇÃO: Usar o passe do ciclo ou o recomendado para garantir que a sala seja encontrada.
+                const passeParaTV = chamadaAtual.passe_ciclo_atual || chamadaAtual.passeRecomendado;
+                const salaDestino = novoStatus === 'chamado_entrevista' ? 'SALA DE ENTREVISTA' : getSalaPorPasse(passeParaTV);
                 
                 const chamadasAnteriores = atendimentosDoDia
                     .filter(a => a.id !== chamadaAtual.id && (a.status === 'chamado_entrevista' || a.status === 'chamado_passe'))
                     .sort((a,b) => b.chegadaEm.toMillis() - a.chegadaEm.toMillis());
                     
-                const historico = chamadasAnteriores.slice(0, 3).map(a => ({
-                    nome: a.nomeAssistido,
-                    sala: a.status === 'chamado_entrevista' ? 'SALA DE ENTREVISTA' : getSalaPorPasse(a.passeRecomendado)
-                }));
+                const historico = chamadasAnteriores.slice(0, 3).map(a => {
+                    // CORREÇÃO: Lógica robusta também para o histórico.
+                    const passeHist = a.passe_ciclo_atual || a.passeRecomendado;
+                    return {
+                        nome: a.nomeAssistido,
+                        sala: a.status === 'chamado_entrevista' ? 'SALA DE ENTREVISTA' : getSalaPorPasse(passeHist)
+                    };
+                });
 
                 await setDoc(painelEstadoRef, {
                     nome: chamadaAtual.nomeAssistido,
