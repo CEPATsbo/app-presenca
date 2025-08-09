@@ -103,25 +103,38 @@
             const qFila = query(filaRef, where("chegadaEm", ">=", Timestamp.fromDate(hojeInicio)), where("status", "==", "chamado_entrevista"), orderBy("chegadaEm", "asc"));
 
             onSnapshot(qFila, (snapshot) => {
+                const selecionadoAtual = document.querySelector('#lista-fila li.selecionado')?.dataset.atendimentoId;
+                
                 ui.listaFila.innerHTML = '';
                 if (snapshot.empty) {
                     ui.listaFila.innerHTML = '<li>Ninguém na fila.</li>';
                     ui.formularioContainer.innerHTML = '<p>Selecione um assistido à esquerda.</p>';
                     return;
                 }
+
+                let aindaNaLista = false;
                 snapshot.forEach(doc => {
                     const atendimento = { id: doc.id, ...doc.data() };
+                    if (atendimento.id === selecionadoAtual) {
+                        aindaNaLista = true;
+                    }
                     const li = document.createElement('li');
                     li.textContent = atendimento.nomeAssistido;
                     li.dataset.atendimentoId = atendimento.id;
                     li.addEventListener('click', () => carregarFormulario(atendimento));
                     ui.listaFila.appendChild(li);
                 });
+
+                if (selecionadoAtual && !aindaNaLista) {
+                    ui.formularioContainer.innerHTML = '<p>Atendimento concluído. Selecione um novo assistido à esquerda.</p>';
+                } else if (selecionadoAtual) {
+                    document.querySelector(`li[data-atendimento-id="${selecionadoAtual}"]`)?.classList.add('selecionado');
+                }
             });
 
             async function carregarFormulario(atendimento) {
                 document.querySelectorAll('#lista-fila li').forEach(el => el.classList.remove('selecionado'));
-                document.querySelector(`li[data-atendimento-id="${atendimento.id}"]`).classList.add('selecionado');
+                document.querySelector(`li[data-atendimento-id="${atendimento.id}"]`)?.classList.add('selecionado');
                 ui.formularioContainer.innerHTML = '<p>Carregando dados do tratamento...</p>';
 
                 if (!atendimento.tratamentoId) {
@@ -139,25 +152,21 @@
                 const qSemanas = query(atendimentosRef, where("tratamentoId", "==", tratamento.id), where("tipo", "!=", "falta"));
                 const semanasSnapshot = await getDocs(qSemanas);
                 
-                // CORREÇÃO: Calcular semana na base 1 (1, 2, 3, 4, 5)
                 const semanaNum = semanasSnapshot.size + 1;
-
                 const passe = tratamento.passe_ciclo_atual;
                 
                 let formHtml = '';
-                // CORREÇÃO: Lógica de exibição do formulário baseada na semana correta.
-                if (semanaNum === 1) { // 1ª Semana
+                if (semanaNum === 1) { 
                     formHtml = criarFormularioPrimeiraVez(tratamento);
-                } else if (semanaNum === 5) { // 5ª Semana (Reavaliação)
+                } else if (semanaNum === 5) { // Dia da Reavaliação
                     formHtml = criarFormularioSemanal(semanaNum, passe, true, tratamento);
                 } else { // Semanas 2, 3, 4
                     formHtml = criarFormularioSemanal(semanaNum, passe, false, tratamento);
                 }
                 ui.formularioContainer.innerHTML = formHtml;
                 
-                // Adiciona os listeners aos botões depois de criar o HTML
-                document.getElementById('btn-salvar-entrevista')?.addEventListener('click', () => salvarEntrevista(atendimento, tratamento, semanaNum));
-                document.getElementById('btn-dar-alta')?.addEventListener('click', () => darAlta(atendimento, tratamento));
+                document.getElementById('btn-salvar-entrevista')?.addEventListener('click', () => salvarEntrevista(atendimento, tratamento, semanaNum, user));
+                document.getElementById('btn-dar-alta')?.addEventListener('click', () => darAlta(atendimento, tratamento, user));
             }
 
             const gerarOpcoesPasse = (selecionado = '') => {
@@ -168,13 +177,12 @@
             };
             
             function criarFormularioPrimeiraVez(tratamento) {
-                const entrevistadorPadrao = tratamento.primeiraEntrevista?.entrevistador || user.displayName || '';
                 return `
                     <fieldset>
                         <legend>ENTREVISTA DE 1ª VEZ OU DE REINICIO</legend>
                         <div class="form-grid">
                             <div class="form-item"><label>DATA:</label><input type="text" value="${new Date().toLocaleDateString('pt-BR')}" disabled></div>
-                            <div class="form-item"><label>ENTREVISTADOR:</label><input type="text" id="entrevistador-nome" value="${entrevistadorPadrao}" required></div>
+                            <div class="form-item"><label>ENTREVISTADOR:</label><input type="text" id="entrevistador-nome" value="${user.displayName || ''}" required></div>
                         </div>
                         <div class="form-item" style="margin-top: 15px;">
                             <label for="entrevista-notas">Descrição da Entrevista:</label>
@@ -198,7 +206,7 @@
                             <div id="retorno-encaminhamentos-opcoes" class="checkboxes hidden">
                                 <label><input type="checkbox" value="ENL"/> ENL</label><label><input type="checkbox" value="Leituras"/> Leituras</label><label><input type="checkbox" value="EAE"/> EAE</label><label><input type="checkbox" value="Voluntariado"/> Voluntariado</label><label><input type="checkbox" value="Médico"/> Médico</label><label><input type="checkbox" value="Alimento"/> Alimento</label><label><input type="checkbox" value="Natureza"/> Natureza</label><label><input type="checkbox" value="Mocidade"/> Mocidade</label><label><input type="checkbox" value="Evangelização"/> Evangelização</label>
                             </div></div></div>
-                        <div class="form-grid" style="margin-top:15px;"><div class="form-item"><label for="colegiado-data">Data:</label><input type="date" id="colegiado-data"></div><div class="form-item"><label for="colegiado-resp">Responsável:</label><input type="text" id="colegiado-resp"></div></div>
+                        <div class="form-grid" style="margin-top:15px;"><div class="form-item"><label for="colegiado-data">Data:</label><input type="date" id="colegiado-data"></div><div class="form-item"><label for="colegiado-resp">Responsável:</label><input type="text" id="colegiado-resp" value="${user.displayName || ''}"></div></div>
                         <button id="btn-dar-alta" type="button" class="btn btn-danger" style="width: 100%; margin-top: 10px;">Dar Alta</button>`;
                 }
                 return `<fieldset><legend>Registro da ${semanaNum}ª Semana</legend>
@@ -211,77 +219,129 @@
                 </fieldset>`;
             }
             
-            async function salvarEntrevista(atendimento, tratamento, semanaNum) {
+            async function salvarEntrevista(atendimento, tratamento, semanaNum, user) {
                 const btn = document.getElementById('btn-salvar-entrevista');
                 btn.disabled = true;
+                btn.textContent = 'Salvando...';
+
                 const entrevistador = document.getElementById('entrevistador-nome').value;
                 const notas = document.getElementById('entrevista-notas').value;
-                if (!entrevistador) { alert("O nome do entrevistador é obrigatório."); btn.disabled = false; return; }
+                if (!entrevistador) { 
+                    alert("O nome do entrevistador é obrigatório.");
+                    btn.disabled = false;
+                    btn.textContent = 'Salvar Atendimento da Semana';
+                    return; 
+                }
 
                 const batch = writeBatch(db);
-                const tratamentoDocRef = doc(db, 'tratamentos_ae', tratamento.id);
+                const passePara = document.getElementById('colegiado-para')?.value;
 
-                // CORREÇÃO: Lógica de salvamento baseada na semana correta (1 a 5)
-                if (semanaNum === 1) { // Salvando a 1ª Semana
-                    batch.update(tratamentoDocRef, { "primeiraEntrevista": { data: Timestamp.now(), entrevistador, notas } });
-                    batch.set(doc(atendimentosRef), {
-                        assistidoId: tratamento.assistidoId, tratamentoId: tratamento.id,
-                        tipo: 'tratamento_semanal', dataAtendimento: serverTimestamp(),
-                        entrevistador: entrevistador, passeRecomendado: tratamento.passe_ciclo_atual, notas: notas, semana: semanaNum
-                    });
-                } else { // Salvando semanas 2, 3, 4 e 5
-                    const passePara = document.getElementById('colegiado-para')?.value;
-                    batch.set(doc(atendimentosRef), {
-                        assistidoId: tratamento.assistidoId, tratamentoId: tratamento.id, tipo: 'tratamento_semanal', dataAtendimento: serverTimestamp(),
-                        entrevistador, passeRecomendado: document.getElementById('retorno-passe').value,
-                        horarioInicio: document.getElementById('retorno-inicio').value, horarioFim: document.getElementById('retorno-fim').value,
-                        evolucao: document.querySelector('input[name="evolucao"]:checked').value,
-                        passeDe: document.getElementById('colegiado-de')?.value || null, passePara: passePara || null,
-                        encaminhamentos: Array.from(document.querySelectorAll('#retorno-encaminhamentos-opcoes input:checked')).map(cb => cb.value),
-                        notas, semana: semanaNum
-                    });
+                // Cenário Crítico: É a reavaliação (5ª visita) e um novo passe foi escolhido.
+                if (semanaNum === 5 && passePara) {
+                    // *** A 5ª SEMANA VIRA A 1ª DO NOVO CICLO ***
+
+                    // 1. Finaliza o tratamento ANTIGO
+                    const tratamentoAntigoDocRef = doc(db, 'tratamentos_ae', tratamento.id);
+                    batch.update(tratamentoAntigoDocRef, { status: 'concluido_por_reavaliacao', dataFim: serverTimestamp() });
                     
-                    if (semanaNum === 5 && passePara) { // Reavaliação e continuação na 5ª semana
-                        batch.update(tratamentoDocRef, { status: 'concluido', dataFim: serverTimestamp() });
-                        const novoTratamentoRef = doc(tratamentosRef);
-                        batch.set(novoTratamentoRef, {
-                            assistidoId: tratamento.assistidoId, dataInicio: serverTimestamp(), status: 'ativo',
-                            faltas_acumuladas: 0, passe_ciclo_atual: passePara
-                        });
+                    // 2. Cria o NOVO tratamento
+                    const novoTratamentoRef = doc(tratamentosRef);
+                    batch.set(novoTratamentoRef, {
+                        assistidoId: tratamento.assistidoId,
+                        dataInicio: serverTimestamp(),
+                        status: 'ativo',
+                        faltas_acumuladas: 0,
+                        passe_ciclo_atual: passePara
+                    });
+
+                    // 3. Cria o registro de atendimento de HOJE e o vincula ao NOVO tratamento
+                    const dadosAtendimentoHoje = {
+                        assistidoId: tratamento.assistidoId,
+                        tratamentoId: novoTratamentoRef.id, // <-- PONTO CRUCIAL: Vinculado ao NOVO ID
+                        tipo: 'tratamento_semanal',
+                        dataAtendimento: serverTimestamp(),
+                        semana: 1, // <-- PONTO CRUCIAL: Este é o atendimento da Semana 1
+                        entrevistador,
+                        passeRecomendado: passePara,
+                        horarioInicio: document.getElementById('retorno-inicio').value,
+                        horarioFim: document.getElementById('retorno-fim').value,
+                        evolucao: document.querySelector('input[name="evolucao"]:checked').value,
+                        passeDe: tratamento.passe_ciclo_atual, 
+                        passePara: passePara,
+                        encaminhamentos: Array.from(document.querySelectorAll('#retorno-encaminhamentos-opcoes input:checked')).map(cb => cb.value),
+                        notas,
+                    };
+                    batch.set(doc(atendimentosRef), dadosAtendimentoHoje);
+
+                } else {
+                    // Cenário Normal: Atendimento das semanas 1, 2, 3, 4
+                    const dadosAtendimento = {
+                        assistidoId: tratamento.assistidoId,
+                        tratamentoId: tratamento.id, // Vinculado ao tratamento atual
+                        tipo: 'tratamento_semanal',
+                        dataAtendimento: serverTimestamp(),
+                        semana: semanaNum,
+                        entrevistador,
+                        passeRecomendado: tratamento.passe_ciclo_atual,
+                        notas,
+                    };
+
+                    // Se não for a primeira semana, adiciona os outros campos
+                    if (semanaNum > 1) {
+                        dadosAtendimento.horarioInicio = document.getElementById('retorno-inicio').value;
+                        dadosAtendimento.horarioFim = document.getElementById('retorno-fim').value;
+                        dadosAtendimento.evolucao = document.querySelector('input[name="evolucao"]:checked').value;
                     }
+                    batch.set(doc(atendimentosRef), dadosAtendimento);
                 }
                 
+                // 4. Atualiza o status na fila para remover a pessoa da lista de entrevistas
                 const filaDocRef = doc(db, 'fila_atendimento_ae', atendimento.id);
-                // O status 'entrevista_concluida' pode precisar ser reavaliado. Talvez deva ir direto para 'chamado_passe' no front-end.
-                // Por hora, mantemos a lógica de apenas concluir a entrevista.
                 batch.update(filaDocRef, { status: 'entrevista_concluida' });
 
                 try {
                     await batch.commit();
                     alert('Atendimento registrado com sucesso!');
-                    ui.formularioContainer.innerHTML = '<p>Selecione um assistido à esquerda.</p>';
                 } catch(error) {
                     console.error("Erro ao salvar entrevista: ", error);
                     alert("Falha ao salvar. Tente novamente.");
                 } finally {
                     btn.disabled = false;
+                    btn.textContent = 'Salvar Atendimento da Semana';
                 }
             }
             
-            async function darAlta(atendimento, tratamento) {
+            async function darAlta(atendimento, tratamento, user) {
                 const btn = document.getElementById('btn-dar-alta');
                 btn.disabled = true;
                 if (confirm(`Tem certeza que deseja dar alta para este assistido?`)) {
+                    
+                    const batch = writeBatch(db);
+
+                    // Marca o tratamento como concluído com alta
                     const tratamentoDocRef = doc(db, 'tratamentos_ae', tratamento.id);
-                    await updateDoc(tratamentoDocRef, { status: 'concluido_com_alta', dataFim: serverTimestamp() });
+                    batch.update(tratamentoDocRef, { status: 'concluido_com_alta', dataFim: serverTimestamp() });
                     
+                    // Registra este último atendimento de alta
+                    batch.set(doc(atendimentosRef), {
+                        assistidoId: tratamento.assistidoId,
+                        tratamentoId: tratamento.id,
+                        tipo: 'alta',
+                        dataAtendimento: serverTimestamp(),
+                        semana: 5, // Registra como sendo da 5a semana
+                        entrevistador: document.getElementById('colegiado-resp')?.value || user.displayName,
+                        notas: "Atendimento de reavaliação finalizado com alta."
+                    });
+                    
+                    // Limpa da fila de hoje
                     const filaDocRef = doc(db, 'fila_atendimento_ae', atendimento.id);
-                    await updateDoc(filaDocRef, { status: 'entrevista_concluida' });
+                    batch.update(filaDocRef, { status: 'entrevista_concluida' });
                     
+                    await batch.commit();
                     alert('Alta registrada com sucesso!');
-                    ui.formularioContainer.innerHTML = '<p>Selecione um assistido à esquerda.</p>';
+                } else {
+                    btn.disabled = false;
                 }
-                btn.disabled = false;
             }
         }
     </script>
