@@ -86,7 +86,7 @@
             }
 
             async function carregarFormularioParaEdicao(atendimentoId) {
-                 const atendimentoDocRef = doc(db, 'atendimentos_ae', atendimentoId);
+                const atendimentoDocRef = doc(db, 'atendimentos_ae', atendimentoId);
                 const atendimentoDoc = await getDoc(atendimentoDocRef);
 
                 if (!atendimentoDoc.exists()) {
@@ -157,9 +157,47 @@
                     }
                 }
             }
+            
+            const gerarOpcoesPasse = (selecionado = '') => {
+                const passes = ['P1', 'P2', 'P3A', 'P3B', 'P4A', 'P4B', 'CH'];
+                let html = '<option value="">Selecione...</option>';
+                passes.forEach(p => { html += `<option value="${p}" ${p === selecionado ? 'selected' : ''}>${p}</option>`; });
+                return html;
+            };
 
-            const gerarOpcoesPasse = (selecionado = '') => { /* ...código completo aqui... */ };
-            function criarFormulario(semanaNum, passeDe, mostrarColegiado, atendimento) { /* ...código completo aqui... */ }
+            function criarFormulario(semanaNum, passeDe, mostrarColegiado, atendimento) {
+                const dataAtendimento = atendimento.dataAtendimento ? atendimento.dataAtendimento.toDate().toLocaleDateString('pt-br') : new Date().toLocaleDateString('pt-br');
+                let colegiadoHtml = '';
+                if (mostrarColegiado) {
+                    colegiadoHtml = `<hr><h5>Colegiado</h5>
+                        <div class="form-grid"><div class="form-item"><label for="colegiado-de">DE:</label><select id="colegiado-de" disabled>${gerarOpcoesPasse(passeDe)}</select></div><div class="form-item"><label for="colegiado-para">PARA (Mudar o passe):</label><select id="colegiado-para">${gerarOpcoesPasse()}</select></div></div>
+                        <div class="form-item" style="margin-top:15px;"><label>Encaminhamentos (Múltipla Escolha):</label><div class="multiselect">
+                            <div class="select-box" tabindex="0">Selecione...</div>
+                            <div class="checkboxes">
+                                <label><input type="checkbox" value="ENL"/> ENL</label><label><input type="checkbox" value="LEITURAS"/> Leituras</label><label><input type="checkbox" value="EAE"/> EAE</label><label><input type="checkbox" value="VOLUNTARIADO"/> Voluntariado</label><label><input type="checkbox" value="MÉDICO"/> Médico</label><label><input type="checkbox" value="ALIMENTO"/> Alimento</label><label><input type="checkbox" value="NATUREZA"/> Natureza</label><label><input type="checkbox" value="MOCIDADE"/> Mocidade</label><label><input type="checkbox" value="EVANGELIZAÇÃO"/> Evangelização</label>
+                            </div></div></div>
+                        <div class="form-item" style="margin-top: 15px;"><label for="colegiado-notas">Orientações do Colegiado:</label><textarea id="colegiado-notas" rows="4"></textarea></div>
+                        <button id="btn-dar-alta" type="button" class="btn btn-danger" style="width: 100%; margin-top: 10px;">Confirmar e Dar Alta</button>`;
+                }
+                return `<fieldset><legend>Detalhes do Atendimento da ${semanaNum}ª Semana</legend>
+                    <div class="form-grid" style="background-color: #f8f9fa; padding: 10px; border-radius: 6px;">
+                        <div class="form-item"><label>Assistido:</label><h3 id="assistido-nome" style="text-align:left; margin:0;">Carregando...</h3></div>
+                        <div class="form-item"><label>Data do Atendimento:</label><p id="data-atendimento" style="margin:0; font-weight:bold;">${dataAtendimento}</p></div>
+                    </div><hr>
+                    <div class="form-grid">
+                        <div class="form-item"><label for="entrevistador-nome">Entrevistador:</label><input type="text" id="entrevistador-nome" value="${user.displayName || ''}"></div>
+                    </div>
+                    <div class="form-item" style="margin-top: 15px;"><label for="entrevista-notas">Descrição da Entrevista:</label><textarea id="entrevista-notas" rows="6"></textarea></div>
+                    <hr><h5>Detalhes do Passe</h5><div class="form-grid">
+                        <div class="form-item"><label for="retorno-passe">Passe:</label><input type="text" id="retorno-passe" class="readonly-input" value="${passeDe}" readonly></div>
+                        <div class="form-item"><label for="retorno-inicio">Início:</label><input type="time" id="retorno-inicio"></div>
+                        <div class="form-item"><label for="retorno-fim">Fim:</label><input type="time" id="retorno-fim"></div>
+                    </div>
+                    <div class="form-item" style="margin-top:15px;"><label>Evolução:</label><div style="display:flex; gap: 15px;"><label><input type="radio" name="evolucao" value="melhorou"> Melhorou</label><label><input type="radio" name="evolucao" value="piorou"> Piorou</label><label><input type="radio" name="evolucao" value="na_mesma" checked> Na Mesma</label></div></div>
+                    ${colegiadoHtml}
+                    <button id="btn-salvar-entrevista" type="button" class="btn btn-primary" style="width: 100%; margin-top: 20px;">Salvar Alterações</button>
+                </fieldset>`;
+            }
 
             async function salvarEdicao(atendimento) {
                 const btn = document.getElementById('btn-salvar-entrevista');
@@ -238,7 +276,7 @@
                     });
                     
                     await batch.commit();
-                    alert('Alta registrada com sucesso! O tratamento foi encerrado. O fluxo do dia continuará para a entrevista final.');
+                    alert('Alta registrada! O tratamento foi encerrado. O assistido ainda passará pela entrevista final de hoje.');
                 } else {
                      btn.disabled = false;
                 }

@@ -128,10 +128,10 @@
                     if (tratamentoSnapshot.empty) { throw new Error(`Nenhum tratamento ATIVO encontrado para o ID: ${assistidoId}`); }
                     const tratamentoDoc = tratamentoSnapshot.docs[0];
                     const tratamento = { id: tratamentoDoc.id, ...tratamentoDoc.data() };
-
                     const dataTimestamp = Timestamp.fromDate(new Date(dataSimulada + 'T12:00:00'));
                     
                     if (acao === 'presenca') {
+                        const batch = writeBatch(db);
                         const inicioDaVisitaSimulada = new Date(dataSimulada + 'T00:00:00');
                         const qHistorico = query(atendimentosRef, 
                             where("tratamentoId", "==", tratamento.id),
@@ -144,14 +144,25 @@
                         });
                         const semanaAtual = atendimentosPassadosValidos + 1;
                         
-                        const docParaFila = {
+                        batch.set(doc(atendimentosRef), {
+                            assistidoId: assistidoId,
+                            tratamentoId: tratamento.id,
+                            tipo: 'tratamento_semanal',
+                            dataAtendimento: dataTimestamp,
+                            semana: semanaAtual,
+                            entrevistador: 'Aguardando Detalhes',
+                            passeRecomendado: tratamento.passe_ciclo_atual,
+                            notas: ''
+                        });
+                        
+                        batch.set(doc(collection(db, 'fila_atendimento_ae')), {
                             assistidoId: assistidoId, nomeAssistido: nomeAssistido, tratamentoId: tratamento.id,
                             status: 'aguardando_entrevista_ou_passe', passeRecomendado: tratamento.passe_ciclo_atual,
                             semana_atual: semanaAtual, chegadaEm: dataTimestamp,
                             recepcionista: { uid: user.uid, nome: `Simulação por ${user.displayName}` }
-                        };
-                        await addDoc(collection(db, 'fila_atendimento_ae'), docParaFila);
-                        log(`Sucesso: '${nomeAssistido}' (Semana ${semanaAtual}) adicionado à fila do dia ${new Date(dataSimulada + 'T12:00:00').toLocaleDateString()}.`);
+                        });
+                        await batch.commit();
+                        log(`Sucesso: '${nomeAssistido}' (Semana ${semanaAtual}) adicionado à fila e ao histórico do dia ${new Date(dataSimulada + 'T12:00:00').toLocaleDateString()}.`);
 
                     } else if (acao === 'falta') {
                         const batch = writeBatch(db);
@@ -167,7 +178,6 @@
                         const faltasAtuais = tratamento.faltas_acumuladas || 0;
                         const novoTotalFaltas = faltasAtuais + 1;
 
-                        // REGRA SIMPLES DE TESTE: Encerra com 2 faltas.
                         if (novoTotalFaltas >= 2) {
                              batch.update(tratamentoDocRef, { status: 'encerrado_por_falta' });
                              log(`Falta registrada. ATENÇÃO: Tratamento encerrado por atingir ${novoTotalFaltas} faltas!`);
