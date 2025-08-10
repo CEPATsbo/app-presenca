@@ -100,7 +100,7 @@
             event.target.value = input;
         };
 
-        protegerPagina(['recepcionista', 'tesoureiro', 'conselheiro', 'entrevistador', 'diretor', 'super-admin']).then(user => {
+        protegerPagina(['recepcionista', 'diretor', 'super-admin']).then(user => {
             document.getElementById('main-content').classList.remove('hidden');
             inicializarPagina(user);
         }).catch(err => { 
@@ -139,24 +139,20 @@
             
             async function calcularSemanaAtual(tratamentoId) {
                 if (!tratamentoId) return 1;
-
                 const inicioDoDiaDeHoje = new Date();
                 inicioDoDiaDeHoje.setHours(0, 0, 0, 0);
-
                 const qHistorico = query(
                     atendimentosRef, 
                     where("tratamentoId", "==", tratamentoId),
                     where("dataAtendimento", "<", Timestamp.fromDate(inicioDoDiaDeHoje))
                 );
                 const historicoSnapshot = await getDocs(qHistorico);
-                
                 let atendimentosPassadosValidos = 0;
                 historicoSnapshot.forEach(doc => {
                     if (doc.data().tipo !== 'falta') {
                         atendimentosPassadosValidos++;
                     }
                 });
-                
                 return atendimentosPassadosValidos + 1;
             }
             
@@ -198,7 +194,7 @@
                 if (!snapshot.empty) {
                     ui.btnVerHistorico.classList.remove('hidden');
                     ui.btnVerHistorico.onclick = () => {
-                        window.open(`/arquivo-geral-ae.html?id=${assistidoId}`, '_blank');
+                        window.open(`/arquivo-geral-ae.html?assistidoId=${assistidoId}`, '_blank');
                     };
                 } else {
                     ui.btnVerHistorico.classList.add('hidden');
@@ -278,7 +274,6 @@
 
                 const semanaAtual = await calcularSemanaAtual(tratamentoAtivoSelecionado.id);
                 const passeDoCiclo = tratamentoAtivoSelecionado.passe_ciclo_atual;
-
                 const batch = writeBatch(db);
                 const dataAtual = serverTimestamp();
 
@@ -378,10 +373,11 @@
                     const diffMs = Date.now() - idadeDate.getTime();
                     const idade = new Date(diffMs).getUTCFullYear() - 1970;
                     const passeAvulso = idade >= 12 ? 'P2' : 'P4A';
+                    const dataAtual = serverTimestamp();
 
                     const batch = writeBatch(db);
-                    batch.set(doc(filaRef), { assistidoId: assistidoId, nomeAssistido: assistidoSelecionado?.nome || ui.nomeInput.value, status: 'aguardando_entrevista_ou_passe', passeRecomendado: passeAvulso, tipoAtendimento: 'avulso', semana_atual: 1, chegadaEm: serverTimestamp(), recepcionista: { uid: user.uid, nome: user.displayName } });
-                    batch.set(doc(atendimentosRef), { assistidoId: assistidoId, tratamentoId: null, tipo: 'avulso', dataAtendimento: serverTimestamp(), passeRecomendado: passeAvulso });
+                    batch.set(doc(filaRef), { assistidoId: assistidoId, nomeAssistido: assistidoSelecionado?.nome || ui.nomeInput.value, status: 'aguardando_entrevista_ou_passe', passeRecomendado: passeAvulso, tipoAtendimento: 'avulso', semana_atual: 1, chegadaEm: dataAtual, recepcionista: { uid: user.uid, nome: user.displayName } });
+                    batch.set(doc(atendimentosRef), { assistidoId: assistidoId, tratamentoId: null, tipo: 'avulso', dataAtendimento: dataAtual, passeRecomendado: passeAvulso });
                     await batch.commit();
                     await registrarLog({ acao: 'REGISTROU_PASSE_AVULSO', detalhes: { assistidoId: assistidoId, nome: assistidoSelecionado?.nome || ui.nomeInput.value, passe: passeAvulso }});
                     alert('Passe avulso registrado e enviado para a fila!');

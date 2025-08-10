@@ -55,7 +55,7 @@
 
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
-        import { getFirestore, collection, doc, getDoc, onSnapshot, updateDoc, query, where, orderBy, Timestamp, getDocs, setDoc, serverTimestamp, writeBatch, deleteDoc } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
+        import { getFirestore, collection, doc, getDoc, onSnapshot, updateDoc, query, where, orderBy, Timestamp, getDocs, setDoc, serverTimestamp, deleteDoc } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
         import { protegerPagina } from '/auth.js';
 
         const firebaseConfig = {
@@ -68,7 +68,7 @@
         };
         initializeApp(firebaseConfig);
 
-        protegerPagina(['entrevistador', 'diretor', 'super-admin', 'tesoureiro', 'conselheiro','recepcionista']).then(user => {
+        protegerPagina(['entrevistador', 'diretor', 'super-admin', 'recepcionista']).then(user => {
             document.getElementById('main-content').classList.remove('hidden');
             document.getElementById('acesso-negado').classList.add('hidden');
             inicializarPagina(user);
@@ -104,7 +104,6 @@
                     unsubscribeFila();
                 }
                 cardsContainer.innerHTML = `<p>Buscando fila para o dia ${new Date(dataString + 'T12:00:00').toLocaleDateString()}...</p>`;
-
                 const dataSelecionada = new Date(dataString + 'T12:00:00');
                 const inicioDoDia = new Date(dataSelecionada.setHours(0, 0, 0, 0));
                 const fimDoDia = new Date(dataSelecionada.setHours(23, 59, 59, 999));
@@ -119,7 +118,6 @@
                 unsubscribeFila = onSnapshot(qFila, async (snapshot) => {
                     const promessas = snapshot.docs.map(docSnapshot => getContextoDoAtendimento(docSnapshot));
                     atendimentosDoDia = await Promise.all(promessas.filter(p => p !== null));
-                    
                     renderizarCards();
                 });
             }
@@ -138,14 +136,16 @@
             async function getContextoDoAtendimento(filaDocSnapshot) {
                 const atendimento = { id: filaDocSnapshot.id, ...filaDocSnapshot.data() };
                 if (atendimento.tipoAtendimento === 'avulso') {
-                    return { ...atendimento, precisaEntrevista: false, semana_atual: 1 };
+                    return { ...atendimento, precisaEntrevista: false };
                 }
                 if (!atendimento.tratamentoId) return null;
 
                 const tratamentoDocRef = doc(db, 'tratamentos_ae', atendimento.tratamentoId);
                 const tratamentoDoc = await getDoc(tratamentoDocRef);
-                if (!tratamentoDoc.exists()) return null;
-                const tratamento = { id: tratamentoDoc.id, ...tratamentoDoc.data() };
+                if (!tratamentoDoc.exists()) {
+                    return null; 
+                }
+                const tratamento = tratamentoDoc.data();
                 
                 const semanaNum = atendimento.semana_atual || 1;
                 
@@ -178,7 +178,7 @@
                     const entrevistaChamada = statusFila === 'chamado_entrevista';
                     const entrevistaRealizada = statusFila === 'entrevista_realizada';
 
-                    let passeBtnDisabled = true;
+                    let passeBtnDisabled = true; 
                     if (entrevistaRealizada) {
                         if (atendimento.semana_atual === 5) {
                             if (atendimento.status_tratamento !== 'ativo') {
@@ -210,16 +210,14 @@
                     </p>
                     <div class="${actionsClass}">${buttonsHtml}</div>`;
                 
-                if (atendimento.semana_atual === 5 && atendimento.status_tratamento === 'ativo' && entrevistaRealizada) {
-                    card.innerHTML += `<p style="text-align:center; font-weight:bold; color: #c0392b;">Aguardando decisão do Colegiado (Alta ou Novo Passe) ser salva.</p>`;
+                if (atendimento.semana_atual === 5 && atendimento.status_tratamento === 'ativo' && statusFila === 'entrevista_realizada') {
+                    card.innerHTML += `<p style="text-align:center; font-weight:bold; color: #c0392b;">Aguardando decisão do Colegiado ser salva no Arquivo Geral.</p>`;
                 }
 
                 return card;
             }
 
-
             async function atualizarPainelTV(chamadaAtual, novoStatus) {
-                // Esta função continua igual, sem alterações
                 const mapaDeSalas = { 'SALA 1': ['P1', 'P3A', 'P3B'], 'SALA 2': ['P2', 'P4A', 'P4B', 'CH'] };
                 const getSalaPorPasse = (passe) => {
                     if (!passe) return 'Encaminhamento';
@@ -253,9 +251,6 @@
                 });
             }
 
-            // =========================================================================================
-            // LÓGICA DE CLIQUES TOTALMENTE REFEITA PARA O NOVO FLUXO
-            // =========================================================================================
             cardsContainer.addEventListener('click', async (e) => {
                 const target = e.target;
                 const id = target.dataset.id;
