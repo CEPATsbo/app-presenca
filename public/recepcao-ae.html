@@ -39,11 +39,11 @@
     </style>
 </head>
 <body>
-    <nav class="nav-voltar"><a href="/dashboard-ae.html" class="btn-voltar">⬅ Voltar para o Dashboard</a></nav>
+    <nav class="nav-voltar"><a href="/dashboard-ae.html" class="btn-voltar">⬅ Voltar para o Painel AE</a></nav>
     <div id="acesso-negado" class="container hidden"><h1>Acesso Negado</h1></div>
 
     <div id="main-content" class="container">
-        <h1>Recepção da Assistência Espiritual</h1>
+        <h1>Recepção do Atendimento Espiritual</h1>
 
         <fieldset>
             <legend>Tratamentos Ativos (Acesso Rápido)</legend>
@@ -225,10 +225,10 @@
                     if (!tratamento.assistidoId) return null;
                     
                     const assistidoDocRef = doc(db, 'assistidos', tratamento.assistidoId);
-                    const qFrequenciaHoje = query(atendimentosRef, 
+                    const qFrequenciaHoje = query(filaRef, 
                         where("tratamentoId", "==", tratamento.id),
-                        where("dataAtendimento", ">=", Timestamp.fromDate(hojeInicio)),
-                        where("dataAtendimento", "<=", Timestamp.fromDate(hojeFim)),
+                        where("chegadaEm", ">=", Timestamp.fromDate(hojeInicio)),
+                        where("chegadaEm", "<=", Timestamp.fromDate(hojeFim)),
                         limit(1)
                     );
                     
@@ -236,7 +236,7 @@
                     
                     let statusHoje = 'pendente';
                     if (!frequenciaSnapshot.empty) {
-                        statusHoje = frequenciaSnapshot.docs[0].data().tipo === 'falta' ? 'ausente' : 'presente';
+                        statusHoje = 'presente';
                     }
                     
                     return assistidoDoc.exists() ? { assistido: {id: assistidoDoc.id, ...assistidoDoc.data()}, tratamento, statusHoje } : null;
@@ -279,16 +279,32 @@
                 const semanaAtual = await calcularSemanaAtual(tratamentoAtivoSelecionado.id);
                 const passeDoCiclo = tratamentoAtivoSelecionado.passe_ciclo_atual;
 
-                await addDoc(filaRef, {
+                const batch = writeBatch(db);
+                const dataAtual = serverTimestamp();
+
+                batch.set(doc(atendimentosRef), {
+                    assistidoId: assistidoSelecionado.id,
+                    tratamentoId: tratamentoAtivoSelecionado.id,
+                    tipo: 'tratamento_semanal',
+                    dataAtendimento: dataAtual,
+                    semana: semanaAtual,
+                    entrevistador: 'Aguardando Detalhes',
+                    passeRecomendado: passeDoCiclo,
+                    notas: ''
+                });
+
+                batch.set(doc(filaRef), {
                     assistidoId: assistidoSelecionado.id,
                     nomeAssistido: assistidoSelecionado.nome,
                     tratamentoId: tratamentoAtivoSelecionado.id,
                     status: 'aguardando_entrevista_ou_passe',
                     passeRecomendado: passeDoCiclo,
                     semana_atual: semanaAtual, 
-                    chegadaEm: serverTimestamp(),
+                    chegadaEm: dataAtual,
                     recepcionista: { uid: user.uid, nome: user.displayName }
                 });
+
+                await batch.commit();
                 
                 await registrarLog({ acao: 'REGISTROU_PRESENCA_AE', detalhes: { assistidoId: assistidoSelecionado.id, nome: assistidoSelecionado.nome }});
                 alert(`Presença de ${assistidoSelecionado.nome} (Semana ${semanaAtual}) registrada com sucesso!`);
@@ -306,10 +322,10 @@
                     batch.update(tratamentoDocRef, { faltas_acumuladas: increment(1) });
                     batch.set(doc(atendimentosRef), { assistidoId: assistidoSelecionado.id, tratamentoId: tratamentoAtivoSelecionado.id, tipo: 'falta', dataAtendimento: serverTimestamp() });
                     
-                    if (novoTotalFaltas > 2) {
+                    if (novoTotalFaltas >= 2) {
                         batch.update(tratamentoDocRef, { status: 'encerrado_por_falta' });
                         await batch.commit();
-                        alert('Falta registrada. ATENÇÃO: Tratamento encerrado automaticamente por exceder o limite de 2 faltas!');
+                        alert('Falta registrada. ATENÇÃO: Tratamento encerrado automaticamente por exceder o limite de faltas!');
                     } else {
                         await batch.commit();
                         alert(`Falta registrada com sucesso! Total de faltas: ${novoTotalFaltas}.`);
@@ -358,30 +374,19 @@
                 if (!validarDadosPessoais()) { e.target.disabled = false; return; }
                 try {
                     const assistidoId = await criarNovoAssistidoSeNaoExistir();
-                    const trintaDiasAtras = new Date(); trintaDiasAtras.setDate(trintaDiasAtras.getDate() - 30);
-                    const qAvulso = query(atendimentosRef, where("assistidoId", "==", assistidoId), where("tipo", "==", "avulso"), where("dataAtendimento", ">=", Timestamp.fromDate(trintaDiasAtras)));
-                    const avulsoSnapshot = await getDocs(qAvulso);
-                    if (!avulsoSnapshot.empty) { 
-                        alert('Este assistido já recebeu um passe avulso nos últimos 30 dias.');
-                        e.target.disabled = false; return; 
-                    }
-                    if (confirm(`Confirmar registro de Passe Avulso para ${assistidoSelecionado?.nome || ui.nomeInput.value}?`)) {
-                        const idadeDate = new Date(ui.dnInput.value);
-                        const diffMs = Date.now() - idadeDate.getTime();
-                        const idade = new Date(diffMs).getUTCFullYear() - 1970;
-                        const passeAvulso = idade >= 12 ? 'P2' : 'P4A';
+                    const idadeDate = new Date(ui.dnInput.value);
+                    const diffMs = Date.now() - idadeDate.getTime();
+                    const idade = new Date(diffMs).getUTCFullYear() - 1970;
+                    const passeAvulso = idade >= 12 ? 'P2' : 'P4A';
 
-                        const batch = writeBatch(db);
-                        batch.set(doc(filaRef), { assistidoId: assistidoId, nomeAssistido: assistidoSelecionado?.nome || ui.nomeInput.value, status: 'pronto_para_chamar', passeRecomendado: passeAvulso, tipoAtendimento: 'avulso', semana_atual: 1, chegadaEm: serverTimestamp(), recepcionista: { uid: user.uid, nome: user.displayName } });
-                        batch.set(doc(atendimentosRef), { assistidoId: assistidoId, tratamentoId: null, tipo: 'avulso', dataAtendimento: serverTimestamp(), passeRecomendado: passeAvulso });
-                        await batch.commit();
-                        await registrarLog({ acao: 'REGISTROU_PASSE_AVULSO', detalhes: { assistidoId: assistidoId, nome: assistidoSelecionado?.nome || ui.nomeInput.value, passe: passeAvulso }});
-                        alert('Passe avulso registrado e enviado para a fila!');
-                        resetarFormularioBusca();
-                        await carregarTratamentosAtivos();
-                    } else {
-                        e.target.disabled = false;
-                    }
+                    const batch = writeBatch(db);
+                    batch.set(doc(filaRef), { assistidoId: assistidoId, nomeAssistido: assistidoSelecionado?.nome || ui.nomeInput.value, status: 'aguardando_entrevista_ou_passe', passeRecomendado: passeAvulso, tipoAtendimento: 'avulso', semana_atual: 1, chegadaEm: serverTimestamp(), recepcionista: { uid: user.uid, nome: user.displayName } });
+                    batch.set(doc(atendimentosRef), { assistidoId: assistidoId, tratamentoId: null, tipo: 'avulso', dataAtendimento: serverTimestamp(), passeRecomendado: passeAvulso });
+                    await batch.commit();
+                    await registrarLog({ acao: 'REGISTROU_PASSE_AVULSO', detalhes: { assistidoId: assistidoId, nome: assistidoSelecionado?.nome || ui.nomeInput.value, passe: passeAvulso }});
+                    alert('Passe avulso registrado e enviado para a fila!');
+                    resetarFormularioBusca();
+                    await carregarTratamentosAtivos();
                 } catch(error) { 
                     console.error("Erro ao registrar passe avulso:", error); 
                     e.target.disabled = false;
@@ -402,6 +407,19 @@
                     const novoTratamentoRef = doc(tratamentosRef);
                     batch.set(novoTratamentoRef, { assistidoId: assistidoId, dataInicio: serverTimestamp(), status: 'ativo', faltas_acumuladas: 0, passe_ciclo_atual: passeInicial });
                     
+                    const dataAtual = serverTimestamp();
+
+                     batch.set(doc(atendimentosRef), {
+                        assistidoId: assistidoId,
+                        tratamentoId: novoTratamentoRef.id,
+                        tipo: 'tratamento_semanal',
+                        dataAtendimento: dataAtual,
+                        semana: 1,
+                        entrevistador: 'Aguardando Detalhes',
+                        passeRecomendado: passeInicial,
+                        notas: ''
+                    });
+
                     batch.set(doc(filaRef), { 
                         assistidoId: assistidoId, 
                         nomeAssistido: assistidoSelecionado.nome, 
@@ -409,7 +427,7 @@
                         status: 'aguardando_entrevista_ou_passe', 
                         passeRecomendado: passeInicial,
                         semana_atual: 1,
-                        chegadaEm: serverTimestamp(), 
+                        chegadaEm: dataAtual, 
                         recepcionista: { uid: user.uid, nome: user.displayName } 
                     });
                     

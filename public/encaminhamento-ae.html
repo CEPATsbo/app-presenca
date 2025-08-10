@@ -35,7 +35,7 @@
 </head>
 <body>
     <div class="container-principal">
-        <nav class="nav-voltar"><a href="/dashboard-ae.html" class="btn-voltar">⬅ Voltar para o Dashboard</a></nav>
+        <nav class="nav-voltar"><a href="/dashboard-ae.html" class="btn-voltar">⬅ Voltar para o Painel AE</a></nav>
         <div id="acesso-negado" class="container hidden"><h1>Acesso Negado</h1></div>
         
         <div id="main-content" class="container hidden">
@@ -55,7 +55,7 @@
 
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
-        import { getFirestore, collection, doc, getDoc, onSnapshot, updateDoc, query, where, orderBy, Timestamp, getDocs, setDoc, serverTimestamp, writeBatch } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
+        import { getFirestore, collection, doc, getDoc, onSnapshot, updateDoc, query, where, orderBy, Timestamp, getDocs, setDoc, serverTimestamp, writeBatch, deleteDoc } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
         import { protegerPagina } from '/auth.js';
 
         const firebaseConfig = {
@@ -68,7 +68,7 @@
         };
         initializeApp(firebaseConfig);
 
-        protegerPagina(['entrevistador', 'diretor', 'super-admin']).then(user => {
+        protegerPagina(['entrevistador', 'diretor', 'super-admin', 'tesoureiro', 'conselheiro','recepcionista']).then(user => {
             document.getElementById('main-content').classList.remove('hidden');
             document.getElementById('acesso-negado').classList.add('hidden');
             inicializarPagina(user);
@@ -81,7 +81,6 @@
             const db = getFirestore();
             const filaRef = collection(db, 'fila_atendimento_ae');
             const tratamentosRef = collection(db, 'tratamentos_ae');
-            const atendimentosRef = collection(db, 'atendimentos_ae');
             const painelEstadoRef = doc(db, 'painel_estado', 'atual');
             const cardsContainer = document.getElementById('cards-container');
             const seletorData = document.getElementById('seletor-data');
@@ -146,28 +145,23 @@
                 const tratamentoDocRef = doc(db, 'tratamentos_ae', atendimento.tratamentoId);
                 const tratamentoDoc = await getDoc(tratamentoDocRef);
                 if (!tratamentoDoc.exists()) return null;
-                const tratamento = tratamentoDoc.data();
+                const tratamento = { id: tratamentoDoc.id, ...tratamentoDoc.data() };
                 
                 const semanaNum = atendimento.semana_atual || 1;
                 
-                const passe = tratamento.passe_ciclo_atual;
                 let precisaEntrevista = false;
-                
-                if (passe === 'P3A' || passe === 'P3B' || [1, 4, 5].includes(semanaNum)) {
+                if (tratamento.passe_ciclo_atual === 'P3A' || tratamento.passe_ciclo_atual === 'P3B' || [1, 4, 5].includes(semanaNum)) {
                     precisaEntrevista = true;
                 }
-                return { ...atendimento, precisaEntrevista, passe_ciclo_atual: passe };
+                return { ...atendimento, precisaEntrevista, passe_ciclo_atual: tratamento.passe_ciclo_atual, status_tratamento: tratamento.status };
             }
 
-            // =========================================================================================
-            // FUNÇÃO DE CRIAR CARD TOTALMENTE REFEITA PARA O NOVO FLUXO
-            // =========================================================================================
             function criarCard(atendimento) {
                 const card = document.createElement('div');
                 card.className = 'assistido-card';
-                const status = atendimento.status;
+                const statusFila = atendimento.status;
                 
-                if (status === 'chamado_passe') {
+                if (statusFila === 'chamado_passe') {
                     card.classList.add('chamado-passe');
                     card.innerHTML = `<h3>${atendimento.nomeAssistido}</h3><p class="info">Atendimento finalizado.</p>`;
                     return card;
@@ -176,26 +170,34 @@
                 let buttonsHtml = '';
                 let actionsClass = '';
 
-                // CASO 1: PASSE DIRETO (NÃO PRECISA DE ENTREVISTA)
                 if (!atendimento.precisaEntrevista) {
                     actionsClass = 'actions-1-button';
                     buttonsHtml = `<button class="btn btn-success btn-chamar-passe" data-id="${atendimento.id}">Chamar p/ Passe</button>`;
-                
-                // CASO 2: FLUXO DE ENTREVISTA (3 BOTÕES)
                 } else {
                     actionsClass = 'actions-3-buttons';
-                    const entrevistaChamada = status === 'chamado_entrevista';
-                    const entrevistaRealizada = status === 'entrevista_realizada';
+                    const entrevistaChamada = statusFila === 'chamado_entrevista';
+                    const entrevistaRealizada = statusFila === 'entrevista_realizada';
+
+                    let passeBtnDisabled = true;
+                    if (entrevistaRealizada) {
+                        if (atendimento.semana_atual === 5) {
+                            if (atendimento.status_tratamento !== 'ativo') {
+                                passeBtnDisabled = false;
+                            }
+                        } else {
+                            passeBtnDisabled = false;
+                        }
+                    }
 
                     buttonsHtml = `
                         <button class="btn btn-info btn-chamar-entrevista" data-id="${atendimento.id}" ${entrevistaChamada || entrevistaRealizada ? 'disabled' : ''}>1. Chamar Entrevista</button>
                         <button class="btn btn-warning btn-entrevista-realizada" data-id="${atendimento.id}" ${!entrevistaChamada || entrevistaRealizada ? 'disabled' : ''}>2. Entrevista Realizada</button>
-                        <button class="btn btn-success btn-chamar-passe" data-id="${atendimento.id}" ${!entrevistaRealizada ? 'disabled' : ''}>3. Chamar p/ Passe</button>
+                        <button class="btn btn-success btn-chamar-passe" data-id="${atendimento.id}" ${passeBtnDisabled ? 'disabled' : ''}>3. Chamar p/ Passe</button>
                     `;
                 }
 
-                if (status === 'chamado_entrevista') card.classList.add('chamado-entrevista');
-                if (status === 'entrevista_realizada') card.classList.add('entrevista-realizada');
+                if (statusFila === 'chamado_entrevista') card.classList.add('chamado-entrevista');
+                if (statusFila === 'entrevista_realizada') card.classList.add('entrevista-realizada');
                 
                 const tipoLabel = `Assistência (${atendimento.passe_ciclo_atual || 'N/A'})`;
 
@@ -208,8 +210,13 @@
                     </p>
                     <div class="${actionsClass}">${buttonsHtml}</div>`;
                 
+                if (atendimento.semana_atual === 5 && atendimento.status_tratamento === 'ativo' && entrevistaRealizada) {
+                    card.innerHTML += `<p style="text-align:center; font-weight:bold; color: #c0392b;">Aguardando decisão do Colegiado (Alta ou Novo Passe) ser salva.</p>`;
+                }
+
                 return card;
             }
+
 
             async function atualizarPainelTV(chamadaAtual, novoStatus) {
                 // Esta função continua igual, sem alterações
@@ -256,56 +263,28 @@
 
                 const atendimentoChamado = atendimentosDoDia.find(a => a.id === id);
                 if (!atendimentoChamado) return;
-
+                
                 target.disabled = true;
 
                 try {
-                    // Botão 1: Chamar para a Entrevista
                     if (target.classList.contains('btn-chamar-entrevista')) {
                         await atualizarPainelTV(atendimentoChamado, 'chamado_entrevista');
                         await updateDoc(doc(db, 'fila_atendimento_ae', id), { status: 'chamado_entrevista' });
                     
-                    // Botão 2: Marcar Entrevista como Realizada (e criar registro no histórico)
                     } else if (target.classList.contains('btn-entrevista-realizada')) {
-                        const batch = writeBatch(db);
-                        const filaDocRef = doc(db, 'fila_atendimento_ae', id);
-                        
-                        const atendimentoRecord = {
-                            assistidoId: atendimentoChamado.assistidoId,
-                            tratamentoId: atendimentoChamado.tratamentoId,
-                            tipo: 'tratamento_semanal',
-                            dataAtendimento: atendimentoChamado.chegadaEm,
-                            semana: atendimentoChamado.semana_atual,
-                            entrevistador: 'Aguardando Detalhes',
-                            passeRecomendado: atendimentoChamado.passe_ciclo_atual,
-                            notas: '' // Notas vazias para serem preenchidas depois
-                        };
-                        batch.set(doc(collection(db, 'atendimentos_ae')), atendimentoRecord);
-                        batch.update(filaDocRef, { status: 'entrevista_realizada' });
-                        await batch.commit();
+                        const tratamentoDocRef = doc(db, 'tratamentos_ae', atendimentoChamado.tratamentoId);
+                        const tratamentoDoc = await getDoc(tratamentoDocRef);
+                        const statusTratamento = tratamentoDoc.exists() ? tratamentoDoc.data().status : 'ativo';
+
+                        if (statusTratamento === 'concluido_com_alta') {
+                            await deleteDoc(doc(db, 'fila_atendimento_ae', id));
+                        } else {
+                            await updateDoc(doc(db, 'fila_atendimento_ae', id), { status: 'entrevista_realizada' });
+                        }
                     
-                    // Botão 3 (ou único): Chamar para o Passe
                     } else if (target.classList.contains('btn-chamar-passe')) {
                         await atualizarPainelTV(atendimentoChamado, 'chamado_passe');
-                        const batch = writeBatch(db);
-                        const filaDocRef = doc(db, 'fila_atendimento_ae', id);
-                        batch.update(filaDocRef, { status: 'chamado_passe' });
-
-                        // Se for um passe direto, cria o registro histórico agora
-                        if (!atendimentoChamado.precisaEntrevista) {
-                            const atendimentoRecord = {
-                                assistidoId: atendimentoChamado.assistidoId,
-                                tratamentoId: atendimentoChamado.tratamentoId,
-                                tipo: 'tratamento_semanal',
-                                dataAtendimento: atendimentoChamado.chegadaEm,
-                                semana: atendimentoChamado.semana_atual,
-                                entrevistador: 'Passe Direto',
-                                passeRecomendado: atendimentoChamado.passe_ciclo_atual,
-                                notas: 'Atendimento direto para o passe, sem entrevista.'
-                            };
-                            batch.set(doc(collection(db, 'atendimentos_ae')), atendimentoRecord);
-                        }
-                        await batch.commit();
+                        await updateDoc(doc(db, 'fila_atendimento_ae', id), { status: 'chamado_passe' });
                     }
                 } catch (error) {
                     console.error("Erro ao processar chamada:", error);

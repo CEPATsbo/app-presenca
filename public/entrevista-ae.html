@@ -3,19 +3,18 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Entrevista - Atendimento Espiritual</title>
+    <title>Detalhes do Atendimento - AE</title>
     <style>
         :root { --cor-primaria: #007bff; --cor-borda: #ddd; --fundo-desabilitado: #f9f9f9; }
         body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background-color: #f0f2f5; margin: 0; padding: 20px; }
-        .container { width: 100%; max-width: 1100px; background-color: white; padding: 30px; border-radius: 12px; box-shadow: 0 6px 24px rgba(0,0,0,0.1); margin: auto; }
-        .nav-voltar { width: 100%; max-width: 1100px; margin: auto; margin-bottom: 20px; }
+        .container { width: 100%; max-width: 900px; background-color: white; padding: 30px; border-radius: 12px; box-shadow: 0 6px 24px rgba(0,0,0,0.1); margin: auto; }
+        .nav-voltar { width: 100%; max-width: 900px; margin: auto; margin-bottom: 20px; }
         .btn, .btn-voltar { background-color: var(--cor-primaria); color: white; border: none; padding: 12px 20px; border-radius: 8px; font-weight: bold; font-size: 1em; text-decoration: none; cursor: pointer; transition: background-color 0.3s; }
         .btn:disabled { background-color: #ccc; cursor: not-allowed; }
         .btn-voltar { background-color: #6c757d; }
         .btn-success { background-color: #28a745; }
-        .btn-secondary { background-color: #6c757d; }
         .btn-danger { background-color: #dc3545; }
-        h1, h2, h3, h4 { color: #333; text-align: center; }
+        h1, h3 { color: #333; text-align: center; }
         fieldset { border: 1px solid var(--cor-borda); border-radius: 8px; padding: 20px; margin-bottom: 20px; }
         legend { font-weight: bold; font-size: 1.2em; color: #0056b3; padding: 0 10px; }
         .form-item { display: flex; flex-direction: column; }
@@ -23,8 +22,6 @@
         .form-item input, .form-item select, .form-item textarea, .form-item .readonly-input { padding: 10px; border-radius: 6px; border: 1px solid #ccc; font-size: 1em; width: 100%; box-sizing: border-box; }
         .form-item .readonly-input { background-color: #e9ecef; }
         .form-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; align-items: end; }
-        .hidden { display: none; }
-        .grid-entrevista { display: grid; grid-template-columns: 1fr; } /* Layout de coluna única para edição */
         .multiselect { position: relative; }
         .select-box { border: 1px solid #ccc; border-radius: 6px; padding: 10px; cursor: pointer; background-color: #fff; min-height: 1.5em; }
         .checkboxes { display: none; position: absolute; background: white; border: 1px solid var(--cor-borda); border-radius: 6px; z-index: 100; max-height: 200px; overflow-y: auto; padding: 5px; width: 100%; box-sizing: border-box; }
@@ -35,18 +32,14 @@
     </style>
 </head>
 <body>
-    <nav class="nav-voltar"><a href="/dashboard-ae.html" class="btn-voltar">⬅ Voltar para o Dashboard</a></nav>
+    <nav class="nav-voltar"><a href="/dashboard-ae.html" class="btn-voltar">⬅ Voltar para o Painel AE</a></nav>
     <div id="acesso-negado" class="container hidden"><h1>Acesso Negado</h1></div>
 
     <div id="main-content" class="container">
-        <h1 id="titulo-pagina">Detalhes do Atendimento</h1>
-        <p id="subtitulo-pagina" style="text-align: center; margin-top: -10px;">Adicione ou edite as informações do atendimento.</p>
-        <div id="grid-entrevista" class="grid-entrevista">
-            <div id="painel-formulario">
-                <div id="formulario-container">
-                    <p>Carregando dados do atendimento...</p>
-                </div>
-            </div>
+        <h1>Detalhes do Atendimento</h1>
+        <p style="text-align: center; margin-top: -10px;">Adicione ou edite as informações do atendimento.</p>
+        <div id="formulario-container">
+            <p>Carregando dados do atendimento...</p>
         </div>
     </div>
 
@@ -65,15 +58,7 @@
         };
         initializeApp(firebaseConfig);
 
-        const formatarDataParaInput = (timestamp) => {
-            if (!timestamp) return '';
-            const data = timestamp.toDate();
-            const offset = data.getTimezoneOffset();
-            const dataLocal = new Date(data.getTime() - (offset*60*1000));
-            return dataLocal.toISOString().split("T")[0];
-        };
-
-        protegerPagina(['entrevistador', 'diretor', 'super-admin']).then(user => {
+        protegerPagina(['entrevistador', 'diretor', 'tesoureiro', 'conselheiro', 'recepcionista','super-admin']).then(user => {
             document.getElementById('main-content').classList.remove('hidden');
             inicializarPagina(user);
         }).catch(err => {
@@ -85,6 +70,7 @@
             const db = getFirestore();
             const tratamentosRef = collection(db, 'tratamentos_ae');
             const atendimentosRef = collection(db, 'atendimentos_ae');
+            const filaRef = collection(db, 'fila_atendimento_ae');
             
             const ui = {
                 formularioContainer: document.getElementById('formulario-container'),
@@ -222,8 +208,7 @@
                 try {
                     const batch = writeBatch(db);
                     const atendimentoDocRef = doc(db, 'atendimentos_ae', atendimento.id);
-                    const tratamentoDocRef = doc(db, 'tratamentos_ae', atendimento.tratamentoId);
-
+                    
                     const dadosParaAtualizar = {
                         entrevistador: document.getElementById('entrevistador-nome').value,
                         notas: document.getElementById('entrevista-notas').value,
@@ -234,17 +219,30 @@
                     
                     if (atendimento.semana === 5) {
                         const passePara = document.getElementById('colegiado-para')?.value;
-                        if (passePara) { // Se um novo passe foi escolhido
+                        if (passePara) { 
+                            const tratamentoDocRef = doc(db, 'tratamentos_ae', atendimento.tratamentoId);
                             batch.update(tratamentoDocRef, { status: 'concluido_por_reavaliacao', dataFim: serverTimestamp() });
+                            
                             const novoTratamentoRef = doc(tratamentosRef);
                             batch.set(novoTratamentoRef, {
                                 assistidoId: atendimento.assistidoId, dataInicio: serverTimestamp(), status: 'ativo',
                                 faltas_acumuladas: 0, passe_ciclo_atual: passePara
                             });
-                            // Atualiza o atendimento atual para já refletir a mudança de ciclo
+                            
                             dadosParaAtualizar.tratamentoId = novoTratamentoRef.id;
                             dadosParaAtualizar.semana = 1;
                             dadosParaAtualizar.passePara = passePara;
+                            
+                            const filaQuery = query(filaRef, where("assistidoId", "==", atendimento.assistidoId), where("chegadaEm", ">=", new Date(new Date().setHours(0,0,0,0))));
+                            const filaSnapshot = await getDocs(filaQuery);
+                            if (!filaSnapshot.empty) {
+                                const filaDocRef = filaSnapshot.docs[0].ref;
+                                batch.update(filaDocRef, {
+                                    tratamentoId: novoTratamentoRef.id,
+                                    semana_atual: 1,
+                                    passeRecomendado: passePara
+                                });
+                            }
                         }
                         dadosParaAtualizar.colegiadoNotas = document.getElementById('colegiado-notas').value;
                         dadosParaAtualizar.encaminhamentos = Array.from(document.querySelectorAll('.checkboxes input:checked')).map(cb => cb.value);
@@ -275,14 +273,11 @@
                     const atendimentoDocRef = doc(db, 'atendimentos_ae', atendimento.id);
                     batch.update(atendimentoDocRef, {
                          tipo: 'alta',
-                         responsavelAlta: document.getElementById('colegiado-resp')?.value || user.displayName,
                          colegiadoNotas: document.getElementById('colegiado-notas')?.value || "Atendimento de reavaliação finalizado com alta."
                     });
                     
-                    // Como este modo é edição, não mexemos na fila. A remoção da fila acontece no Encaminhamento.
-                    
                     await batch.commit();
-                    alert('Alta registrada com sucesso! O tratamento foi encerrado.');
+                    alert('Alta registrada com sucesso! O tratamento foi encerrado. O assistido ainda passará pela entrevista final de hoje.');
                 } else {
                      btn.disabled = false;
                 }
