@@ -108,7 +108,9 @@
                 ui.listaFila.innerHTML = '';
                 if (snapshot.empty) {
                     ui.listaFila.innerHTML = '<li>Ninguém na fila.</li>';
-                    ui.formularioContainer.innerHTML = '<p>Selecione um assistido à esquerda.</p>';
+                    if (!selecionadoAtual) {
+                        ui.formularioContainer.innerHTML = '<p>Selecione um assistido à esquerda.</p>';
+                    }
                     return;
                 }
 
@@ -126,7 +128,7 @@
                 });
 
                 if (selecionadoAtual && !aindaNaLista) {
-                    ui.formularioContainer.innerHTML = '<p>Atendimento concluído. Selecione um novo assistido à esquerda.</p>';
+                     ui.formularioContainer.innerHTML = '<p>Atendimento concluído. Selecione um novo assistido à esquerda.</p>';
                 } else if (selecionadoAtual) {
                     document.querySelector(`li[data-atendimento-id="${selecionadoAtual}"]`)?.classList.add('selecionado');
                 }
@@ -149,18 +151,15 @@
                 }
                 const tratamento = { id: tratamentoDoc.id, ...tratamentoDoc.data() };
 
-                const qSemanas = query(atendimentosRef, where("tratamentoId", "==", tratamento.id), where("tipo", "!=", "falta"));
-                const semanasSnapshot = await getDocs(qSemanas);
-                
-                const semanaNum = semanasSnapshot.size + 1;
+                const semanaNum = atendimento.semana_atual || 1;
                 const passe = tratamento.passe_ciclo_atual;
                 
                 let formHtml = '';
                 if (semanaNum === 1) { 
                     formHtml = criarFormularioPrimeiraVez(tratamento);
-                } else if (semanaNum === 5) { // Dia da Reavaliação
+                } else if (semanaNum === 5) { 
                     formHtml = criarFormularioSemanal(semanaNum, passe, true, tratamento);
-                } else { // Semanas 2, 3, 4
+                } else { 
                     formHtml = criarFormularioSemanal(semanaNum, passe, false, tratamento);
                 }
                 ui.formularioContainer.innerHTML = formHtml;
@@ -234,17 +233,13 @@
                 }
 
                 const batch = writeBatch(db);
+                const filaDocRef = doc(db, 'fila_atendimento_ae', atendimento.id);
                 const passePara = document.getElementById('colegiado-para')?.value;
 
-                // Cenário Crítico: É a reavaliação (5ª visita) e um novo passe foi escolhido.
                 if (semanaNum === 5 && passePara) {
-                    // *** A 5ª SEMANA VIRA A 1ª DO NOVO CICLO ***
-
-                    // 1. Finaliza o tratamento ANTIGO
                     const tratamentoAntigoDocRef = doc(db, 'tratamentos_ae', tratamento.id);
                     batch.update(tratamentoAntigoDocRef, { status: 'concluido_por_reavaliacao', dataFim: serverTimestamp() });
                     
-                    // 2. Cria o NOVO tratamento
                     const novoTratamentoRef = doc(tratamentosRef);
                     batch.set(novoTratamentoRef, {
                         assistidoId: tratamento.assistidoId,
@@ -254,13 +249,12 @@
                         passe_ciclo_atual: passePara
                     });
 
-                    // 3. Cria o registro de atendimento de HOJE e o vincula ao NOVO tratamento
-                    const dadosAtendimentoHoje = {
+                    batch.set(doc(atendimentosRef), {
                         assistidoId: tratamento.assistidoId,
-                        tratamentoId: novoTratamentoRef.id, // <-- PONTO CRUCIAL: Vinculado ao NOVO ID
+                        tratamentoId: novoTratamentoRef.id,
                         tipo: 'tratamento_semanal',
                         dataAtendimento: serverTimestamp(),
-                        semana: 1, // <-- PONTO CRUCIAL: Este é o atendimento da Semana 1
+                        semana: 1,
                         entrevistador,
                         passeRecomendado: passePara,
                         horarioInicio: document.getElementById('retorno-inicio').value,
@@ -270,14 +264,22 @@
                         passePara: passePara,
                         encaminhamentos: Array.from(document.querySelectorAll('#retorno-encaminhamentos-opcoes input:checked')).map(cb => cb.value),
                         notas,
-                    };
-                    batch.set(doc(atendimentosRef), dadosAtendimentoHoje);
+                    });
+
+                    // =========================================================================
+                    // A CORREÇÃO ESTÁ AQUI: ATUALIZA A FILA COM OS DADOS DO NOVO CICLO
+                    // =========================================================================
+                    batch.update(filaDocRef, { 
+                        status: 'entrevista_concluida',
+                        tratamentoId: novoTratamentoRef.id, // Aponta para o NOVO tratamento
+                        semana_atual: 1,                     // Avisa que agora é a Semana 1
+                        passeRecomendado: passePara          // Avisa qual é o novo passe
+                    });
 
                 } else {
-                    // Cenário Normal: Atendimento das semanas 1, 2, 3, 4
                     const dadosAtendimento = {
                         assistidoId: tratamento.assistidoId,
-                        tratamentoId: tratamento.id, // Vinculado ao tratamento atual
+                        tratamentoId: tratamento.id,
                         tipo: 'tratamento_semanal',
                         dataAtendimento: serverTimestamp(),
                         semana: semanaNum,
@@ -285,20 +287,15 @@
                         passeRecomendado: tratamento.passe_ciclo_atual,
                         notas,
                     };
-
-                    // Se não for a primeira semana, adiciona os outros campos
                     if (semanaNum > 1) {
                         dadosAtendimento.horarioInicio = document.getElementById('retorno-inicio').value;
                         dadosAtendimento.horarioFim = document.getElementById('retorno-fim').value;
                         dadosAtendimento.evolucao = document.querySelector('input[name="evolucao"]:checked').value;
                     }
                     batch.set(doc(atendimentosRef), dadosAtendimento);
+                    batch.update(filaDocRef, { status: 'entrevista_concluida' });
                 }
                 
-                // 4. Atualiza o status na fila para remover a pessoa da lista de entrevistas
-                const filaDocRef = doc(db, 'fila_atendimento_ae', atendimento.id);
-                batch.update(filaDocRef, { status: 'entrevista_concluida' });
-
                 try {
                     await batch.commit();
                     alert('Atendimento registrado com sucesso!');
@@ -317,30 +314,26 @@
                 if (confirm(`Tem certeza que deseja dar alta para este assistido?`)) {
                     
                     const batch = writeBatch(db);
-
-                    // Marca o tratamento como concluído com alta
                     const tratamentoDocRef = doc(db, 'tratamentos_ae', tratamento.id);
                     batch.update(tratamentoDocRef, { status: 'concluido_com_alta', dataFim: serverTimestamp() });
                     
-                    // Registra este último atendimento de alta
                     batch.set(doc(atendimentosRef), {
                         assistidoId: tratamento.assistidoId,
                         tratamentoId: tratamento.id,
                         tipo: 'alta',
                         dataAtendimento: serverTimestamp(),
-                        semana: 5, // Registra como sendo da 5a semana
+                        semana: 5,
                         entrevistador: document.getElementById('colegiado-resp')?.value || user.displayName,
                         notas: "Atendimento de reavaliação finalizado com alta."
                     });
                     
-                    // Limpa da fila de hoje
                     const filaDocRef = doc(db, 'fila_atendimento_ae', atendimento.id);
                     batch.update(filaDocRef, { status: 'entrevista_concluida' });
                     
                     await batch.commit();
                     alert('Alta registrada com sucesso!');
                 } else {
-                    btn.disabled = false;
+                     btn.disabled = false;
                 }
             }
         }
