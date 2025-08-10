@@ -128,7 +128,7 @@
                 });
 
                 if (selecionadoAtual && !aindaNaLista) {
-                     ui.formularioContainer.innerHTML = '<p>Atendimento concluído. Selecione um novo assistido à esquerda.</p>';
+                     ui.formularioContainer.innerHTML = '<p>Selecione um assistido à esquerda.</p>';
                 } else if (selecionadoAtual) {
                     document.querySelector(`li[data-atendimento-id="${selecionadoAtual}"]`)?.classList.add('selecionado');
                 }
@@ -188,7 +188,7 @@
                             <textarea id="entrevista-notas" rows="10"></textarea>
                         </div>
                         <div class="actions-grid" style="margin-top: 15px;">
-                            <button id="btn-salvar-entrevista" type="button" class="btn btn-success" style="grid-column: 1 / -1;">Salvar Entrevista e Finalizar</button>
+                            <button id="btn-salvar-entrevista" type="button" class="btn btn-success" style="grid-column: 1 / -1;">Salvar Atendimento da Semana</button>
                         </div>
                     </fieldset>
                 `;
@@ -242,50 +242,30 @@
                     
                     const novoTratamentoRef = doc(tratamentosRef);
                     batch.set(novoTratamentoRef, {
-                        assistidoId: tratamento.assistidoId,
-                        dataInicio: serverTimestamp(),
-                        status: 'ativo',
-                        faltas_acumuladas: 0,
-                        passe_ciclo_atual: passePara
+                        assistidoId: tratamento.assistidoId, dataInicio: serverTimestamp(), status: 'ativo',
+                        faltas_acumuladas: 0, passe_ciclo_atual: passePara
                     });
 
                     batch.set(doc(atendimentosRef), {
-                        assistidoId: tratamento.assistidoId,
-                        tratamentoId: novoTratamentoRef.id,
-                        tipo: 'tratamento_semanal',
-                        dataAtendimento: serverTimestamp(),
-                        semana: 1,
-                        entrevistador,
-                        passeRecomendado: passePara,
-                        horarioInicio: document.getElementById('retorno-inicio').value,
-                        horarioFim: document.getElementById('retorno-fim').value,
+                        assistidoId: tratamento.assistidoId, tratamentoId: novoTratamentoRef.id, tipo: 'tratamento_semanal',
+                        dataAtendimento: serverTimestamp(), semana: 1, entrevistador, passeRecomendado: passePara,
+                        horarioInicio: document.getElementById('retorno-inicio').value, horarioFim: document.getElementById('retorno-fim').value,
                         evolucao: document.querySelector('input[name="evolucao"]:checked').value,
-                        passeDe: tratamento.passe_ciclo_atual, 
-                        passePara: passePara,
+                        passeDe: tratamento.passe_ciclo_atual, passePara: passePara,
                         encaminhamentos: Array.from(document.querySelectorAll('#retorno-encaminhamentos-opcoes input:checked')).map(cb => cb.value),
                         notas,
                     });
 
-                    // =========================================================================
-                    // A CORREÇÃO ESTÁ AQUI: ATUALIZA A FILA COM OS DADOS DO NOVO CICLO
-                    // =========================================================================
                     batch.update(filaDocRef, { 
-                        status: 'entrevista_concluida',
-                        tratamentoId: novoTratamentoRef.id, // Aponta para o NOVO tratamento
-                        semana_atual: 1,                     // Avisa que agora é a Semana 1
-                        passeRecomendado: passePara          // Avisa qual é o novo passe
+                        status: 'entrevista_concluida', tratamentoId: novoTratamentoRef.id,
+                        semana_atual: 1, passeRecomendado: passePara
                     });
 
                 } else {
                     const dadosAtendimento = {
-                        assistidoId: tratamento.assistidoId,
-                        tratamentoId: tratamento.id,
-                        tipo: 'tratamento_semanal',
-                        dataAtendimento: serverTimestamp(),
-                        semana: semanaNum,
-                        entrevistador,
-                        passeRecomendado: tratamento.passe_ciclo_atual,
-                        notas,
+                        assistidoId: tratamento.assistidoId, tratamentoId: tratamento.id, tipo: 'tratamento_semanal',
+                        dataAtendimento: serverTimestamp(), semana: semanaNum, entrevistador,
+                        passeRecomendado: tratamento.passe_ciclo_atual, notas,
                     };
                     if (semanaNum > 1) {
                         dadosAtendimento.horarioInicio = document.getElementById('retorno-inicio').value;
@@ -299,6 +279,8 @@
                 try {
                     await batch.commit();
                     alert('Atendimento registrado com sucesso!');
+                    // A CORREÇÃO ESTÁ AQUI:
+                    ui.formularioContainer.innerHTML = '<p>Selecione um assistido à esquerda.</p>';
                 } catch(error) {
                     console.error("Erro ao salvar entrevista: ", error);
                     alert("Falha ao salvar. Tente novamente.");
@@ -318,11 +300,8 @@
                     batch.update(tratamentoDocRef, { status: 'concluido_com_alta', dataFim: serverTimestamp() });
                     
                     batch.set(doc(atendimentosRef), {
-                        assistidoId: tratamento.assistidoId,
-                        tratamentoId: tratamento.id,
-                        tipo: 'alta',
-                        dataAtendimento: serverTimestamp(),
-                        semana: 5,
+                        assistidoId: tratamento.assistidoId, tratamentoId: tratamento.id,
+                        tipo: 'alta', dataAtendimento: serverTimestamp(), semana: 5,
                         entrevistador: document.getElementById('colegiado-resp')?.value || user.displayName,
                         notas: "Atendimento de reavaliação finalizado com alta."
                     });
@@ -332,6 +311,8 @@
                     
                     await batch.commit();
                     alert('Alta registrada com sucesso!');
+                    // A CORREÇÃO ESTÁ AQUI TAMBÉM:
+                    ui.formularioContainer.innerHTML = '<p>Selecione um assistido à esquerda.</p>';
                 } else {
                      btn.disabled = false;
                 }
