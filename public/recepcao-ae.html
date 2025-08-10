@@ -177,6 +177,7 @@
             };
             
             const checarHistoricoEExibirBotao = async (assistidoId) => {
+                if (!assistidoId) return;
                 const qTratamentos = query(tratamentosRef, where("assistidoId", "==", assistidoId), limit(1));
                 const snapshot = await getDocs(qTratamentos);
                 if (!snapshot.empty) {
@@ -210,7 +211,7 @@
                     
                     const assistidoDocRef = doc(db, 'assistidos', tratamento.assistidoId);
                     const qFrequenciaHoje = query(filaRef, 
-                        where("tratamentoId", "==", tratamento.id),
+                        where("assistidoId", "==", tratamento.assistidoId),
                         where("chegadaEm", ">=", Timestamp.fromDate(hojeInicio)),
                         where("chegadaEm", "<=", Timestamp.fromDate(hojeFim)),
                         limit(1)
@@ -268,39 +269,44 @@
                     return;
                 }
 
-                const semanaAtual = await calcularSemanaAtual(tratamentoAtivoSelecionado.id);
-                const passeDoCiclo = tratamentoAtivoSelecionado.passe_ciclo_atual;
-                const batch = writeBatch(db);
-                const dataAtual = serverTimestamp();
+                try {
+                    const semanaAtual = await calcularSemanaAtual(tratamentoAtivoSelecionado.id);
+                    const passeDoCiclo = tratamentoAtivoSelecionado.passe_ciclo_atual;
+                    const dataAtual = serverTimestamp();
 
-                batch.set(doc(atendimentosRef), {
-                    assistidoId: assistidoSelecionado.id,
-                    tratamentoId: tratamentoAtivoSelecionado.id,
-                    tipo: 'tratamento_semanal',
-                    dataAtendimento: dataAtual,
-                    semana: semanaAtual,
-                    entrevistador: 'Aguardando Detalhes',
-                    passeRecomendado: passeDoCiclo,
-                    notas: ''
-                });
-
-                batch.set(doc(filaRef), {
-                    assistidoId: assistidoSelecionado.id,
-                    nomeAssistido: assistidoSelecionado.nome,
-                    tratamentoId: tratamentoAtivoSelecionado.id,
-                    status: 'aguardando_entrevista_ou_passe',
-                    passeRecomendado: passeDoCiclo,
-                    semana_atual: semanaAtual, 
-                    chegadaEm: dataAtual,
-                    recepcionista: { uid: user.uid, nome: user.displayName }
-                });
-
-                await batch.commit();
-                
-                alert(`Presença de ${assistidoSelecionado.nome} (Semana ${semanaAtual}) registrada com sucesso!`);
-                ui.painelAcoesFrequencia.classList.add('hidden');
-                await carregarTratamentosAtivos();
-                e.target.disabled = false;
+                    const placeholderHistorico = {
+                        assistidoId: assistidoSelecionado.id,
+                        tratamentoId: tratamentoAtivoSelecionado.id,
+                        tipo: 'tratamento_semanal',
+                        dataAtendimento: dataAtual,
+                        semana: semanaAtual,
+                        entrevistador: 'Aguardando Detalhes',
+                        passeRecomendado: passeDoCiclo,
+                        notas: ''
+                    };
+                    const novoAtendimentoRef = await addDoc(atendimentosRef, placeholderHistorico);
+                    
+                    await addDoc(filaRef, {
+                        assistidoId: assistidoSelecionado.id,
+                        nomeAssistido: assistidoSelecionado.nome,
+                        tratamentoId: tratamentoAtivoSelecionado.id,
+                        atendimentoId: novoAtendimentoRef.id, // A PONTE DE LIGAÇÃO
+                        status: 'aguardando_entrevista_ou_passe',
+                        passeRecomendado: passeDoCiclo,
+                        semana_atual: semanaAtual, 
+                        chegadaEm: dataAtual,
+                        recepcionista: { uid: user.uid, nome: user.displayName }
+                    });
+                    
+                    alert(`Presença de ${assistidoSelecionado.nome} (Semana ${semanaAtual}) registrada com sucesso!`);
+                } catch (error) {
+                    console.error("Erro ao marcar presença: ", error);
+                    alert("Ocorreu uma falha ao marcar a presença.");
+                } finally {
+                    ui.painelAcoesFrequencia.classList.add('hidden');
+                    await carregarTratamentosAtivos();
+                    e.target.disabled = false;
+                }
             });
 
             ui.btnMarcarFaltaRapido.addEventListener('click', async (e) => {
@@ -397,8 +403,9 @@
                     batch.set(novoTratamentoRef, { assistidoId: assistidoId, dataInicio: serverTimestamp(), status: 'ativo', faltas_acumuladas: 0, passe_ciclo_atual: passeInicial });
                     
                     const dataAtual = serverTimestamp();
+                    const novoAtendimentoRef = doc(atendimentosRef);
 
-                     batch.set(doc(atendimentosRef), {
+                     batch.set(novoAtendimentoRef, {
                         assistidoId: assistidoId,
                         tratamentoId: novoTratamentoRef.id,
                         tipo: 'tratamento_semanal',
@@ -413,6 +420,7 @@
                         assistidoId: assistidoId, 
                         nomeAssistido: assistidoSelecionado.nome, 
                         tratamentoId: novoTratamentoRef.id, 
+                        atendimentoId: novoAtendimentoRef.id, // A PONTE DE LIGAÇÃO
                         status: 'aguardando_entrevista_ou_passe', 
                         passeRecomendado: passeInicial,
                         semana_atual: 1,

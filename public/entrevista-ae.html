@@ -199,10 +199,8 @@
                 </fieldset>`;
             }
 
-            async function encontrarFilaDoDia(assistidoId) {
-                const hojeInicio = new Date();
-                hojeInicio.setHours(0,0,0,0);
-                const q = query(filaRef, where("assistidoId", "==", assistidoId), where("chegadaEm", ">=", Timestamp.fromDate(hojeInicio)), limit(1));
+            async function encontrarFilaDoDia(atendimentoId) {
+                const q = query(filaRef, where("atendimentoId", "==", atendimentoId), limit(1));
                 const filaSnapshot = await getDocs(q);
                 if (!filaSnapshot.empty) {
                     return filaSnapshot.docs[0].ref;
@@ -229,7 +227,7 @@
                     
                     if (atendimento.semana === 5) {
                         const passePara = document.getElementById('colegiado-para')?.value;
-                        const filaDocRef = await encontrarFilaDoDia(atendimento.assistidoId);
+                        const filaDocRef = await encontrarFilaDoDia(atendimento.id);
                         
                         if (passePara) { 
                             const tratamentoDocRef = doc(db, 'tratamentos_ae', atendimento.tratamentoId);
@@ -254,7 +252,6 @@
                                 });
                             }
                         } else if(filaDocRef) {
-                            // Se não mudou o passe, apenas sinaliza que a decisão foi salva
                             batch.update(filaDocRef, { decisao_registrada: true });
                         }
                         
@@ -290,7 +287,7 @@
                          colegiadoNotas: document.getElementById('colegiado-notas')?.value || "Atendimento de reavaliação finalizado com alta."
                     });
                     
-                    const filaDocRef = await encontrarFilaDoDia(atendimento.assistidoId);
+                    const filaDocRef = await encontrarFilaDoDia(atendimento.id);
                     if (filaDocRef) {
                         batch.update(filaDocRef, { decisao_registrada: true });
                     }

@@ -144,7 +144,8 @@
                         });
                         const semanaAtual = atendimentosPassadosValidos + 1;
                         
-                        batch.set(doc(atendimentosRef), {
+                        const novoAtendimentoRef = doc(atendimentosRef);
+                        batch.set(novoAtendimentoRef, {
                             assistidoId: assistidoId,
                             tratamentoId: tratamento.id,
                             tipo: 'tratamento_semanal',
@@ -157,6 +158,7 @@
                         
                         batch.set(doc(collection(db, 'fila_atendimento_ae')), {
                             assistidoId: assistidoId, nomeAssistido: nomeAssistido, tratamentoId: tratamento.id,
+                            atendimentoId: novoAtendimentoRef.id,
                             status: 'aguardando_entrevista_ou_passe', passeRecomendado: tratamento.passe_ciclo_atual,
                             semana_atual: semanaAtual, chegadaEm: dataTimestamp,
                             recepcionista: { uid: user.uid, nome: `Simulação por ${user.displayName}` }
