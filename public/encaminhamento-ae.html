@@ -183,7 +183,6 @@
                     let entrevistaBtnDisabled = entrevistaChamada || entrevistaRealizada;
                     let passeBtnDisabled = true; 
 
-                    // TRAVA DE SEGURANÇA DA 5ª SEMANA
                     if (atendimento.semana_atual === 5 && !atendimento.decisao_registrada) {
                         entrevistaBtnDisabled = true;
                         avisoHtml = `<p class="aviso-decisao">Aguardando registro da decisão do Colegiado no Arquivo Geral.</p>`;
@@ -191,7 +190,7 @@
 
                     if (entrevistaRealizada) {
                         if (atendimento.semana_atual === 5) {
-                            if (atendimento.status_tratamento !== 'ativo' || atendimento.decisao_registrada) {
+                            if (atendimento.decisao_registrada) {
                                 passeBtnDisabled = false;
                             }
                         } else {
@@ -225,7 +224,37 @@
             }
 
             async function atualizarPainelTV(chamadaAtual, novoStatus) {
-                // ...
+                const mapaDeSalas = { 'SALA 1': ['P1', 'P3A', 'P3B'], 'SALA 2': ['P2', 'P4A', 'P4B', 'CH'] };
+                const getSalaPorPasse = (passe) => {
+                    if (!passe) return 'Encaminhamento';
+                    for (const sala in mapaDeSalas) {
+                        if (mapaDeSalas[sala].includes(passe.toUpperCase())) return sala;
+                    }
+                    return 'Encaminhamento';
+                };
+                
+                const passeParaTV = chamadaAtual.passe_ciclo_atual || chamadaAtual.passeRecomendado;
+                const salaDestino = novoStatus === 'chamado_entrevista' ? 'SALA DE ENTREVISTA' : getSalaPorPasse(passeParaTV);
+                
+                const chamadasAnteriores = atendimentosDoDia
+                    .filter(a => a.id !== chamadaAtual.id && (a.status === 'chamado_entrevista' || a.status === 'chamado_passe' || a.status === 'entrevista_realizada'))
+                    .sort((a,b) => b.chegadaEm.toMillis() - a.chegadaEm.toMillis());
+                    
+                const historico = chamadasAnteriores.slice(0, 3).map(a => {
+                    const passeHist = a.passe_ciclo_atual || a.passeRecomendado;
+                    let salaHist = getSalaPorPasse(passeHist);
+                    if (a.status !== 'chamado_passe') {
+                        salaHist = 'SALA DE ENTREVISTA';
+                    }
+                    return { nome: a.nomeAssistido, sala: salaHist };
+                });
+
+                await setDoc(painelEstadoRef, {
+                    nome: chamadaAtual.nomeAssistido,
+                    sala: salaDestino,
+                    historico: historico,
+                    timestamp: serverTimestamp()
+                });
             }
 
             cardsContainer.addEventListener('click', async (e) => {
