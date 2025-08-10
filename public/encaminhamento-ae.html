@@ -182,6 +182,7 @@
                     
                     let entrevistaBtnDisabled = entrevistaChamada || entrevistaRealizada;
                     let passeBtnDisabled = true; 
+                    let entrevistaRealizadaBtnDisabled = !entrevistaChamada || entrevistaRealizada;
 
                     if (atendimento.semana_atual === 5 && !atendimento.decisao_registrada) {
                         entrevistaBtnDisabled = true;
@@ -190,7 +191,7 @@
 
                     if (entrevistaRealizada) {
                         if (atendimento.semana_atual === 5) {
-                            if (atendimento.decisao_registrada) {
+                            if (atendimento.decisao_registrada) { // Só libera o passe se a decisão foi salva
                                 passeBtnDisabled = false;
                             }
                         } else {
@@ -200,7 +201,7 @@
 
                     buttonsHtml = `
                         <button class="btn btn-info btn-chamar-entrevista" data-id="${atendimento.id}" ${entrevistaBtnDisabled ? 'disabled' : ''}>1. Chamar Entrevista</button>
-                        <button class="btn btn-warning btn-entrevista-realizada" data-id="${atendimento.id}" ${!entrevistaChamada || entrevistaRealizada ? 'disabled' : ''}>2. Entrevista Realizada</button>
+                        <button class="btn btn-warning btn-entrevista-realizada" data-id="${atendimento.id}" ${entrevistaRealizadaBtnDisabled ? 'disabled' : ''}>2. Entrevista Realizada</button>
                         <button class="btn btn-success btn-chamar-passe" data-id="${atendimento.id}" ${passeBtnDisabled ? 'disabled' : ''}>3. Chamar p/ Passe</button>
                     `;
                 }

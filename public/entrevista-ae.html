@@ -45,7 +45,7 @@
 
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
-        import { getFirestore, collection, doc, getDoc, updateDoc, query, where, Timestamp, getDocs, writeBatch, serverTimestamp, limit } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
+        import { getFirestore, collection, doc, getDoc, updateDoc, query, where, Timestamp, getDocs, writeBatch, serverTimestamp, addDoc, deleteDoc, limit } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
         import { protegerPagina } from '/auth.js';
 
         const firebaseConfig = {
@@ -229,6 +229,8 @@
                     
                     if (atendimento.semana === 5) {
                         const passePara = document.getElementById('colegiado-para')?.value;
+                        const filaDocRef = await encontrarFilaDoDia(atendimento.assistidoId);
+                        
                         if (passePara) { 
                             const tratamentoDocRef = doc(db, 'tratamentos_ae', atendimento.tratamentoId);
                             batch.update(tratamentoDocRef, { status: 'concluido_por_reavaliacao', dataFim: serverTimestamp() });
@@ -243,7 +245,6 @@
                             dadosParaAtualizar.semana = 1;
                             dadosParaAtualizar.passePara = passePara;
                             
-                            const filaDocRef = await encontrarFilaDoDia(atendimento.assistidoId);
                             if (filaDocRef) {
                                 batch.update(filaDocRef, {
                                     tratamentoId: novoTratamentoRef.id,
@@ -252,7 +253,11 @@
                                     decisao_registrada: true
                                 });
                             }
+                        } else if(filaDocRef) {
+                            // Se não mudou o passe, apenas sinaliza que a decisão foi salva
+                            batch.update(filaDocRef, { decisao_registrada: true });
                         }
+                        
                         dadosParaAtualizar.colegiadoNotas = document.getElementById('colegiado-notas').value;
                         dadosParaAtualizar.encaminhamentos = Array.from(document.querySelectorAll('.checkboxes input:checked')).map(cb => cb.value);
                     }
