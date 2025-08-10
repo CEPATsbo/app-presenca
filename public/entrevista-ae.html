@@ -59,7 +59,7 @@
 
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
-        import { getFirestore, collection, doc, getDoc, onSnapshot, updateDoc, query, where, orderBy, Timestamp, getDocs, writeBatch, serverTimestamp, addDoc } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
+        import { getFirestore, collection, doc, getDoc, onSnapshot, updateDoc, query, where, orderBy, Timestamp, getDocs, writeBatch, serverTimestamp, addDoc, deleteDoc } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
         import { protegerPagina } from '/auth.js';
 
         const firebaseConfig = {
@@ -305,9 +305,9 @@
                         notas: "Atendimento de reavaliação finalizado com alta."
                     });
                     
+                    // A CORREÇÃO ESTÁ AQUI: Deleta o item da fila em vez de mudar o status
                     const filaDocRef = doc(db, 'fila_atendimento_ae', atendimento.id);
-                    // A CORREÇÃO ESTÁ AQUI:
-                    batch.update(filaDocRef, { status: 'atendimento_finalizado' });
+                    batch.delete(filaDocRef);
                     
                     await batch.commit();
                     alert('Alta registrada com sucesso!');
