@@ -126,6 +126,10 @@
                 btnVerHistorico: document.getElementById('btn-ver-historico'),
             };
             
+            const capitalizarNome = (nome) => {
+                return nome.toLowerCase().replace(/(^|\s)\S/g, L => L.toUpperCase());
+            };
+
             async function calcularSemanaAtual(tratamentoId) {
                 if (!tratamentoId) return 1;
                 const inicioDoDiaDeHoje = new Date();
@@ -148,9 +152,7 @@
             const resetarFormularioBusca = () => {
                 assistidoSelecionado = null;
                 tratamentoAtivoSelecionado = null;
-                ui.nomeInput.value = '';
-                ui.telefoneInput.value = '';
-                ui.dnInput.value = '';
+                document.getElementById('ficha-atendimento').reset();
                 ui.searchResults.innerHTML = '';
                 ui.novoAtendimentoSection.classList.add('hidden');
                 ui.btnVerHistorico.classList.add('hidden');
@@ -169,8 +171,18 @@
             const criarNovoAssistidoSeNaoExistir = async () => {
                 if (assistidoSelecionado) return assistidoSelecionado.id;
                 if (!validarDadosPessoais()) throw new Error("Dados pessoais incompletos");
-                const nome = ui.nomeInput.value.trim();
-                const novoAssistidoData = { nome: nome, nome_lower: nome.toLowerCase(), telefone: ui.telefoneInput.value, dn: ui.dnInput.value, criadoEm: serverTimestamp(), criadoPor: { uid: user.uid, nome: user.displayName } };
+                
+                const nomeOriginal = ui.nomeInput.value.trim();
+                const nomeCapitalizado = capitalizarNome(nomeOriginal);
+
+                const novoAssistidoData = { 
+                    nome: nomeCapitalizado, 
+                    nome_lower: nomeCapitalizado.toLowerCase(), 
+                    telefone: ui.telefoneInput.value, 
+                    dn: ui.dnInput.value, 
+                    criadoEm: serverTimestamp(), 
+                    criadoPor: { uid: user.uid, nome: user.displayName } 
+                };
                 const docRef = await addDoc(assistidosRef, novoAssistidoData);
                 assistidoSelecionado = { id: docRef.id, ...novoAssistidoData };
                 return docRef.id;
@@ -290,7 +302,7 @@
                         assistidoId: assistidoSelecionado.id,
                         nomeAssistido: assistidoSelecionado.nome,
                         tratamentoId: tratamentoAtivoSelecionado.id,
-                        atendimentoId: novoAtendimentoRef.id, // A PONTE DE LIGAÇÃO
+                        atendimentoId: novoAtendimentoRef.id,
                         status: 'aguardando_entrevista_ou_passe',
                         passeRecomendado: passeDoCiclo,
                         semana_atual: semanaAtual, 
@@ -376,7 +388,7 @@
                     const dataAtual = serverTimestamp();
 
                     const batch = writeBatch(db);
-                    batch.set(doc(filaRef), { assistidoId: assistidoId, nomeAssistido: assistidoSelecionado?.nome || ui.nomeInput.value, status: 'aguardando_entrevista_ou_passe', passeRecomendado: passeAvulso, tipoAtendimento: 'avulso', semana_atual: 1, chegadaEm: dataAtual, recepcionista: { uid: user.uid, nome: user.displayName } });
+                    batch.set(doc(filaRef), { assistidoId: assistidoId, nomeAssistido: capitalizarNome(ui.nomeInput.value.trim()), status: 'aguardando_entrevista_ou_passe', passeRecomendado: passeAvulso, tipoAtendimento: 'avulso', semana_atual: 1, chegadaEm: dataAtual, recepcionista: { uid: user.uid, nome: user.displayName } });
                     batch.set(doc(atendimentosRef), { assistidoId: assistidoId, tratamentoId: null, tipo: 'avulso', dataAtendimento: dataAtual, passeRecomendado: passeAvulso });
                     await batch.commit();
                     alert('Passe avulso registrado e enviado para a fila!');
@@ -420,7 +432,7 @@
                         assistidoId: assistidoId, 
                         nomeAssistido: assistidoSelecionado.nome, 
                         tratamentoId: novoTratamentoRef.id, 
-                        atendimentoId: novoAtendimentoRef.id, // A PONTE DE LIGAÇÃO
+                        atendimentoId: novoAtendimentoRef.id, 
                         status: 'aguardando_entrevista_ou_passe', 
                         passeRecomendado: passeInicial,
                         semana_atual: 1,

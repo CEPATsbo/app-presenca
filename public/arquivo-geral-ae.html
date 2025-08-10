@@ -9,7 +9,8 @@
         body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background-color: #f4f6f9; margin: 0; padding: 20px; }
         .container { width: 100%; max-width: 1400px; margin: 0 auto; background-color: #fff; padding: 30px; border-radius: 12px; box-shadow: 0 6px 24px rgba(0,0,0,0.1); }
         .nav-voltar { margin-bottom: 20px; }
-        .btn-voltar { background-color: #6c757d; color: white; border: none; padding: 12px 20px; border-radius: 8px; font-weight: bold; text-decoration: none; }
+        .btn, .btn-voltar, .btn-editar { background-color: var(--cor-primaria); color: white; border: none; padding: 12px 20px; border-radius: 8px; font-weight: bold; text-decoration: none; display: inline-block; cursor: pointer; }
+        .btn-voltar { background-color: #6c757d; }
         .hidden { display: none; }
         
         .filtros-container { display: flex; flex-direction: column; gap: 15px; margin-bottom: 20px; }
@@ -21,30 +22,31 @@
         .main-grid { display: grid; grid-template-columns: 350px 1fr; gap: 30px; min-height: 60vh; }
         .lista-assistidos-col { border-right: 1px solid var(--cor-borda); padding-right: 20px; }
         #lista-assistidos { list-style-type: none; padding: 0; margin: 0; max-height: 60vh; overflow-y: auto; }
-        #lista-assistidos li { padding: 15px; border-bottom: 1px solid #eee; cursor: pointer; transition: background-color 0.2s; font-weight: 500; }
+        #lista-assistidos li { padding: 15px; border-bottom: 1px solid #eee; cursor: pointer; font-weight: 500; }
         #lista-assistidos li:hover { background-color: var(--fundo-selecionado); }
         #lista-assistidos li.selecionado { background-color: var(--cor-primaria); color: white; font-weight: bold; }
         
         .detalhes-assistido-col h2 { text-align: center; margin-top: 0; }
         #historico-container { max-height: 60vh; overflow-y: auto; }
         .ciclo-tratamento { border: 1px solid var(--cor-borda); border-radius: 8px; margin-bottom: 20px; }
-        .ciclo-header { background-color: #f8f9fa; padding: 15px; border-bottom: 1px solid var(--cor-borda); font-weight: bold; display: flex; justify-content: space-between; }
+        .ciclo-header { background-color: #f8f9fa; padding: 15px; border-bottom: 1px solid var(--cor-borda); font-weight: bold; display: flex; justify-content: space-between; flex-wrap: wrap; }
         .ciclo-header .status-ativo { color: #28a745; }
         .ciclo-header .status-concluido { color: #6c757d; }
         .atendimentos-lista { list-style-type: none; padding: 0; margin: 0; }
         .atendimentos-lista li { display: flex; justify-content: space-between; align-items: center; padding: 12px 15px; border-bottom: 1px solid #eee; }
         .atendimentos-lista li:last-child { border-bottom: none; }
-        .btn-editar { background-color: #17a2b8; color: white; border: none; padding: 6px 12px; border-radius: 6px; text-decoration: none; font-size: 0.9em; }
+        .atendimento-info { display: flex; align-items: center; gap: 10px; }
+        .btn-editar { background-color: #17a2b8; padding: 6px 12px; border-radius: 6px; font-size: 0.9em; }
     </style>
 </head>
 <body>
     <div class="container">
-        <nav class="nav-voltar"><a href="/dashboard-ae.html" class="btn-voltar">⬅ Voltar para o Dashboard</a></nav>
+        <nav class="nav-voltar"><a href="/dashboard-ae.html" class="btn-voltar">⬅ Voltar para o Painel AE</a></nav>
         <div id="acesso-negado" class="hidden"><h1>Acesso Negado</h1></div>
 
         <div id="main-content">
             <header>
-                <h1 style="text-align: center;">Arquivo Geral de Atendimentos</h1>
+                <h1 style="text-align: center;">Arquivo e Edição de Entrevistas</h1>
             </header>
             <section class="filtros-container">
                 <div id="alfabeto-filtro" class="alfabeto-filtro"></div>
@@ -66,7 +68,7 @@
 
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
-        import { getFirestore, collection, doc, getDoc, query, where, getDocs, orderBy } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
+        import { getFirestore, collection, doc, getDoc, query, where, getDocs, orderBy, Timestamp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
         import { protegerPagina } from '/auth.js';
 
         const firebaseConfig = {
@@ -79,7 +81,7 @@
         };
         initializeApp(firebaseConfig);
 
-        protegerPagina(['entrevistador', 'tesoureiro', 'conselheiro', 'recepcionista', 'diretor', 'super-admin']).then(user => {
+        protegerPagina(['entrevistador', 'diretor', 'super-admin', 'recepcionista']).then(user => {
             document.getElementById('main-content').classList.remove('hidden');
             inicializarPagina(user);
         }).catch(err => {
@@ -140,6 +142,19 @@
                 const snapshot = await getDocs(q);
                 const assistidos = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
                 renderizarListaAssistidos(assistidos);
+                
+                const params = new URLSearchParams(window.location.search);
+                const assistidoIdUrl = params.get('assistidoId');
+                if (assistidoIdUrl) {
+                    const assistidoParaMostrar = assistidos.find(a => a.id === assistidoIdUrl);
+                    if (assistidoParaMostrar) {
+                        const liCorrespondente = ui.listaAssistidos.querySelector(`[data-assistido-id="${assistidoIdUrl}"]`);
+                        if (liCorrespondente) {
+                            liCorrespondente.classList.add('selecionado');
+                        }
+                        mostrarDetalhes(assistidoParaMostrar);
+                    }
+                }
             }
 
             function renderizarListaAssistidos(assistidos) {
@@ -164,66 +179,80 @@
             async function mostrarDetalhes(assistido) {
                 ui.detalhesAssistido.innerHTML = `<h2>Histórico de ${assistido.nome}</h2><p>Carregando histórico...</p>`;
                 
+                // Busca por atendimentos de tratamento
                 const qTratamentos = query(tratamentosRef, where('assistidoId', '==', assistido.id), orderBy('dataInicio', 'desc'));
                 const tratamentosSnapshot = await getDocs(qTratamentos);
                 
-                if (tratamentosSnapshot.empty) {
-                    ui.detalhesAssistido.innerHTML = `<h2>Histórico de ${assistido.nome}</h2><p>Nenhum ciclo de tratamento encontrado para este assistido.</p>`;
-                    return;
-                }
-
-                const promessasDeCiclos = tratamentosSnapshot.docs.map(async (tratamentoDoc) => {
+                const promessasDeAtendimentos = tratamentosSnapshot.docs.map(async (tratamentoDoc) => {
                     const tratamento = { id: tratamentoDoc.id, ...tratamentoDoc.data() };
-                    const qAtendimentos = query(atendimentosRef, where('tratamentoId', '==', tratamento.id), orderBy('dataAtendimento', 'asc'));
+                    const qAtendimentos = query(atendimentosRef, where('tratamentoId', '==', tratamento.id));
                     const atendimentosSnapshot = await getDocs(qAtendimentos);
-                    const atendimentos = atendimentosSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-                    return { tratamento, atendimentos };
+                    return atendimentosSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
                 });
+                
+                // Busca por passes avulsos
+                const qAvulsos = query(atendimentosRef, where('assistidoId', '==', assistido.id), where('tipo', '==', 'avulso'));
+                const avulsosSnapshot = await getDocs(qAvulsos);
+                const passesAvulsos = avulsosSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
 
-                const ciclosCompletos = await Promise.all(promessasDeCiclos);
-                renderizarHistorico(assistido, ciclosCompletos);
+                const todosOsAtendimentosArrays = await Promise.all(promessasDeAtendimentos);
+                const todosOsAtendimentos = todosOsAtendimentosArrays.flat().concat(passesAvulsos);
+                
+                todosOsAtendimentos.sort((a, b) => b.dataAtendimento.toMillis() - a.dataAtendimento.toMillis());
+
+                renderizarHistorico(assistido, todosOsAtendimentos);
             }
             
-            function renderizarHistorico(assistido, ciclos) {
+            function renderizarHistorico(assistido, atendimentos) {
                 let html = `<h2>Histórico de ${assistido.nome}</h2>`;
-                html += `<p><strong>DN:</strong> ${new Date(assistido.dn + 'T12:00:00').toLocaleDateString('pt-br')} | <strong>Telefone:</strong> ${assistido.telefone}</p>`;
+                const dnFormatado = assistido.dn ? new Date(assistido.dn + 'T12:00:00').toLocaleDateString('pt-br') : 'Não informado';
+                html += `<p><strong>DN:</strong> ${dnFormatado} | <strong>Telefone:</strong> ${assistido.telefone || 'Não informado'}</p>`;
                 html += '<div id="historico-container">';
 
-                if (ciclos.length === 0) {
-                    html += '<p>Nenhum ciclo de tratamento encontrado.</p>';
+                if (atendimentos.length === 0) {
+                    html += '<p>Nenhum atendimento registrado.</p>';
                 } else {
-                    ciclos.forEach(ciclo => {
-                        const t = ciclo.tratamento;
-                        const dataInicio = t.dataInicio ? t.dataInicio.toDate().toLocaleDateString('pt-br') : 'N/A';
-                        const statusClasse = t.status === 'ativo' ? 'status-ativo' : 'status-concluido';
-                        
-                        html += `<div class="ciclo-tratamento">
-                                    <div class="ciclo-header">
-                                        <span>Início: ${dataInicio} | Passe do Ciclo: ${t.passe_ciclo_atual || 'N/A'}</span>
-                                        <span class="${statusClasse}">${t.status.replace(/_/g, ' ')}</span>
-                                    </div>
-                                    <ul class="atendimentos-lista">`;
+                    html += `<ul class="atendimentos-lista">`;
+                    atendimentos.forEach(a => {
+                        const dataAtendimento = a.dataAtendimento.toDate().toLocaleDateString('pt-br');
+                        let tipoAtendimento = '';
+                        let infoExtra = '';
+                        let botaoEditarHtml = '';
+                        let iconeHtml = '';
 
-                        if (ciclo.atendimentos.length === 0) {
-                            html += '<li>Nenhum atendimento registrado para este ciclo.</li>';
+                        if (a.tipo === 'avulso') {
+                            tipoAtendimento = 'Passe Avulso';
+                            infoExtra = `(${a.passeRecomendado})`;
+                        } else if (a.tipo === 'falta') {
+                            tipoAtendimento = 'Falta';
                         } else {
-                            ciclo.atendimentos.forEach(a => {
-                                const dataAtendimento = a.dataAtendimento.toDate().toLocaleDateString('pt-br');
-                                const tipoAtendimento = a.tipo.replace(/_/g, ' ');
-                                html += `<li>
-                                            <span><strong>${dataAtendimento}</strong> - Semana ${a.semana || '?'} (${tipoAtendimento})</span>
-                                            <a href="/entrevista-ae.html?atendimentoId=${a.id}" target="_blank" class="btn-editar">Ver / Editar Detalhes</a>
-                                        </li>`;
-                            });
+                            tipoAtendimento = `Semana ${a.semana || '?'}`;
+                            infoExtra = `(${a.passeRecomendado})`;
                         }
-                        html += `</ul></div>`;
+
+                        if (a.entrevistador && a.entrevistador !== 'Passe Direto') {
+                            if (a.notas && a.notas.trim() !== '') {
+                                iconeHtml = '<span>✅</span>'; // Entrevista preenchida
+                            } else {
+                                iconeHtml = '<span>📝</span>'; // Entrevista pendente de preenchimento
+                            }
+                            botaoEditarHtml = `<a href="/entrevista-ae.html?atendimentoId=${a.id}" target="_blank" class="btn btn-editar">Ver / Editar</a>`;
+                        }
+
+                        html += `<li>
+                                    <div class="atendimento-info">
+                                        ${iconeHtml}
+                                        <span><strong>${dataAtendimento}</strong> - ${tipoAtendimento} ${infoExtra}</span>
+                                    </div>
+                                    ${botaoEditarHtml}
+                                </li>`;
                     });
+                    html += `</ul>`;
                 }
                 html += '</div>';
                 ui.detalhesAssistido.innerHTML = html;
             }
 
-            // Event Listeners
             ui.alfabetoFiltro.addEventListener('click', (e) => {
                 if (e.target.tagName === 'BUTTON') {
                     document.querySelectorAll('#alfabeto-filtro button').forEach(btn => btn.classList.remove('ativo'));
@@ -241,7 +270,6 @@
                 }, 500);
             });
 
-            // Carga inicial
             gerarBotoesAlfabeto();
             carregarAssistidos();
         }
