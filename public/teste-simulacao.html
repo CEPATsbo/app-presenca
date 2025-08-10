@@ -24,27 +24,35 @@
     </div>
 
     <div id="main-content" class="container hidden">
-        <h1>Máquina do Tempo (Simulação de Fila)</h1>
-        <p style="text-align: center; color: #666;">Use esta página para adicionar um assistido à fila de atendimento em uma data específica.</p>
+        <h1>Máquina do Tempo (Simulação de Eventos)</h1>
+        <p style="text-align: center; color: #666;">Use esta página para simular eventos em datas específicas.</p>
 
         <div class="form-item">
             <label for="assistido-id">ID do Assistido:</label>
             <input type="text" id="assistido-id" placeholder="Cole aqui o ID do documento do assistido">
         </div>
+        
+        <div class="form-item">
+            <label for="acao">Ação a Simular:</label>
+            <select id="acao">
+                <option value="presenca">Adicionar à Fila (Presença)</option>
+                <option value="falta">Marcar Falta</option>
+            </select>
+        </div>
 
         <div class="form-item">
-            <label for="data-simulacao">Adicionar à Fila do Dia:</label>
+            <label for="data-simulacao">Data da Simulação:</label>
             <input type="date" id="data-simulacao">
         </div>
 
-        <button id="btn-simular" class="btn">Adicionar à Fila</button>
+        <button id="btn-simular" class="btn">Simular Ação</button>
 
         <div id="log" style="display: none;"></div>
     </div>
 
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
-        import { getFirestore, collection, doc, getDoc, query, where, getDocs, addDoc, Timestamp, orderBy, limit } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
+        import { getFirestore, collection, doc, getDoc, query, where, getDocs, addDoc, Timestamp, orderBy, limit, writeBatch, increment } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
         import { protegerPagina } from '/auth.js';
 
         const firebaseConfig = {
@@ -68,11 +76,13 @@
         function inicializarPagina(user) {
             const ui = {
                 assistidoIdInput: document.getElementById('assistido-id'),
+                acaoSelect: document.getElementById('acao'),
                 dataInput: document.getElementById('data-simulacao'),
                 btnSimular: document.getElementById('btn-simular'),
                 logDiv: document.getElementById('log'),
             };
             const atendimentosRef = collection(db, 'atendimentos_ae');
+            const tratamentosRef = collection(db, 'tratamentos_ae');
 
             const hoje = new Date();
             const offset = hoje.getTimezoneOffset();
@@ -91,12 +101,13 @@
                 log('Iniciando simulação...');
 
                 const assistidoId = ui.assistidoIdInput.value.trim();
+                const acao = ui.acaoSelect.value;
                 const dataSimulada = ui.dataInput.value;
 
                 if (!assistidoId || !dataSimulada) {
                     log('Erro: Preencha o ID do Assistido e a Data da Simulação.', true);
                     ui.btnSimular.disabled = false;
-                    ui.btnSimular.textContent = 'Adicionar à Fila';
+                    ui.btnSimular.textContent = 'Simular Ação';
                     return;
                 }
 
@@ -107,7 +118,7 @@
                     const nomeAssistido = assistidoDoc.data().nome;
 
                     const qTratamento = query(
-                        collection(db, 'tratamentos_ae'),
+                        tratamentosRef,
                         where('assistidoId', '==', assistidoId),
                         where('status', '==', 'ativo'),
                         orderBy('dataInicio', 'desc'),
@@ -118,41 +129,61 @@
                     const tratamentoDoc = tratamentoSnapshot.docs[0];
                     const tratamento = { id: tratamentoDoc.id, ...tratamentoDoc.data() };
 
-                    const inicioDaVisitaSimulada = new Date(dataSimulada + 'T00:00:00');
-                    const qHistorico = query(
-                        atendimentosRef, 
-                        where("tratamentoId", "==", tratamento.id),
-                        where("dataAtendimento", "<", Timestamp.fromDate(inicioDaVisitaSimulada))
-                    );
-                    const historicoSnapshot = await getDocs(qHistorico);
-                    let atendimentosPassadosValidos = 0;
-                    historicoSnapshot.forEach(doc => {
-                        if (doc.data().tipo !== 'falta') { atendimentosPassadosValidos++; }
-                    });
-                    const semanaAtual = atendimentosPassadosValidos + 1;
-
                     const dataTimestamp = Timestamp.fromDate(new Date(dataSimulada + 'T12:00:00'));
                     
-                    const docParaFila = {
-                        assistidoId: assistidoId,
-                        nomeAssistido: nomeAssistido,
-                        tratamentoId: tratamento.id,
-                        status: 'aguardando_entrevista_ou_passe',
-                        passeRecomendado: tratamento.passe_ciclo_atual,
-                        semana_atual: semanaAtual,
-                        chegadaEm: dataTimestamp,
-                        recepcionista: { uid: user.uid, nome: `Simulação por ${user.displayName}` }
-                    };
+                    if (acao === 'presenca') {
+                        const inicioDaVisitaSimulada = new Date(dataSimulada + 'T00:00:00');
+                        const qHistorico = query(atendimentosRef, 
+                            where("tratamentoId", "==", tratamento.id),
+                            where("dataAtendimento", "<", Timestamp.fromDate(inicioDaVisitaSimulada))
+                        );
+                        const historicoSnapshot = await getDocs(qHistorico);
+                        let atendimentosPassadosValidos = 0;
+                        historicoSnapshot.forEach(doc => {
+                            if (doc.data().tipo !== 'falta') { atendimentosPassadosValidos++; }
+                        });
+                        const semanaAtual = atendimentosPassadosValidos + 1;
+                        
+                        const docParaFila = {
+                            assistidoId: assistidoId, nomeAssistido: nomeAssistido, tratamentoId: tratamento.id,
+                            status: 'aguardando_entrevista_ou_passe', passeRecomendado: tratamento.passe_ciclo_atual,
+                            semana_atual: semanaAtual, chegadaEm: dataTimestamp,
+                            recepcionista: { uid: user.uid, nome: `Simulação por ${user.displayName}` }
+                        };
+                        await addDoc(collection(db, 'fila_atendimento_ae'), docParaFila);
+                        log(`Sucesso: '${nomeAssistido}' (Semana ${semanaAtual}) adicionado à fila do dia ${new Date(dataSimulada + 'T12:00:00').toLocaleDateString()}.`);
 
-                    await addDoc(collection(db, 'fila_atendimento_ae'), docParaFila);
-                    log(`Sucesso: '${nomeAssistido}' (Semana ${semanaAtual}) adicionado à fila do dia ${new Date(dataSimulada + 'T12:00:00').toLocaleDateString()}.`);
+                    } else if (acao === 'falta') {
+                        const batch = writeBatch(db);
+                        const tratamentoDocRef = doc(db, 'tratamentos_ae', tratamento.id);
+
+                        batch.set(doc(atendimentosRef), {
+                            assistidoId: assistidoId, tratamentoId: tratamento.id, tipo: 'falta',
+                            dataAtendimento: dataTimestamp
+                        });
+                        
+                        batch.update(tratamentoDocRef, { faltas_acumuladas: increment(1) });
+                        
+                        const faltasAtuais = tratamento.faltas_acumuladas || 0;
+                        const novoTotalFaltas = faltasAtuais + 1;
+
+                        // REGRA SIMPLES DE TESTE: Encerra com 2 faltas.
+                        if (novoTotalFaltas >= 2) {
+                             batch.update(tratamentoDocRef, { status: 'encerrado_por_falta' });
+                             log(`Falta registrada. ATENÇÃO: Tratamento encerrado por atingir ${novoTotalFaltas} faltas!`);
+                        } else {
+                            log(`Falta registrada com sucesso! Total de faltas agora é ${novoTotalFaltas}.`);
+                        }
+                        
+                        await batch.commit();
+                    }
 
                 } catch (error) {
                     console.error("Erro na simulação:", error);
                     log(`ERRO: ${error.message}`, true);
                 } finally {
                     ui.btnSimular.disabled = false;
-                    ui.btnSimular.textContent = 'Adicionar à Fila';
+                    ui.btnSimular.textContent = 'Simular Ação';
                 }
             });
         }
