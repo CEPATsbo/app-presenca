@@ -87,7 +87,12 @@
             let atendimentosDoDia = [];
             let unsubscribeFila; 
 
-            seletorData.value = new Date().toISOString().split("T")[0];
+            // CORREÇÃO PARA A DATA LOCAL
+            const hoje = new Date();
+            const offset = hoje.getTimezoneOffset();
+            const hojeLocal = new Date(hoje.getTime() - (offset*60*1000));
+            seletorData.value = hojeLocal.toISOString().split("T")[0];
+            
             monitorarFila(seletorData.value);
 
             seletorData.addEventListener('change', () => {
@@ -143,22 +148,27 @@
                 const tratamento = tratamentoDoc.data();
 
                 // =========================================================================================
-                // LÓGICA DE CONTAGEM DE SEMANA DEFINITIVA: SÓ CONTA VISITAS DE DIAS ANTERIORES
+                // CORREÇÃO DA QUERY DO FIREBASE
                 // =========================================================================================
                 const inicioDaVisitaAtual = new Date();
                 inicioDaVisitaAtual.setHours(0,0,0,0);
 
                 const qHistorico = query(
                     atendimentosRef, 
-                    where("tratamentoId", "==", atendimento.tratamentoId), 
-                    where("tipo", "!=", "falta"),
-                    where("dataAtendimento", "<", Timestamp.fromDate(inicioDaVisitaAtual)) // A MÁGICA ACONTECE AQUI
+                    where("tratamentoId", "==", atendimento.tratamentoId),
+                    where("dataAtendimento", "<", Timestamp.fromDate(inicioDaVisitaAtual))
                 );
                 const historicoSnapshot = await getDocs(qHistorico);
                 
-                // Não precisamos mais do Set, pois a nova query já filtra os dias corretamente.
-                // Uma visita por dia de trabalho.
-                const semanaNum = historicoSnapshot.size + 1;
+                // Filtro para "tipo != 'falta'" feito no lado do cliente
+                let atendimentosPassadosValidos = 0;
+                historicoSnapshot.forEach(doc => {
+                    if (doc.data().tipo !== 'falta') {
+                        atendimentosPassadosValidos++;
+                    }
+                });
+                
+                const semanaNum = atendimentosPassadosValidos + 1;
                 // =========================================================================================
                 
                 const passe = tratamento.passe_ciclo_atual;
