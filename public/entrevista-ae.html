@@ -199,6 +199,17 @@
                 </fieldset>`;
             }
 
+            async function encontrarFilaDoDia(assistidoId) {
+                const hojeInicio = new Date();
+                hojeInicio.setHours(0,0,0,0);
+                const q = query(filaRef, where("assistidoId", "==", assistidoId), where("chegadaEm", ">=", Timestamp.fromDate(hojeInicio)), limit(1));
+                const filaSnapshot = await getDocs(q);
+                if (!filaSnapshot.empty) {
+                    return filaSnapshot.docs[0].ref;
+                }
+                return null;
+            }
+
             async function salvarEdicao(atendimento) {
                 const btn = document.getElementById('btn-salvar-entrevista');
                 btn.disabled = true;
@@ -232,14 +243,13 @@
                             dadosParaAtualizar.semana = 1;
                             dadosParaAtualizar.passePara = passePara;
                             
-                            const filaQuery = query(filaRef, where("assistidoId", "==", atendimento.assistidoId), where("chegadaEm", ">=", new Date(new Date().setHours(0,0,0,0))));
-                            const filaSnapshot = await getDocs(filaQuery);
-                            if (!filaSnapshot.empty) {
-                                const filaDocRef = filaSnapshot.docs[0].ref;
+                            const filaDocRef = await encontrarFilaDoDia(atendimento.assistidoId);
+                            if (filaDocRef) {
                                 batch.update(filaDocRef, {
                                     tratamentoId: novoTratamentoRef.id,
                                     semana_atual: 1,
-                                    passeRecomendado: passePara
+                                    passeRecomendado: passePara,
+                                    decisao_registrada: true // SINALIZA PARA O ENCAMINHAMENTO
                                 });
                             }
                         }
@@ -275,8 +285,13 @@
                          colegiadoNotas: document.getElementById('colegiado-notas')?.value || "Atendimento de reavaliação finalizado com alta."
                     });
                     
+                    const filaDocRef = await encontrarFilaDoDia(atendimento.assistidoId);
+                    if (filaDocRef) {
+                        batch.update(filaDocRef, { decisao_registrada: true }); // SINALIZA PARA O ENCAMINHAMENTO
+                    }
+                    
                     await batch.commit();
-                    alert('Alta registrada! O tratamento foi encerrado. O assistido ainda passará pela entrevista final de hoje.');
+                    alert('Alta registrada! O tratamento foi encerrado. O fluxo do dia continuará para a entrevista final.');
                 } else {
                      btn.disabled = false;
                 }

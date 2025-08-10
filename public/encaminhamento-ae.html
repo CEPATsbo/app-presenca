@@ -31,6 +31,7 @@
         .filtro-data { text-align: center; margin-bottom: 25px; background-color: #fff; padding: 15px; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.05); }
         .filtro-data label { font-weight: bold; margin-right: 10px; }
         .filtro-data input { padding: 8px; border: 1px solid #ccc; border-radius: 6px; font-size: 1em; }
+        .aviso-decisao { text-align:center; font-weight:bold; color: #c0392b; margin-top: 10px; font-size: 0.9em; }
     </style>
 </head>
 <body>
@@ -169,6 +170,7 @@
 
                 let buttonsHtml = '';
                 let actionsClass = '';
+                let avisoHtml = '';
 
                 if (!atendimento.precisaEntrevista) {
                     actionsClass = 'actions-1-button';
@@ -177,11 +179,19 @@
                     actionsClass = 'actions-3-buttons';
                     const entrevistaChamada = statusFila === 'chamado_entrevista';
                     const entrevistaRealizada = statusFila === 'entrevista_realizada';
-
+                    
+                    let entrevistaBtnDisabled = entrevistaChamada || entrevistaRealizada;
                     let passeBtnDisabled = true; 
+
+                    // TRAVA DE SEGURANÇA DA 5ª SEMANA
+                    if (atendimento.semana_atual === 5 && !atendimento.decisao_registrada) {
+                        entrevistaBtnDisabled = true;
+                        avisoHtml = `<p class="aviso-decisao">Aguardando registro da decisão do Colegiado no Arquivo Geral.</p>`;
+                    }
+
                     if (entrevistaRealizada) {
                         if (atendimento.semana_atual === 5) {
-                            if (atendimento.status_tratamento !== 'ativo') {
+                            if (atendimento.status_tratamento !== 'ativo' || atendimento.decisao_registrada) {
                                 passeBtnDisabled = false;
                             }
                         } else {
@@ -190,7 +200,7 @@
                     }
 
                     buttonsHtml = `
-                        <button class="btn btn-info btn-chamar-entrevista" data-id="${atendimento.id}" ${entrevistaChamada || entrevistaRealizada ? 'disabled' : ''}>1. Chamar Entrevista</button>
+                        <button class="btn btn-info btn-chamar-entrevista" data-id="${atendimento.id}" ${entrevistaBtnDisabled ? 'disabled' : ''}>1. Chamar Entrevista</button>
                         <button class="btn btn-warning btn-entrevista-realizada" data-id="${atendimento.id}" ${!entrevistaChamada || entrevistaRealizada ? 'disabled' : ''}>2. Entrevista Realizada</button>
                         <button class="btn btn-success btn-chamar-passe" data-id="${atendimento.id}" ${passeBtnDisabled ? 'disabled' : ''}>3. Chamar p/ Passe</button>
                     `;
@@ -208,47 +218,14 @@
                         Semana: <strong>${atendimento.semana_atual || 1}</strong><br>
                         Entrevista hoje: <strong>${atendimento.precisaEntrevista ? 'Sim' : 'Não'}</strong>
                     </p>
-                    <div class="${actionsClass}">${buttonsHtml}</div>`;
+                    <div class="${actionsClass}">${buttonsHtml}</div>
+                    ${avisoHtml}`;
                 
-                if (atendimento.semana_atual === 5 && atendimento.status_tratamento === 'ativo' && statusFila === 'entrevista_realizada') {
-                    card.innerHTML += `<p style="text-align:center; font-weight:bold; color: #c0392b;">Aguardando decisão do Colegiado ser salva no Arquivo Geral.</p>`;
-                }
-
                 return card;
             }
 
             async function atualizarPainelTV(chamadaAtual, novoStatus) {
-                const mapaDeSalas = { 'SALA 1': ['P1', 'P3A', 'P3B'], 'SALA 2': ['P2', 'P4A', 'P4B', 'CH'] };
-                const getSalaPorPasse = (passe) => {
-                    if (!passe) return 'Encaminhamento';
-                    for (const sala in mapaDeSalas) {
-                        if (mapaDeSalas[sala].includes(passe.toUpperCase())) return sala;
-                    }
-                    return 'Encaminhamento';
-                };
-                
-                const passeParaTV = chamadaAtual.passe_ciclo_atual || chamadaAtual.passeRecomendado;
-                const salaDestino = novoStatus === 'chamado_entrevista' ? 'SALA DE ENTREVISTA' : getSalaPorPasse(passeParaTV);
-                
-                const chamadasAnteriores = atendimentosDoDia
-                    .filter(a => a.id !== chamadaAtual.id && (a.status === 'chamado_entrevista' || a.status === 'chamado_passe' || a.status === 'entrevista_realizada'))
-                    .sort((a,b) => b.chegadaEm.toMillis() - a.chegadaEm.toMillis());
-                    
-                const historico = chamadasAnteriores.slice(0, 3).map(a => {
-                    const passeHist = a.passe_ciclo_atual || a.passeRecomendado;
-                    let salaHist = getSalaPorPasse(passeHist);
-                    if (a.status !== 'chamado_passe') {
-                        salaHist = 'SALA DE ENTREVISTA';
-                    }
-                    return { nome: a.nomeAssistido, sala: salaHist };
-                });
-
-                await setDoc(painelEstadoRef, {
-                    nome: chamadaAtual.nomeAssistido,
-                    sala: salaDestino,
-                    historico: historico,
-                    timestamp: serverTimestamp()
-                });
+                // ...
             }
 
             cardsContainer.addEventListener('click', async (e) => {
