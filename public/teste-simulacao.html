@@ -44,7 +44,7 @@
 
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
-        import { getFirestore, collection, doc, getDoc, query, where, getDocs, addDoc, writeBatch, Timestamp, increment, orderBy, limit } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
+        import { getFirestore, collection, doc, getDoc, query, where, getDocs, addDoc, Timestamp, orderBy, limit } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
         import { protegerPagina } from '/auth.js';
 
         const firebaseConfig = {
@@ -72,8 +72,12 @@
                 btnSimular: document.getElementById('btn-simular'),
                 logDiv: document.getElementById('log'),
             };
+            const atendimentosRef = collection(db, 'atendimentos_ae');
 
-            ui.dataInput.value = new Date().toISOString().split("T")[0];
+            const hoje = new Date();
+            const offset = hoje.getTimezoneOffset();
+            const hojeLocal = new Date(hoje.getTime() - (offset*60*1000));
+            ui.dataInput.value = hojeLocal.toISOString().split("T")[0];
 
             function log(message, isError = false) {
                 ui.logDiv.style.display = 'block';
@@ -97,15 +101,11 @@
                 }
 
                 try {
-                    // Passo 1: Buscar o documento do assistido para pegar o nome
                     const assistidoRef = doc(db, 'assistidos', assistidoId);
                     const assistidoDoc = await getDoc(assistidoRef);
-                    if (!assistidoDoc.exists()) {
-                        throw new Error(`Assistido com ID ${assistidoId} não encontrado.`);
-                    }
+                    if (!assistidoDoc.exists()) { throw new Error(`Assistido com ID ${assistidoId} não encontrado.`); }
                     const nomeAssistido = assistidoDoc.data().nome;
 
-                    // Passo 2: Encontrar o tratamento ATIVO para o assistido
                     const qTratamento = query(
                         collection(db, 'tratamentos_ae'),
                         where('assistidoId', '==', assistidoId),
@@ -114,13 +114,23 @@
                         limit(1)
                     );
                     const tratamentoSnapshot = await getDocs(qTratamento);
-                    if (tratamentoSnapshot.empty) {
-                        throw new Error(`Nenhum tratamento ATIVO encontrado para o ID: ${assistidoId}`);
-                    }
+                    if (tratamentoSnapshot.empty) { throw new Error(`Nenhum tratamento ATIVO encontrado para o ID: ${assistidoId}`); }
                     const tratamentoDoc = tratamentoSnapshot.docs[0];
                     const tratamento = { id: tratamentoDoc.id, ...tratamentoDoc.data() };
 
-                    // Passo 3: Preparar o documento para a FILA
+                    const inicioDaVisitaSimulada = new Date(dataSimulada + 'T00:00:00');
+                    const qHistorico = query(
+                        atendimentosRef, 
+                        where("tratamentoId", "==", tratamento.id),
+                        where("dataAtendimento", "<", Timestamp.fromDate(inicioDaVisitaSimulada))
+                    );
+                    const historicoSnapshot = await getDocs(qHistorico);
+                    let atendimentosPassadosValidos = 0;
+                    historicoSnapshot.forEach(doc => {
+                        if (doc.data().tipo !== 'falta') { atendimentosPassadosValidos++; }
+                    });
+                    const semanaAtual = atendimentosPassadosValidos + 1;
+
                     const dataTimestamp = Timestamp.fromDate(new Date(dataSimulada + 'T12:00:00'));
                     
                     const docParaFila = {
@@ -129,17 +139,13 @@
                         tratamentoId: tratamento.id,
                         status: 'aguardando_entrevista_ou_passe',
                         passeRecomendado: tratamento.passe_ciclo_atual,
-                        chegadaEm: dataTimestamp, // USA A DATA SIMULADA
-                        recepcionista: { 
-                            uid: user.uid, 
-                            nome: `Simulação por ${user.displayName}` 
-                        }
+                        semana_atual: semanaAtual,
+                        chegadaEm: dataTimestamp,
+                        recepcionista: { uid: user.uid, nome: `Simulação por ${user.displayName}` }
                     };
 
-                    // Passo 4: Adicionar o documento na coleção correta (`fila_atendimento_ae`)
                     await addDoc(collection(db, 'fila_atendimento_ae'), docParaFila);
-
-                    log(`Sucesso: '${nomeAssistido}' adicionado à fila do dia ${new Date(dataSimulada + 'T12:00:00').toLocaleDateString()}.`);
+                    log(`Sucesso: '${nomeAssistido}' (Semana ${semanaAtual}) adicionado à fila do dia ${new Date(dataSimulada + 'T12:00:00').toLocaleDateString()}.`);
 
                 } catch (error) {
                     console.error("Erro na simulação:", error);

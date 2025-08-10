@@ -116,7 +116,7 @@
                 );
 
                 unsubscribeFila = onSnapshot(qFila, async (snapshot) => {
-                    const promessas = snapshot.docs.map(docSnapshot => getContextoDoAtendimento(docSnapshot, dataString));
+                    const promessas = snapshot.docs.map(docSnapshot => getContextoDoAtendimento(docSnapshot));
                     atendimentosDoDia = await Promise.all(promessas.filter(p => p !== null));
                     
                     renderizarCards();
@@ -134,7 +134,7 @@
                 });
             }
 
-            async function getContextoDoAtendimento(filaDocSnapshot, dataDaVisitaString) {
+            async function getContextoDoAtendimento(filaDocSnapshot) {
                 const atendimento = { id: filaDocSnapshot.id, ...filaDocSnapshot.data() };
                 if (atendimento.tipoAtendimento === 'avulso') {
                     return { ...atendimento, precisaEntrevista: false, semana_atual: 1 };
@@ -145,24 +145,8 @@
                 const tratamentoDoc = await getDoc(tratamentoDocRef);
                 if (!tratamentoDoc.exists()) return null;
                 const tratamento = tratamentoDoc.data();
-
-                const inicioDaVisitaAtual = new Date(dataDaVisitaString + 'T00:00:00');
-
-                const qHistorico = query(
-                    atendimentosRef, 
-                    where("tratamentoId", "==", atendimento.tratamentoId),
-                    where("dataAtendimento", "<", Timestamp.fromDate(inicioDaVisitaAtual))
-                );
-                const historicoSnapshot = await getDocs(qHistorico);
                 
-                let atendimentosPassadosValidos = 0;
-                historicoSnapshot.forEach(doc => {
-                    if (doc.data().tipo !== 'falta') {
-                        atendimentosPassadosValidos++;
-                    }
-                });
-                
-                const semanaNum = atendimentosPassadosValidos + 1;
+                const semanaNum = atendimento.semana_atual || 1;
                 
                 const passe = tratamento.passe_ciclo_atual;
                 let precisaEntrevista = false;
@@ -170,7 +154,7 @@
                 if (passe === 'P3A' || passe === 'P3B' || [1, 4, 5].includes(semanaNum)) {
                     precisaEntrevista = true;
                 }
-                return { ...atendimento, precisaEntrevista, passe_ciclo_atual: passe, semana_atual: semanaNum };
+                return { ...atendimento, precisaEntrevista, passe_ciclo_atual: passe };
             }
 
             function criarCard(atendimento) {

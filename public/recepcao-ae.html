@@ -137,6 +137,29 @@
                 btnVerHistorico: document.getElementById('btn-ver-historico'),
             };
             
+            async function calcularSemanaAtual(tratamentoId) {
+                if (!tratamentoId) return 1;
+
+                const inicioDoDiaDeHoje = new Date();
+                inicioDoDiaDeHoje.setHours(0, 0, 0, 0);
+
+                const qHistorico = query(
+                    atendimentosRef, 
+                    where("tratamentoId", "==", tratamentoId),
+                    where("dataAtendimento", "<", Timestamp.fromDate(inicioDoDiaDeHoje))
+                );
+                const historicoSnapshot = await getDocs(qHistorico);
+                
+                let atendimentosPassadosValidos = 0;
+                historicoSnapshot.forEach(doc => {
+                    if (doc.data().tipo !== 'falta') {
+                        atendimentosPassadosValidos++;
+                    }
+                });
+                
+                return atendimentosPassadosValidos + 1;
+            }
+            
             const resetarFormularioBusca = () => {
                 assistidoSelecionado = null;
                 tratamentoAtivoSelecionado = null;
@@ -253,6 +276,7 @@
                     return;
                 }
 
+                const semanaAtual = await calcularSemanaAtual(tratamentoAtivoSelecionado.id);
                 const passeDoCiclo = tratamentoAtivoSelecionado.passe_ciclo_atual;
 
                 await addDoc(filaRef, {
@@ -260,13 +284,14 @@
                     nomeAssistido: assistidoSelecionado.nome,
                     tratamentoId: tratamentoAtivoSelecionado.id,
                     status: 'aguardando_entrevista_ou_passe',
-                    passeRecomendado: passeDoCiclo, // <-- CORREÇÃO APLICADA AQUI
+                    passeRecomendado: passeDoCiclo,
+                    semana_atual: semanaAtual, 
                     chegadaEm: serverTimestamp(),
                     recepcionista: { uid: user.uid, nome: user.displayName }
                 });
                 
                 await registrarLog({ acao: 'REGISTROU_PRESENCA_AE', detalhes: { assistidoId: assistidoSelecionado.id, nome: assistidoSelecionado.nome }});
-                alert(`Presença de ${assistidoSelecionado.nome} registrada com sucesso!`);
+                alert(`Presença de ${assistidoSelecionado.nome} (Semana ${semanaAtual}) registrada com sucesso!`);
                 ui.painelAcoesFrequencia.classList.add('hidden');
                 await carregarTratamentosAtivos();
                 e.target.disabled = false;
@@ -281,9 +306,7 @@
                     batch.update(tratamentoDocRef, { faltas_acumuladas: increment(1) });
                     batch.set(doc(atendimentosRef), { assistidoId: assistidoSelecionado.id, tratamentoId: tratamentoAtivoSelecionado.id, tipo: 'falta', dataAtendimento: serverTimestamp() });
                     
-                    // A lógica de encerramento por falta deve ser validada com as novas regras
-                    // Por exemplo: if ((passe_especial && novoTotalFaltas > 0) || (!passe_especial && novoTotalFaltas > 1))
-                    if (novoTotalFaltas > 2) { // Mantendo a lógica original por enquanto
+                    if (novoTotalFaltas > 2) {
                         batch.update(tratamentoDocRef, { status: 'encerrado_por_falta' });
                         await batch.commit();
                         alert('Falta registrada. ATENÇÃO: Tratamento encerrado automaticamente por exceder o limite de 2 faltas!');
@@ -349,7 +372,7 @@
                         const passeAvulso = idade >= 12 ? 'P2' : 'P4A';
 
                         const batch = writeBatch(db);
-                        batch.set(doc(filaRef), { assistidoId: assistidoId, nomeAssistido: assistidoSelecionado?.nome || ui.nomeInput.value, status: 'pronto_para_chamar', passeRecomendado: passeAvulso, tipoAtendimento: 'avulso', chegadaEm: serverTimestamp(), recepcionista: { uid: user.uid, nome: user.displayName } });
+                        batch.set(doc(filaRef), { assistidoId: assistidoId, nomeAssistido: assistidoSelecionado?.nome || ui.nomeInput.value, status: 'pronto_para_chamar', passeRecomendado: passeAvulso, tipoAtendimento: 'avulso', semana_atual: 1, chegadaEm: serverTimestamp(), recepcionista: { uid: user.uid, nome: user.displayName } });
                         batch.set(doc(atendimentosRef), { assistidoId: assistidoId, tratamentoId: null, tipo: 'avulso', dataAtendimento: serverTimestamp(), passeRecomendado: passeAvulso });
                         await batch.commit();
                         await registrarLog({ acao: 'REGISTROU_PASSE_AVULSO', detalhes: { assistidoId: assistidoId, nome: assistidoSelecionado?.nome || ui.nomeInput.value, passe: passeAvulso }});
@@ -379,13 +402,13 @@
                     const novoTratamentoRef = doc(tratamentosRef);
                     batch.set(novoTratamentoRef, { assistidoId: assistidoId, dataInicio: serverTimestamp(), status: 'ativo', faltas_acumuladas: 0, passe_ciclo_atual: passeInicial });
                     
-                    // CORREÇÃO: Adicionar passeRecomendado na fila ao iniciar tratamento
                     batch.set(doc(filaRef), { 
                         assistidoId: assistidoId, 
                         nomeAssistido: assistidoSelecionado.nome, 
                         tratamentoId: novoTratamentoRef.id, 
                         status: 'aguardando_entrevista_ou_passe', 
-                        passeRecomendado: passeInicial, // <-- CORREÇÃO APLICADA AQUI
+                        passeRecomendado: passeInicial,
+                        semana_atual: 1,
                         chegadaEm: serverTimestamp(), 
                         recepcionista: { uid: user.uid, nome: user.displayName } 
                     });
