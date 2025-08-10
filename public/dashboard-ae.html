@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Assistência Espiritual - Dashboard</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: #f4f6f9;
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        .header {
+            width: 100%;
+            max-width: 1000px;
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        .header h1 {
+            color: #2c3e50;
+            margin: 0;
+        }
+        .header p {
+            color: #7f8c8d;
+            margin-top: 5px;
+        }
+        .nav-voltar {
+            width: 100%;
+            max-width: 1000px;
+            margin-bottom: 20px;
+        }
+        .btn-voltar {
+            background-color: #6c757d;
+            color: white;
+            border: none;
+            padding: 12px 20px;
+            border-radius: 8px;
+            font-weight: bold;
+            text-decoration: none;
+            display: inline-block;
+        }
+        .card-container {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+            gap: 25px;
+            width: 100%;
+            max-width: 1000px;
+            display: none; /* Começa escondido e é exibido pelo script */
+        }
+        .card {
+            background-color: white;
+            border-radius: 12px;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.08);
+            padding: 25px;
+            text-align: left;
+            text-decoration: none;
+            color: inherit;
+            transition: transform 0.2s, box-shadow 0.2s;
+            position: relative;
+            border-left: 5px solid transparent;
+            display: none; /* Cards individuais também começam escondidos */
+        }
+        .card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 8px 25px rgba(0, 0, 0, 0.12);
+        }
+        .card h2 {
+            margin-top: 0;
+            font-size: 1.4em;
+            color: #34495e;
+        }
+        .card p {
+            color: #576574;
+            font-size: 0.95em;
+            line-height: 1.5;
+            text-align: left;
+        }
+        .hidden { display: none !important; }
+
+        /* ESTILOS PARA O CARD INTELIGENTE */
+        .card.notificacao-ativa {
+            background-color: #fff3cd;
+            border-left-color: #ffc107;
+            animation: pulse 1.5s infinite;
+        }
+        .notification-badge {
+            position: absolute;
+            top: 15px;
+            right: 15px;
+            background-color: #dc3545;
+            color: white;
+            width: 25px;
+            height: 25px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            font-size: 0.9em;
+        }
+        @keyframes pulse {
+            0% { box-shadow: 0 0 0 0 rgba(255, 193, 7, 0.7); }
+            70% { box-shadow: 0 0 0 10px rgba(255, 193, 7, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(255, 193, 7, 0); }
+        }
+    </style>
+</head>
+<body>
+    <nav class="nav-voltar">
+        <a href="/dashboard.html" class="btn-voltar">⬅ Voltar para o Dashboard Principal</a>
+    </nav>
+
+    <div class="header">
+        <h1>Assistência Espiritual</h1>
+        <p>Selecione uma área do atendimento para continuar.</p>
+    </div>
+
+    <div id="main-content" class="card-container">
+        <a href="/recepcao-ae.html" class="card" data-role="super-admin,tesoureiro,conselheiro,diretor,entrevistador,recepcionista">
+            <h2>Recepção</h2>
+            <p>Buscar e cadastrar assistidos, iniciar atendimentos e gerenciar a fila inicial.</p>
+        </a>
+        <a href="/encaminhamento-ae.html" class="card" data-role="super-admin,diretor,tesoureiro,conselheiro,recepcionista,entrevistador">
+            <h2>Encaminhamento</h2>
+            <p>Visualizar a fila, chamar para entrevista e encaminhar para as salas de passe.</p>
+        </a>
+        
+        <a href="/entrevista-ae.html" class="card" id="card-entrevista" data-role="super-admin,tesoureiro,conselheiro,diretor,entrevistador,recepcionista">
+            <h2 id="card-entrevista-titulo">Entrevistas</h2>
+            <p id="card-entrevista-status">Editar detalhes e registrar decisões do Colegiado (5ª semana).</p>
+            <span class="notification-badge hidden" id="card-entrevista-badge">0</span>
+        </a>
+
+        <a href="/arquivo-geral-ae.html" class="card" data-role="super-admin,diretor,conselheiro,tesoureiro,entrevistador,recepcionista">
+            <h2>Arquivo Geral</h2>
+            <p>Consultar o histórico completo de todos os assistidos.</p>
+        </a>
+        <a href="/painel-ae.tv.html" target="_blank" class="card" data-role="super-admin,diretor,tesoureiro,conselheiro,recepcionista,entrevistador">
+            <h2>Painel TV</h2>
+            <p>Abrir o painel de chamadas para exibição no salão.</p>
+        </a>
+    </div>
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
+        import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-auth.js";
+        import { getFirestore, collection, query, where, onSnapshot, Timestamp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
+
+        const firebaseConfig = {
+            apiKey: "AIzaSyBV7RPjk3cFTqL-aIpflJcUojKg1ZXMLuU",
+            authDomain: "voluntarios-ativos---cepat.firebaseapp.com",
+            projectId: "voluntarios-ativos---cepat",
+            storageBucket: "voluntarios-ativos---cepat.firebasestorage.app",
+            messagingSenderId: "66122858261",
+            appId: "1:66122858261:web:7fa21f1805463b5c08331c"
+        };
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+
+        onAuthStateChanged(auth, (user) => {
+            if (user) {
+                user.getIdTokenResult(true).then((idTokenResult) => {
+                    const userRole = idTokenResult.claims.role || 'voluntario';
+                    
+                    // LÓGICA QUE FALTAVA: Mostra os cards baseados no cargo do usuário
+                    document.querySelectorAll('.card').forEach(card => {
+                        const rolesPermitidas = card.dataset.role.split(',');
+                        if (rolesPermitidas.includes(userRole)) {
+                            card.style.display = 'block'; 
+                        } else {
+                            card.style.display = 'none';
+                        }
+                    });
+
+                    // LÓGICA QUE FALTAVA: Exibe o container principal
+                    document.getElementById('main-content').style.display = 'grid';
+
+                    // Inicia o monitoramento da notificação inteligente
+                    monitorarFilaDeEntrevistas();
+                });
+            } else {
+                window.location.href = '/login.html';
+            }
+        });
+
+
+        function monitorarFilaDeEntrevistas() {
+            const db = getFirestore();
+            const filaRef = collection(db, 'fila_atendimento_ae');
+            const hojeInicio = new Date();
+            hojeInicio.setHours(0, 0, 0, 0);
+
+            const q = query(
+                filaRef,
+                where("status", "==", "chamado_entrevista"),
+                where("chegadaEm", ">=", Timestamp.fromDate(hojeInicio))
+            );
+
+            onSnapshot(q, (snapshot) => {
+                atualizarCardEntrevista(snapshot.size);
+            });
+        }
+
+        function atualizarCardEntrevista(count) {
+            const card = document.getElementById('card-entrevista');
+            const titulo = document.getElementById('card-entrevista-titulo');
+            const status = document.getElementById('card-entrevista-status');
+            const badge = document.getElementById('card-entrevista-badge');
+
+            if (!card) return;
+
+            if (count > 0) {
+                card.classList.add('notificacao-ativa');
+                titulo.textContent = 'Decisão Pendente';
+                status.textContent = `${count} assistido(s) aguardando`;
+                badge.textContent = count;
+                badge.classList.remove('hidden');
+            } else {
+                card.classList.remove('notificacao-ativa');
+                titulo.textContent = 'Entrevistas';
+                status.textContent = 'Editar detalhes e registrar decisões do Colegiado (5ª semana).';
+                badge.classList.add('hidden');
+            }
+        }
+    </script>
+</body>
+</html>
