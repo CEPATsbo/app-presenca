@@ -87,7 +87,6 @@
             let atendimentosDoDia = [];
             let unsubscribeFila; 
 
-            // CORREÇÃO PARA A DATA LOCAL
             const hoje = new Date();
             const offset = hoje.getTimezoneOffset();
             const hojeLocal = new Date(hoje.getTime() - (offset*60*1000));
@@ -117,7 +116,8 @@
                 );
 
                 unsubscribeFila = onSnapshot(qFila, async (snapshot) => {
-                    const promessas = snapshot.docs.map(docSnapshot => getContextoDoAtendimento(docSnapshot));
+                    // Passa a data selecionada para a função de contexto
+                    const promessas = snapshot.docs.map(docSnapshot => getContextoDoAtendimento(docSnapshot, dataString));
                     atendimentosDoDia = await Promise.all(promessas.filter(p => p !== null));
                     
                     renderizarCards();
@@ -135,7 +135,7 @@
                 });
             }
 
-            async function getContextoDoAtendimento(filaDocSnapshot) {
+            async function getContextoDoAtendimento(filaDocSnapshot, dataDaVisitaString) {
                 const atendimento = { id: filaDocSnapshot.id, ...filaDocSnapshot.data() };
                 if (atendimento.tipoAtendimento === 'avulso') {
                     return { ...atendimento, precisaEntrevista: false, semana_atual: 1 };
@@ -148,10 +148,9 @@
                 const tratamento = tratamentoDoc.data();
 
                 // =========================================================================================
-                // CORREÇÃO DA QUERY DO FIREBASE
+                // LÓGICA DE CONTAGEM SINCRONIZADA COM A DATA SELECIONADA
                 // =========================================================================================
-                const inicioDaVisitaAtual = new Date();
-                inicioDaVisitaAtual.setHours(0,0,0,0);
+                const inicioDaVisitaAtual = new Date(dataDaVisitaString + 'T00:00:00');
 
                 const qHistorico = query(
                     atendimentosRef, 
@@ -160,7 +159,6 @@
                 );
                 const historicoSnapshot = await getDocs(qHistorico);
                 
-                // Filtro para "tipo != 'falta'" feito no lado do cliente
                 let atendimentosPassadosValidos = 0;
                 historicoSnapshot.forEach(doc => {
                     if (doc.data().tipo !== 'falta') {
