@@ -23,8 +23,8 @@
         .assistido-card .actions .btn { width: 100%; padding: 15px; font-size: 1.1em; }
         .chamado-entrevista { border-left-color: #17a2b8; }
         .entrevista-concluida { border-left-color: #ffc107; }
-        .chamado-passe { border-left-color: #28a745; background-color: #f8f9fa; opacity: 0.8; }
-        .chamado-passe h3, .chamado-passe .info, .chamado-passe .actions { text-decoration: line-through; }
+        .chamado-passe, .atendimento-finalizado { border-left-color: #28a745; background-color: #f8f9fa; opacity: 0.8; }
+        .chamado-passe h3, .chamado-passe .info, .atendimento-finalizado h3, .atendimento-finalizado .info { text-decoration: line-through; }
         .hidden { display: none; }
         .filtro-data { text-align: center; margin-bottom: 25px; background-color: #fff; padding: 15px; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.05); }
         .filtro-data label { font-weight: bold; margin-right: 10px; }
@@ -116,7 +116,7 @@
                 );
 
                 unsubscribeFila = onSnapshot(qFila, async (snapshot) => {
-                    const promessas = snapshot.docs.map(docSnapshot => getContextoDoAtendimento(docSnapshot));
+                    const promessas = snapshot.docs.map(docSnapshot => getContextoDoAtendimento(docSnapshot, dataString));
                     atendimentosDoDia = await Promise.all(promessas.filter(p => p !== null));
                     
                     renderizarCards();
@@ -134,7 +134,7 @@
                 });
             }
 
-            async function getContextoDoAtendimento(filaDocSnapshot) {
+            async function getContextoDoAtendimento(filaDocSnapshot, dataDaVisitaString) {
                 const atendimento = { id: filaDocSnapshot.id, ...filaDocSnapshot.data() };
                 if (atendimento.tipoAtendimento === 'avulso') {
                     return { ...atendimento, precisaEntrevista: false, semana_atual: 1 };
@@ -145,7 +145,7 @@
                 const tratamentoDoc = await getDoc(tratamentoDocRef);
                 if (!tratamentoDoc.exists()) return null;
                 const tratamento = tratamentoDoc.data();
-                
+
                 const semanaNum = atendimento.semana_atual || 1;
                 
                 const passe = tratamento.passe_ciclo_atual;
@@ -161,27 +161,40 @@
                 const card = document.createElement('div');
                 card.className = 'assistido-card';
                 const status = atendimento.status;
+                
+                // A CORREÇÃO ESTÁ AQUI: Trata os status finais primeiro
+                if (status === 'chamado_passe' || status === 'atendimento_finalizado') {
+                    card.classList.add('atendimento-finalizado');
+                    let statusText = status === 'chamado_passe' ? 'Chamado para o Passe' : 'Atendimento Finalizado (Alta)';
+                    
+                    card.innerHTML = `
+                        <h3>${atendimento.nomeAssistido}</h3>
+                        <p class="info">
+                            Tipo: <strong>Assistência (${atendimento.passeRecomendado || atendimento.passe_ciclo_atual})</strong><br>
+                            Semana: <strong>${atendimento.semana_atual || ''}</strong><br>
+                            Status: <strong>${statusText}</strong>
+                        </p>`;
+                    return card;
+                }
+                
+                // Se não for um status final, continua a lógica dos botões
                 let buttonsHtml = '';
-                
-                const passeChamado = status === 'chamado_passe';
-                
                 if (atendimento.precisaEntrevista) {
                     const entrevistaChamada = status === 'chamado_entrevista';
                     const entrevistaConcluida = status === 'entrevista_concluida';
                     
-                    const entrevistaBtnDisabled = entrevistaChamada || entrevistaConcluida || passeChamado;
-                    const passeBtnDisabled = !(entrevistaChamada || entrevistaConcluida) || passeChamado;
+                    const entrevistaBtnDisabled = entrevistaChamada || entrevistaConcluida;
+                    const passeBtnDisabled = !entrevistaConcluida;
 
                     buttonsHtml = `
                         <button class="btn btn-info btn-chamar-entrevista" data-id="${atendimento.id}" ${entrevistaBtnDisabled ? 'disabled' : ''}>Chamar p/ Entrevista</button>
                         <button class="btn btn-success btn-chamar-passe" data-id="${atendimento.id}" ${passeBtnDisabled ? 'disabled' : ''}>Chamar p/ Passe</button>`;
                 } else {
-                    buttonsHtml = `<div style="grid-column: 1 / -1;"><button class="btn btn-success btn-chamar-passe" data-id="${atendimento.id}" ${passeChamado ? 'disabled' : ''}>Chamar p/ Passe</button></div>`;
+                    buttonsHtml = `<div style="grid-column: 1 / -1;"><button class="btn btn-success btn-chamar-passe" data-id="${atendimento.id}">Chamar p/ Passe</button></div>`;
                 }
 
                 if (status === 'chamado_entrevista') card.classList.add('chamado-entrevista');
                 if (status === 'entrevista_concluida') card.classList.add('entrevista-concluida');
-                if (status === 'chamado_passe') card.classList.add('chamado-passe');
                 
                 let tipoLabel = `Assistência (${atendimento.passe_ciclo_atual || 'N/A'})`;
                 if(atendimento.tipoAtendimento === 'avulso'){
@@ -214,13 +227,13 @@
                 const salaDestino = novoStatus === 'chamado_entrevista' ? 'SALA DE ENTREVISTA' : getSalaPorPasse(passeParaTV);
                 
                 const chamadasAnteriores = atendimentosDoDia
-                    .filter(a => a.id !== chamadaAtual.id && (a.status === 'chamado_entrevista' || a.status === 'chamado_passe' || a.status === 'entrevista_concluida'))
+                    .filter(a => a.id !== chamadaAtual.id && (a.status === 'chamado_entrevista' || a.status === 'chamado_passe' || a.status === 'entrevista_concluida' || a.status === 'atendimento_finalizado'))
                     .sort((a,b) => b.chegadaEm.toMillis() - a.chegadaEm.toMillis());
                     
                 const historico = chamadasAnteriores.slice(0, 3).map(a => {
                     const passeHist = a.passe_ciclo_atual || a.passeRecomendado;
                     let salaHist = getSalaPorPasse(passeHist);
-                    if (a.status === 'chamado_entrevista' || a.status === 'entrevista_concluida') {
+                    if (a.status !== 'chamado_passe') {
                         salaHist = 'SALA DE ENTREVISTA';
                     }
                     return { nome: a.nomeAssistido, sala: salaHist };

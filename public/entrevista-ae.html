@@ -279,7 +279,6 @@
                 try {
                     await batch.commit();
                     alert('Atendimento registrado com sucesso!');
-                    // A CORREÇÃO ESTÁ AQUI:
                     ui.formularioContainer.innerHTML = '<p>Selecione um assistido à esquerda.</p>';
                 } catch(error) {
                     console.error("Erro ao salvar entrevista: ", error);
@@ -307,11 +306,11 @@
                     });
                     
                     const filaDocRef = doc(db, 'fila_atendimento_ae', atendimento.id);
-                    batch.update(filaDocRef, { status: 'entrevista_concluida' });
+                    // A CORREÇÃO ESTÁ AQUI:
+                    batch.update(filaDocRef, { status: 'atendimento_finalizado' });
                     
                     await batch.commit();
                     alert('Alta registrada com sucesso!');
-                    // A CORREÇÃO ESTÁ AQUI TAMBÉM:
                     ui.formularioContainer.innerHTML = '<p>Selecione um assistido à esquerda.</p>';
                 } else {
                      btn.disabled = false;
