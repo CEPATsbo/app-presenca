@@ -133,7 +133,7 @@
             async function getContextoDoAtendimento(filaDocSnapshot) {
                 const atendimento = { id: filaDocSnapshot.id, ...filaDocSnapshot.data() };
                 if (atendimento.tipoAtendimento === 'avulso') {
-                    return { ...atendimento, precisaEntrevista: false };
+                    return { ...atendimento, precisaEntrevista: false, semana_atual: 1 };
                 }
                 if (!atendimento.tratamentoId) return null;
 
@@ -143,20 +143,22 @@
                 const tratamento = tratamentoDoc.data();
 
                 // =========================================================================================
-                // LÓGICA DE CONTAGEM DE SEMANA COMPLETAMENTE REFEITA (BASEADA EM DATAS ÚNICAS)
+                // LÓGICA DE CONTAGEM DE SEMANA DEFINITIVA: SÓ CONTA VISITAS DE DIAS ANTERIORES
                 // =========================================================================================
-                const qHistorico = query(atendimentosRef, where("tratamentoId", "==", atendimento.tratamentoId), where("tipo", "!=", "falta"));
+                const inicioDaVisitaAtual = new Date();
+                inicioDaVisitaAtual.setHours(0,0,0,0);
+
+                const qHistorico = query(
+                    atendimentosRef, 
+                    where("tratamentoId", "==", atendimento.tratamentoId), 
+                    where("tipo", "!=", "falta"),
+                    where("dataAtendimento", "<", Timestamp.fromDate(inicioDaVisitaAtual)) // A MÁGICA ACONTECE AQUI
+                );
                 const historicoSnapshot = await getDocs(qHistorico);
-
-                const datasUnicas = new Set();
-                historicoSnapshot.forEach(doc => {
-                    const data = doc.data().dataAtendimento.toDate();
-                    // Converte a data para o formato YYYY-MM-DD para garantir que o mesmo dia não seja contado duas vezes
-                    const dataString = data.toISOString().split('T')[0];
-                    datasUnicas.add(dataString);
-                });
-
-                const semanaNum = datasUnicas.size + 1;
+                
+                // Não precisamos mais do Set, pois a nova query já filtra os dias corretamente.
+                // Uma visita por dia de trabalho.
+                const semanaNum = historicoSnapshot.size + 1;
                 // =========================================================================================
                 
                 const passe = tratamento.passe_ciclo_atual;
