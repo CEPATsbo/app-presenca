@@ -116,7 +116,7 @@
                 );
 
                 unsubscribeFila = onSnapshot(qFila, async (snapshot) => {
-                    // Passa a data selecionada para a função de contexto
+                    // CORREÇÃO: Passa a data selecionada para a função de contexto
                     const promessas = snapshot.docs.map(docSnapshot => getContextoDoAtendimento(docSnapshot, dataString));
                     atendimentosDoDia = await Promise.all(promessas.filter(p => p !== null));
                     
@@ -135,6 +135,7 @@
                 });
             }
 
+            // CORREÇÃO: A função agora recebe a data da visita como parâmetro
             async function getContextoDoAtendimento(filaDocSnapshot, dataDaVisitaString) {
                 const atendimento = { id: filaDocSnapshot.id, ...filaDocSnapshot.data() };
                 if (atendimento.tipoAtendimento === 'avulso') {
@@ -147,9 +148,7 @@
                 if (!tratamentoDoc.exists()) return null;
                 const tratamento = tratamentoDoc.data();
 
-                // =========================================================================================
-                // LÓGICA DE CONTAGEM SINCRONIZADA COM A DATA SELECIONADA
-                // =========================================================================================
+                // CORREÇÃO: A data de referência é a data da visita (do seletor), não a data de hoje
                 const inicioDaVisitaAtual = new Date(dataDaVisitaString + 'T00:00:00');
 
                 const qHistorico = query(
@@ -167,7 +166,6 @@
                 });
                 
                 const semanaNum = atendimentosPassadosValidos + 1;
-                // =========================================================================================
                 
                 const passe = tratamento.passe_ciclo_atual;
                 let precisaEntrevista = false;
