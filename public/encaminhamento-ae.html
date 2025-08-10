@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Encaminhamento - Atendimento Espiritual</title>
     <style>
-        :root { --cor-primaria: #007bff; --cor-borda: #ddd; --fundo-claro: #f8f9fa; }
+        :root { --cor-primaria: #007bff; --cor-borda: #ddd; --fundo-claro: #f8f9fa; --cor-aviso: #ffc107; }
         body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background-color: #f0f2f5; margin: 0; padding: 20px; }
         .container-principal { width: 100%; max-width: 1200px; margin: 0 auto; }
         .nav-voltar { margin-bottom: 20px; }
@@ -14,17 +14,19 @@
         .btn-voltar { background-color: #6c757d; }
         .btn-success { background-color: #28a745; }
         .btn-info { background-color: #17a2b8; }
+        .btn-warning { background-color: var(--cor-aviso); color: #212529; }
         h1 { color: #333; text-align: center; }
-        .cards-container { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 20px; }
+        .cards-container { display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: 20px; }
         .assistido-card { background-color: white; padding: 20px; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); display: flex; flex-direction: column; gap: 15px; border-left: 5px solid #6c757d; }
         .assistido-card h3 { margin: 0; font-size: 1.5em; text-align: center; color: #333; }
         .assistido-card .info { text-align: center; font-size: 1.0em; color: #666; line-height: 1.5; }
-        .assistido-card .actions { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-        .assistido-card .actions .btn { width: 100%; padding: 15px; font-size: 1.1em; }
+        .actions-3-buttons { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; }
+        .actions-1-button { display: grid; }
+        .actions-3-buttons .btn, .actions-1-button .btn { width: 100%; padding: 15px 5px; font-size: 0.9em; }
         .chamado-entrevista { border-left-color: #17a2b8; }
-        .entrevista-concluida { border-left-color: #ffc107; }
+        .entrevista-realizada { border-left-color: var(--cor-aviso); }
         .chamado-passe { border-left-color: #28a745; background-color: #f8f9fa; opacity: 0.8; }
-        .chamado-passe h3, .chamado-passe .info, .chamado-passe .actions { text-decoration: line-through; }
+        .chamado-passe h3, .chamado-passe .info { text-decoration: line-through; }
         .hidden { display: none; }
         .filtro-data { text-align: center; margin-bottom: 25px; background-color: #fff; padding: 15px; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.05); }
         .filtro-data label { font-weight: bold; margin-right: 10px; }
@@ -116,7 +118,7 @@
                 );
 
                 unsubscribeFila = onSnapshot(qFila, async (snapshot) => {
-                    const promessas = snapshot.docs.map(docSnapshot => getContextoDoAtendimento(docSnapshot, dataString));
+                    const promessas = snapshot.docs.map(docSnapshot => getContextoDoAtendimento(docSnapshot));
                     atendimentosDoDia = await Promise.all(promessas.filter(p => p !== null));
                     
                     renderizarCards();
@@ -134,7 +136,7 @@
                 });
             }
 
-            async function getContextoDoAtendimento(filaDocSnapshot, dataDaVisitaString) {
+            async function getContextoDoAtendimento(filaDocSnapshot) {
                 const atendimento = { id: filaDocSnapshot.id, ...filaDocSnapshot.data() };
                 if (atendimento.tipoAtendimento === 'avulso') {
                     return { ...atendimento, precisaEntrevista: false, semana_atual: 1 };
@@ -145,7 +147,7 @@
                 const tratamentoDoc = await getDoc(tratamentoDocRef);
                 if (!tratamentoDoc.exists()) return null;
                 const tratamento = tratamentoDoc.data();
-
+                
                 const semanaNum = atendimento.semana_atual || 1;
                 
                 const passe = tratamento.passe_ciclo_atual;
@@ -157,6 +159,9 @@
                 return { ...atendimento, precisaEntrevista, passe_ciclo_atual: passe };
             }
 
+            // =========================================================================================
+            // FUNÇÃO DE CRIAR CARD TOTALMENTE REFEITA PARA O NOVO FLUXO
+            // =========================================================================================
             function criarCard(atendimento) {
                 const card = document.createElement('div');
                 card.className = 'assistido-card';
@@ -164,38 +169,35 @@
                 
                 if (status === 'chamado_passe') {
                     card.classList.add('chamado-passe');
-                    card.innerHTML = `
-                        <h3>${atendimento.nomeAssistido}</h3>
-                        <p class="info">
-                            Tipo: <strong>Assistência (${atendimento.passeRecomendado || atendimento.passe_ciclo_atual})</strong><br>
-                            Semana: <strong>${atendimento.semana_atual || ''}</strong><br>
-                            Status: <strong>Chamado para o Passe</strong>
-                        </p>`;
+                    card.innerHTML = `<h3>${atendimento.nomeAssistido}</h3><p class="info">Atendimento finalizado.</p>`;
                     return card;
                 }
-                
+
                 let buttonsHtml = '';
-                if (atendimento.precisaEntrevista) {
+                let actionsClass = '';
+
+                // CASO 1: PASSE DIRETO (NÃO PRECISA DE ENTREVISTA)
+                if (!atendimento.precisaEntrevista) {
+                    actionsClass = 'actions-1-button';
+                    buttonsHtml = `<button class="btn btn-success btn-chamar-passe" data-id="${atendimento.id}">Chamar p/ Passe</button>`;
+                
+                // CASO 2: FLUXO DE ENTREVISTA (3 BOTÕES)
+                } else {
+                    actionsClass = 'actions-3-buttons';
                     const entrevistaChamada = status === 'chamado_entrevista';
-                    const entrevistaConcluida = status === 'entrevista_concluida';
-                    
-                    const entrevistaBtnDisabled = entrevistaChamada || entrevistaConcluida;
-                    const passeBtnDisabled = !entrevistaConcluida;
+                    const entrevistaRealizada = status === 'entrevista_realizada';
 
                     buttonsHtml = `
-                        <button class="btn btn-info btn-chamar-entrevista" data-id="${atendimento.id}" ${entrevistaBtnDisabled ? 'disabled' : ''}>Chamar p/ Entrevista</button>
-                        <button class="btn btn-success btn-chamar-passe" data-id="${atendimento.id}" ${passeBtnDisabled ? 'disabled' : ''}>Chamar p/ Passe</button>`;
-                } else {
-                    buttonsHtml = `<div style="grid-column: 1 / -1;"><button class="btn btn-success btn-chamar-passe" data-id="${atendimento.id}">Chamar p/ Passe</button></div>`;
+                        <button class="btn btn-info btn-chamar-entrevista" data-id="${atendimento.id}" ${entrevistaChamada || entrevistaRealizada ? 'disabled' : ''}>1. Chamar Entrevista</button>
+                        <button class="btn btn-warning btn-entrevista-realizada" data-id="${atendimento.id}" ${!entrevistaChamada || entrevistaRealizada ? 'disabled' : ''}>2. Entrevista Realizada</button>
+                        <button class="btn btn-success btn-chamar-passe" data-id="${atendimento.id}" ${!entrevistaRealizada ? 'disabled' : ''}>3. Chamar p/ Passe</button>
+                    `;
                 }
 
                 if (status === 'chamado_entrevista') card.classList.add('chamado-entrevista');
-                if (status === 'entrevista_concluida') card.classList.add('entrevista-concluida');
+                if (status === 'entrevista_realizada') card.classList.add('entrevista-realizada');
                 
-                let tipoLabel = `Assistência (${atendimento.passe_ciclo_atual || 'N/A'})`;
-                if(atendimento.tipoAtendimento === 'avulso'){
-                    tipoLabel = `Passe Avulso (${atendimento.passeRecomendado || 'N/A'})`;
-                }
+                const tipoLabel = `Assistência (${atendimento.passe_ciclo_atual || 'N/A'})`;
 
                 card.innerHTML = `
                     <h3>${atendimento.nomeAssistido}</h3>
@@ -204,12 +206,13 @@
                         Semana: <strong>${atendimento.semana_atual || 1}</strong><br>
                         Entrevista hoje: <strong>${atendimento.precisaEntrevista ? 'Sim' : 'Não'}</strong>
                     </p>
-                    <div class="actions">${buttonsHtml}</div>`;
+                    <div class="${actionsClass}">${buttonsHtml}</div>`;
                 
                 return card;
             }
 
             async function atualizarPainelTV(chamadaAtual, novoStatus) {
+                // Esta função continua igual, sem alterações
                 const mapaDeSalas = { 'SALA 1': ['P1', 'P3A', 'P3B'], 'SALA 2': ['P2', 'P4A', 'P4B', 'CH'] };
                 const getSalaPorPasse = (passe) => {
                     if (!passe) return 'Encaminhamento';
@@ -223,7 +226,7 @@
                 const salaDestino = novoStatus === 'chamado_entrevista' ? 'SALA DE ENTREVISTA' : getSalaPorPasse(passeParaTV);
                 
                 const chamadasAnteriores = atendimentosDoDia
-                    .filter(a => a.id !== chamadaAtual.id && (a.status === 'chamado_entrevista' || a.status === 'chamado_passe' || a.status === 'entrevista_concluida'))
+                    .filter(a => a.id !== chamadaAtual.id && (a.status === 'chamado_entrevista' || a.status === 'chamado_passe' || a.status === 'entrevista_realizada'))
                     .sort((a,b) => b.chegadaEm.toMillis() - a.chegadaEm.toMillis());
                     
                 const historico = chamadasAnteriores.slice(0, 3).map(a => {
@@ -243,31 +246,52 @@
                 });
             }
 
+            // =========================================================================================
+            // LÓGICA DE CLIQUES TOTALMENTE REFEITA PARA O NOVO FLUXO
+            // =========================================================================================
             cardsContainer.addEventListener('click', async (e) => {
                 const target = e.target;
-                target.disabled = true;
-                
                 const id = target.dataset.id;
-                if (!id) return;
+                if (!id || target.disabled) return;
 
                 const atendimentoChamado = atendimentosDoDia.find(a => a.id === id);
-                if (!atendimentoChamado) {
-                    target.disabled = false;
-                    return;
-                }
+                if (!atendimentoChamado) return;
+
+                target.disabled = true;
 
                 try {
+                    // Botão 1: Chamar para a Entrevista
                     if (target.classList.contains('btn-chamar-entrevista')) {
                         await atualizarPainelTV(atendimentoChamado, 'chamado_entrevista');
                         await updateDoc(doc(db, 'fila_atendimento_ae', id), { status: 'chamado_entrevista' });
                     
+                    // Botão 2: Marcar Entrevista como Realizada (e criar registro no histórico)
+                    } else if (target.classList.contains('btn-entrevista-realizada')) {
+                        const batch = writeBatch(db);
+                        const filaDocRef = doc(db, 'fila_atendimento_ae', id);
+                        
+                        const atendimentoRecord = {
+                            assistidoId: atendimentoChamado.assistidoId,
+                            tratamentoId: atendimentoChamado.tratamentoId,
+                            tipo: 'tratamento_semanal',
+                            dataAtendimento: atendimentoChamado.chegadaEm,
+                            semana: atendimentoChamado.semana_atual,
+                            entrevistador: 'Aguardando Detalhes',
+                            passeRecomendado: atendimentoChamado.passe_ciclo_atual,
+                            notas: '' // Notas vazias para serem preenchidas depois
+                        };
+                        batch.set(doc(collection(db, 'atendimentos_ae')), atendimentoRecord);
+                        batch.update(filaDocRef, { status: 'entrevista_realizada' });
+                        await batch.commit();
+                    
+                    // Botão 3 (ou único): Chamar para o Passe
                     } else if (target.classList.contains('btn-chamar-passe')) {
                         await atualizarPainelTV(atendimentoChamado, 'chamado_passe');
-                        
                         const batch = writeBatch(db);
                         const filaDocRef = doc(db, 'fila_atendimento_ae', id);
                         batch.update(filaDocRef, { status: 'chamado_passe' });
 
+                        // Se for um passe direto, cria o registro histórico agora
                         if (!atendimentoChamado.precisaEntrevista) {
                             const atendimentoRecord = {
                                 assistidoId: atendimentoChamado.assistidoId,
@@ -279,8 +303,7 @@
                                 passeRecomendado: atendimentoChamado.passe_ciclo_atual,
                                 notas: 'Atendimento direto para o passe, sem entrevista.'
                             };
-                            const novoAtendimentoRef = doc(collection(db, 'atendimentos_ae'));
-                            batch.set(novoAtendimentoRef, atendimentoRecord);
+                            batch.set(doc(collection(db, 'atendimentos_ae')), atendimentoRecord);
                         }
                         await batch.commit();
                     }
