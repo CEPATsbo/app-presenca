@@ -142,9 +142,23 @@
                 if (!tratamentoDoc.exists()) return null;
                 const tratamento = tratamentoDoc.data();
 
-                const qSemanas = query(atendimentosRef, where("tratamentoId", "==", atendimento.tratamentoId), where("tipo", "!=", "falta"));
-                const semanasSnapshot = await getDocs(qSemanas);
-                const semanaNum = semanasSnapshot.size + 1;
+                // =========================================================================================
+                // LÓGICA DE CONTAGEM DE SEMANA COMPLETAMENTE REFEITA (BASEADA EM DATAS ÚNICAS)
+                // =========================================================================================
+                const qHistorico = query(atendimentosRef, where("tratamentoId", "==", atendimento.tratamentoId), where("tipo", "!=", "falta"));
+                const historicoSnapshot = await getDocs(qHistorico);
+
+                const datasUnicas = new Set();
+                historicoSnapshot.forEach(doc => {
+                    const data = doc.data().dataAtendimento.toDate();
+                    // Converte a data para o formato YYYY-MM-DD para garantir que o mesmo dia não seja contado duas vezes
+                    const dataString = data.toISOString().split('T')[0];
+                    datasUnicas.add(dataString);
+                });
+
+                const semanaNum = datasUnicas.size + 1;
+                // =========================================================================================
+                
                 const passe = tratamento.passe_ciclo_atual;
                 let precisaEntrevista = false;
                 
@@ -256,9 +270,6 @@
                         const filaDocRef = doc(db, 'fila_atendimento_ae', id);
                         batch.update(filaDocRef, { status: 'chamado_passe' });
 
-                        // *** LÓGICA CORRIGIDA ***
-                        // Cria um registro permanente APENAS se for um "Passe Direto" (sem necessidade de entrevista).
-                        // O registro do atendimento pós-entrevista já foi criado na página de Entrevista.
                         if (!atendimentoChamado.precisaEntrevista) {
                             const atendimentoRecord = {
                                 assistidoId: atendimentoChamado.assistidoId,
