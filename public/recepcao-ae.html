@@ -28,7 +28,6 @@
         #lista-ativos li { background-color: #6c757d; color: white; padding: 10px 15px; border-radius: 20px; cursor: pointer; transition: background-color 0.2s; font-size: 0.9em; }
         #lista-ativos li:hover { opacity: 0.8; }
         #lista-ativos li.status-presente { background-color: #28a745; }
-        #lista-ativos li.status-ausente { background-color: #ffc107; color: #212529; }
         .actions-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-top: 20px; }
         .actions-grid-freq { display: flex; gap: 15px; margin-top: 10px; }
         #search-results-container { position: relative; }
@@ -170,7 +169,7 @@
             };
 
             const criarNovoAssistidoSeNaoExistir = async () => {
-                if (assistidoSelecionado) return assistidoSelecionado.id;
+                if (assistidoSelecionado) return { id: assistidoSelecionado.id, nome: assistidoSelecionado.nome };
                 if (!validarDadosPessoais()) throw new Error("Dados pessoais incompletos");
                 
                 const nomeOriginal = ui.nomeInput.value.trim();
@@ -186,7 +185,7 @@
                 };
                 const docRef = await addDoc(assistidosRef, novoAssistidoData);
                 assistidoSelecionado = { id: docRef.id, ...novoAssistidoData };
-                return docRef.id;
+                return { id: docRef.id, nome: nomeCapitalizado };
             };
             
             const checarHistoricoEExibirBotao = async (assistidoId) => {
@@ -299,7 +298,7 @@
                         entrevistador: 'Aguardando Detalhes',
                         passeRecomendado: passeDoCiclo,
                         notas: '',
-                        detalhes_preenchidos: false 
+                        detalhes_preenchidos: false
                     });
                     
                     batch.set(doc(filaRef), {
@@ -399,8 +398,19 @@
                 e.target.disabled = true;
                 if (!validarDadosPessoais()) { e.target.disabled = false; return; }
                 try {
-                    await criarNovoAssistidoSeNaoExistir();
-                    location.reload(); 
+                    const { id: assistidoId, nome: nomeAssistido } = await criarNovoAssistidoSeNaoExistir();
+                    const idadeDate = new Date(ui.dnInput.value);
+                    const diffMs = Date.now() - idadeDate.getTime();
+                    const idade = new Date(diffMs).getUTCFullYear() - 1970;
+                    const passeAvulso = idade >= 12 ? 'P2' : 'P4A';
+                    const dataAtual = serverTimestamp();
+
+                    const batch = writeBatch(db);
+                    batch.set(doc(filaRef), { assistidoId: assistidoId, nomeAssistido: nomeAssistido, status: 'aguardando_entrevista_ou_passe', passeRecomendado: passeAvulso, tipoAtendimento: 'avulso', semana_atual: 1, chegadaEm: dataAtual, recepcionista: { uid: user.uid, nome: user.displayName } });
+                    batch.set(doc(atendimentosRef), { assistidoId: assistidoId, tratamentoId: null, tipo: 'avulso', dataAtendimento: dataAtual, passeRecomendado: passeAvulso });
+                    await batch.commit();
+                    alert('Passe avulso registrado e enviado para a fila!');
+                    location.reload();
                 } catch(error) { 
                     console.error("Erro ao registrar passe avulso:", error); 
                     e.target.disabled = false;
@@ -411,10 +421,49 @@
                 e.target.disabled = true;
                 if (!validarDadosPessoais()) { e.target.disabled = false; return; }
                 try {
-                    await criarNovoAssistidoSeNaoExistir();
+                    const { id: assistidoId, nome: nomeAssistido } = await criarNovoAssistidoSeNaoExistir();
+                    const idadeDate = new Date(ui.dnInput.value);
+                    const diffMs = Date.now() - idadeDate.getTime();
+                    const idade = new Date(diffMs).getUTCFullYear() - 1970;
+                    const passeInicial = idade >= 12 ? 'P2' : 'P4A';
+                    
+                    const batch = writeBatch(db);
+                    const novoTratamentoRef = doc(tratamentosRef);
+                    batch.set(novoTratamentoRef, { assistidoId: assistidoId, dataInicio: serverTimestamp(), status: 'ativo', faltas_acumuladas: 0, passe_ciclo_atual: passeInicial });
+                    
+                    const dataAtual = serverTimestamp();
+                    const novoAtendimentoRef = doc(collection(db, 'atendimentos_ae'));
+
+                     batch.set(novoAtendimentoRef, {
+                        assistidoId: assistidoId,
+                        tratamentoId: novoTratamentoRef.id,
+                        tipo: 'tratamento_semanal',
+                        dataAtendimento: dataAtual,
+                        semana: 1,
+                        entrevistador: 'Aguardando Detalhes',
+                        passeRecomendado: passeInicial,
+                        notas: '',
+                        detalhes_preenchidos: false
+                    });
+
+                    batch.set(doc(filaRef), { 
+                        assistidoId: assistidoId, 
+                        nomeAssistido: nomeAssistido, 
+                        tratamentoId: novoTratamentoRef.id, 
+                        atendimentoId: novoAtendimentoRef.id, 
+                        status: 'aguardando_entrevista_ou_passe', 
+                        passeRecomendado: passeInicial,
+                        semana_atual: 1,
+                        chegadaEm: dataAtual, 
+                        recepcionista: { uid: user.uid, nome: user.displayName } 
+                    });
+                    
+                    await batch.commit();
+                    alert('Assistência Espiritual iniciada com sucesso e enviada para a fila!');
                     location.reload();
                 } catch(error) { 
                     console.error("Erro ao iniciar assistência:", error); 
+                    alert(`Ocorreu um erro: ${error.message}`);
                     e.target.disabled = false;
                 }
             });
