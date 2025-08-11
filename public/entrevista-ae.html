@@ -33,12 +33,11 @@
         .checkboxes label:hover { background-color: #f0f0f0; }
         .erro { color: #dc3545; font-weight: bold; text-align: center; }
         .hidden { display: none; }
-
-        /* Estilos do Modal de Reautenticação */
         .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.6); z-index: 1000; display: flex; align-items: center; justify-content: center; }
         .modal-content { background-color: white; padding: 30px; border-radius: 12px; box-shadow: 0 5px 15px rgba(0,0,0,0.3); width: 100%; max-width: 400px; }
         .modal-header { text-align: center; margin-bottom: 20px; }
         .modal-actions { display: flex; gap: 10px; justify-content: flex-end; margin-top: 20px; }
+        .info-text { font-size: 0.8em; color: #6c757d; margin-top: -10px; margin-bottom: 10px; text-align: center; }
     </style>
 </head>
 <body>
@@ -62,6 +61,7 @@
             <form id="reauth-form" onsubmit="return false;">
                 <div class="form-item">
                     <label for="reauth-email">Email:</label>
+                    <p class="info-text">Seu email de login (não pode ser alterado).</p>
                     <input type="email" id="reauth-email" class="readonly-input" readonly>
                 </div>
                 <div class="form-item">
@@ -128,9 +128,7 @@
                  ui.formularioContainer.innerHTML = `<p class="erro">Nenhum atendimento selecionado. Acesse esta página a partir de um link de edição no histórico do assistido.</p>`;
             }
 
-            // --- LÓGICA DE TRAVA/DESTRAVA E REAUTENTICAÇÃO ---
-
-            function travarFormulario(mostrarBotaoAlta = false) {
+            function travarFormulario() {
                 const form = ui.formularioContainer.querySelector('fieldset');
                 if (!form) return;
                 form.querySelectorAll('input, select, textarea').forEach(el => {
@@ -143,10 +141,12 @@
                 if (selectBox) selectBox.setAttribute('disabled', 'disabled');
 
                 document.getElementById('btn-salvar-entrevista').classList.add('hidden');
-                
                 const btnAlta = document.getElementById('btn-dar-alta');
                 if(btnAlta) btnAlta.classList.add('hidden');
                 
+                const btnHabilitarExistente = document.getElementById('btn-habilitar-edicao');
+                if(btnHabilitarExistente) btnHabilitarExistente.remove();
+
                 const btnHabilitar = document.createElement('button');
                 btnHabilitar.id = 'btn-habilitar-edicao';
                 btnHabilitar.className = 'btn btn-secondary';
@@ -213,9 +213,6 @@
                 ui.reauthError.classList.add('hidden');
             });
 
-
-            // --- LÓGICA PRINCIPAL DA PÁGINA ---
-
             async function carregarFormularioParaEdicao(atendimentoId) {
                 const atendimentoDocRef = doc(db, 'atendimentos_ae', atendimentoId);
                 const atendimentoDoc = await getDoc(atendimentoDocRef);
@@ -234,8 +231,9 @@
                 ui.formularioContainer.innerHTML = formHtml;
                 preencherFormulario(atendimento, nomeAssistido);
 
-                if (atendimento.entrevistador !== 'Aguardando Detalhes') {
-                    travarFormulario(isQuintaSemana);
+                // NOVA REGRA DA TRAVA: Trava se as notas já foram preenchidas.
+                if (atendimento.notas && atendimento.notas.trim() !== '') {
+                    travarFormulario();
                 }
 
                 document.getElementById('btn-salvar-entrevista')?.addEventListener('click', () => salvarEdicao(atendimento));
@@ -335,7 +333,13 @@
             }
 
             async function encontrarFilaDoDia(atendimento) {
-                if (!atendimento.atendimentoId) return null; // A ponte precisa existir
+                if (!atendimento.atendimentoId) { // Procura pela ponte de ligação primeiro
+                    const hojeInicio = new Date();
+                    hojeInicio.setHours(0,0,0,0);
+                    const q = query(filaRef, where("assistidoId", "==", atendimento.assistidoId), where("chegadaEm", ">=", Timestamp.fromDate(hojeInicio)), limit(1));
+                    const filaSnapshot = await getDocs(q);
+                    if (!filaSnapshot.empty) return filaSnapshot.docs[0].ref;
+                }
                 const q = query(filaRef, where("atendimentoId", "==", atendimento.id), limit(1));
                 const filaSnapshot = await getDocs(q);
                 if (!filaSnapshot.empty) {
@@ -398,7 +402,7 @@
                     batch.update(atendimentoDocRef, dadosParaAtualizar);
                     await batch.commit();
                     alert('Detalhes do atendimento atualizados com sucesso!');
-                    travarFormulario(atendimento.semana === 5);
+                    travarFormulario();
 
                 } catch (error) {
                     console.error("Erro ao salvar edição:", error);
@@ -431,7 +435,7 @@
                     
                     await batch.commit();
                     alert('Alta registrada! O tratamento foi encerrado.');
-                    travarFormulario(true);
+                    travarFormulario();
                 } else {
                      btn.disabled = false;
                 }
