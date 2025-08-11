@@ -31,6 +31,7 @@
         .filtro-data { text-align: center; margin-bottom: 25px; background-color: #fff; padding: 15px; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.05); }
         .filtro-data label { font-weight: bold; margin-right: 10px; }
         .filtro-data input { padding: 8px; border: 1px solid #ccc; border-radius: 6px; font-size: 1em; }
+        .aviso-decisao { text-align:center; font-weight:bold; color: #c0392b; margin-top: 10px; font-size: 0.9em; }
     </style>
 </head>
 <body>
@@ -54,8 +55,9 @@
     </div>
 
     <script type="module">
+        // A CORREÇÃO ESTÁ AQUI: Adicionei "deleteDoc" à lista de importação
         import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
-        import { getFirestore, collection, doc, getDoc, onSnapshot, updateDoc, query, where, orderBy, Timestamp, getDocs, setDoc, serverTimestamp, writeBatch } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
+        import { getFirestore, collection, doc, getDoc, onSnapshot, updateDoc, query, where, orderBy, Timestamp, getDocs, setDoc, serverTimestamp, deleteDoc } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
         import { protegerPagina } from '/auth.js';
 
         const firebaseConfig = {
@@ -81,7 +83,6 @@
             const db = getFirestore();
             const filaRef = collection(db, 'fila_atendimento_ae');
             const tratamentosRef = collection(db, 'tratamentos_ae');
-            const atendimentosRef = collection(db, 'atendimentos_ae');
             const painelEstadoRef = doc(db, 'painel_estado', 'atual');
             const cardsContainer = document.getElementById('cards-container');
             const seletorData = document.getElementById('seletor-data');
@@ -170,6 +171,7 @@
 
                 let buttonsHtml = '';
                 let actionsClass = '';
+                let avisoHtml = '';
 
                 if (!atendimento.precisaEntrevista) {
                     actionsClass = 'actions-1-button';
@@ -185,11 +187,13 @@
 
                     if (atendimento.semana_atual === 5 && !atendimento.decisao_registrada) {
                         entrevistaBtnDisabled = true;
+                        avisoHtml = `<p class="aviso-decisao">Aguardando registro da decisão do Colegiado no Arquivo Geral.</p>`;
                     }
 
                     if (entrevistaRealizada) {
                         if (atendimento.semana_atual === 5) {
-                            if (atendimento.decisao_registrada) {
+                            // Só libera o passe se a decisão foi salva (o que atualiza o status do tratamento)
+                            if (atendimento.status_tratamento !== 'ativo') {
                                 passeBtnDisabled = false;
                             }
                         } else {
@@ -216,17 +220,44 @@
                         Semana: <strong>${atendimento.semana_atual || 1}</strong><br>
                         Entrevista hoje: <strong>${atendimento.precisaEntrevista ? 'Sim' : 'Não'}</strong>
                     </p>
-                    <div class="${actionsClass}">${buttonsHtml}</div>`;
+                    <div class="${actionsClass}">${buttonsHtml}</div>
+                    ${avisoHtml}`;
                 
-                if (atendimento.semana_atual === 5 && !atendimento.decisao_registrada && statusFila !== 'chamado_passe') {
-                    card.innerHTML += `<p class="aviso-decisao">Aguardando registro da decisão do Colegiado no Arquivo Geral.</p>`;
-                }
-
                 return card;
             }
 
             async function atualizarPainelTV(chamadaAtual, novoStatus) {
-                // ...
+                const mapaDeSalas = { 'SALA 1': ['P1', 'P3A', 'P3B'], 'SALA 2': ['P2', 'P4A', 'P4B', 'CH'] };
+                const getSalaPorPasse = (passe) => {
+                    if (!passe) return 'Encaminhamento';
+                    for (const sala in mapaDeSalas) {
+                        if (mapaDeSalas[sala].includes(passe.toUpperCase())) return sala;
+                    }
+                    return 'Encaminhamento';
+                };
+                
+                const passeParaTV = chamadaAtual.passe_ciclo_atual || chamadaAtual.passeRecomendado;
+                const salaDestino = novoStatus === 'chamado_entrevista' ? 'SALA DE ENTREVISTA' : getSalaPorPasse(passeParaTV);
+                
+                const chamadasAnteriores = atendimentosDoDia
+                    .filter(a => a.id !== chamadaAtual.id && (a.status === 'chamado_entrevista' || a.status === 'chamado_passe' || a.status === 'entrevista_realizada'))
+                    .sort((a,b) => b.chegadaEm.toMillis() - a.chegadaEm.toMillis());
+                    
+                const historico = chamadasAnteriores.slice(0, 3).map(a => {
+                    const passeHist = a.passe_ciclo_atual || a.passeRecomendado;
+                    let salaHist = getSalaPorPasse(passeHist);
+                    if (a.status !== 'chamado_passe') {
+                        salaHist = 'SALA DE ENTREVISTA';
+                    }
+                    return { nome: a.nomeAssistido, sala: salaHist };
+                });
+
+                await setDoc(painelEstadoRef, {
+                    nome: chamadaAtual.nomeAssistido,
+                    sala: salaDestino,
+                    historico: historico,
+                    timestamp: serverTimestamp()
+                });
             }
 
             cardsContainer.addEventListener('click', async (e) => {
@@ -256,16 +287,8 @@
                         }
                     
                     } else if (target.classList.contains('btn-chamar-passe')) {
-                        const batch = writeBatch(db);
-                        const filaDocRef = doc(db, 'fila_atendimento_ae', id);
-                        batch.update(filaDocRef, { status: 'chamado_passe' });
-                        
-                        if (!atendimentoChamado.precisaEntrevista) {
-                            const atendimentoDocRef = doc(db, 'atendimentos_ae', atendimentoChamado.atendimentoId);
-                            batch.update(atendimentoDocRef, { entrevistador: 'Passe Direto' });
-                        }
-                        await batch.commit();
                         await atualizarPainelTV(atendimentoChamado, 'chamado_passe');
+                        await updateDoc(doc(db, 'fila_atendimento_ae', id), { status: 'chamado_passe' });
                     }
                 } catch (error) {
                     console.error("Erro ao processar chamada:", error);
