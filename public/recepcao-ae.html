@@ -287,7 +287,11 @@
                     const passeDoCiclo = tratamentoAtivoSelecionado.passe_ciclo_atual;
                     const dataAtual = serverTimestamp();
 
-                    const placeholderHistorico = {
+                    const placeholderHistoricoRef = doc(collection(db, 'atendimentos_ae'));
+                    
+                    const batch = writeBatch(db);
+                    
+                    batch.set(placeholderHistoricoRef, {
                         assistidoId: assistidoSelecionado.id,
                         tratamentoId: tratamentoAtivoSelecionado.id,
                         tipo: 'tratamento_semanal',
@@ -296,21 +300,21 @@
                         entrevistador: 'Aguardando Detalhes',
                         passeRecomendado: passeDoCiclo,
                         notas: ''
-                    };
-                    const novoAtendimentoRef = await addDoc(atendimentosRef, placeholderHistorico);
-                    
-                    await addDoc(filaRef, {
+                    });
+
+                    batch.set(doc(filaRef), {
                         assistidoId: assistidoSelecionado.id,
                         nomeAssistido: assistidoSelecionado.nome,
                         tratamentoId: tratamentoAtivoSelecionado.id,
-                        atendimentoId: novoAtendimentoRef.id,
+                        atendimentoId: placeholderHistoricoRef.id,
                         status: 'aguardando_entrevista_ou_passe',
                         passeRecomendado: passeDoCiclo,
                         semana_atual: semanaAtual, 
                         chegadaEm: dataAtual,
                         recepcionista: { uid: user.uid, nome: user.displayName }
                     });
-                    
+
+                    await batch.commit();
                     alert(`Presença de ${assistidoSelecionado.nome} (Semana ${semanaAtual}) registrada com sucesso!`);
                 } catch (error) {
                     console.error("Erro ao marcar presença: ", error);
@@ -346,18 +350,17 @@
             });
 
             ui.nomeInput.addEventListener('input', async (e) => {
-                const termo = e.target.value.trim().toLowerCase();
+                const termo = e.target.value.trim();
                 ui.searchResults.innerHTML = '';
                 
-                // Se o usuário já selecionou alguém e começa a digitar de novo, reseta o formulário
-                if (assistidoSelecionado) {
-                    const nomeAntigo = assistidoSelecionado.nome;
-                    resetarFormularioBusca();
-                    ui.nomeInput.value = nomeAntigo.slice(0, -1) + termo.slice(-1);
-                    return;
+                if (assistidoSelecionado && termo !== assistidoSelecionado.nome) {
+                    assistidoSelecionado = null;
+                    ui.telefoneInput.value = '';
+                    ui.dnInput.value = '';
+                    ui.btnVerHistorico.classList.add('hidden');
                 }
 
-                if (termo.length > 0 && !assistidoSelecionado) {
+                if (termo.length > 0) {
                     ui.novoAtendimentoSection.classList.remove('hidden');
                 } else {
                     ui.novoAtendimentoSection.classList.add('hidden');
@@ -365,7 +368,7 @@
 
                 if (termo.length < 3) return;
 
-                const q = query(assistidosRef, where('nome_lower', '>=', termo), where('nome_lower', '<=', termo + '\uf8ff'), limit(5));
+                const q = query(assistidosRef, where('nome_lower', '>=', termo.toLowerCase()), where('nome_lower', '<=', termo.toLowerCase() + '\uf8ff'), limit(5));
                 const snapshot = await getDocs(q);
                 snapshot.forEach(doc => {
                     const assistido = { id: doc.id, ...doc.data() };
@@ -406,8 +409,7 @@
                     batch.set(doc(atendimentosRef), { assistidoId: assistidoId, tratamentoId: null, tipo: 'avulso', dataAtendimento: dataAtual, passeRecomendado: passeAvulso });
                     await batch.commit();
                     alert('Passe avulso registrado e enviado para a fila!');
-                    resetarFormularioBusca();
-                    await carregarTratamentosAtivos();
+                    location.reload(); // SOLUÇÃO SIMPLES E EFICAZ
                 } catch(error) { 
                     console.error("Erro ao registrar passe avulso:", error); 
                     e.target.disabled = false;
@@ -456,8 +458,7 @@
                     
                     await batch.commit();
                     alert('Assistência Espiritual iniciada com sucesso e enviada para a fila!');
-                    resetarFormularioBusca();
-                    await carregarTratamentosAtivos();
+                    location.reload(); // SOLUÇÃO SIMPLES E EFICAZ
                 } catch(error) { 
                     console.error("Erro ao iniciar assistência:", error); 
                     e.target.disabled = false;
