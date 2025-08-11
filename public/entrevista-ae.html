@@ -333,9 +333,11 @@
 
             async function encontrarFilaDoDia(atendimento) {
                 if (!atendimento.atendimentoId) {
-                    const hojeInicio = new Date();
+                    const hojeInicio = new Date(atendimento.dataAtendimento.toDate());
                     hojeInicio.setHours(0,0,0,0);
-                    const q = query(filaRef, where("assistidoId", "==", atendimento.assistidoId), where("chegadaEm", ">=", Timestamp.fromDate(hojeInicio)), limit(1));
+                    const hojeFim = new Date(atendimento.dataAtendimento.toDate());
+                    hojeFim.setHours(23,59,59,999);
+                    const q = query(filaRef, where("assistidoId", "==", atendimento.assistidoId), where("chegadaEm", ">=", Timestamp.fromDate(hojeInicio)), where("chegadaEm", "<=", Timestamp.fromDate(hojeFim)), limit(1));
                     const filaSnapshot = await getDocs(q);
                     if (!filaSnapshot.empty) return filaSnapshot.docs[0].ref;
                 }
@@ -362,7 +364,7 @@
                         horarioInicio: document.getElementById('retorno-inicio').value,
                         horarioFim: document.getElementById('retorno-fim').value,
                         evolucao: document.querySelector('input[name="evolucao"]:checked').value,
-                        detalhes_preenchidos: true // ATUALIZA O CARIMBO
+                        detalhes_preenchidos: true
                     };
                     
                     if (atendimento.semana === 5) {
@@ -414,7 +416,7 @@
             }
 
             async function darAlta(atendimento) {
-                const btn = document.getElementById('btn-dar-alta');
+                 const btn = document.getElementById('btn-dar-alta');
                 btn.disabled = true;
                 if (confirm(`Tem certeza que deseja dar alta para este assistido?`)) {
                     
@@ -426,7 +428,7 @@
                     batch.update(atendimentoDocRef, {
                          tipo: 'alta',
                          colegiadoNotas: document.getElementById('colegiado-notas')?.value || "Atendimento de reavaliação finalizado com alta.",
-                         detalhes_preenchidos: true // ATUALIZA O CARIMBO
+                         detalhes_preenchidos: true
                     });
                     
                     const filaDocRef = await encontrarFilaDoDia(atendimento);
