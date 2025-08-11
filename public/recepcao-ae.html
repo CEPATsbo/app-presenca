@@ -286,10 +286,9 @@
                     const semanaAtual = await calcularSemanaAtual(tratamentoAtivoSelecionado.id);
                     const passeDoCiclo = tratamentoAtivoSelecionado.passe_ciclo_atual;
                     const dataAtual = serverTimestamp();
+                    const batch = writeBatch(db);
 
                     const placeholderHistoricoRef = doc(collection(db, 'atendimentos_ae'));
-                    
-                    const batch = writeBatch(db);
                     
                     batch.set(placeholderHistoricoRef, {
                         assistidoId: assistidoSelecionado.id,
@@ -299,9 +298,10 @@
                         semana: semanaAtual,
                         entrevistador: 'Aguardando Detalhes',
                         passeRecomendado: passeDoCiclo,
-                        notas: ''
+                        notas: '',
+                        detalhes_preenchidos: false // NOVO CARIMBO
                     });
-
+                    
                     batch.set(doc(filaRef), {
                         assistidoId: assistidoSelecionado.id,
                         nomeAssistido: assistidoSelecionado.nome,
@@ -313,7 +313,7 @@
                         chegadaEm: dataAtual,
                         recepcionista: { uid: user.uid, nome: user.displayName }
                     });
-
+                    
                     await batch.commit();
                     alert(`Presença de ${assistidoSelecionado.nome} (Semana ${semanaAtual}) registrada com sucesso!`);
                 } catch (error) {
@@ -360,9 +360,9 @@
                     ui.btnVerHistorico.classList.add('hidden');
                 }
 
-                if (termo.length > 0) {
+                if (termo.length > 0 && !assistidoSelecionado) {
                     ui.novoAtendimentoSection.classList.remove('hidden');
-                } else {
+                } else if (termo.length === 0) {
                     ui.novoAtendimentoSection.classList.add('hidden');
                 }
 
@@ -409,7 +409,7 @@
                     batch.set(doc(atendimentosRef), { assistidoId: assistidoId, tratamentoId: null, tipo: 'avulso', dataAtendimento: dataAtual, passeRecomendado: passeAvulso });
                     await batch.commit();
                     alert('Passe avulso registrado e enviado para a fila!');
-                    location.reload(); // SOLUÇÃO SIMPLES E EFICAZ
+                    location.reload();
                 } catch(error) { 
                     console.error("Erro ao registrar passe avulso:", error); 
                     e.target.disabled = false;
@@ -441,7 +441,8 @@
                         semana: 1,
                         entrevistador: 'Aguardando Detalhes',
                         passeRecomendado: passeInicial,
-                        notas: ''
+                        notas: '',
+                        detalhes_preenchidos: false // NOVO CARIMBO
                     });
 
                     batch.set(doc(filaRef), { 
@@ -458,7 +459,7 @@
                     
                     await batch.commit();
                     alert('Assistência Espiritual iniciada com sucesso e enviada para a fila!');
-                    location.reload(); // SOLUÇÃO SIMPLES E EFICAZ
+                    location.reload();
                 } catch(error) { 
                     console.error("Erro ao iniciar assistência:", error); 
                     e.target.disabled = false;

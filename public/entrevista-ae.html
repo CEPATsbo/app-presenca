@@ -196,7 +196,7 @@
                     ui.reauthForm.reset();
                 } catch (error) {
                     console.error("Erro de reautenticação:", error.code);
-                    if (error.code === 'auth/wrong-password' || error.code === 'auth/invalid-credential') {
+                    if (error.code === 'auth/wrong-password' || error.code === 'auth/invalid-credential' || error.code === 'auth/invalid-login-credentials') {
                         ui.reauthError.textContent = 'Senha incorreta. Tente novamente.';
                     } else {
                         ui.reauthError.textContent = 'Ocorreu um erro. Tente novamente mais tarde.';
@@ -231,8 +231,7 @@
                 ui.formularioContainer.innerHTML = formHtml;
                 preencherFormulario(atendimento, nomeAssistido);
 
-                // NOVA REGRA DA TRAVA: Trava se as notas já foram preenchidas.
-                if (atendimento.notas && atendimento.notas.trim() !== '') {
+                if (atendimento.detalhes_preenchidos === true) {
                     travarFormulario();
                 }
 
@@ -333,7 +332,7 @@
             }
 
             async function encontrarFilaDoDia(atendimento) {
-                if (!atendimento.atendimentoId) { // Procura pela ponte de ligação primeiro
+                if (!atendimento.atendimentoId) {
                     const hojeInicio = new Date();
                     hojeInicio.setHours(0,0,0,0);
                     const q = query(filaRef, where("assistidoId", "==", atendimento.assistidoId), where("chegadaEm", ">=", Timestamp.fromDate(hojeInicio)), limit(1));
@@ -362,7 +361,8 @@
                         notas: document.getElementById('entrevista-notas').value,
                         horarioInicio: document.getElementById('retorno-inicio').value,
                         horarioFim: document.getElementById('retorno-fim').value,
-                        evolucao: document.querySelector('input[name="evolucao"]:checked').value
+                        evolucao: document.querySelector('input[name="evolucao"]:checked').value,
+                        detalhes_preenchidos: true // ATUALIZA O CARIMBO
                     };
                     
                     if (atendimento.semana === 5) {
@@ -414,7 +414,7 @@
             }
 
             async function darAlta(atendimento) {
-                 const btn = document.getElementById('btn-dar-alta');
+                const btn = document.getElementById('btn-dar-alta');
                 btn.disabled = true;
                 if (confirm(`Tem certeza que deseja dar alta para este assistido?`)) {
                     
@@ -425,7 +425,8 @@
                     const atendimentoDocRef = doc(db, 'atendimentos_ae', atendimento.id);
                     batch.update(atendimentoDocRef, {
                          tipo: 'alta',
-                         colegiadoNotas: document.getElementById('colegiado-notas')?.value || "Atendimento de reavaliação finalizado com alta."
+                         colegiadoNotas: document.getElementById('colegiado-notas')?.value || "Atendimento de reavaliação finalizado com alta.",
+                         detalhes_preenchidos: true // ATUALIZA O CARIMBO
                     });
                     
                     const filaDocRef = await encontrarFilaDoDia(atendimento);
