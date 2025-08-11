@@ -171,12 +171,10 @@
                 assistidoAtualmenteSelecionado = assistido;
                 ui.detalhesAssistido.innerHTML = `<h2>Histórico de ${assistido.nome}</h2><p>Carregando histórico...</p>`;
                 
-                // 1. Busca todos os ciclos de tratamento
                 const qTratamentos = query(tratamentosRef, where('assistidoId', '==', assistido.id), orderBy('dataInicio', 'desc'));
                 const tratamentosSnapshot = await getDocs(qTratamentos);
                 const ciclos = tratamentosSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
                 
-                // 2. Busca TODOS os atendimentos (de tratamento e avulsos) do assistido
                 const qAtendimentos = query(atendimentosRef, where('assistidoId', '==', assistido.id), orderBy('dataAtendimento', 'desc'));
                 const atendimentosSnapshot = await getDocs(qAtendimentos);
                 const todosAtendimentos = atendimentosSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
@@ -190,7 +188,6 @@
                 html += `<p><strong>DN:</strong> ${dnFormatado} | <strong>Telefone:</strong> ${assistido.telefone || 'Não informado'}</p>`;
                 html += '<div id="historico-container">';
 
-                // Renderiza os ciclos de tratamento
                 if (ciclos.length > 0) {
                     ciclos.forEach(ciclo => {
                         const dataInicio = ciclo.dataInicio ? ciclo.dataInicio.toDate().toLocaleDateString('pt-br') : 'N/A';
@@ -215,7 +212,6 @@
                     });
                 }
                 
-                // Renderiza os passes avulsos
                 const passesAvulsos = todosAtendimentos.filter(a => a.tipo === 'avulso');
                 if (passesAvulsos.length > 0) {
                      html += `<div class="ciclo-tratamento">
@@ -237,7 +233,7 @@
 
             function renderizarItemAtendimento(a) {
                 const dataAtendimento = a.dataAtendimento.toDate().toLocaleDateString('pt-br');
-                let tipoAtendimento = a.tipo.replace(/_/g, ' ');
+                let tipoAtendimento = a.tipo?.replace(/_/g, ' ') || 'N/A';
                 let infoExtra = '';
                 let botaoEditarHtml = '';
                 let iconeHtml = '';
@@ -251,10 +247,8 @@
                 }
 
                 if (a.entrevistador && a.entrevistador !== 'Passe Direto' && a.tipo !== 'falta' && a.tipo !== 'avulso') {
-                     if (a.notas && a.notas.trim() !== '') {
+                     if (a.entrevistador !== 'Aguardando Detalhes') {
                         iconeHtml = '<span>✅</span>';
-                    } else if (a.entrevistador !== 'Aguardando Detalhes') {
-                         iconeHtml = '<span>✅</span>';
                     } else {
                         iconeHtml = '<span>📝</span>';
                     }

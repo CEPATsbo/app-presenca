@@ -349,12 +349,15 @@
                 const termo = e.target.value.trim().toLowerCase();
                 ui.searchResults.innerHTML = '';
                 
+                // Se o usuário já selecionou alguém e começa a digitar de novo, reseta o formulário
                 if (assistidoSelecionado) {
+                    const nomeAntigo = assistidoSelecionado.nome;
                     resetarFormularioBusca();
-                    ui.nomeInput.value = termo;
+                    ui.nomeInput.value = nomeAntigo.slice(0, -1) + termo.slice(-1);
+                    return;
                 }
 
-                if (termo.length > 0) {
+                if (termo.length > 0 && !assistidoSelecionado) {
                     ui.novoAtendimentoSection.classList.remove('hidden');
                 } else {
                     ui.novoAtendimentoSection.classList.add('hidden');
