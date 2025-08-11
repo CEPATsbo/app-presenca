@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Detalhes do Atendimento - AE</title>
     <style>
-        :root { --cor-primaria: #007bff; --cor-borda: #ddd; --fundo-desabilitado: #f9f9f9; }
+        :root { --cor-primaria: #007bff; --cor-borda: #ddd; --fundo-desabilitado: #e9ecef; }
         body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background-color: #f0f2f5; margin: 0; padding: 20px; }
         .container { width: 100%; max-width: 900px; background-color: white; padding: 30px; border-radius: 12px; box-shadow: 0 6px 24px rgba(0,0,0,0.1); margin: auto; }
         .nav-voltar { width: 100%; max-width: 900px; margin: auto; margin-bottom: 20px; }
@@ -14,21 +14,31 @@
         .btn-voltar { background-color: #6c757d; }
         .btn-success { background-color: #28a745; }
         .btn-danger { background-color: #dc3545; }
+        .btn-secondary { background-color: #6c757d; }
         h1, h3 { color: #333; text-align: center; }
         fieldset { border: 1px solid var(--cor-borda); border-radius: 8px; padding: 20px; margin-bottom: 20px; }
         legend { font-weight: bold; font-size: 1.2em; color: #0056b3; padding: 0 10px; }
         .form-item { display: flex; flex-direction: column; }
         .form-item label { margin-bottom: 5px; font-weight: bold; color: #555; }
         .form-item input, .form-item select, .form-item textarea, .form-item .readonly-input { padding: 10px; border-radius: 6px; border: 1px solid #ccc; font-size: 1em; width: 100%; box-sizing: border-box; }
-        .form-item .readonly-input { background-color: #e9ecef; }
+        .form-item .readonly-input { background-color: var(--fundo-desabilitado); }
+        .form-item input:disabled, .form-item select:disabled, .form-item textarea:disabled { background-color: var(--fundo-desabilitado); cursor: not-allowed; }
         .form-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; align-items: end; }
         .multiselect { position: relative; }
         .select-box { border: 1px solid #ccc; border-radius: 6px; padding: 10px; cursor: pointer; background-color: #fff; min-height: 1.5em; }
+        .select-box[disabled] { background-color: var(--fundo-desabilitado); cursor: not-allowed; }
         .checkboxes { display: none; position: absolute; background: white; border: 1px solid var(--cor-borda); border-radius: 6px; z-index: 100; max-height: 200px; overflow-y: auto; padding: 5px; width: 100%; box-sizing: border-box; }
         .checkboxes.visible { display: block; }
         .checkboxes label { display: block; padding: 5px 8px; }
         .checkboxes label:hover { background-color: #f0f0f0; }
         .erro { color: #dc3545; font-weight: bold; text-align: center; }
+        .hidden { display: none; }
+
+        /* Estilos do Modal de Reautenticação */
+        .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.6); z-index: 1000; display: flex; align-items: center; justify-content: center; }
+        .modal-content { background-color: white; padding: 30px; border-radius: 12px; box-shadow: 0 5px 15px rgba(0,0,0,0.3); width: 100%; max-width: 400px; }
+        .modal-header { text-align: center; margin-bottom: 20px; }
+        .modal-actions { display: flex; gap: 10px; justify-content: flex-end; margin-top: 20px; }
     </style>
 </head>
 <body>
@@ -43,9 +53,34 @@
         </div>
     </div>
 
+    <div id="reauth-modal" class="modal-overlay hidden">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Habilitar Edição</h3>
+                <p>Para sua segurança, por favor, confirme sua identidade digitando sua senha novamente.</p>
+            </div>
+            <form id="reauth-form" onsubmit="return false;">
+                <div class="form-item">
+                    <label for="reauth-email">Email:</label>
+                    <input type="email" id="reauth-email" class="readonly-input" readonly>
+                </div>
+                <div class="form-item">
+                    <label for="reauth-password">Senha:</label>
+                    <input type="password" id="reauth-password" required autocomplete="current-password">
+                </div>
+                <p id="reauth-error" class="erro hidden"></p>
+                <div class="modal-actions">
+                    <button type="button" id="btn-reauth-cancel" class="btn btn-secondary">Cancelar</button>
+                    <button type="submit" id="btn-reauth-confirm" class="btn btn-success">Confirmar</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
-        import { getFirestore, collection, doc, getDoc, updateDoc, query, where, Timestamp, getDocs, writeBatch, serverTimestamp, addDoc, deleteDoc, limit } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
+        import { getFirestore, collection, doc, getDoc, updateDoc, query, where, Timestamp, getDocs, writeBatch, serverTimestamp, limit } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
+        import { getAuth, EmailAuthProvider, reauthenticateWithCredential } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-auth.js";
         import { protegerPagina } from '/auth.js';
 
         const firebaseConfig = {
@@ -57,6 +92,7 @@
             appId: "1:66122858261:web:7fa21f1805463b5c08331c"
         };
         initializeApp(firebaseConfig);
+        const auth = getAuth();
 
         protegerPagina(['entrevistador', 'diretor', 'super-admin']).then(user => {
             document.getElementById('main-content').classList.remove('hidden');
@@ -74,6 +110,13 @@
             
             const ui = {
                 formularioContainer: document.getElementById('formulario-container'),
+                modal: document.getElementById('reauth-modal'),
+                reauthForm: document.getElementById('reauth-form'),
+                reauthEmail: document.getElementById('reauth-email'),
+                reauthPassword: document.getElementById('reauth-password'),
+                reauthError: document.getElementById('reauth-error'),
+                btnReauthCancel: document.getElementById('btn-reauth-cancel'),
+                btnReauthConfirm: document.getElementById('btn-reauth-confirm'),
             };
 
             const params = new URLSearchParams(window.location.search);
@@ -84,6 +127,94 @@
             } else {
                  ui.formularioContainer.innerHTML = `<p class="erro">Nenhum atendimento selecionado. Acesse esta página a partir de um link de edição no histórico do assistido.</p>`;
             }
+
+            // --- LÓGICA DE TRAVA/DESTRAVA E REAUTENTICAÇÃO ---
+
+            function travarFormulario(mostrarBotaoAlta = false) {
+                const form = ui.formularioContainer.querySelector('fieldset');
+                if (!form) return;
+                form.querySelectorAll('input, select, textarea').forEach(el => {
+                    if (!el.classList.contains('readonly-input')) {
+                        el.disabled = true;
+                    }
+                });
+
+                const selectBox = form.querySelector('.select-box');
+                if (selectBox) selectBox.setAttribute('disabled', 'disabled');
+
+                document.getElementById('btn-salvar-entrevista').classList.add('hidden');
+                
+                const btnAlta = document.getElementById('btn-dar-alta');
+                if(btnAlta) btnAlta.classList.add('hidden');
+                
+                const btnHabilitar = document.createElement('button');
+                btnHabilitar.id = 'btn-habilitar-edicao';
+                btnHabilitar.className = 'btn btn-secondary';
+                btnHabilitar.style.width = '100%';
+                btnHabilitar.style.marginTop = '10px';
+                btnHabilitar.innerHTML = '🔒 Habilitar Edição';
+                btnHabilitar.type = 'button';
+                btnHabilitar.onclick = () => {
+                    ui.reauthEmail.value = user.email;
+                    ui.modal.classList.remove('hidden');
+                    ui.reauthPassword.focus();
+                };
+                form.appendChild(btnHabilitar);
+            }
+
+            function destravarFormulario() {
+                const form = ui.formularioContainer.querySelector('fieldset');
+                if (!form) return;
+                form.querySelectorAll('input, select, textarea').forEach(el => {
+                    if(!el.classList.contains('readonly-input')) el.disabled = false;
+                });
+                
+                const selectBox = form.querySelector('.select-box');
+                if (selectBox) selectBox.removeAttribute('disabled');
+
+                document.getElementById('btn-salvar-entrevista').classList.remove('hidden');
+                const btnAlta = document.getElementById('btn-dar-alta');
+                if(btnAlta) btnAlta.classList.remove('hidden');
+
+                const btnHabilitar = document.getElementById('btn-habilitar-edicao');
+                if (btnHabilitar) btnHabilitar.remove();
+            }
+
+            ui.reauthForm.addEventListener('submit', async (e) => {
+                e.preventDefault();
+                const password = ui.reauthPassword.value;
+                if (!password) return;
+
+                ui.btnReauthConfirm.disabled = true;
+                ui.reauthError.classList.add('hidden');
+                const credential = EmailAuthProvider.credential(user.email, password);
+
+                try {
+                    await reauthenticateWithCredential(user, credential);
+                    destravarFormulario();
+                    ui.modal.classList.add('hidden');
+                    ui.reauthForm.reset();
+                } catch (error) {
+                    console.error("Erro de reautenticação:", error.code);
+                    if (error.code === 'auth/wrong-password' || error.code === 'auth/invalid-credential') {
+                        ui.reauthError.textContent = 'Senha incorreta. Tente novamente.';
+                    } else {
+                        ui.reauthError.textContent = 'Ocorreu um erro. Tente novamente mais tarde.';
+                    }
+                    ui.reauthError.classList.remove('hidden');
+                } finally {
+                     ui.btnReauthConfirm.disabled = false;
+                }
+            });
+
+            ui.btnReauthCancel.addEventListener('click', () => {
+                ui.modal.classList.add('hidden');
+                ui.reauthForm.reset();
+                ui.reauthError.classList.add('hidden');
+            });
+
+
+            // --- LÓGICA PRINCIPAL DA PÁGINA ---
 
             async function carregarFormularioParaEdicao(atendimentoId) {
                 const atendimentoDocRef = doc(db, 'atendimentos_ae', atendimentoId);
@@ -103,25 +234,29 @@
                 ui.formularioContainer.innerHTML = formHtml;
                 preencherFormulario(atendimento, nomeAssistido);
 
+                if (atendimento.entrevistador !== 'Aguardando Detalhes') {
+                    travarFormulario(isQuintaSemana);
+                }
+
                 document.getElementById('btn-salvar-entrevista')?.addEventListener('click', () => salvarEdicao(atendimento));
                 document.getElementById('btn-dar-alta')?.addEventListener('click', () => darAlta(atendimento));
                 
                 const selectBox = document.querySelector('.select-box');
                 const checkboxes = document.querySelector('.checkboxes');
                 if (selectBox && checkboxes) {
-                    selectBox.addEventListener('click', () => { checkboxes.classList.toggle('visible'); });
+                    selectBox.addEventListener('click', () => { if (selectBox.getAttribute('disabled') === null) checkboxes.classList.toggle('visible'); });
                     checkboxes.addEventListener('change', () => {
                         const selecionados = Array.from(checkboxes.querySelectorAll('input:checked')).map(cb => cb.value);
                         selectBox.textContent = selecionados.length > 0 ? selecionados.join(', ') : 'Selecione...';
                     });
                     document.addEventListener('click', (e) => {
-                        if (!selectBox.contains(e.target) && !checkboxes.contains(e.target)) {
+                        if (selectBox && !selectBox.contains(e.target) && !checkboxes.contains(e.target)) {
                             checkboxes.classList.remove('visible');
                         }
                     });
                 }
             }
-
+            
             function preencherFormulario(atendimento, nomeAssistido) {
                 document.getElementById('assistido-nome').textContent = nomeAssistido;
                 if (document.getElementById('entrevistador-nome')) {
@@ -170,7 +305,7 @@
                 let colegiadoHtml = '';
                 if (mostrarColegiado) {
                     colegiadoHtml = `<hr><h5>Colegiado</h5>
-                        <div class="form-grid"><div class="form-item"><label for="colegiado-de">DE:</label><select id="colegiado-de" disabled>${gerarOpcoesPasse(passeDe)}</select></div><div class="form-item"><label for="colegiado-para">PARA (Mudar o passe):</label><select id="colegiado-para">${gerarOpcoesPasse()}</select></div></div>
+                        <div class="form-grid"><div class="form-item"><label for="colegiado-de">DE:</label><select id="colegiado-de" class="readonly-input" disabled>${gerarOpcoesPasse(passeDe)}</select></div><div class="form-item"><label for="colegiado-para">PARA (Mudar o passe):</label><select id="colegiado-para">${gerarOpcoesPasse()}</select></div></div>
                         <div class="form-item" style="margin-top:15px;"><label>Encaminhamentos (Múltipla Escolha):</label><div class="multiselect">
                             <div class="select-box" tabindex="0">Selecione...</div>
                             <div class="checkboxes">
@@ -199,8 +334,9 @@
                 </fieldset>`;
             }
 
-            async function encontrarFilaDoDia(atendimentoId) {
-                const q = query(filaRef, where("atendimentoId", "==", atendimentoId), limit(1));
+            async function encontrarFilaDoDia(atendimento) {
+                if (!atendimento.atendimentoId) return null; // A ponte precisa existir
+                const q = query(filaRef, where("atendimentoId", "==", atendimento.id), limit(1));
                 const filaSnapshot = await getDocs(q);
                 if (!filaSnapshot.empty) {
                     return filaSnapshot.docs[0].ref;
@@ -227,7 +363,7 @@
                     
                     if (atendimento.semana === 5) {
                         const passePara = document.getElementById('colegiado-para')?.value;
-                        const filaDocRef = await encontrarFilaDoDia(atendimento.id);
+                        const filaDocRef = await encontrarFilaDoDia(atendimento);
                         
                         if (passePara) { 
                             const tratamentoDocRef = doc(db, 'tratamentos_ae', atendimento.tratamentoId);
@@ -262,6 +398,7 @@
                     batch.update(atendimentoDocRef, dadosParaAtualizar);
                     await batch.commit();
                     alert('Detalhes do atendimento atualizados com sucesso!');
+                    travarFormulario(atendimento.semana === 5);
 
                 } catch (error) {
                     console.error("Erro ao salvar edição:", error);
@@ -287,13 +424,14 @@
                          colegiadoNotas: document.getElementById('colegiado-notas')?.value || "Atendimento de reavaliação finalizado com alta."
                     });
                     
-                    const filaDocRef = await encontrarFilaDoDia(atendimento.id);
+                    const filaDocRef = await encontrarFilaDoDia(atendimento);
                     if (filaDocRef) {
                         batch.update(filaDocRef, { decisao_registrada: true });
                     }
                     
                     await batch.commit();
-                    alert('Alta registrada! O tratamento foi encerrado. O fluxo do dia continuará para a entrevista final.');
+                    alert('Alta registrada! O tratamento foi encerrado.');
+                    travarFormulario(true);
                 } else {
                      btn.disabled = false;
                 }
