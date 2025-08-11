@@ -332,15 +332,6 @@
             }
 
             async function encontrarFilaDoDia(atendimento) {
-                if (!atendimento.atendimentoId) {
-                    const hojeInicio = new Date(atendimento.dataAtendimento.toDate());
-                    hojeInicio.setHours(0,0,0,0);
-                    const hojeFim = new Date(atendimento.dataAtendimento.toDate());
-                    hojeFim.setHours(23,59,59,999);
-                    const q = query(filaRef, where("assistidoId", "==", atendimento.assistidoId), where("chegadaEm", ">=", Timestamp.fromDate(hojeInicio)), where("chegadaEm", "<=", Timestamp.fromDate(hojeFim)), limit(1));
-                    const filaSnapshot = await getDocs(q);
-                    if (!filaSnapshot.empty) return filaSnapshot.docs[0].ref;
-                }
                 const q = query(filaRef, where("atendimentoId", "==", atendimento.id), limit(1));
                 const filaSnapshot = await getDocs(q);
                 if (!filaSnapshot.empty) {

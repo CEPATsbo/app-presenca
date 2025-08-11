@@ -286,8 +286,11 @@
                     const semanaAtual = await calcularSemanaAtual(tratamentoAtivoSelecionado.id);
                     const passeDoCiclo = tratamentoAtivoSelecionado.passe_ciclo_atual;
                     const dataAtual = serverTimestamp();
+                    const batch = writeBatch(db);
 
-                    const placeholderHistorico = {
+                    const placeholderHistoricoRef = doc(collection(db, 'atendimentos_ae'));
+                    
+                    batch.set(placeholderHistoricoRef, {
                         assistidoId: assistidoSelecionado.id,
                         tratamentoId: tratamentoAtivoSelecionado.id,
                         tipo: 'tratamento_semanal',
@@ -296,15 +299,14 @@
                         entrevistador: 'Aguardando Detalhes',
                         passeRecomendado: passeDoCiclo,
                         notas: '',
-                        detalhes_preenchidos: false // NOVO CARIMBO
-                    };
-                    const novoAtendimentoRef = await addDoc(atendimentosRef, placeholderHistorico);
+                        detalhes_preenchidos: false 
+                    });
                     
-                    await addDoc(filaRef, {
+                    batch.set(doc(filaRef), {
                         assistidoId: assistidoSelecionado.id,
                         nomeAssistido: assistidoSelecionado.nome,
                         tratamentoId: tratamentoAtivoSelecionado.id,
-                        atendimentoId: novoAtendimentoRef.id,
+                        atendimentoId: placeholderHistoricoRef.id,
                         status: 'aguardando_entrevista_ou_passe',
                         passeRecomendado: passeDoCiclo,
                         semana_atual: semanaAtual, 
@@ -312,6 +314,7 @@
                         recepcionista: { uid: user.uid, nome: user.displayName }
                     });
                     
+                    await batch.commit();
                     alert(`Presença de ${assistidoSelecionado.nome} (Semana ${semanaAtual}) registrada com sucesso!`);
                 } catch (error) {
                     console.error("Erro ao marcar presença: ", error);
@@ -348,8 +351,6 @@
 
             ui.nomeInput.addEventListener('input', async (e) => {
                 const termo = e.target.value.trim();
-                ui.searchResults.innerHTML = '';
-                
                 if (assistidoSelecionado && termo !== assistidoSelecionado.nome) {
                     assistidoSelecionado = null;
                     ui.telefoneInput.value = '';
@@ -363,10 +364,14 @@
                     ui.novoAtendimentoSection.classList.add('hidden');
                 }
 
-                if (termo.length < 3) return;
+                if (termo.length < 3) {
+                    ui.searchResults.innerHTML = '';
+                    return;
+                }
 
                 const q = query(assistidosRef, where('nome_lower', '>=', termo.toLowerCase()), where('nome_lower', '<=', termo.toLowerCase() + '\uf8ff'), limit(5));
                 const snapshot = await getDocs(q);
+                ui.searchResults.innerHTML = '';
                 snapshot.forEach(doc => {
                     const assistido = { id: doc.id, ...doc.data() };
                     const li = document.createElement('li');
@@ -394,19 +399,8 @@
                 e.target.disabled = true;
                 if (!validarDadosPessoais()) { e.target.disabled = false; return; }
                 try {
-                    const assistidoId = await criarNovoAssistidoSeNaoExistir();
-                    const idadeDate = new Date(ui.dnInput.value);
-                    const diffMs = Date.now() - idadeDate.getTime();
-                    const idade = new Date(diffMs).getUTCFullYear() - 1970;
-                    const passeAvulso = idade >= 12 ? 'P2' : 'P4A';
-                    const dataAtual = serverTimestamp();
-
-                    const batch = writeBatch(db);
-                    batch.set(doc(filaRef), { assistidoId: assistidoId, nomeAssistido: capitalizarNome(ui.nomeInput.value.trim()), status: 'aguardando_entrevista_ou_passe', passeRecomendado: passeAvulso, tipoAtendimento: 'avulso', semana_atual: 1, chegadaEm: dataAtual, recepcionista: { uid: user.uid, nome: user.displayName } });
-                    batch.set(doc(atendimentosRef), { assistidoId: assistidoId, tratamentoId: null, tipo: 'avulso', dataAtendimento: dataAtual, passeRecomendado: passeAvulso });
-                    await batch.commit();
-                    alert('Passe avulso registrado e enviado para a fila!');
-                    location.reload();
+                    await criarNovoAssistidoSeNaoExistir();
+                    location.reload(); 
                 } catch(error) { 
                     console.error("Erro ao registrar passe avulso:", error); 
                     e.target.disabled = false;
@@ -417,45 +411,7 @@
                 e.target.disabled = true;
                 if (!validarDadosPessoais()) { e.target.disabled = false; return; }
                 try {
-                    const assistidoId = await criarNovoAssistidoSeNaoExistir();
-                    const idadeDate = new Date(ui.dnInput.value);
-                    const diffMs = Date.now() - idadeDate.getTime();
-                    const idade = new Date(diffMs).getUTCFullYear() - 1970;
-                    const passeInicial = idade >= 12 ? 'P2' : 'P4A';
-                    
-                    const batch = writeBatch(db);
-                    const novoTratamentoRef = doc(tratamentosRef);
-                    batch.set(novoTratamentoRef, { assistidoId: assistidoId, dataInicio: serverTimestamp(), status: 'ativo', faltas_acumuladas: 0, passe_ciclo_atual: passeInicial });
-                    
-                    const dataAtual = serverTimestamp();
-                    const novoAtendimentoRef = doc(atendimentosRef);
-
-                     batch.set(novoAtendimentoRef, {
-                        assistidoId: assistidoId,
-                        tratamentoId: novoTratamentoRef.id,
-                        tipo: 'tratamento_semanal',
-                        dataAtendimento: dataAtual,
-                        semana: 1,
-                        entrevistador: 'Aguardando Detalhes',
-                        passeRecomendado: passeInicial,
-                        notas: '',
-                        detalhes_preenchidos: false // NOVO CARIMBO
-                    });
-
-                    batch.set(doc(filaRef), { 
-                        assistidoId: assistidoId, 
-                        nomeAssistido: assistidoSelecionado.nome, 
-                        tratamentoId: novoTratamentoRef.id, 
-                        atendimentoId: novoAtendimentoRef.id, 
-                        status: 'aguardando_entrevista_ou_passe', 
-                        passeRecomendado: passeInicial,
-                        semana_atual: 1,
-                        chegadaEm: dataAtual, 
-                        recepcionista: { uid: user.uid, nome: user.displayName } 
-                    });
-                    
-                    await batch.commit();
-                    alert('Assistência Espiritual iniciada com sucesso e enviada para a fila!');
+                    await criarNovoAssistidoSeNaoExistir();
                     location.reload();
                 } catch(error) { 
                     console.error("Erro ao iniciar assistência:", error); 
