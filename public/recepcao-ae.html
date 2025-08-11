@@ -285,8 +285,11 @@
                     const semanaAtual = await calcularSemanaAtual(tratamentoAtivoSelecionado.id);
                     const passeDoCiclo = tratamentoAtivoSelecionado.passe_ciclo_atual;
                     const dataAtual = serverTimestamp();
+                    const batch = writeBatch(db);
 
-                    const placeholderHistorico = {
+                    const placeholderHistoricoRef = doc(collection(db, 'atendimentos_ae'));
+                    
+                    batch.set(placeholderHistoricoRef, {
                         assistidoId: assistidoSelecionado.id,
                         tratamentoId: tratamentoAtivoSelecionado.id,
                         tipo: 'tratamento_semanal',
@@ -296,14 +299,13 @@
                         passeRecomendado: passeDoCiclo,
                         notas: '',
                         detalhes_preenchidos: false
-                    };
-                    const novoAtendimentoRef = await addDoc(atendimentosRef, placeholderHistorico);
+                    });
                     
-                    await addDoc(filaRef, {
+                    batch.set(doc(filaRef), {
                         assistidoId: assistidoSelecionado.id,
                         nomeAssistido: assistidoSelecionado.nome,
                         tratamentoId: tratamentoAtivoSelecionado.id,
-                        atendimentoId: novoAtendimentoRef.id,
+                        atendimentoId: placeholderHistoricoRef.id,
                         status: 'aguardando_entrevista_ou_passe',
                         passeRecomendado: passeDoCiclo,
                         semana_atual: semanaAtual, 
@@ -311,6 +313,7 @@
                         recepcionista: { uid: user.uid, nome: user.displayName }
                     });
                     
+                    await batch.commit();
                     alert(`Presença de ${assistidoSelecionado.nome} (Semana ${semanaAtual}) registrada com sucesso!`);
                 } catch (error) {
                     console.error("Erro ao marcar presença: ", error);

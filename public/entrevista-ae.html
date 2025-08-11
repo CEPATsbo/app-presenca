@@ -78,374 +78,371 @@
     </div>
 
     <script type="module">
-    import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
-    import { getFirestore, collection, doc, getDoc, updateDoc, query, where, Timestamp, getDocs, writeBatch, serverTimestamp, limit } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
-    import { getAuth, EmailAuthProvider, reauthenticateWithCredential } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-auth.js";
-    import { protegerPagina } from '/auth.js';
+        import { initializeApp } from "[https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js](https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js)";
+        import { getFirestore, collection, doc, getDoc, updateDoc, query, where, Timestamp, getDocs, writeBatch, serverTimestamp, limit } from "[https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js](https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js)";
+        import { getAuth, EmailAuthProvider, reauthenticateWithCredential } from "[https://www.gstatic.com/firebasejs/9.15.0/firebase-auth.js](https://www.gstatic.com/firebasejs/9.15.0/firebase-auth.js)";
+        import { protegerPagina } from '/auth.js';
 
-    const firebaseConfig = {
-        apiKey: "AIzaSyBV7RPjk3cFTqL-aIpflJcUojKg1ZXMLuU",
-        authDomain: "voluntarios-ativos---cepat.firebaseapp.com",
-        projectId: "voluntarios-ativos---cepat",
-        storageBucket: "voluntarios-ativos---cepat.firebasestorage.app",
-        messagingSenderId: "66122858261",
-        appId: "1:66122858261:web:7fa21f1805463b5c08331c"
-    };
-    initializeApp(firebaseConfig);
-    const auth = getAuth();
-
-    protegerPagina(['entrevistador', 'diretor', 'super-admin']).then(user => {
-        document.getElementById('main-content').classList.remove('hidden');
-        inicializarPagina(user);
-    }).catch(err => {
-        document.getElementById('acesso-negado').classList.remove('hidden');
-        document.getElementById('main-content').classList.add('hidden');
-    });
-
-    function inicializarPagina(user) {
-        const db = getFirestore();
-        const tratamentosRef = collection(db, 'tratamentos_ae');
-        const atendimentosRef = collection(db, 'atendimentos_ae');
-        const filaRef = collection(db, 'fila_atendimento_ae');
-        
-        const ui = {
-            formularioContainer: document.getElementById('formulario-container'),
-            modal: document.getElementById('reauth-modal'),
-            reauthForm: document.getElementById('reauth-form'),
-            reauthEmail: document.getElementById('reauth-email'),
-            reauthPassword: document.getElementById('reauth-password'),
-            reauthError: document.getElementById('reauth-error'),
-            btnReauthCancel: document.getElementById('btn-reauth-cancel'),
-            btnReauthConfirm: document.getElementById('btn-reauth-confirm'),
+        const firebaseConfig = {
+            apiKey: "AIzaSyBV7RPjk3cFTqL-aIpflJcUojKg1ZXMLuU",
+            authDomain: "voluntarios-ativos---cepat.firebaseapp.com",
+            projectId: "voluntarios-ativos---cepat",
+            storageBucket: "voluntarios-ativos---cepat.firebasestorage.app",
+            messagingSenderId: "66122858261",
+            appId: "1:66122858261:web:7fa21f1805463b5c08331c"
         };
+        initializeApp(firebaseConfig);
+        const auth = getAuth();
 
-        const params = new URLSearchParams(window.location.search);
-        const atendimentoIdParaEditar = params.get('atendimentoId');
+        protegerPagina(['entrevistador', 'diretor', 'super-admin']).then(user => {
+            document.getElementById('main-content').classList.remove('hidden');
+            inicializarPagina(user);
+        }).catch(err => {
+            document.getElementById('acesso-negado').classList.remove('hidden');
+            document.getElementById('main-content').classList.add('hidden');
+        });
 
-        if (atendimentoIdParaEditar) {
-            carregarFormularioParaEdicao(atendimentoIdParaEditar);
-        } else {
-             ui.formularioContainer.innerHTML = `<p class="erro">Nenhum atendimento selecionado. Acesse esta página a partir de um link de edição no histórico do assistido.</p>`;
-        }
-
-        function travarFormulario() {
-            const form = ui.formularioContainer.querySelector('fieldset');
-            if (!form) return;
-            form.querySelectorAll('input, select, textarea').forEach(el => {
-                if (!el.classList.contains('readonly-input')) {
-                    el.disabled = true;
-                }
-            });
-
-            const selectBox = form.querySelector('.select-box');
-            if (selectBox) selectBox.setAttribute('disabled', 'disabled');
-
-            document.getElementById('btn-salvar-entrevista').classList.add('hidden');
-            const btnAlta = document.getElementById('btn-dar-alta');
-            if(btnAlta) btnAlta.classList.add('hidden');
+        function inicializarPagina(user) {
+            const db = getFirestore();
+            const tratamentosRef = collection(db, 'tratamentos_ae');
+            const atendimentosRef = collection(db, 'atendimentos_ae');
+            const filaRef = collection(db, 'fila_atendimento_ae');
             
-            const btnHabilitarExistente = document.getElementById('btn-habilitar-edicao');
-            if(btnHabilitarExistente) btnHabilitarExistente.remove();
-
-            const btnHabilitar = document.createElement('button');
-            btnHabilitar.id = 'btn-habilitar-edicao';
-            btnHabilitar.className = 'btn btn-secondary';
-            btnHabilitar.style.width = '100%';
-            btnHabilitar.style.marginTop = '10px';
-            btnHabilitar.innerHTML = '🔒 Habilitar Edição';
-            btnHabilitar.type = 'button';
-            btnHabilitar.onclick = () => {
-                ui.reauthEmail.value = user.email;
-                ui.modal.classList.remove('hidden');
-                ui.reauthPassword.focus();
+            const ui = {
+                formularioContainer: document.getElementById('formulario-container'),
+                modal: document.getElementById('reauth-modal'),
+                reauthForm: document.getElementById('reauth-form'),
+                reauthEmail: document.getElementById('reauth-email'),
+                reauthPassword: document.getElementById('reauth-password'),
+                reauthError: document.getElementById('reauth-error'),
+                btnReauthCancel: document.getElementById('btn-reauth-cancel'),
+                btnReauthConfirm: document.getElementById('btn-reauth-confirm'),
             };
-            form.appendChild(btnHabilitar);
-        }
 
-        function destravarFormulario() {
-            const form = ui.formularioContainer.querySelector('fieldset');
-            if (!form) return;
-            form.querySelectorAll('input, select, textarea').forEach(el => {
-                if(!el.classList.contains('readonly-input')) el.disabled = false;
-            });
-            
-            const selectBox = form.querySelector('.select-box');
-            if (selectBox) selectBox.removeAttribute('disabled');
+            const params = new URLSearchParams(window.location.search);
+            const atendimentoIdParaEditar = params.get('atendimentoId');
 
-            document.getElementById('btn-salvar-entrevista').classList.remove('hidden');
-            const btnAlta = document.getElementById('btn-dar-alta');
-            if(btnAlta) btnAlta.classList.remove('hidden');
-
-            const btnHabilitar = document.getElementById('btn-habilitar-edicao');
-            if (btnHabilitar) btnHabilitar.remove();
-        }
-
-        ui.reauthForm.addEventListener('submit', async (e) => {
-            e.preventDefault();
-            const password = ui.reauthPassword.value;
-            if (!password) return;
-
-            ui.btnReauthConfirm.disabled = true;
-            ui.reauthError.classList.add('hidden');
-            const credential = EmailAuthProvider.credential(user.email, password);
-
-            try {
-                await reauthenticateWithCredential(user, credential);
-                destravarFormulario();
-                ui.modal.classList.add('hidden');
-                ui.reauthForm.reset();
-            } catch (error) {
-                console.error("Erro de reautenticação:", error.code);
-                if (error.code === 'auth/wrong-password' || error.code === 'auth/invalid-credential' || error.code === 'auth/invalid-login-credentials') {
-                    ui.reauthError.textContent = 'Senha incorreta. Tente novamente.';
-                } else {
-                    ui.reauthError.textContent = 'Ocorreu um erro. Tente novamente mais tarde.';
-                }
-                ui.reauthError.classList.remove('hidden');
-            } finally {
-                 ui.btnReauthConfirm.disabled = false;
-            }
-        });
-
-        ui.btnReauthCancel.addEventListener('click', () => {
-            ui.modal.classList.add('hidden');
-            ui.reauthForm.reset();
-            ui.reauthError.classList.add('hidden');
-        });
-
-        async function carregarFormularioParaEdicao(atendimentoId) {
-            const atendimentoDocRef = doc(db, 'atendimentos_ae', atendimentoId);
-            const atendimentoDoc = await getDoc(atendimentoDocRef);
-
-            if (!atendimentoDoc.exists()) {
-                ui.formularioContainer.innerHTML = `<p class="erro">Atendimento com ID ${atendimentoId} não encontrado.</p>`;
-                return;
-            }
-            const atendimento = { id: atendimentoDoc.id, ...atendimentoDoc.data() };
-            
-            const assistidoDoc = await getDoc(doc(db, 'assistidos', atendimento.assistidoId));
-            const nomeAssistido = assistidoDoc.exists() ? assistidoDoc.data().nome : "Assistido não encontrado";
-
-            const isQuintaSemana = atendimento.semana === 5;
-            const formHtml = criarFormulario(atendimento.semana, atendimento.passeRecomendado, isQuintaSemana, atendimento);
-            ui.formularioContainer.innerHTML = formHtml;
-            preencherFormulario(atendimento, nomeAssistido);
-
-            if (atendimento.detalhes_preenchidos === true) {
-                travarFormulario();
+            if (atendimentoIdParaEditar) {
+                carregarFormularioParaEdicao(atendimentoIdParaEditar);
+            } else {
+                 ui.formularioContainer.innerHTML = `<p class="erro">Nenhum atendimento selecionado. Acesse esta página a partir de um link de edição no histórico do assistido.</p>`;
             }
 
-            document.getElementById('btn-salvar-entrevista')?.addEventListener('click', () => salvarEdicao(atendimento));
-            document.getElementById('btn-dar-alta')?.addEventListener('click', () => darAlta(atendimento));
-            
-            const selectBox = document.querySelector('.select-box');
-            const checkboxes = document.querySelector('.checkboxes');
-            if (selectBox && checkboxes) {
-                selectBox.addEventListener('click', () => { if (selectBox.getAttribute('disabled') === null) checkboxes.classList.toggle('visible'); });
-                checkboxes.addEventListener('change', () => {
-                    const selecionados = Array.from(checkboxes.querySelectorAll('input:checked')).map(cb => cb.value);
-                    selectBox.textContent = selecionados.length > 0 ? selecionados.join(', ') : 'Selecione...';
-                });
-                document.addEventListener('click', (e) => {
-                    if (selectBox && !selectBox.contains(e.target) && !checkboxes.contains(e.target)) {
-                        checkboxes.classList.remove('visible');
+            function travarFormulario() {
+                const form = ui.formularioContainer.querySelector('fieldset');
+                if (!form) return;
+                form.querySelectorAll('input, select, textarea').forEach(el => {
+                    if (!el.classList.contains('readonly-input')) {
+                        el.disabled = true;
                     }
                 });
+
+                const selectBox = form.querySelector('.select-box');
+                if (selectBox) selectBox.setAttribute('disabled', 'disabled');
+
+                document.getElementById('btn-salvar-entrevista').classList.add('hidden');
+                const btnAlta = document.getElementById('btn-dar-alta');
+                if(btnAlta) btnAlta.classList.add('hidden');
+                
+                const btnHabilitarExistente = document.getElementById('btn-habilitar-edicao');
+                if(btnHabilitarExistente) btnHabilitarExistente.remove();
+
+                const btnHabilitar = document.createElement('button');
+                btnHabilitar.id = 'btn-habilitar-edicao';
+                btnHabilitar.className = 'btn btn-secondary';
+                btnHabilitar.style.width = '100%';
+                btnHabilitar.style.marginTop = '10px';
+                btnHabilitar.innerHTML = '🔒 Habilitar Edição';
+                btnHabilitar.type = 'button';
+                btnHabilitar.onclick = () => {
+                    ui.reauthEmail.value = user.email;
+                    ui.modal.classList.remove('hidden');
+                    ui.reauthPassword.focus();
+                };
+                form.appendChild(btnHabilitar);
             }
-        }
-        
-        function preencherFormulario(atendimento, nomeAssistido) {
-            document.getElementById('assistido-nome').textContent = nomeAssistido;
-            if (document.getElementById('entrevistador-nome')) {
-                document.getElementById('entrevistador-nome').value = atendimento.entrevistador === 'Aguardando Detalhes' || atendimento.entrevistador === 'Passe Direto' ? user.displayName : (atendimento.entrevistador || '');
+
+            function destravarFormulario() {
+                const form = ui.formularioContainer.querySelector('fieldset');
+                if (!form) return;
+                form.querySelectorAll('input, select, textarea').forEach(el => {
+                    if(!el.classList.contains('readonly-input')) el.disabled = false;
+                });
+                
+                const selectBox = form.querySelector('.select-box');
+                if (selectBox) selectBox.removeAttribute('disabled');
+
+                document.getElementById('btn-salvar-entrevista').classList.remove('hidden');
+                const btnAlta = document.getElementById('btn-dar-alta');
+                if(btnAlta) btnAlta.classList.remove('hidden');
+
+                const btnHabilitar = document.getElementById('btn-habilitar-edicao');
+                if (btnHabilitar) btnHabilitar.remove();
             }
-            if (document.getElementById('entrevista-notas')) {
-                document.getElementById('entrevista-notas').value = atendimento.notas || '';
-            }
-            if (document.getElementById('retorno-inicio')) {
-                document.getElementById('retorno-inicio').value = atendimento.horarioInicio || '';
-            }
-            if (document.getElementById('retorno-fim')) {
-                document.getElementById('retorno-fim').value = atendimento.horarioFim || '';
-            }
-            if (atendimento.evolucao) {
-                const evolucaoRadio = document.querySelector(`input[name="evolucao"][value="${atendimento.evolucao}"]`);
-                if (evolucaoRadio) evolucaoRadio.checked = true;
-            }
-            if (atendimento.semana === 5) {
-                if (document.getElementById('colegiado-para') && atendimento.passePara) {
-                    document.getElementById('colegiado-para').value = atendimento.passePara;
+
+            ui.reauthForm.addEventListener('submit', async (e) => {
+                e.preventDefault();
+                const password = ui.reauthPassword.value;
+                if (!password) return;
+
+                ui.btnReauthConfirm.disabled = true;
+                ui.reauthError.classList.add('hidden');
+                const credential = EmailAuthProvider.credential(user.email, password);
+
+                try {
+                    await reauthenticateWithCredential(user, credential);
+                    destravarFormulario();
+                    ui.modal.classList.add('hidden');
+                    ui.reauthForm.reset();
+                } catch (error) {
+                    console.error("Erro de reautenticação:", error.code);
+                    if (error.code === 'auth/wrong-password' || error.code === 'auth/invalid-credential' || error.code === 'auth/invalid-login-credentials') {
+                        ui.reauthError.textContent = 'Senha incorreta. Tente novamente.';
+                    } else {
+                        ui.reauthError.textContent = 'Ocorreu um erro. Tente novamente mais tarde.';
+                    }
+                    ui.reauthError.classList.remove('hidden');
+                } finally {
+                     ui.btnReauthConfirm.disabled = false;
                 }
-                if (document.getElementById('colegiado-notas')) {
-                     document.getElementById('colegiado-notas').value = atendimento.colegiadoNotas || '';
+            });
+
+            ui.btnReauthCancel.addEventListener('click', () => {
+                ui.modal.classList.add('hidden');
+                ui.reauthForm.reset();
+                ui.reauthError.classList.add('hidden');
+            });
+
+            async function carregarFormularioParaEdicao(atendimentoId) {
+                const atendimentoDocRef = doc(db, 'atendimentos_ae', atendimentoId);
+                const atendimentoDoc = await getDoc(atendimentoDocRef);
+
+                if (!atendimentoDoc.exists()) {
+                    ui.formularioContainer.innerHTML = `<p class="erro">Atendimento com ID ${atendimentoId} não encontrado.</p>`;
+                    return;
                 }
-                if (atendimento.encaminhamentos && atendimento.encaminhamentos.length > 0) {
-                    const selectBox = document.querySelector('.select-box');
-                    selectBox.textContent = atendimento.encaminhamentos.join(', ');
-                    atendimento.encaminhamentos.forEach(val => {
-                        const checkbox = document.querySelector(`.checkboxes input[value="${val}"]`);
-                        if (checkbox) checkbox.checked = true;
+                const atendimento = { id: atendimentoDoc.id, ...atendimentoDoc.data() };
+                
+                const assistidoDoc = await getDoc(doc(db, 'assistidos', atendimento.assistidoId));
+                const nomeAssistido = assistidoDoc.exists() ? assistidoDoc.data().nome : "Assistido não encontrado";
+
+                const isQuintaSemana = atendimento.semana === 5;
+                const formHtml = criarFormulario(atendimento.semana, atendimento.passeRecomendado, isQuintaSemana, atendimento);
+                ui.formularioContainer.innerHTML = formHtml;
+                preencherFormulario(atendimento, nomeAssistido);
+
+                if (atendimento.detalhes_preenchidos === true) {
+                    travarFormulario();
+                }
+
+                document.getElementById('btn-salvar-entrevista')?.addEventListener('click', () => salvarEdicao(atendimento));
+                document.getElementById('btn-dar-alta')?.addEventListener('click', () => darAlta(atendimento));
+                
+                const selectBox = document.querySelector('.select-box');
+                const checkboxes = document.querySelector('.checkboxes');
+                if (selectBox && checkboxes) {
+                    selectBox.addEventListener('click', () => { if (selectBox.getAttribute('disabled') === null) checkboxes.classList.toggle('visible'); });
+                    checkboxes.addEventListener('change', () => {
+                        const selecionados = Array.from(checkboxes.querySelectorAll('input:checked')).map(cb => cb.value);
+                        selectBox.textContent = selecionados.length > 0 ? selecionados.join(', ') : 'Selecione...';
+                    });
+                    document.addEventListener('click', (e) => {
+                        if (selectBox && !selectBox.contains(e.target) && !checkboxes.contains(e.target)) {
+                            checkboxes.classList.remove('visible');
+                        }
                     });
                 }
             }
-        }
-        
-        const gerarOpcoesPasse = (selecionado = '') => {
-            const passes = ['P1', 'P2', 'P3A', 'P3B', 'P4A', 'P4B', 'CH'];
-            let html = '<option value="">Selecione...</option>';
-            passes.forEach(p => { html += `<option value="${p}" ${p === selecionado ? 'selected' : ''}>${p}</option>`; });
-            return html;
-        };
-
-        function criarFormulario(semanaNum, passeDe, mostrarColegiado, atendimento) {
-            const dataAtendimento = atendimento.dataAtendimento ? atendimento.dataAtendimento.toDate().toLocaleDateString('pt-br') : new Date().toLocaleDateString('pt-br');
-            let colegiadoHtml = '';
-            if (mostrarColegiado) {
-                colegiadoHtml = `<hr><h5>Colegiado</h5>
-                    <div class="form-grid"><div class="form-item"><label for="colegiado-de">DE:</label><select id="colegiado-de" class="readonly-input" disabled>${gerarOpcoesPasse(passeDe)}</select></div><div class="form-item"><label for="colegiado-para">PARA (Mudar o passe):</label><select id="colegiado-para">${gerarOpcoesPasse()}</select></div></div>
-                    <div class="form-item" style="margin-top:15px;"><label>Encaminhamentos (Múltipla Escolha):</label><div class="multiselect">
-                        <div class="select-box" tabindex="0">Selecione...</div>
-                        <div class="checkboxes">
-                            <label><input type="checkbox" value="ENL"/> ENL</label><label><input type="checkbox" value="LEITURAS"/> Leituras</label><label><input type="checkbox" value="EAE"/> EAE</label><label><input type="checkbox" value="VOLUNTARIADO"/> Voluntariado</label><label><input type="checkbox" value="MÉDICO"/> Médico</label><label><input type="checkbox" value="ALIMENTO"/> Alimento</label><label><input type="checkbox" value="NATUREZA"/> Natureza</label><label><input type="checkbox" value="MOCIDADE"/> Mocidade</label><label><input type="checkbox" value="EVANGELIZAÇÃO"/> Evangelização</label>
-                        </div></div></div>
-                    <div class="form-item" style="margin-top: 15px;"><label for="colegiado-notas">Orientações do Colegiado:</label><textarea id="colegiado-notas" rows="4"></textarea></div>
-                    <button id="btn-dar-alta" type="button" class="btn btn-danger" style="width: 100%; margin-top: 10px;">Confirmar e Dar Alta</button>`;
-            }
-            return `<fieldset><legend>Detalhes do Atendimento da ${semanaNum}ª Semana</legend>
-                <div class="form-grid" style="background-color: #f8f9fa; padding: 10px; border-radius: 6px;">
-                    <div class="form-item"><label>Assistido:</label><h3 id="assistido-nome" style="text-align:left; margin:0;">Carregando...</h3></div>
-                    <div class="form-item"><label>Data do Atendimento:</label><p id="data-atendimento" style="margin:0; font-weight:bold;">${dataAtendimento}</p></div>
-                </div><hr>
-                <div class="form-grid">
-                    <div class="form-item"><label for="entrevistador-nome">Entrevistador:</label><input type="text" id="entrevistador-nome" value="${user.displayName || ''}"></div>
-                </div>
-                <div class="form-item" style="margin-top: 15px;"><label for="entrevista-notas">Descrição da Entrevista:</label><textarea id="entrevista-notas" rows="6"></textarea></div>
-                <hr><h5>Detalhes do Passe</h5><div class="form-grid">
-                    <div class="form-item"><label for="retorno-passe">Passe:</label><input type="text" id="retorno-passe" class="readonly-input" value="${passeDe}" readonly></div>
-                    <div class="form-item"><label for="retorno-inicio">Início:</label><input type="time" id="retorno-inicio"></div>
-                    <div class="form-item"><label for="retorno-fim">Fim:</label><input type="time" id="retorno-fim"></div>
-                </div>
-                <div class="form-item" style="margin-top:15px;"><label>Evolução:</label><div style="display:flex; gap: 15px;"><label><input type="radio" name="evolucao" value="melhorou"> Melhorou</label><label><input type="radio" name="evolucao" value="piorou"> Piorou</label><label><input type="radio" name="evolucao" value="na_mesma" checked> Na Mesma</label></div></div>
-                ${colegiadoHtml}
-                <button id="btn-salvar-entrevista" type="button" class="btn btn-primary" style="width: 100%; margin-top: 20px;">Salvar Alterações</button>
-            </fieldset>`;
-        }
-
-        async function encontrarFilaDoDia(atendimento) {
-            const q = query(filaRef, where("atendimentoId", "==", atendimento.id), limit(1));
-            const filaSnapshot = await getDocs(q);
-            if (!filaSnapshot.empty) {
-                return filaSnapshot.docs[0].ref;
-            }
-            // Fallback para o caso de a ponte ainda não existir em dados antigos
-            const dataDoAtendimento = atendimento.dataAtendimento.toDate();
-            const inicioDoDia = new Date(dataDoAtendimento);
-            inicioDoDia.setHours(0,0,0,0);
-            const fimDoDia = new Date(dataDoAtendimento);
-            fimDoDia.setHours(23,59,59,999);
-            const qFallback = query(filaRef, where("assistidoId", "==", atendimento.assistidoId), where("chegadaEm", ">=", Timestamp.fromDate(inicioDoDia)), where("chegadaEm", "<=", Timestamp.fromDate(fimDoDia)), limit(1));
-            const filaSnapshotFallback = await getDocs(qFallback);
-            if (!filaSnapshotFallback.empty) {
-                return filaSnapshotFallback.docs[0].ref;
-            }
-            return null;
-        }
-
-        async function salvarEdicao(atendimento) {
-            const btn = document.getElementById('btn-salvar-entrevista');
-            btn.disabled = true;
-            btn.textContent = 'Salvando...';
-
-            try {
-                const batch = writeBatch(db);
-                const atendimentoDocRef = doc(db, 'atendimentos_ae', atendimento.id);
-                
-                const dadosParaAtualizar = {
-                    entrevistador: document.getElementById('entrevistador-nome').value,
-                    notas: document.getElementById('entrevista-notas').value,
-                    horarioInicio: document.getElementById('retorno-inicio').value,
-                    horarioFim: document.getElementById('retorno-fim').value,
-                    evolucao: document.querySelector('input[name="evolucao"]:checked').value,
-                    detalhes_preenchidos: true
-                };
-                
+            
+            function preencherFormulario(atendimento, nomeAssistido) {
+                document.getElementById('assistido-nome').textContent = nomeAssistido;
+                if (document.getElementById('entrevistador-nome')) {
+                    document.getElementById('entrevistador-nome').value = atendimento.entrevistador === 'Aguardando Detalhes' || atendimento.entrevistador === 'Passe Direto' ? user.displayName : (atendimento.entrevistador || '');
+                }
+                if (document.getElementById('entrevista-notas')) {
+                    document.getElementById('entrevista-notas').value = atendimento.notas || '';
+                }
+                if (document.getElementById('retorno-inicio')) {
+                    document.getElementById('retorno-inicio').value = atendimento.horarioInicio || '';
+                }
+                if (document.getElementById('retorno-fim')) {
+                    document.getElementById('retorno-fim').value = atendimento.horarioFim || '';
+                }
+                if (atendimento.evolucao) {
+                    const evolucaoRadio = document.querySelector(`input[name="evolucao"][value="${atendimento.evolucao}"]`);
+                    if (evolucaoRadio) evolucaoRadio.checked = true;
+                }
                 if (atendimento.semana === 5) {
-                    const passePara = document.getElementById('colegiado-para')?.value;
-                    const filaDocRef = await encontrarFilaDoDia(atendimento);
-                    
-                    if (passePara) { 
-                        const tratamentoDocRef = doc(db, 'tratamentos_ae', atendimento.tratamentoId);
-                        batch.update(tratamentoDocRef, { status: 'concluido_por_reavaliacao', dataFim: serverTimestamp() });
-                        
-                        const novoTratamentoRef = doc(tratamentosRef);
-                        batch.set(novoTratamentoRef, {
-                            assistidoId: atendimento.assistidoId, dataInicio: serverTimestamp(), status: 'ativo',
-                            faltas_acumuladas: 0, passe_ciclo_atual: passePara
+                    if (document.getElementById('colegiado-para') && atendimento.passePara) {
+                        document.getElementById('colegiado-para').value = atendimento.passePara;
+                    }
+                    if (document.getElementById('colegiado-notas')) {
+                         document.getElementById('colegiado-notas').value = atendimento.colegiadoNotas || '';
+                    }
+                    if (atendimento.encaminhamentos && atendimento.encaminhamentos.length > 0) {
+                        const selectBox = document.querySelector('.select-box');
+                        selectBox.textContent = atendimento.encaminhamentos.join(', ');
+                        atendimento.encaminhamentos.forEach(val => {
+                            const checkbox = document.querySelector(`.checkboxes input[value="${val}"]`);
+                            if (checkbox) checkbox.checked = true;
                         });
+                    }
+                }
+            }
+            
+            const gerarOpcoesPasse = (selecionado = '') => {
+                const passes = ['P1', 'P2', 'P3A', 'P3B', 'P4A', 'P4B', 'CH'];
+                let html = '<option value="">Selecione...</option>';
+                passes.forEach(p => { html += `<option value="${p}" ${p === selecionado ? 'selected' : ''}>${p}</option>`; });
+                return html;
+            };
+
+            function criarFormulario(semanaNum, passeDe, mostrarColegiado, atendimento) {
+                const dataAtendimento = atendimento.dataAtendimento ? atendimento.dataAtendimento.toDate().toLocaleDateString('pt-br') : new Date().toLocaleDateString('pt-br');
+                let colegiadoHtml = '';
+                if (mostrarColegiado) {
+                    colegiadoHtml = `<hr><h5>Colegiado</h5>
+                        <div class="form-grid"><div class="form-item"><label for="colegiado-de">DE:</label><select id="colegiado-de" class="readonly-input" disabled>${gerarOpcoesPasse(passeDe)}</select></div><div class="form-item"><label for="colegiado-para">PARA (Mudar o passe):</label><select id="colegiado-para">${gerarOpcoesPasse()}</select></div></div>
+                        <div class="form-item" style="margin-top:15px;"><label>Encaminhamentos (Múltipla Escolha):</label><div class="multiselect">
+                            <div class="select-box" tabindex="0">Selecione...</div>
+                            <div class="checkboxes">
+                                <label><input type="checkbox" value="ENL"/> ENL</label><label><input type="checkbox" value="LEITURAS"/> Leituras</label><label><input type="checkbox" value="EAE"/> EAE</label><label><input type="checkbox" value="VOLUNTARIADO"/> Voluntariado</label><label><input type="checkbox" value="MÉDICO"/> Médico</label><label><input type="checkbox" value="ALIMENTO"/> Alimento</label><label><input type="checkbox" value="NATUREZA"/> Natureza</label><label><input type="checkbox" value="MOCIDADE"/> Mocidade</label><label><input type="checkbox" value="EVANGELIZAÇÃO"/> Evangelização</label>
+                            </div></div></div>
+                        <div class="form-item" style="margin-top: 15px;"><label for="colegiado-notas">Orientações do Colegiado:</label><textarea id="colegiado-notas" rows="4"></textarea></div>
+                        <button id="btn-dar-alta" type="button" class="btn btn-danger" style="width: 100%; margin-top: 10px;">Confirmar e Dar Alta</button>`;
+                }
+                return `<fieldset><legend>Detalhes do Atendimento da ${semanaNum}ª Semana</legend>
+                    <div class="form-grid" style="background-color: #f8f9fa; padding: 10px; border-radius: 6px;">
+                        <div class="form-item"><label>Assistido:</label><h3 id="assistido-nome" style="text-align:left; margin:0;">Carregando...</h3></div>
+                        <div class="form-item"><label>Data do Atendimento:</label><p id="data-atendimento" style="margin:0; font-weight:bold;">${dataAtendimento}</p></div>
+                    </div><hr>
+                    <div class="form-grid">
+                        <div class="form-item"><label for="entrevistador-nome">Entrevistador:</label><input type="text" id="entrevistador-nome" value="${user.displayName || ''}"></div>
+                    </div>
+                    <div class="form-item" style="margin-top: 15px;"><label for="entrevista-notas">Descrição da Entrevista:</label><textarea id="entrevista-notas" rows="6"></textarea></div>
+                    <hr><h5>Detalhes do Passe</h5><div class="form-grid">
+                        <div class="form-item"><label for="retorno-passe">Passe:</label><input type="text" id="retorno-passe" class="readonly-input" value="${passeDe}" readonly></div>
+                        <div class="form-item"><label for="retorno-inicio">Início:</label><input type="time" id="retorno-inicio"></div>
+                        <div class="form-item"><label for="retorno-fim">Fim:</label><input type="time" id="retorno-fim"></div>
+                    </div>
+                    <div class="form-item" style="margin-top:15px;"><label>Evolução:</label><div style="display:flex; gap: 15px;"><label><input type="radio" name="evolucao" value="melhorou"> Melhorou</label><label><input type="radio" name="evolucao" value="piorou"> Piorou</label><label><input type="radio" name="evolucao" value="na_mesma" checked> Na Mesma</label></div></div>
+                    ${colegiadoHtml}
+                    <button id="btn-salvar-entrevista" type="button" class="btn btn-primary" style="width: 100%; margin-top: 20px;">Salvar Alterações</button>
+                </fieldset>`;
+            }
+
+            async function encontrarFilaDoDia(atendimento) {
+                const q = query(filaRef, where("atendimentoId", "==", atendimento.id), limit(1));
+                const filaSnapshot = await getDocs(q);
+                if (!filaSnapshot.empty) {
+                    return filaSnapshot.docs[0].ref;
+                }
+                const dataDoAtendimento = atendimento.dataAtendimento.toDate();
+                const inicioDoDia = new Date(dataDoAtendimento.setHours(0,0,0,0));
+                const fimDoDia = new Date(dataDoAtendimento.setHours(23,59,59,999));
+                const qFallback = query(filaRef, where("assistidoId", "==", atendimento.assistidoId), where("chegadaEm", ">=", Timestamp.fromDate(inicioDoDia)), where("chegadaEm", "<=", Timestamp.fromDate(fimDoDia)), limit(1));
+                const filaSnapshotFallback = await getDocs(qFallback);
+                if (!filaSnapshotFallback.empty) {
+                    return filaSnapshotFallback.docs[0].ref;
+                }
+                return null;
+            }
+
+            async function salvarEdicao(atendimento) {
+                const btn = document.getElementById('btn-salvar-entrevista');
+                btn.disabled = true;
+                btn.textContent = 'Salvando...';
+
+                try {
+                    const batch = writeBatch(db);
+                    const atendimentoDocRef = doc(db, 'atendimentos_ae', atendimento.id);
+                    
+                    const dadosParaAtualizar = {
+                        entrevistador: document.getElementById('entrevistador-nome').value,
+                        notas: document.getElementById('entrevista-notas').value,
+                        horarioInicio: document.getElementById('retorno-inicio').value,
+                        horarioFim: document.getElementById('retorno-fim').value,
+                        evolucao: document.querySelector('input[name="evolucao"]:checked').value,
+                        detalhes_preenchidos: true
+                    };
+                    
+                    if (atendimento.semana === 5) {
+                        const passePara = document.getElementById('colegiado-para')?.value;
+                        const filaDocRef = await encontrarFilaDoDia(atendimento);
                         
-                        dadosParaAtualizar.tratamentoId = novoTratamentoRef.id;
-                        dadosParaAtualizar.semana = 1;
-                        dadosParaAtualizar.passePara = passePara;
-                        
-                        if (filaDocRef) {
-                            batch.update(filaDocRef, {
-                                tratamentoId: novoTratamentoRef.id,
-                                semana_atual: 1,
-                                passeRecomendado: passePara,
-                                decisao_registrada: true
+                        if (passePara) { 
+                            const tratamentoDocRef = doc(db, 'tratamentos_ae', atendimento.tratamentoId);
+                            batch.update(tratamentoDocRef, { status: 'concluido_por_reavaliacao', dataFim: serverTimestamp() });
+                            
+                            const novoTratamentoRef = doc(tratamentosRef);
+                            batch.set(novoTratamentoRef, {
+                                assistidoId: atendimento.assistidoId, dataInicio: serverTimestamp(), status: 'ativo',
+                                faltas_acumuladas: 0, passe_ciclo_atual: passePara
                             });
+                            
+                            dadosParaAtualizar.tratamentoId = novoTratamentoRef.id;
+                            dadosParaAtualizar.semana = 1;
+                            dadosParaAtualizar.passePara = passePara;
+                            
+                            if (filaDocRef) {
+                                batch.update(filaDocRef, {
+                                    tratamentoId: novoTratamentoRef.id,
+                                    semana_atual: 1,
+                                    passeRecomendado: passePara,
+                                    decisao_registrada: true
+                                });
+                            }
+                        } else if(filaDocRef) {
+                            batch.update(filaDocRef, { decisao_registrada: true });
                         }
-                    } else if(filaDocRef) {
+                        
+                        dadosParaAtualizar.colegiadoNotas = document.getElementById('colegiado-notas').value;
+                        dadosParaAtualizar.encaminhamentos = Array.from(document.querySelectorAll('.checkboxes input:checked')).map(cb => cb.value);
+                    }
+
+                    batch.update(atendimentoDocRef, dadosParaAtualizar);
+                    await batch.commit();
+                    alert('Detalhes do atendimento atualizados com sucesso!');
+                    travarFormulario();
+
+                } catch (error) {
+                    console.error("Erro ao salvar edição:", error);
+                    alert("Falha ao salvar. Tente novamente.");
+                } finally {
+                    btn.disabled = false;
+                    btn.textContent = 'Salvar Alterações';
+                }
+            }
+
+            async function darAlta(atendimento) {
+                 const btn = document.getElementById('btn-dar-alta');
+                btn.disabled = true;
+                if (confirm(`Tem certeza que deseja dar alta para este assistido?`)) {
+                    
+                    const batch = writeBatch(db);
+                    const tratamentoDocRef = doc(db, 'tratamentos_ae', atendimento.tratamentoId);
+                    batch.update(tratamentoDocRef, { status: 'concluido_com_alta', dataFim: serverTimestamp() });
+                    
+                    const atendimentoDocRef = doc(db, 'atendimentos_ae', atendimento.id);
+                    batch.update(atendimentoDocRef, {
+                         tipo: 'alta',
+                         colegiadoNotas: document.getElementById('colegiado-notas')?.value || "Atendimento de reavaliação finalizado com alta.",
+                         detalhes_preenchidos: true
+                    });
+                    
+                    const filaDocRef = await encontrarFilaDoDia(atendimento);
+                    if (filaDocRef) {
                         batch.update(filaDocRef, { decisao_registrada: true });
                     }
                     
-                    dadosParaAtualizar.colegiadoNotas = document.getElementById('colegiado-notas').value;
-                    dadosParaAtualizar.encaminhamentos = Array.from(document.querySelectorAll('.checkboxes input:checked')).map(cb => cb.value);
+                    await batch.commit();
+                    alert('Alta registrada! O tratamento foi encerrado.');
+                    travarFormulario();
+                } else {
+                     btn.disabled = false;
                 }
-
-                batch.update(atendimentoDocRef, dadosParaAtualizar);
-                await batch.commit();
-                alert('Detalhes do atendimento atualizados com sucesso!');
-                travarFormulario();
-
-            } catch (error) {
-                console.error("Erro ao salvar edição:", error);
-                alert("Falha ao salvar. Tente novamente.");
-            } finally {
-                btn.disabled = false;
-                btn.textContent = 'Salvar Alterações';
             }
         }
-
-        async function darAlta(atendimento) {
-             const btn = document.getElementById('btn-dar-alta');
-            btn.disabled = true;
-            if (confirm(`Tem certeza que deseja dar alta para este assistido?`)) {
-                
-                const batch = writeBatch(db);
-                const tratamentoDocRef = doc(db, 'tratamentos_ae', atendimento.tratamentoId);
-                batch.update(tratamentoDocRef, { status: 'concluido_com_alta', dataFim: serverTimestamp() });
-                
-                const atendimentoDocRef = doc(db, 'atendimentos_ae', atendimento.id);
-                batch.update(atendimentoDocRef, {
-                     tipo: 'alta',
-                     colegiadoNotas: document.getElementById('colegiado-notas')?.value || "Atendimento de reavaliação finalizado com alta.",
-                     detalhes_preenchidos: true
-                });
-                
-                const filaDocRef = await encontrarFilaDoDia(atendimento);
-                if (filaDocRef) {
-                    batch.update(filaDocRef, { decisao_registrada: true });
-                }
-                
-                await batch.commit();
-                alert('Alta registrada! O tratamento foi encerrado.');
-                travarFormulario();
-            } else {
-                 btn.disabled = false;
-            }
-        }
-    }
-</script>
+    </script>
 </body>
 </html>
