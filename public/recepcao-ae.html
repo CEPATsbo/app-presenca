@@ -127,6 +127,7 @@
             };
             
             const capitalizarNome = (nome) => {
+                if (!nome) return '';
                 return nome.toLowerCase().replace(/(^|\s)\S/g, L => L.toUpperCase());
             };
 
@@ -346,10 +347,23 @@
 
             ui.nomeInput.addEventListener('input', async (e) => {
                 const termo = e.target.value.trim().toLowerCase();
-                if (termo.length < 3) { if (assistidoSelecionado) resetarFormularioBusca(); ui.searchResults.innerHTML = ''; return; }
+                ui.searchResults.innerHTML = '';
+                
+                if (assistidoSelecionado) {
+                    resetarFormularioBusca();
+                    ui.nomeInput.value = termo;
+                }
+
+                if (termo.length > 0) {
+                    ui.novoAtendimentoSection.classList.remove('hidden');
+                } else {
+                    ui.novoAtendimentoSection.classList.add('hidden');
+                }
+
+                if (termo.length < 3) return;
+
                 const q = query(assistidosRef, where('nome_lower', '>=', termo), where('nome_lower', '<=', termo + '\uf8ff'), limit(5));
                 const snapshot = await getDocs(q);
-                ui.searchResults.innerHTML = '';
                 snapshot.forEach(doc => {
                     const assistido = { id: doc.id, ...doc.data() };
                     const li = document.createElement('li');
@@ -369,9 +383,6 @@
 
             ui.nomeInput.addEventListener('blur', () => {
                 setTimeout(() => { 
-                    if (!assistidoSelecionado && ui.nomeInput.value.length > 2) { 
-                        ui.novoAtendimentoSection.classList.remove('hidden');
-                    } 
                     ui.searchResults.innerHTML = ''; 
                 }, 200);
             });

@@ -94,14 +94,15 @@
             const tratamentosRef = collection(db, 'tratamentos_ae');
             const atendimentosRef = collection(db, 'atendimentos_ae');
 
+            let assistidoAtualmenteSelecionado = null;
+            let debounceTimer;
+
             const ui = {
                 alfabetoFiltro: document.getElementById('alfabeto-filtro'),
                 campoBusca: document.getElementById('campo-busca'),
                 listaAssistidos: document.getElementById('lista-assistidos'),
                 detalhesAssistido: document.getElementById('detalhes-assistido'),
             };
-
-            let debounceTimer;
 
             function gerarBotoesAlfabeto() {
                 const alfabeto = "ABCDEFGHIJKLMNOPQRSTUVWXYZ".split('');
@@ -123,18 +124,10 @@
                 let q;
                 if (termoBusca) {
                     const termo = termoBusca.toLowerCase();
-                    q = query(assistidosRef, 
-                        where('nome_lower', '>=', termo), 
-                        where('nome_lower', '<=', termo + '\uf8ff'),
-                        orderBy('nome_lower')
-                    );
+                    q = query(assistidosRef, where('nome_lower', '>=', termo), where('nome_lower', '<=', termo + '\uf8ff'), orderBy('nome_lower'));
                 } else if (filtroLetra) {
                     const proximaLetra = String.fromCharCode(filtroLetra.charCodeAt(0) + 1);
-                    q = query(assistidosRef, 
-                        where('nome', '>=', filtroLetra), 
-                        where('nome', '<', proximaLetra),
-                        orderBy('nome')
-                    );
+                    q = query(assistidosRef, where('nome', '>=', filtroLetra), where('nome', '<', proximaLetra), orderBy('nome'));
                 } else {
                     q = query(assistidosRef, orderBy('nome'));
                 }
@@ -149,9 +142,7 @@
                     const assistidoParaMostrar = assistidos.find(a => a.id === assistidoIdUrl);
                     if (assistidoParaMostrar) {
                         const liCorrespondente = ui.listaAssistidos.querySelector(`[data-assistido-id="${assistidoIdUrl}"]`);
-                        if (liCorrespondente) {
-                            liCorrespondente.classList.add('selecionado');
-                        }
+                        if (liCorrespondente) liCorrespondente.classList.add('selecionado');
                         mostrarDetalhes(assistidoParaMostrar);
                     }
                 }
@@ -177,80 +168,106 @@
             }
 
             async function mostrarDetalhes(assistido) {
+                assistidoAtualmenteSelecionado = assistido;
                 ui.detalhesAssistido.innerHTML = `<h2>Histórico de ${assistido.nome}</h2><p>Carregando histórico...</p>`;
                 
-                // Busca por atendimentos de tratamento
+                // 1. Busca todos os ciclos de tratamento
                 const qTratamentos = query(tratamentosRef, where('assistidoId', '==', assistido.id), orderBy('dataInicio', 'desc'));
                 const tratamentosSnapshot = await getDocs(qTratamentos);
+                const ciclos = tratamentosSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
                 
-                const promessasDeAtendimentos = tratamentosSnapshot.docs.map(async (tratamentoDoc) => {
-                    const tratamento = { id: tratamentoDoc.id, ...tratamentoDoc.data() };
-                    const qAtendimentos = query(atendimentosRef, where('tratamentoId', '==', tratamento.id));
-                    const atendimentosSnapshot = await getDocs(qAtendimentos);
-                    return atendimentosSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-                });
-                
-                // Busca por passes avulsos
-                const qAvulsos = query(atendimentosRef, where('assistidoId', '==', assistido.id), where('tipo', '==', 'avulso'));
-                const avulsosSnapshot = await getDocs(qAvulsos);
-                const passesAvulsos = avulsosSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                // 2. Busca TODOS os atendimentos (de tratamento e avulsos) do assistido
+                const qAtendimentos = query(atendimentosRef, where('assistidoId', '==', assistido.id), orderBy('dataAtendimento', 'desc'));
+                const atendimentosSnapshot = await getDocs(qAtendimentos);
+                const todosAtendimentos = atendimentosSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
 
-                const todosOsAtendimentosArrays = await Promise.all(promessasDeAtendimentos);
-                const todosOsAtendimentos = todosOsAtendimentosArrays.flat().concat(passesAvulsos);
-                
-                todosOsAtendimentos.sort((a, b) => b.dataAtendimento.toMillis() - a.dataAtendimento.toMillis());
-
-                renderizarHistorico(assistido, todosOsAtendimentos);
+                renderizarHistorico(assistido, ciclos, todosAtendimentos);
             }
             
-            function renderizarHistorico(assistido, atendimentos) {
-                let html = `<h2>Histórico de ${assistido.nome}</h2>`;
+            function renderizarHistorico(assistido, ciclos, todosAtendimentos) {
                 const dnFormatado = assistido.dn ? new Date(assistido.dn + 'T12:00:00').toLocaleDateString('pt-br') : 'Não informado';
+                let html = `<h2>Histórico de ${assistido.nome}</h2>`;
                 html += `<p><strong>DN:</strong> ${dnFormatado} | <strong>Telefone:</strong> ${assistido.telefone || 'Não informado'}</p>`;
                 html += '<div id="historico-container">';
 
-                if (atendimentos.length === 0) {
-                    html += '<p>Nenhum atendimento registrado.</p>';
-                } else {
-                    html += `<ul class="atendimentos-lista">`;
-                    atendimentos.forEach(a => {
-                        const dataAtendimento = a.dataAtendimento.toDate().toLocaleDateString('pt-br');
-                        let tipoAtendimento = '';
-                        let infoExtra = '';
-                        let botaoEditarHtml = '';
-                        let iconeHtml = '';
-
-                        if (a.tipo === 'avulso') {
-                            tipoAtendimento = 'Passe Avulso';
-                            infoExtra = `(${a.passeRecomendado})`;
-                        } else if (a.tipo === 'falta') {
-                            tipoAtendimento = 'Falta';
-                        } else {
-                            tipoAtendimento = `Semana ${a.semana || '?'}`;
-                            infoExtra = `(${a.passeRecomendado})`;
-                        }
-
-                        if (a.entrevistador && a.entrevistador !== 'Passe Direto') {
-                            if (a.notas && a.notas.trim() !== '') {
-                                iconeHtml = '<span>✅</span>'; // Entrevista preenchida
-                            } else {
-                                iconeHtml = '<span>📝</span>'; // Entrevista pendente de preenchimento
-                            }
-                            botaoEditarHtml = `<a href="/entrevista-ae.html?atendimentoId=${a.id}" target="_blank" class="btn btn-editar">Ver / Editar</a>`;
-                        }
-
-                        html += `<li>
-                                    <div class="atendimento-info">
-                                        ${iconeHtml}
-                                        <span><strong>${dataAtendimento}</strong> - ${tipoAtendimento} ${infoExtra}</span>
+                // Renderiza os ciclos de tratamento
+                if (ciclos.length > 0) {
+                    ciclos.forEach(ciclo => {
+                        const dataInicio = ciclo.dataInicio ? ciclo.dataInicio.toDate().toLocaleDateString('pt-br') : 'N/A';
+                        const statusClasse = ciclo.status === 'ativo' ? 'status-ativo' : 'status-concluido';
+                        
+                        html += `<div class="ciclo-tratamento">
+                                    <div class="ciclo-header">
+                                        <span>Início: ${dataInicio} | Passe do Ciclo: ${ciclo.passe_ciclo_atual || 'N/A'}</span>
+                                        <span class="${statusClasse}">${ciclo.status.replace(/_/g, ' ')}</span>
                                     </div>
-                                    ${botaoEditarHtml}
-                                </li>`;
+                                    <ul class="atendimentos-lista">`;
+                        
+                        const atendimentosDoCiclo = todosAtendimentos.filter(a => a.tratamentoId === ciclo.id);
+                        if (atendimentosDoCiclo.length === 0) {
+                            html += '<li>Nenhum atendimento registrado para este ciclo.</li>';
+                        } else {
+                            atendimentosDoCiclo.sort((a, b) => a.dataAtendimento.toMillis() - b.dataAtendimento.toMillis()).forEach(a => {
+                                html += renderizarItemAtendimento(a);
+                            });
+                        }
+                        html += `</ul></div>`;
                     });
-                    html += `</ul>`;
                 }
+                
+                // Renderiza os passes avulsos
+                const passesAvulsos = todosAtendimentos.filter(a => a.tipo === 'avulso');
+                if (passesAvulsos.length > 0) {
+                     html += `<div class="ciclo-tratamento">
+                                <div class="ciclo-header"><span>Passes Avulsos</span></div>
+                                <ul class="atendimentos-lista">`;
+                    passesAvulsos.sort((a, b) => a.dataAtendimento.toMillis() - b.dataAtendimento.toMillis()).forEach(a => {
+                        html += renderizarItemAtendimento(a);
+                    });
+                    html += `</ul></div>`;
+                }
+
+                if (ciclos.length === 0 && passesAvulsos.length === 0) {
+                    html += '<p>Nenhum atendimento registrado para este assistido.</p>';
+                }
+
                 html += '</div>';
                 ui.detalhesAssistido.innerHTML = html;
+            }
+
+            function renderizarItemAtendimento(a) {
+                const dataAtendimento = a.dataAtendimento.toDate().toLocaleDateString('pt-br');
+                let tipoAtendimento = a.tipo.replace(/_/g, ' ');
+                let infoExtra = '';
+                let botaoEditarHtml = '';
+                let iconeHtml = '';
+
+                if (a.tipo === 'avulso') {
+                    tipoAtendimento = 'Passe Avulso';
+                    infoExtra = `(${a.passeRecomendado})`;
+                } else if (a.tipo !== 'falta') {
+                    tipoAtendimento = `Semana ${a.semana || '?'}`;
+                    infoExtra = `(${a.passeRecomendado})`;
+                }
+
+                if (a.entrevistador && a.entrevistador !== 'Passe Direto' && a.tipo !== 'falta' && a.tipo !== 'avulso') {
+                     if (a.notas && a.notas.trim() !== '') {
+                        iconeHtml = '<span>✅</span>';
+                    } else if (a.entrevistador !== 'Aguardando Detalhes') {
+                         iconeHtml = '<span>✅</span>';
+                    } else {
+                        iconeHtml = '<span>📝</span>';
+                    }
+                    botaoEditarHtml = `<a href="/entrevista-ae.html?atendimentoId=${a.id}" target="_blank" class="btn btn-editar">Ver / Editar</a>`;
+                }
+                
+                return `<li>
+                            <div class="atendimento-info">
+                                ${iconeHtml}
+                                <span><strong>${dataAtendimento}</strong> - ${tipoAtendimento} ${infoExtra}</span>
+                            </div>
+                            ${botaoEditarHtml}
+                        </li>`;
             }
 
             ui.alfabetoFiltro.addEventListener('click', (e) => {
@@ -268,6 +285,12 @@
                     document.querySelectorAll('#alfabeto-filtro button').forEach(btn => btn.classList.remove('ativo'));
                     carregarAssistidos('', e.target.value);
                 }, 500);
+            });
+
+            window.addEventListener('focus', () => {
+                if (assistidoAtualmenteSelecionado) {
+                    mostrarDetalhes(assistidoAtualmenteSelecionado);
+                }
             });
 
             gerarBotoesAlfabeto();
