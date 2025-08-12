@@ -71,7 +71,9 @@
 
         function inicializarPagina(user) {
             const db = getFirestore();
+            const tratamentosRef = collection(db, 'tratamentos_ae');
             const atendimentosRef = collection(db, 'atendimentos_ae');
+            const filaRef = collection(db, 'fila_atendimento_ae');
             
             const formularioContainer = document.getElementById('formulario-container');
             const params = new URLSearchParams(window.location.search);
@@ -149,6 +151,15 @@
                 const checkboxes = document.querySelector('.checkboxes');
                 if (selectBox && checkboxes) {
                     selectBox.addEventListener('click', () => { if (!selectBox.hasAttribute('disabled')) checkboxes.classList.toggle('visible'); });
+                    checkboxes.addEventListener('change', () => {
+                        const selecionados = Array.from(checkboxes.querySelectorAll('input:checked')).map(cb => cb.value);
+                        selectBox.textContent = selecionados.length > 0 ? selecionados.join(', ') : 'Selecione...';
+                    });
+                    document.addEventListener('click', (e) => {
+                        if (selectBox && !selectBox.contains(e.target) && !checkboxes.contains(e.target)) {
+                            checkboxes.classList.remove('visible');
+                        }
+                    });
                 }
             }
             
@@ -158,12 +169,13 @@
                 btn.textContent = 'Salvando...';
 
                 try {
+                    const batch = writeBatch(db);
                     const atendimentoDocRef = doc(db, 'atendimentos_ae', atendimento.id);
                     
                     const logEdicao = {
                         editadoPor_uid: user.uid,
                         editadoPor_nome: user.displayName,
-                        editadoEm: serverTimestamp()
+                        editadoEm: new Date() // <-- CORREÇÃO APLICADA AQUI
                     };
                     
                     const dadosParaAtualizar = {
@@ -173,11 +185,45 @@
                         horarioFim: document.getElementById('retorno-fim').value,
                         evolucao: document.querySelector('input[name="evolucao"]:checked').value,
                         detalhes_preenchidos: true,
-                        historico_edicoes: arrayUnion(logEdicao) // ADICIONA O LOG AO HISTÓRICO
+                        historico_edicoes: arrayUnion(logEdicao)
                     };
                     
-                    await updateDoc(atendimentoDocRef, dadosParaAtualizar);
-                    
+                    if (atendimento.semana === 5) {
+                        const passePara = document.getElementById('colegiado-para')?.value;
+                        const filaDocRef = await encontrarFilaDoDia(atendimento);
+                        
+                        if (passePara) { 
+                            const tratamentoDocRef = doc(db, 'tratamentos_ae', atendimento.tratamentoId);
+                            batch.update(tratamentoDocRef, { status: 'concluido_por_reavaliacao', dataFim: serverTimestamp() });
+                            
+                            const novoTratamentoRef = doc(tratamentosRef);
+                            batch.set(novoTratamentoRef, {
+                                assistidoId: atendimento.assistidoId, dataInicio: serverTimestamp(), status: 'ativo',
+                                faltas_acumuladas: 0, passe_ciclo_atual: passePara
+                            });
+                            
+                            dadosParaAtualizar.tratamentoId = novoTratamentoRef.id;
+                            dadosParaAtualizar.semana = 1;
+                            dadosParaAtualizar.passePara = passePara;
+                            
+                            if (filaDocRef) {
+                                batch.update(filaDocRef, {
+                                    tratamentoId: novoTratamentoRef.id,
+                                    semana_atual: 1,
+                                    passeRecomendado: passePara,
+                                    decisao_registrada: true
+                                });
+                            }
+                        } else if(filaDocRef) {
+                            batch.update(filaDocRef, { decisao_registrada: true });
+                        }
+                        
+                        dadosParaAtualizar.colegiadoNotas = document.getElementById('colegiado-notas').value;
+                        dadosParaAtualizar.encaminhamentos = Array.from(document.querySelectorAll('.checkboxes input:checked')).map(cb => cb.value);
+                    }
+
+                    batch.update(atendimentoDocRef, dadosParaAtualizar);
+                    await batch.commit();
                     alert('Detalhes do atendimento atualizados com sucesso!');
                     manipularEstadoFormulario(true);
 
@@ -189,9 +235,6 @@
                     btn.textContent = 'Salvar Alterações';
                 }
             }
-
-            // As funções abaixo (criarFormulario, preencherFormulario, etc.) não foram alteradas na sua essência.
-            // Apenas foram adaptadas para o novo contexto sem a lógica complexa de antes.
             
             function preencherFormulario(atendimento, nomeAssistido) {
                 document.getElementById('assistido-nome').textContent = nomeAssistido;
@@ -269,13 +312,48 @@
                     <button id="btn-salvar-entrevista" type="button" class="btn btn-primary" style="width: 100%; margin-top: 20px;">Salvar Alterações</button>
                 </fieldset>`;
             }
-            
+
+            async function encontrarFilaDoDia(atendimento) {
+                const q = query(filaRef, where("atendimentoId", "==", atendimento.id), limit(1));
+                const filaSnapshot = await getDocs(q);
+                if (!filaSnapshot.empty) {
+                    return filaSnapshot.docs[0].ref;
+                }
+                const dataDoAtendimento = atendimento.dataAtendimento.toDate();
+                const inicioDoDia = new Date(dataDoAtendimento.setHours(0,0,0,0));
+                const fimDoDia = new Date(dataDoAtendimento.setHours(23,59,59,999));
+                const qFallback = query(filaRef, where("assistidoId", "==", atendimento.assistidoId), where("chegadaEm", ">=", Timestamp.fromDate(inicioDoDia)), where("chegadaEm", "<=", Timestamp.fromDate(fimDoDia)), limit(1));
+                const filaSnapshotFallback = await getDocs(qFallback);
+                if (!filaSnapshotFallback.empty) {
+                    return filaSnapshotFallback.docs[0].ref;
+                }
+                return null;
+            }
+
             async function darAlta(atendimento) {
                  const btn = document.getElementById('btn-dar-alta');
                 btn.disabled = true;
                 if (confirm(`Tem certeza que deseja dar alta para este assistido?`)) {
-                    // Implementação da função darAlta (pode ser adaptada para incluir log também se desejado)
-                    // ...
+                    
+                    const batch = writeBatch(db);
+                    const tratamentoDocRef = doc(db, 'tratamentos_ae', atendimento.tratamentoId);
+                    batch.update(tratamentoDocRef, { status: 'concluido_com_alta', dataFim: serverTimestamp() });
+                    
+                    const atendimentoDocRef = doc(db, 'atendimentos_ae', atendimento.id);
+                    batch.update(atendimentoDocRef, {
+                         tipo: 'alta',
+                         colegiadoNotas: document.getElementById('colegiado-notas')?.value || "Atendimento de reavaliação finalizado com alta.",
+                         detalhes_preenchidos: true
+                    });
+                    
+                    const filaDocRef = await encontrarFilaDoDia(atendimento);
+                    if (filaDocRef) {
+                        batch.update(filaDocRef, { decisao_registrada: true });
+                    }
+                    
+                    await batch.commit();
+                    alert('Alta registrada! O tratamento foi encerrado.');
+                    manipularEstadoFormulario(true);
                 } else {
                      btn.disabled = false;
                 }
