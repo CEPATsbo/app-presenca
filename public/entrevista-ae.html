@@ -338,8 +338,10 @@
                     return filaSnapshot.docs[0].ref;
                 }
                 const dataDoAtendimento = atendimento.dataAtendimento.toDate();
-                const inicioDoDia = new Date(dataDoAtendimento.setHours(0,0,0,0));
-                const fimDoDia = new Date(dataDoAtendimento.setHours(23,59,59,999));
+                const inicioDoDia = new Date(dataDoAtendimento);
+                inicioDoDia.setHours(0,0,0,0);
+                const fimDoDia = new Date(dataDoAtendimento);
+                fimDoDia.setHours(23,59,59,999);
                 const qFallback = query(filaRef, where("assistidoId", "==", atendimento.assistidoId), where("chegadaEm", ">=", Timestamp.fromDate(inicioDoDia)), where("chegadaEm", "<=", Timestamp.fromDate(fimDoDia)), limit(1));
                 const filaSnapshotFallback = await getDocs(qFallback);
                 if (!filaSnapshotFallback.empty) {
