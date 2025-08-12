@@ -44,7 +44,7 @@
     <nav class="nav-voltar"><a href="/arquivo-geral-ae.html" class="btn-voltar">⬅ Voltar para o Arquivo Geral</a></nav>
     <div id="acesso-negado" class="container hidden"><h1>Acesso Negado</h1></div>
 
-    <div id="main-content" class="container">
+    <div id="main-content" class="container hidden">
         <h1>Detalhes do Atendimento</h1>
         <p style="text-align: center; margin-top: -10px;">Adicione ou edite as informações do atendimento.</p>
         <div id="formulario-container">
@@ -95,11 +95,9 @@
         const auth = getAuth();
 
         protegerPagina(['entrevistador', 'diretor', 'super-admin']).then(user => {
-            document.getElementById('main-content').classList.remove('hidden');
             inicializarPagina(user);
         }).catch(err => {
             document.getElementById('acesso-negado').classList.remove('hidden');
-            document.getElementById('main-content').classList.add('hidden');
         });
 
         function inicializarPagina(user) {
@@ -109,6 +107,7 @@
             const filaRef = collection(db, 'fila_atendimento_ae');
             
             const ui = {
+                mainContent: document.getElementById('main-content'),
                 formularioContainer: document.getElementById('formulario-container'),
                 modal: document.getElementById('reauth-modal'),
                 reauthForm: document.getElementById('reauth-form'),
@@ -122,72 +121,65 @@
             const params = new URLSearchParams(window.location.search);
             const atendimentoIdParaEditar = params.get('atendimentoId');
 
-            // ===================================================================
-            // INÍCIO DA MODIFICAÇÃO PARA O GRAMPO FINAL
-            // ===================================================================
-            function travarFormulario() {
-                alert("A FUNÇÃO 'travarFormulario' FOI CHAMADA! Verifique o console para saber quem a chamou.");
-                console.error("ALERTA VERMELHO: A função travarFormulario() foi executada. Rastreio da chamada (stack trace) abaixo:");
-                console.trace(); // Esta linha mágica nos diz quem chamou a função.
+            if (atendimentoIdParaEditar) {
+                carregarFormularioParaEdicao(atendimentoIdParaEditar);
+            } else {
+                ui.mainContent.innerHTML = `<p class="erro">Nenhum atendimento selecionado.</p>`;
+                ui.mainContent.classList.remove('hidden');
+            }
 
+            function mostrarFormulario(travado = false) {
                 const form = ui.formularioContainer.querySelector('fieldset');
                 if (!form) return;
+
                 form.querySelectorAll('input, select, textarea').forEach(el => {
                     if (!el.classList.contains('readonly-input')) {
-                        el.disabled = true;
+                        el.disabled = travado;
                     }
                 });
 
                 const selectBox = form.querySelector('.select-box');
-                if (selectBox) selectBox.setAttribute('disabled', 'disabled');
+                if (selectBox) {
+                    if (travado) {
+                        selectBox.setAttribute('disabled', 'disabled');
+                    } else {
+                        selectBox.removeAttribute('disabled');
+                    }
+                }
 
-                document.getElementById('btn-salvar-entrevista').classList.add('hidden');
-                const btnAlta = document.getElementById('btn-dar-alta');
-                if(btnAlta) btnAlta.classList.add('hidden');
+                const btnSalvar = document.getElementById('btn-salvar-entrevista');
+                if (btnSalvar) btnSalvar.classList.toggle('hidden', travado);
                 
+                const btnAlta = document.getElementById('btn-dar-alta');
+                if (btnAlta) btnAlta.classList.toggle('hidden', travado);
+
+                // Remove o botão antigo se existir, para evitar duplicação
                 const btnHabilitarExistente = document.getElementById('btn-habilitar-edicao');
                 if(btnHabilitarExistente) btnHabilitarExistente.remove();
 
-                const btnHabilitar = document.createElement('button');
-                btnHabilitar.id = 'btn-habilitar-edicao';
-                btnHabilitar.className = 'btn btn-secondary';
-                btnHabilitar.style.width = '100%';
-                btnHabilitar.style.marginTop = '10px';
-                btnHabilitar.innerHTML = '🔒 Habilitar Edição';
-                btnHabilitar.type = 'button';
-                btnHabilitar.onclick = () => {
-                    ui.reauthEmail.value = user.email;
-                    ui.modal.classList.remove('hidden');
-                    ui.reauthPassword.focus();
-                };
-                form.appendChild(btnHabilitar);
-            }
-            // ===================================================================
-            // FIM DA MODIFICAÇÃO
-            // ===================================================================
-
-            if (atendimentoIdParaEditar) {
-                carregarFormularioParaEdicao(atendimentoIdParaEditar);
-            } else {
-                 ui.formularioContainer.innerHTML = `<p class="erro">Nenhum atendimento selecionado. Acesse esta página a partir de um link de edição no histórico do assistido.</p>`;
-            }
-
-            function destravarFormulario() {
-                const form = ui.formularioContainer.querySelector('fieldset');
-                if (!form) return;
-                form.querySelectorAll('input, select, textarea').forEach(el => {
-                    if(!el.classList.contains('readonly-input')) el.disabled = false;
-                });
+                if (travado) {
+                    const btnHabilitar = document.createElement('button');
+                    btnHabilitar.id = 'btn-habilitar-edicao';
+                    btnHabilitar.className = 'btn btn-secondary';
+                    btnHabilitar.style.width = '100%';
+                    btnHabilitar.style.marginTop = '10px';
+                    btnHabilitar.innerHTML = '🔒 Habilitar Edição';
+                    btnHabilitar.type = 'button';
+                    btnHabilitar.onclick = () => mostrarModalReautenticacao();
+                    form.appendChild(btnHabilitar);
+                }
                 
-                const selectBox = form.querySelector('.select-box');
-                if (selectBox) selectBox.removeAttribute('disabled');
+                ui.mainContent.classList.remove('hidden');
+                ui.modal.classList.add('hidden');
+            }
 
-                document.getElementById('btn-salvar-entrevista').classList.remove('hidden');
-                const btnAlta = document.getElementById('btn-dar-alta');
-                if(btnAlta) btnAlta.classList.remove('hidden');
-
-                const btnHabilitar = document.getElementById('btn-habilitar-edicao');
-                if (btnHabilitar) btnHabilitar.remove();
+            function mostrarModalReautenticacao() {
+                ui.reauthEmail.value = user.email;
+                ui.reauthForm.reset();
+                ui.reauthError.classList.add('hidden');
+                ui.modal.classList.remove('hidden');
+                ui.mainContent.classList.add('hidden');
+                ui.reauthPassword.focus();
             }
 
             ui.reauthForm.addEventListener('submit', async (e) => {
@@ -201,16 +193,9 @@
 
                 try {
                     await reauthenticateWithCredential(user, credential);
-                    destravarFormulario();
-                    ui.modal.classList.add('hidden');
-                    ui.reauthForm.reset();
+                    mostrarFormulario(false); // Mostra o formulário DESTRAVADO
                 } catch (error) {
-                    console.error("Erro de reautenticação:", error.code);
-                    if (error.code === 'auth/wrong-password' || error.code === 'auth/invalid-credential' || error.code === 'auth/invalid-login-credentials') {
-                        ui.reauthError.textContent = 'Senha incorreta. Tente novamente.';
-                    } else {
-                        ui.reauthError.textContent = 'Ocorreu um erro. Tente novamente mais tarde.';
-                    }
+                    ui.reauthError.textContent = 'Senha incorreta. Tente novamente.';
                     ui.reauthError.classList.remove('hidden');
                 } finally {
                      ui.btnReauthConfirm.disabled = false;
@@ -218,9 +203,7 @@
             });
 
             ui.btnReauthCancel.addEventListener('click', () => {
-                ui.modal.classList.add('hidden');
-                ui.reauthForm.reset();
-                ui.reauthError.classList.add('hidden');
+                window.location.href = '/arquivo-geral-ae.html';
             });
 
             async function carregarFormularioParaEdicao(atendimentoId) {
@@ -228,7 +211,8 @@
                 const atendimentoDoc = await getDoc(atendimentoDocRef);
 
                 if (!atendimentoDoc.exists()) {
-                    ui.formularioContainer.innerHTML = `<p class="erro">Atendimento com ID ${atendimentoId} não encontrado.</p>`;
+                    ui.mainContent.innerHTML = `<p class="erro">Atendimento com ID ${atendimentoId} não encontrado.</p>`;
+                    ui.mainContent.classList.remove('hidden');
                     return;
                 }
                 const atendimento = { id: atendimentoDoc.id, ...atendimentoDoc.data() };
@@ -241,8 +225,11 @@
                 ui.formularioContainer.innerHTML = formHtml;
                 preencherFormulario(atendimento, nomeAssistido);
 
+                // LÓGICA FINAL "À PROVA DE BALAS"
                 if (atendimento.detalhes_preenchidos === true) {
-                    travarFormulario();
+                    mostrarFormulario(true); // Mostra formulário JÁ TRAVADO e com botão para habilitar
+                } else {
+                    mostrarFormulario(false); // Mostra formulário DESTRAVADO para a primeira edição
                 }
 
                 document.getElementById('btn-salvar-entrevista')?.addEventListener('click', () => salvarEdicao(atendimento));
@@ -415,7 +402,7 @@
                     batch.update(atendimentoDocRef, dadosParaAtualizar);
                     await batch.commit();
                     alert('Detalhes do atendimento atualizados com sucesso!');
-                    travarFormulario();
+                    mostrarFormulario(true); // Após salvar, mostra o formulário travado
 
                 } catch (error) {
                     console.error("Erro ao salvar edição:", error);
@@ -449,7 +436,7 @@
                     
                     await batch.commit();
                     alert('Alta registrada! O tratamento foi encerrado.');
-                    travarFormulario();
+                    mostrarFormulario(true); // Após dar alta, mostra o formulário travado
                 } else {
                      btn.disabled = false;
                 }
