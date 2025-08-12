@@ -50,23 +50,36 @@ function calcularCicloVibracoes(dataBase) {
     };
 }
 
-// ===================================================================
-// FUNÇÃO CORRIGIDA PARA LER VARIÁVEIS DE AMBIENTE
-// ===================================================================
 function configurarWebPush() {
-    try {
-        const publicKey = process.env.VAPID_PUBLIC_KEY;
-        const privateKey = process.env.VAPID_PRIVATE_KEY;
+    // ===== INÍCIO DO CÓDIGO DE DIAGNÓSTICO =====
+    console.log("Iniciando configurarWebPush. Verificando a configuração...");
+    
+    // Vamos imprimir o conteúdo bruto da variável de ambiente que o Firebase cria
+    console.log("Conteúdo de process.env.FIREBASE_CONFIG:", process.env.FIREBASE_CONFIG);
+    
+    // Agora vamos imprimir o que a biblioteca firebase-functions interpreta disso
+    console.log("Conteúdo de functions.config():", JSON.stringify(functions.config()));
+    // ===== FIM DO CÓDIGO DE DIAGNÓSTICO =====
 
-        if (publicKey && privateKey) {
-            webpush.setVapidDetails("mailto:cepaulodetarso.sbo@gmail.com", publicKey, privateKey);
+    try {
+        const vapidConfig = functions.config().vapid;
+        
+        // Verificação mais detalhada
+        if (vapidConfig && vapidConfig.public_key && vapidConfig.private_key) {
+            webpush.setVapidDetails(
+                "mailto:cepaulodetarso.sbo@gmail.com", 
+                vapidConfig.public_key, 
+                vapidConfig.private_key
+            );
+            console.log("SUCESSO: Chaves VAPID configuradas no web-push.");
             return true;
         } else {
-            console.error("ERRO CRÍTICO: As chaves VAPID não estão configuradas nas variáveis de ambiente.");
+            // Este é o erro que está acontecendo. O log abaixo vai aparecer.
+            console.error("ERRO CRÍTICO: O objeto 'vapid' ou suas chaves (public_key, private_key) não foram encontrados dentro de functions.config().");
             return false;
         }
     } catch (error) {
-        console.error("ERRO ao configurar o WebPush:", error);
+        console.error("ERRO CRÍTICO ao tentar ler functions.config().vapid:", error);
         return false;
     }
 }

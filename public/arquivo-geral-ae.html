@@ -231,9 +231,6 @@
                 ui.detalhesAssistido.innerHTML = html;
             }
 
-            // ===================================================================
-            // INÍCIO DA FUNÇÃO CORRIGIDA
-            // ===================================================================
             function renderizarItemAtendimento(a, passe_ciclo_atual) {
                 const dataAtendimento = a.dataAtendimento.toDate().toLocaleDateString('pt-br');
                 let tipoAtendimento = a.tipo?.replace(/_/g, ' ') || 'N/A';
@@ -245,16 +242,18 @@
                 if (a.tipo !== 'falta' && a.tipo !== 'avulso') {
                     const semanaNum = a.semana || 0;
                     
-                    // Regra 1: Semanas 1, 4 e 5 SEMPRE têm entrevista para QUALQUER passe.
                     if ([1, 4, 5].includes(semanaNum)) {
                         precisaEntrevista = true;
                     }
-                    
-                    // Regra 2: Passes P3A e P3B também têm entrevista nas semanas 2 e 3.
                     if (['P3A', 'P3B'].includes(passe_ciclo_atual) && [2, 3].includes(semanaNum)) {
                         precisaEntrevista = true;
                     }
                 }
+
+                // ===================================================================
+                // "DEDO-DURO" ADICIONADO AQUI
+                // ===================================================================
+                console.log(`[VERIFICADOR] Data: ${dataAtendimento}, Semana: ${a.semana}, Passe: ${passe_ciclo_atual}, Precisa de Entrevista? -> ${precisaEntrevista}`);
 
                 if (a.tipo === 'avulso') {
                     tipoAtendimento = 'Passe Avulso';
@@ -281,9 +280,6 @@
                             ${botaoEditarHtml}
                         </li>`;
             }
-            // ===================================================================
-            // FIM DA FUNÇÃO CORRIGIDA
-            // ===================================================================
 
             ui.alfabetoFiltro.addEventListener('click', (e) => {
                 if (e.target.tagName === 'BUTTON') {
