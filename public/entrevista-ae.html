@@ -122,13 +122,14 @@
             const params = new URLSearchParams(window.location.search);
             const atendimentoIdParaEditar = params.get('atendimentoId');
 
-            if (atendimentoIdParaEditar) {
-                carregarFormularioParaEdicao(atendimentoIdParaEditar);
-            } else {
-                 ui.formularioContainer.innerHTML = `<p class="erro">Nenhum atendimento selecionado. Acesse esta página a partir de um link de edição no histórico do assistido.</p>`;
-            }
-
+            // ===================================================================
+            // INÍCIO DA MODIFICAÇÃO PARA O GRAMPO FINAL
+            // ===================================================================
             function travarFormulario() {
+                alert("A FUNÇÃO 'travarFormulario' FOI CHAMADA! Verifique o console para saber quem a chamou.");
+                console.error("ALERTA VERMELHO: A função travarFormulario() foi executada. Rastreio da chamada (stack trace) abaixo:");
+                console.trace(); // Esta linha mágica nos diz quem chamou a função.
+
                 const form = ui.formularioContainer.querySelector('fieldset');
                 if (!form) return;
                 form.querySelectorAll('input, select, textarea').forEach(el => {
@@ -160,6 +161,15 @@
                     ui.reauthPassword.focus();
                 };
                 form.appendChild(btnHabilitar);
+            }
+            // ===================================================================
+            // FIM DA MODIFICAÇÃO
+            // ===================================================================
+
+            if (atendimentoIdParaEditar) {
+                carregarFormularioParaEdicao(atendimentoIdParaEditar);
+            } else {
+                 ui.formularioContainer.innerHTML = `<p class="erro">Nenhum atendimento selecionado. Acesse esta página a partir de um link de edição no histórico do assistido.</p>`;
             }
 
             function destravarFormulario() {
@@ -231,26 +241,9 @@
                 ui.formularioContainer.innerHTML = formHtml;
                 preencherFormulario(atendimento, nomeAssistido);
 
-                // ===================================================================
-                // NOVO BLOCO DE VERIFICAÇÃO LÓGICA
-                // ===================================================================
-                console.log("--- INICIANDO BLOCO DE VERIFICAÇÃO FINAL ---");
-                console.log("Valor de 'atendimento.detalhes_preenchidos' ANTES do IF:", atendimento.detalhes_preenchidos);
-                console.log("Tipo do valor:", typeof atendimento.detalhes_preenchidos);
-
-                const deveTravar = (atendimento.detalhes_preenchidos === true);
-                console.log("A condição (atendimento.detalhes_preenchidos === true) resultou em:", deveTravar);
-
-                if (deveTravar) {
-                    console.log("%cDECISÃO: O formulário SERÁ travado.", "color: red; font-weight: bold;");
-                    alert("ALERTA DE DEBUG: O formulário será TRAVADO. Isso NÃO deveria acontecer na primeira edição.");
+                if (atendimento.detalhes_preenchidos === true) {
                     travarFormulario();
-                } else {
-                    console.log("%cDECISÃO: O formulário NÃO será travado.", "color: green; font-weight: bold;");
-                    alert("ALERTA DE DEBUG: O formulário NÃO será travado. Este é o comportamento esperado.");
                 }
-                console.log("--- FIM DO BLOCO DE VERIFICAÇÃO FINAL ---");
-                // ===================================================================
 
                 document.getElementById('btn-salvar-entrevista')?.addEventListener('click', () => salvarEdicao(atendimento));
                 document.getElementById('btn-dar-alta')?.addEventListener('click', () => darAlta(atendimento));
