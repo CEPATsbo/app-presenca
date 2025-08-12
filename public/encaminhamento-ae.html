@@ -55,7 +55,6 @@
     </div>
 
     <script type="module">
-        // A CORREÇÃO ESTÁ AQUI: Adicionei "deleteDoc" à lista de importação
         import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
         import { getFirestore, collection, doc, getDoc, onSnapshot, updateDoc, query, where, orderBy, Timestamp, getDocs, setDoc, serverTimestamp, deleteDoc } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
         import { protegerPagina } from '/auth.js';
@@ -192,7 +191,6 @@
 
                     if (entrevistaRealizada) {
                         if (atendimento.semana_atual === 5) {
-                            // Só libera o passe se a decisão foi salva (o que atualiza o status do tratamento)
                             if (atendimento.status_tratamento !== 'ativo') {
                                 passeBtnDisabled = false;
                             }
@@ -211,8 +209,16 @@
                 if (statusFila === 'chamado_entrevista') card.classList.add('chamado-entrevista');
                 if (statusFila === 'entrevista_realizada') card.classList.add('entrevista-realizada');
                 
-                const tipoLabel = `Assistência (${atendimento.passe_ciclo_atual || 'N/A'})`;
-
+                // ===================================================================
+                // CORREÇÃO APLICADA AQUI
+                // ===================================================================
+                let tipoLabel = '';
+                if (atendimento.tipoAtendimento === 'avulso') {
+                    tipoLabel = `Passe Avulso (${atendimento.passeRecomendado || 'N/A'})`;
+                } else {
+                    tipoLabel = `Assistência (${atendimento.passe_ciclo_atual || 'N/A'})`;
+                }
+                
                 card.innerHTML = `
                     <h3>${atendimento.nomeAssistido}</h3>
                     <p class="info">
@@ -227,37 +233,44 @@
             }
 
             async function atualizarPainelTV(chamadaAtual, novoStatus) {
-                const mapaDeSalas = { 'SALA 1': ['P1', 'P3A', 'P3B'], 'SALA 2': ['P2', 'P4A', 'P4B', 'CH'] };
-                const getSalaPorPasse = (passe) => {
-                    if (!passe) return 'Encaminhamento';
-                    for (const sala in mapaDeSalas) {
-                        if (mapaDeSalas[sala].includes(passe.toUpperCase())) return sala;
-                    }
-                    return 'Encaminhamento';
+                const passe = chamadaAtual.passeRecomendado || chamadaAtual.passe_ciclo_atual;
+                
+                const salas = {
+                    'P1': 'SALA 1', 'P2': 'SALA 2', 'P3A': 'SALA 3A', 'P3B': 'SALA 3B',
+                    'P4A': 'SALA 4A', 'P4B': 'SALA 4B', 'CH': 'CAPELA'
                 };
                 
-                const passeParaTV = chamadaAtual.passe_ciclo_atual || chamadaAtual.passeRecomendado;
-                const salaDestino = novoStatus === 'chamado_entrevista' ? 'SALA DE ENTREVISTA' : getSalaPorPasse(passeParaTV);
-                
-                const chamadasAnteriores = atendimentosDoDia
-                    .filter(a => a.id !== chamadaAtual.id && (a.status === 'chamado_entrevista' || a.status === 'chamado_passe' || a.status === 'entrevista_realizada'))
-                    .sort((a,b) => b.chegadaEm.toMillis() - a.chegadaEm.toMillis());
-                    
-                const historico = chamadasAnteriores.slice(0, 3).map(a => {
-                    const passeHist = a.passe_ciclo_atual || a.passeRecomendado;
-                    let salaHist = getSalaPorPasse(passeHist);
-                    if (a.status !== 'chamado_passe') {
-                        salaHist = 'SALA DE ENTREVISTA';
-                    }
-                    return { nome: a.nomeAssistido, sala: salaHist };
-                });
+                let salaDestino = 'ENCAMINHAMENTO';
+                if (novoStatus === 'chamado_entrevista') {
+                    salaDestino = 'ENTREVISTA';
+                } else if (novoStatus === 'chamado_passe' && passe && salas[passe]) {
+                    salaDestino = salas[passe];
+                }
 
-                await setDoc(painelEstadoRef, {
-                    nome: chamadaAtual.nomeAssistido,
-                    sala: salaDestino,
-                    historico: historico,
+                const painelAtualDoc = await getDoc(painelEstadoRef);
+                const painelData = painelAtualDoc.exists() ? painelAtualDoc.data() : { historico_chamadas: [] };
+                
+                let novoHistorico = [];
+                if (painelData.chamada_principal_nome) {
+                    novoHistorico.push({
+                        nome: painelData.chamada_principal_nome,
+                        sala: painelData.chamada_principal_sala
+                    });
+                }
+                if (painelData.historico_chamadas) {
+                    novoHistorico = novoHistorico.concat(painelData.historico_chamadas);
+                }
+                
+                novoHistorico = novoHistorico.slice(0, 4);
+
+                const dadosParaAtualizar = {
+                    chamada_principal_nome: chamadaAtual.nomeAssistido,
+                    chamada_principal_sala: salaDestino,
+                    historico_chamadas: novoHistorico,
                     timestamp: serverTimestamp()
-                });
+                };
+
+                await setDoc(painelEstadoRef, dadosParaAtualizar);
             }
 
             cardsContainer.addEventListener('click', async (e) => {
