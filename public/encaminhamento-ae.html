@@ -2,7 +2,7 @@
 <html lang="pt-br">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale-1.0">
     <title>Encaminhamento - Atendimento Espiritual</title>
     <style>
         :root { --cor-primaria: #007bff; --cor-borda: #ddd; --fundo-claro: #f8f9fa; --cor-aviso: #ffc107; }
@@ -209,9 +209,6 @@
                 if (statusFila === 'chamado_entrevista') card.classList.add('chamado-entrevista');
                 if (statusFila === 'entrevista_realizada') card.classList.add('entrevista-realizada');
                 
-                // ===================================================================
-                // CORREÇÃO APLICADA AQUI
-                // ===================================================================
                 let tipoLabel = '';
                 if (atendimento.tipoAtendimento === 'avulso') {
                     tipoLabel = `Passe Avulso (${atendimento.passeRecomendado || 'N/A'})`;
@@ -248,25 +245,28 @@
                 }
 
                 const painelAtualDoc = await getDoc(painelEstadoRef);
-                const painelData = painelAtualDoc.exists() ? painelAtualDoc.data() : { historico_chamadas: [] };
+                const painelData = painelAtualDoc.exists() ? painelAtualDoc.data() : { historico: [] };
                 
                 let novoHistorico = [];
-                if (painelData.chamada_principal_nome) {
+                if (painelData.nome) { // Checa pelo nome antigo
                     novoHistorico.push({
-                        nome: painelData.chamada_principal_nome,
-                        sala: painelData.chamada_principal_sala
+                        nome: painelData.nome,
+                        sala: painelData.sala
                     });
                 }
-                if (painelData.historico_chamadas) {
-                    novoHistorico = novoHistorico.concat(painelData.historico_chamadas);
+                if (painelData.historico) { // Checa pelo historico antigo
+                    novoHistorico = novoHistorico.concat(painelData.historico);
                 }
                 
                 novoHistorico = novoHistorico.slice(0, 4);
 
+                // ===================================================================
+                // CORREÇÃO APLICADA AQUI: Renomeando as etiquetas de volta
+                // ===================================================================
                 const dadosParaAtualizar = {
-                    chamada_principal_nome: chamadaAtual.nomeAssistido,
-                    chamada_principal_sala: salaDestino,
-                    historico_chamadas: novoHistorico,
+                    nome: chamadaAtual.nomeAssistido,
+                    sala: salaDestino,
+                    historico: novoHistorico,
                     timestamp: serverTimestamp()
                 };
 
