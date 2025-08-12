@@ -231,10 +231,26 @@
                 ui.formularioContainer.innerHTML = formHtml;
                 preencherFormulario(atendimento, nomeAssistido);
 
-                // Lógica de trava final e correta
-                if (atendimento.detalhes_preenchidos === true) {
+                // ===================================================================
+                // NOVO BLOCO DE VERIFICAÇÃO LÓGICA
+                // ===================================================================
+                console.log("--- INICIANDO BLOCO DE VERIFICAÇÃO FINAL ---");
+                console.log("Valor de 'atendimento.detalhes_preenchidos' ANTES do IF:", atendimento.detalhes_preenchidos);
+                console.log("Tipo do valor:", typeof atendimento.detalhes_preenchidos);
+
+                const deveTravar = (atendimento.detalhes_preenchidos === true);
+                console.log("A condição (atendimento.detalhes_preenchidos === true) resultou em:", deveTravar);
+
+                if (deveTravar) {
+                    console.log("%cDECISÃO: O formulário SERÁ travado.", "color: red; font-weight: bold;");
+                    alert("ALERTA DE DEBUG: O formulário será TRAVADO. Isso NÃO deveria acontecer na primeira edição.");
                     travarFormulario();
+                } else {
+                    console.log("%cDECISÃO: O formulário NÃO será travado.", "color: green; font-weight: bold;");
+                    alert("ALERTA DE DEBUG: O formulário NÃO será travado. Este é o comportamento esperado.");
                 }
+                console.log("--- FIM DO BLOCO DE VERIFICAÇÃO FINAL ---");
+                // ===================================================================
 
                 document.getElementById('btn-salvar-entrevista')?.addEventListener('click', () => salvarEdicao(atendimento));
                 document.getElementById('btn-dar-alta')?.addEventListener('click', () => darAlta(atendimento));
