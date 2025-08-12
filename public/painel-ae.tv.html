@@ -65,12 +65,12 @@
             const sala = dados.sala || '';
             const historico = dados.historico || [];
 
-            if (dados.timestamp && dados.timestamp !== ultimoTimestamp) {
+            if (dados.timestamp && dados.timestamp.toMillis() !== ultimoTimestamp) {
                 if (somNotificacao) somNotificacao.play().catch(()=>{});
                 chamadaPrincipalEl.classList.remove('fade-in');
                 void chamadaPrincipalEl.offsetWidth;
                 chamadaPrincipalEl.classList.add('fade-in');
-                ultimoTimestamp = dados.timestamp;
+                ultimoTimestamp = dados.timestamp.toMillis();
             }
 
             nomeAtualEl.textContent = nome;
@@ -93,8 +93,31 @@
         const painelEstadoRef = doc(db, 'painel_estado', 'atual');
         onSnapshot(painelEstadoRef, (doc) => {
             if (doc.exists()) {
-                atualizarPainel(doc.data());
+                const dados = doc.data();
+                const agora = new Date();
+                const timestampChamada = dados.timestamp ? dados.timestamp.toDate() : null;
+                
+                // ===================================================================
+                // LÓGICA DE AUTOLIMPEZA ADICIONADA AQUI
+                // ===================================================================
+                let chamadaExpirou = false;
+                if (timestampChamada) {
+                    const diffHoras = (agora.getTime() - timestampChamada.getTime()) / 3600000; // Diferença em horas
+                    if (diffHoras > 6) { // Se a chamada tem mais de 6 horas, é considerada antiga
+                        chamadaExpirou = true;
+                    }
+                }
+
+                if (chamadaExpirou || !timestampChamada) {
+                    // Se a chamada é antiga ou não existe, limpa o painel
+                    atualizarPainel({ nome: 'Aguardando...', sala: '', historico: [] });
+                } else {
+                    // Se a chamada é recente, exibe normalmente
+                    atualizarPainel(dados);
+                }
+
             } else {
+                // Se o documento não existe, mostra a tela de aguardando
                 atualizarPainel({});
             }
         });

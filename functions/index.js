@@ -1,12 +1,13 @@
-// Forçando deploy geral - v1.2
-// // ===================================================================
+// Forçando deploy geral - v1.3
+// ===================================================================
 // IMPORTAÇÕES (Atualizadas para a nova sintaxe v2)
 // ===================================================================
 const { onCall, HttpsError } = require("firebase-functions/v2/https");
 const { onDocumentCreated, onDocumentWritten } = require("firebase-functions/v2/firestore");
 const { onSchedule } = require("firebase-functions/v2/scheduler");
 const { onRequest } = require("firebase-functions/v2/https");
-const functions = require("firebase-functions"); 
+const { defineString } = require("firebase-functions/params"); // <-- MUDANÇA 1: Nova importação
+
 // Pacotes que não mudam
 const admin = require("firebase-admin");
 const webpush = require("web-push");
@@ -14,8 +15,8 @@ const cors = require("cors")({ origin: true });
 const Fuse = require("fuse.js");
 const axios = require("axios");
 const stream = require('stream');
-const sharp = require('sharp'); // Para manipulação de imagem
-const bwipjs = require('bwip-js'); // Para gerar código de barras
+const sharp = require('sharp');
+const bwipjs = require('bwip-js');
 
 admin.initializeApp();
 const db = admin.firestore();
@@ -25,6 +26,10 @@ const storage = admin.storage();
 const REGIAO = 'southamerica-east1';
 const OPCOES_FUNCAO = { region: REGIAO };
 const OPCOES_FUNCAO_SAOPAULO = { region: REGIAO, timeZone: 'America/Sao_Paulo' };
+
+// MUDANÇA 2: Definição das variáveis de ambiente com o novo padrão V2
+const vapidPublicKey = defineString("VAPID_PUBLIC_KEY");
+const vapidPrivateKey = defineString("VAPID_PRIVATE_KEY");
 
 
 // ===================================================================
@@ -50,39 +55,31 @@ function calcularCicloVibracoes(dataBase) {
     };
 }
 
+// MUDANÇA 3: Função configurarWebPush totalmente corrigida para o padrão V2
 function configurarWebPush() {
-    // ===== INÍCIO DO CÓDIGO DE DIAGNÓSTICO =====
-    console.log("Iniciando configurarWebPush. Verificando a configuração...");
-    
-    // Vamos imprimir o conteúdo bruto da variável de ambiente que o Firebase cria
-    console.log("Conteúdo de process.env.FIREBASE_CONFIG:", process.env.FIREBASE_CONFIG);
-    
-    // Agora vamos imprimir o que a biblioteca firebase-functions interpreta disso
-    console.log("Conteúdo de functions.config():", JSON.stringify(functions.config()));
-    // ===== FIM DO CÓDIGO DE DIAGNÓSTICO =====
-
     try {
-        const vapidConfig = functions.config().vapid;
-        
-        // Verificação mais detalhada
-        if (vapidConfig && vapidConfig.public_key && vapidConfig.private_key) {
+        // Acessa os valores das variáveis de ambiente definidas no topo do arquivo
+        const publicKey = vapidPublicKey.value();
+        const privateKey = vapidPrivateKey.value();
+
+        if (publicKey && privateKey) {
             webpush.setVapidDetails(
-                "mailto:cepaulodetarso.sbo@gmail.com", 
-                vapidConfig.public_key, 
-                vapidConfig.private_key
+                "mailto:cepaulodetarso.sbo@gmail.com",
+                publicKey,
+                privateKey
             );
-            console.log("SUCESSO: Chaves VAPID configuradas no web-push.");
             return true;
-        } else {
-            // Este é o erro que está acontecendo. O log abaixo vai aparecer.
-            console.error("ERRO CRÍTICO: O objeto 'vapid' ou suas chaves (public_key, private_key) não foram encontrados dentro de functions.config().");
-            return false;
         }
+        
+        console.error("ERRO CRÍTICO: Chaves VAPID (VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY) não encontradas nas variáveis de ambiente.");
+        return false;
+
     } catch (error) {
-        console.error("ERRO CRÍTICO ao tentar ler functions.config().vapid:", error);
+        console.error("ERRO CRÍTICO ao configurar web-push:", error);
         return false;
     }
 }
+
 
 async function enviarNotificacoesParaTodos(titulo, corpo) {
     if (!configurarWebPush()) { return { successCount: 0, failureCount: 0, totalCount: 0 }; }
