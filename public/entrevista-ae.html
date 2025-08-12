@@ -143,6 +143,21 @@
                 preencherFormulario(atendimento, nomeAssistido);
 
                 manipularEstadoFormulario(atendimento.detalhes_preenchidos === true);
+                
+                if (isQuintaSemana) {
+                    const colegiadoParaSelect = document.getElementById('colegiado-para');
+                    const btnDarAlta = document.getElementById('btn-dar-alta');
+
+                    if (colegiadoParaSelect && btnDarAlta) {
+                        colegiadoParaSelect.addEventListener('change', () => {
+                            btnDarAlta.disabled = !!colegiadoParaSelect.value;
+                        });
+
+                        btnDarAlta.addEventListener('click', () => {
+                            colegiadoParaSelect.disabled = true;
+                        });
+                    }
+                }
 
                 document.getElementById('btn-salvar-entrevista')?.addEventListener('click', () => salvarEdicao(atendimento));
                 document.getElementById('btn-dar-alta')?.addEventListener('click', () => darAlta(atendimento));
@@ -205,9 +220,6 @@
                             dadosParaAtualizar.tratamentoId = novoTratamentoRef.id;
                             dadosParaAtualizar.semana = 1;
                             dadosParaAtualizar.passePara = passePara;
-                            // ===============================================
-                            // CORREÇÃO APLICADA AQUI
-                            // ===============================================
                             dadosParaAtualizar.passeRecomendado = passePara;
                             
                             if (filaDocRef) {
