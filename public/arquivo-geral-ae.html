@@ -68,7 +68,7 @@
 
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
-        import { getFirestore, collection, doc, getDoc, query, where, getDocs, orderBy, Timestamp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
+        import { getFirestore, collection, doc, getDoc, query, where, getDocs, orderBy, Timestamp, addDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
         import { protegerPagina } from '/auth.js';
 
         const firebaseConfig = {
@@ -93,6 +93,7 @@
             const assistidosRef = collection(db, 'assistidos');
             const tratamentosRef = collection(db, 'tratamentos_ae');
             const atendimentosRef = collection(db, 'atendimentos_ae');
+            const logAuditoriaRef = collection(db, 'log_auditoria');
 
             let assistidoAtualmenteSelecionado = null;
             let debounceTimer;
@@ -103,6 +104,19 @@
                 listaAssistidos: document.getElementById('lista-assistidos'),
                 detalhesAssistido: document.getElementById('detalhes-assistido'),
             };
+
+            async function registrarLog(acao, detalhes) {
+                try {
+                    await addDoc(logAuditoriaRef, {
+                        timestamp: serverTimestamp(),
+                        autor: { uid: user.uid, nome: user.displayName || 'Usuário do Sistema' },
+                        acao: acao,
+                        detalhes: detalhes
+                    });
+                } catch (error) {
+                    console.error("Erro ao registrar log:", error);
+                }
+            }
 
             function gerarBotoesAlfabeto() {
                 const alfabeto = "ABCDEFGHIJKLMNOPQRSTUVWXYZ".split('');
@@ -170,6 +184,11 @@
             async function mostrarDetalhes(assistido) {
                 assistidoAtualmenteSelecionado = assistido;
                 ui.detalhesAssistido.innerHTML = `<h2>Histórico de ${assistido.nome}</h2><p>Carregando histórico...</p>`;
+                
+                registrarLog('Visualização de Histórico (AE)', {
+                    assistidoId: assistido.id,
+                    assistidoNome: assistido.nome
+                });
                 
                 const qTratamentos = query(tratamentosRef, where('assistidoId', '==', assistido.id), orderBy('dataInicio', 'desc'));
                 const tratamentosSnapshot = await getDocs(qTratamentos);
@@ -249,11 +268,6 @@
                         precisaEntrevista = true;
                     }
                 }
-
-                // ===================================================================
-                // "DEDO-DURO" ADICIONADO AQUI
-                // ===================================================================
-                console.log(`[VERIFICADOR] Data: ${dataAtendimento}, Semana: ${a.semana}, Passe: ${passe_ciclo_atual}, Precisa de Entrevista? -> ${precisaEntrevista}`);
 
                 if (a.tipo === 'avulso') {
                     tipoAtendimento = 'Passe Avulso';

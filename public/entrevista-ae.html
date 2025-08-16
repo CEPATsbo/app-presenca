@@ -47,7 +47,7 @@
 
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
-        import { getFirestore, collection, doc, getDoc, updateDoc, query, where, Timestamp, getDocs, writeBatch, serverTimestamp, limit, arrayUnion } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
+        import { getFirestore, collection, doc, getDoc, updateDoc, query, where, Timestamp, getDocs, writeBatch, serverTimestamp, limit, addDoc } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
         import { getAuth } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-auth.js";
         import { protegerPagina } from '/auth.js';
 
@@ -74,6 +74,7 @@
             const tratamentosRef = collection(db, 'tratamentos_ae');
             const atendimentosRef = collection(db, 'atendimentos_ae');
             const filaRef = collection(db, 'fila_atendimento_ae');
+            const logAuditoriaRef = collection(db, 'log_auditoria');
             
             const formularioContainer = document.getElementById('formulario-container');
             const params = new URLSearchParams(window.location.search);
@@ -83,6 +84,19 @@
                 carregarFormularioParaEdicao(atendimentoIdParaEditar);
             } else {
                 formularioContainer.innerHTML = `<p class="erro">Nenhum atendimento selecionado.</p>`;
+            }
+
+            async function registrarLog(acao, detalhes) {
+                try {
+                    await addDoc(logAuditoriaRef, {
+                        timestamp: serverTimestamp(),
+                        autor: { uid: user.uid, nome: user.displayName || 'Usuário do Sistema' },
+                        acao: acao,
+                        detalhes: detalhes
+                    });
+                } catch (error) {
+                    console.error("Erro ao registrar log:", error);
+                }
             }
 
             function manipularEstadoFormulario(travado) {
@@ -187,20 +201,13 @@
                     const batch = writeBatch(db);
                     const atendimentoDocRef = doc(db, 'atendimentos_ae', atendimento.id);
                     
-                    const logEdicao = {
-                        editadoPor_uid: user.uid,
-                        editadoPor_nome: user.displayName,
-                        editadoEm: new Date()
-                    };
-                    
                     const dadosParaAtualizar = {
                         entrevistador: document.getElementById('entrevistador-nome').value,
                         notas: document.getElementById('entrevista-notas').value,
                         horarioInicio: document.getElementById('retorno-inicio').value,
                         horarioFim: document.getElementById('retorno-fim').value,
                         evolucao: document.querySelector('input[name="evolucao"]:checked').value,
-                        detalhes_preenchidos: true,
-                        historico_edicoes: arrayUnion(logEdicao)
+                        detalhes_preenchidos: true
                     };
                     
                     if (atendimento.semana === 5) {
@@ -239,6 +246,14 @@
                     }
 
                     batch.update(atendimentoDocRef, dadosParaAtualizar);
+
+                    registrarLog('Edição de Entrevista (AE)', {
+                        assistidoId: atendimento.assistidoId,
+                        atendimentoId: atendimento.id,
+                        semana: atendimento.semana,
+                        assistidoNome: document.getElementById('assistido-nome').textContent
+                    });
+                    
                     await batch.commit();
                     alert('Detalhes do atendimento atualizados com sucesso!');
                     manipularEstadoFormulario(true);
@@ -368,6 +383,13 @@
                     }
                     
                     await batch.commit();
+
+                    registrarLog('Registro de Alta (AE)', {
+                        assistidoId: atendimento.assistidoId,
+                        atendimentoId: atendimento.id,
+                        assistidoNome: document.getElementById('assistido-nome').textContent
+                    });
+
                     alert('Alta registrada! O tratamento foi encerrado.');
                     manipularEstadoFormulario(true);
                 } else {

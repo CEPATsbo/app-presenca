@@ -38,7 +38,7 @@
     </style>
 </head>
 <body>
-    <nav class="nav-voltar"><a href="/dashboard-ae.html" class="btn-voltar">⬅ Voltar para o Painel AE</a></nav>
+    <nav class="nav-voltar"><a href="/dashboard.html" class="btn-voltar">⬅ Voltar para o Dashboard</a></nav>
     <div id="acesso-negado" class="container hidden"><h1>Acesso Negado</h1></div>
 
     <div id="main-content" class="container">
@@ -104,6 +104,7 @@
             const filaRef = collection(db, 'fila_atendimento_ae');
             const tratamentosRef = collection(db, 'tratamentos_ae');
             const atendimentosRef = collection(db, 'atendimentos_ae');
+            const logAuditoriaRef = collection(db, 'log_auditoria');
 
             let assistidoSelecionado = null;
             let tratamentoAtivoSelecionado = null;
@@ -124,6 +125,19 @@
                 btnMarcarFaltaRapido: document.getElementById('btn-marcar-falta-rapido'),
                 btnVerHistorico: document.getElementById('btn-ver-historico'),
             };
+
+            async function registrarLog(acao, detalhes) {
+                try {
+                    await addDoc(logAuditoriaRef, {
+                        timestamp: serverTimestamp(),
+                        autor: { uid: user.uid, nome: user.displayName || 'Usuário do Sistema' },
+                        acao: acao,
+                        detalhes: detalhes
+                    });
+                } catch (error) {
+                    console.error("Erro ao registrar log:", error);
+                }
+            }
             
             const capitalizarNome = (nome) => {
                 if (!nome) return '';
@@ -185,6 +199,12 @@
                 };
                 const docRef = await addDoc(assistidosRef, novoAssistidoData);
                 assistidoSelecionado = { id: docRef.id, ...novoAssistidoData };
+                
+                registrarLog('Criação de Novo Assistido (AE)', {
+                    assistidoId: docRef.id,
+                    assistidoNome: nomeCapitalizado
+                });
+                
                 return { id: docRef.id, nome: nomeCapitalizado };
             };
             
@@ -315,6 +335,14 @@
                     
                     await batch.commit();
                     alert(`Presença de ${assistidoSelecionado.nome} (Semana ${semanaAtual}) registrada com sucesso!`);
+                    
+                    registrarLog('Marcação de Presença (AE)', {
+                        assistidoId: assistidoSelecionado.id,
+                        assistidoNome: assistidoSelecionado.nome,
+                        tratamentoId: tratamentoAtivoSelecionado.id,
+                        semana: semanaAtual
+                    });
+
                 } catch (error) {
                     console.error("Erro ao marcar presença: ", error);
                     alert("Ocorreu uma falha ao marcar a presença.");
@@ -333,6 +361,13 @@
                     const batch = writeBatch(db);
                     batch.update(tratamentoDocRef, { faltas_acumuladas: increment(1) });
                     batch.set(doc(atendimentosRef), { assistidoId: assistidoSelecionado.id, tratamentoId: tratamentoAtivoSelecionado.id, tipo: 'falta', dataAtendimento: serverTimestamp() });
+                    
+                    registrarLog('Marcação de Falta (AE)', {
+                        assistidoId: assistidoSelecionado.id,
+                        assistidoNome: assistidoSelecionado.nome,
+                        tratamentoId: tratamentoAtivoSelecionado.id,
+                        totalFaltas: novoTotalFaltas
+                    });
                     
                     if (novoTotalFaltas >= 2) {
                         batch.update(tratamentoDocRef, { status: 'encerrado_por_falta' });
@@ -411,6 +446,13 @@
                     batch.set(doc(atendimentosRef), { assistidoId: assistidoId, tratamentoId: null, tipo: 'avulso', dataAtendimento: dataAtual, passeRecomendado: passeAvulso });
                     await batch.commit();
                     alert('Passe avulso registrado e enviado para a fila!');
+
+                    registrarLog('Registro de Passe Avulso (AE)', {
+                        assistidoId: assistidoId,
+                        assistidoNome: nomeAssistido,
+                        passeRecomendado: passeAvulso
+                    });
+
                     location.reload();
                 } catch(error) { 
                     console.error("Erro ao registrar passe avulso:", error); 
@@ -461,6 +503,13 @@
                     
                     await batch.commit();
                     alert('Assistência Espiritual iniciada com sucesso e enviada para a fila!');
+
+                    registrarLog('Início de Assistência Espiritual', {
+                        assistidoId: assistidoId,
+                        assistidoNome: nomeAssistido,
+                        passeInicial: passeInicial
+                    });
+
                     location.reload();
                 } catch(error) { 
                     console.error("Erro ao iniciar assistência:", error); 
