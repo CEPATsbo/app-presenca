@@ -186,7 +186,6 @@
                 
                 const q = query(voluntariosCollection, orderBy("nome"));
                 onSnapshot(q, async (snapshot) => {
-                    // Lógica para contar conselheiros (necessária para os botões)
                     const queryConselheiros = query(voluntariosCollection, where("role", "==", "conselheiro"));
                     const conselheirosSnapshot = await getDocs(queryConselheiros);
                     const totalConselheiros = conselheirosSnapshot.size;
@@ -209,7 +208,6 @@
                         const li = document.createElement('li');
                         li.className = `item-voluntario ${statusClasse}`;
                         
-                        // --- LÓGICA DOS BOTÕES DE PROMOÇÃO (RESTAURADA) ---
                         let botoesPromocao = '';
                          if (userRole === 'super-admin' && v.authUid) {
                             if (v.role !== 'conselheiro' && totalConselheiros < 5) {
@@ -232,13 +230,11 @@
                             }
                         }
                         
-                        // Lógica do botão de crachá
                         let botaoCracha = '';
                         if (v.codigoVoluntario && v.nomeParaCracha) {
                             botaoCracha = `<button data-codigo="${v.codigoVoluntario}" data-nome-cracha="${v.nomeParaCracha}" class="btn-gerar-cracha">Gerar Crachá</button>`;
                         }
 
-                        // Template final com todos os botões
                         li.innerHTML = `
                             <div class="voluntario-info">
                                 <strong>${v.nome}</strong>
@@ -300,8 +296,10 @@
                 });
 
                 ui.listaUl.addEventListener('click', async (e) => {
-                    if (e.target.classList.contains('btn-gerar-cracha')) {
-                        const target = e.target;
+                    const target = e.target;
+                    const authUid = target.dataset.authUid;
+
+                    if (target.classList.contains('btn-gerar-cracha')) {
                         target.disabled = true;
                         ui.loader.style.display = 'flex';
                         
@@ -315,15 +313,12 @@
                                 const imageBase64 = result.data.imageBase64;
                                 const imageUrl = `data:image/png;base64,${imageBase64}`;
                                 
-                                // SOLUÇÃO FINAL: Forçar o download do arquivo
                                 const link = document.createElement('a');
                                 link.href = imageUrl;
                                 
-                                // Define o nome do arquivo a ser baixado
                                 const nomeArquivo = `cracha_${nomeCracha.replace(/ /g, '_')}_${codigo}.png`;
                                 link.download = nomeArquivo;
 
-                                // Adiciona, clica e remove o link para iniciar o download
                                 document.body.appendChild(link);
                                 link.click();
                                 document.body.removeChild(link);
@@ -366,6 +361,43 @@
                             const novoStatus = target.dataset.status === 'ativo' ? 'inativo' : 'ativo';
                             await updateDoc(docRef, { statusVoluntario: novoStatus });
                             await registrarLog("ALTEROU_STATUS_VOLUNTARIO", { voluntarioId: docId, novoStatus: novoStatus });
+                        }
+                    }
+
+                    if (authUid) {
+                        const nome = target.dataset.nome;
+                        let functionName = '';
+                        let roleName = '';
+                        let logAction = '';
+
+                        if (target.classList.contains('btn-promover-conselheiro')) {
+                            functionName = 'promoverParaConselheiro'; roleName = 'Conselheiro'; logAction = 'PROMOVEU_CONSELHEIRO';
+                        } else if (target.classList.contains('btn-promover-produtor')) {
+                            functionName = 'promoverParaProdutorEvento'; roleName = 'Produtor de Evento'; logAction = 'PROMOVEU_PRODUTOR_EVENTO';
+                        } else if (target.classList.contains('btn-promover-irradiador')) {
+                            functionName = 'promoverParaIrradiador'; roleName = 'Irradiador(a)'; logAction = 'PROMOVEU_IRRADIADOR';
+                        } else if (target.classList.contains('btn-promover-bibliotecario')) {
+                            functionName = 'promoverParaBibliotecario'; roleName = 'Bibliotecário(a)'; logAction = 'PROMOVEU_BIBLIOTECARIO';
+                        } else if (target.classList.contains('btn-promover-recepcionista')) {
+                            functionName = 'promoverParaRecepcionista'; roleName = 'Recepcionista'; logAction = 'PROMOVEU_RECEPCIONISTA';
+                        } else if (target.classList.contains('btn-promover-entrevistador')) {
+                            functionName = 'promoverParaEntrevistador'; roleName = 'Entrevistador(a)'; logAction = 'PROMOVEU_ENTREVISTADOR';
+                        }
+
+                        if (functionName && confirm(`Tem certeza que deseja promover ${nome} a ${roleName}?`)) {
+                            target.disabled = true;
+                            target.textContent = "Promovendo...";
+                            try {
+                                const promoteFunction = httpsCallable(functions, functionName);
+                                const resultado = await promoteFunction({ uid: authUid });
+                                alert(resultado.data.message);
+                                await registrarLog(logAction, { alvo: { nome, uid: authUid } });
+                            } catch (error) {
+                                console.error(`Erro ao promover:`, error);
+                                alert(`Erro: ${error.message}`);
+                            } finally {
+                                target.disabled = false;
+                            }
                         }
                     }
                 });
