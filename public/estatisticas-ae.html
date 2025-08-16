@@ -119,8 +119,11 @@
                     filtroAno.appendChild(option);
                 });
 
-                filtroAno.addEventListener('change', () => renderizarDados(filtroAno.value));
-                renderizarDados(filtroAno.value);
+                // ===================================================================
+                // CORREÇÃO APLICADA AQUI
+                // ===================================================================
+                filtroAno.addEventListener('change', () => renderizarDados(filtroAno.value, todosTratamentos, todosAtendimentos));
+                renderizarDados(filtroAno.value, todosTratamentos, todosAtendimentos);
 
                 feedback.style.display = 'none';
                 dashboardContent.style.display = 'block';
@@ -131,14 +134,15 @@
                 feedback.style.color = 'red';
             }
 
-            function renderizarDados(anoSelecionado) {
+            // ===================================================================
+            // CORREÇÃO APLICADA AQUI (NA ASSINATURA DA FUNÇÃO)
+            // ===================================================================
+            function renderizarDados(anoSelecionado, todosTratamentos, todosAtendimentos) {
                 const ano = parseInt(anoSelecionado);
                 
-                // Filtra os dados pelo ano
                 const tratamentosDoAno = todosTratamentos.filter(t => t.dataInicio.toDate().getFullYear() === ano);
                 const atendimentosDoAno = todosAtendimentos.filter(a => a.dataAtendimento.toDate().getFullYear() === ano);
                 
-                // Calcula KPIs
                 const totalAtendimentos = atendimentosDoAno.filter(a => a.tipo !== 'falta').length;
                 const novosAssistidos = tratamentosDoAno.length;
                 const altas = tratamentosDoAno.filter(t => t.status === 'concluido_com_alta').length;
@@ -151,7 +155,6 @@
                 document.getElementById('kpi-desistencias').textContent = desistencias;
                 document.getElementById('kpi-eae').textContent = encaminhadosEAE;
 
-                // Prepara dados para o gráfico
                 const meses = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
                 const dadosGrafico = {
                     atendimentos: Array(12).fill(0),
@@ -170,7 +173,6 @@
                     dadosGrafico.novos[mes]++;
                 });
 
-                // Renderiza o gráfico
                 const ctx = document.getElementById('grafico-principal').getContext('2d');
                 if (graficoPrincipal) {
                     graficoPrincipal.destroy();
@@ -196,7 +198,10 @@
                     options: {
                         scales: {
                             y: {
-                                beginAtZero: true
+                                beginAtZero: true,
+                                ticks: {
+                                    stepSize: 10 // Garante que a escala não quebre em números decimais
+                                }
                             }
                         }
                     }
