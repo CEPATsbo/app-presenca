@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Estatísticas - Assistência Espiritual</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background-color: #f4f6f9; color: #333; margin: 0; padding: 20px; }
+        .nav-voltar { max-width: 1200px; margin: 0 auto 30px auto; text-align: left; }
+        .btn-voltar { background-color: #e9ecef; color: #495057; border: 1px solid #dee2e6; padding: 10px 20px; border-radius: 8px; font-weight: bold; font-size: 1em; text-decoration: none; transition: background-color 0.2s; }
+        .btn-voltar:hover { background-color: #dee2e6; }
+        .dashboard-container { max-width: 1200px; margin: auto; }
+        .header { text-align: center; border-bottom: 1px solid #ddd; padding-bottom: 20px; margin-bottom: 20px; }
+        .header h1 { color: #007bff; margin: 0; }
+        .filtros-container { display: flex; justify-content: center; align-items: flex-end; gap: 20px; margin-bottom: 30px; background-color: #fff; padding: 20px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
+        .filtro-item { display: flex; flex-direction: column; }
+        .filtro-item label { font-size: 0.9em; color: #555; margin-bottom: 5px; }
+        .filtro-item select { padding: 10px; border-radius: 6px; border: 1px solid #ccc; font-size: 1em; }
+        .grid-kpi { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px; margin-bottom: 30px; }
+        .kpi-card { background-color: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); text-align: center; }
+        .kpi-card .valor { font-size: 2.5em; font-weight: bold; color: #007bff; margin: 0; }
+        .kpi-card .titulo { font-size: 1em; color: #555; margin: 5px 0 0 0; }
+        .chart-card { background-color: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+        .chart-card h2 { margin-top: 0; }
+        #feedback { text-align: center; padding: 50px; font-size: 1.2em; color: #666; }
+    </style>
+</head>
+<body>
+    <nav class="nav-voltar">
+        <a href="/estatisticas.html" class="btn-voltar">⬅ Voltar para Estatísticas Gerais</a>
+    </nav>
+
+    <div id="acesso-negado" style="display: none;">
+        <div class="dashboard-container" style="text-align: center;"><h1>Acesso Negado</h1><p>Você não tem permissão para acessar esta página.</p></div>
+    </div>
+
+    <div id="main-content" class="dashboard-container" style="display: none;">
+        <div class="header"><h1>Estatísticas da Assistência Espiritual</h1></div>
+        
+        <div class="filtros-container">
+            <div class="filtro-item">
+                <label for="filtro-ano">Selecione o Ano:</label>
+                <select id="filtro-ano"></select>
+            </div>
+        </div>
+        
+        <div id="feedback">Carregando dados...</div>
+
+        <div id="dashboard-content" style="display: none;">
+            <div class="grid-kpi">
+                <div class="kpi-card"><p id="kpi-total" class="valor">0</p><p class="titulo">Atendimentos no Ano</p></div>
+                <div class="kpi-card"><p id="kpi-novos" class="valor">0</p><p class="titulo">Novos Assistidos</p></div>
+                <div class="kpi-card"><p id="kpi-altas" class="valor">0</p><p class="titulo">Altas Concedidas</p></div>
+                <div class="kpi-card"><p id="kpi-desistencias" class="valor">0</p><p class="titulo">Desistências (Faltas)</p></div>
+                <div class="kpi-card"><p id="kpi-eae" class="valor">0</p><p class="titulo">Encaminhados ao EAE</p></div>
+            </div>
+
+            <div class="chart-card">
+                <h2>Evolução Mensal</h2>
+                <canvas id="grafico-principal"></canvas>
+            </div>
+        </div>
+    </div>
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
+        import { getFirestore, collection, getDocs, query, where, Timestamp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
+        import { protegerPagina } from '/auth.js';
+
+        const firebaseConfig = {
+            apiKey: "AIzaSyBV7RPjk3cFTqL-aIpflJcUojKg1ZXMLuU",
+            authDomain: "voluntarios-ativos---cepat.firebaseapp.com",
+            projectId: "voluntarios-ativos---cepat",
+            storageBucket: "voluntarios-ativos---cepat.firebasestorage.app",
+            messagingSenderId: "66122858261",
+            appId: "1:66122858261:web:7fa21f1805463b5c08331c"
+        };
+        
+        initializeApp(firebaseConfig);
+
+        protegerPagina(['super-admin', 'diretor', 'entrevistador']).then(user => {
+            document.getElementById('main-content').style.display = 'block';
+            inicializar();
+        }).catch(error => {
+            document.getElementById('feedback').style.display = 'none';
+            document.getElementById('acesso-negado').style.display = 'block';
+        });
+
+        async function inicializar() {
+            const db = getFirestore();
+            const tratamentosRef = collection(db, "tratamentos_ae");
+            const atendimentosRef = collection(db, "atendimentos_ae");
+
+            const filtroAno = document.getElementById('filtro-ano');
+            const feedback = document.getElementById('feedback');
+            const dashboardContent = document.getElementById('dashboard-content');
+            let graficoPrincipal;
+            
+            try {
+                const snapshotTratamentos = await getDocs(tratamentosRef);
+                const todosTratamentos = snapshotTratamentos.docs.map(doc => doc.data());
+
+                const snapshotAtendimentos = await getDocs(atendimentosRef);
+                const todosAtendimentos = snapshotAtendimentos.docs.map(doc => doc.data());
+                
+                if (todosTratamentos.length === 0) {
+                    feedback.textContent = "Nenhum dado de tratamento encontrado para gerar estatísticas.";
+                    return;
+                }
+                
+                const anosDisponiveis = [...new Set(todosTratamentos.map(t => t.dataInicio.toDate().getFullYear()))];
+                anosDisponiveis.sort((a,b) => b - a);
+
+                anosDisponiveis.forEach(ano => {
+                    const option = document.createElement('option');
+                    option.value = ano;
+                    option.textContent = ano;
+                    filtroAno.appendChild(option);
+                });
+
+                filtroAno.addEventListener('change', () => renderizarDados(filtroAno.value));
+                renderizarDados(filtroAno.value);
+
+                feedback.style.display = 'none';
+                dashboardContent.style.display = 'block';
+
+            } catch (error) {
+                console.error("Erro ao carregar dados:", error);
+                feedback.textContent = "Ocorreu um erro ao carregar os dados. Tente novamente mais tarde.";
+                feedback.style.color = 'red';
+            }
+
+            function renderizarDados(anoSelecionado) {
+                const ano = parseInt(anoSelecionado);
+                
+                // Filtra os dados pelo ano
+                const tratamentosDoAno = todosTratamentos.filter(t => t.dataInicio.toDate().getFullYear() === ano);
+                const atendimentosDoAno = todosAtendimentos.filter(a => a.dataAtendimento.toDate().getFullYear() === ano);
+                
+                // Calcula KPIs
+                const totalAtendimentos = atendimentosDoAno.filter(a => a.tipo !== 'falta').length;
+                const novosAssistidos = tratamentosDoAno.length;
+                const altas = tratamentosDoAno.filter(t => t.status === 'concluido_com_alta').length;
+                const desistencias = tratamentosDoAno.filter(t => t.status === 'encerrado_por_falta').length;
+                const encaminhadosEAE = atendimentosDoAno.filter(a => a.encaminhamentos && a.encaminhamentos.includes('EAE')).length;
+
+                document.getElementById('kpi-total').textContent = totalAtendimentos;
+                document.getElementById('kpi-novos').textContent = novosAssistidos;
+                document.getElementById('kpi-altas').textContent = altas;
+                document.getElementById('kpi-desistencias').textContent = desistencias;
+                document.getElementById('kpi-eae').textContent = encaminhadosEAE;
+
+                // Prepara dados para o gráfico
+                const meses = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
+                const dadosGrafico = {
+                    atendimentos: Array(12).fill(0),
+                    novos: Array(12).fill(0)
+                };
+
+                atendimentosDoAno.forEach(a => {
+                    if(a.tipo !== 'falta') {
+                        const mes = a.dataAtendimento.toDate().getMonth();
+                        dadosGrafico.atendimentos[mes]++;
+                    }
+                });
+                
+                tratamentosDoAno.forEach(t => {
+                    const mes = t.dataInicio.toDate().getMonth();
+                    dadosGrafico.novos[mes]++;
+                });
+
+                // Renderiza o gráfico
+                const ctx = document.getElementById('grafico-principal').getContext('2d');
+                if (graficoPrincipal) {
+                    graficoPrincipal.destroy();
+                }
+                graficoPrincipal = new Chart(ctx, {
+                    type: 'line',
+                    data: {
+                        labels: meses,
+                        datasets: [{
+                            label: 'Total de Atendimentos',
+                            data: dadosGrafico.atendimentos,
+                            borderColor: 'rgb(54, 162, 235)',
+                            backgroundColor: 'rgba(54, 162, 235, 0.5)',
+                            tension: 0.1
+                        }, {
+                            label: 'Novos Assistidos',
+                            data: dadosGrafico.novos,
+                            borderColor: 'rgb(255, 99, 132)',
+                            backgroundColor: 'rgba(255, 99, 132, 0.5)',
+                            tension: 0.1
+                        }]
+                    },
+                    options: {
+                        scales: {
+                            y: {
+                                beginAtZero: true
+                            }
+                        }
+                    }
+                });
+            }
+        }
+    </script>
+</body>
+</html>
