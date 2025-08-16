@@ -1,45 +1,58 @@
-// Conteúdo CORRIGIDO e FINAL para o arquivo: public/auth.js
+// Conteúdo de DIAGNÓSTICO para o arquivo: public/auth.js
 
 import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-auth.js";
-// 1. ADICIONADO: Ferramentas do Firestore para buscar o nome do voluntário
 import { getFirestore, doc, getDoc } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
 
 export function protegerPagina(rolesPermitidas = []) {
+    console.log("[auth.js Debug] A função 'protegerPagina' foi chamada.");
     const auth = getAuth();
-    // 2. ADICIONADO: Referência ao Firestore
     const db = getFirestore();
 
     return new Promise((resolve, reject) => {
-        const unsubscribe = onAuthStateChanged(auth, async (user) => { // A função agora é async
-            unsubscribe(); // Evita múltiplas execuções
+        const unsubscribe = onAuthStateChanged(auth, async (user) => {
+            unsubscribe();
             if (user) {
+                console.log("[auth.js Debug] Usuário autenticado encontrado. UID:", user.uid);
                 try {
-                    // 3. ADICIONADO: Bloco para buscar o nome do voluntário no Firestore
+                    console.log("[auth.js Debug] Tentando buscar documento em 'voluntarios' com este UID.");
                     const voluntarioRef = doc(db, 'voluntarios', user.uid);
                     const voluntarioSnap = await getDoc(voluntarioRef);
+                    
                     if (voluntarioSnap.exists()) {
-                        // Se encontrarmos o documento, anexamos o nome ao objeto 'user'
-                        user.displayName = voluntarioSnap.data().nome;
+                        console.log("[auth.js Debug] Documento do voluntário ENCONTRADO!");
+                        const voluntarioData = voluntarioSnap.data();
+                        console.log("[auth.js Debug] Dados do documento:", voluntarioData);
+                        
+                        // Verificando se o campo 'nome' existe
+                        if (voluntarioData.nome) {
+                            console.log("[auth.js Debug] Campo 'nome' encontrado:", voluntarioData.nome);
+                            user.displayName = voluntarioData.nome;
+                        } else {
+                            console.error("[auth.js Debug] ERRO: O documento do voluntário existe, mas não contém um campo chamado 'nome'.");
+                        }
+                    } else {
+                        console.error("[auth.js Debug] ERRO: Nenhum documento encontrado na coleção 'voluntarios' com o ID:", user.uid);
                     }
 
-                    // O resto do código continua como antes, mas agora com 'user.displayName' preenchido
                     const idTokenResult = await user.getIdTokenResult(true);
-                    user.claims = idTokenResult.claims; // Anexa os cargos ao objeto do usuário
+                    user.claims = idTokenResult.claims;
                     const userRole = user.claims.role || 'voluntario';
+                    console.log(`[auth.js Debug] Cargo do usuário ('role'): ${userRole}`);
 
                     if (rolesPermitidas.length === 0 || rolesPermitidas.includes(userRole)) {
-                        // Acesso permitido! Resolve a promessa e envia o usuário ENRIQUECIDO com o nome.
+                        console.log("[auth.js Debug] Acesso PERMITIDO. Resolvendo a promessa.");
+                        console.log("[auth.js Debug] Objeto 'user' final, com displayName:", user.displayName);
                         resolve(user);
                     } else {
-                        // Logado, mas sem permissão de cargo. Rejeita a promessa.
+                        console.error("[auth.js Debug] Acesso NEGADO: cargo insuficiente.");
                         reject(new Error('Acesso negado: cargo insuficiente.'));
                     }
                 } catch (error) {
-                    console.error("Erro ao verificar permissões ou buscar dados do voluntário:", error);
+                    console.error("[auth.js Debug] Ocorreu um erro CRÍTICO durante a busca no Firestore ou verificação de permissões:", error);
                     reject(error);
                 }
             } else {
-                // Usuário não está logado. Redireciona e rejeita a promessa.
+                console.error("[auth.js Debug] Nenhum usuário autenticado. Redirecionando para o login.");
                 const redirectUrl = window.location.pathname;
                 window.location.href = `/login.html?redirectUrl=${encodeURIComponent(redirectUrl)}`;
                 reject(new Error('Usuário não autenticado.'));
