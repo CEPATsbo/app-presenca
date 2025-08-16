@@ -243,7 +243,6 @@
                     });
                     document.getElementById('main-content').style.display = 'grid';
                     
-                    // Inicia o monitoramento de notificações
                     if (document.getElementById('card-assistencia-espiritual')) {
                         monitorarFilaDeEntrevistas();
                     }
@@ -261,17 +260,22 @@
             });
         });
 
-        // --- SCRIPT DO CARD INTELIGENTE ---
+        // ===================================================================
+        // FUNÇÃO DO CARD INTELIGENTE CORRIGIDA
+        // ===================================================================
         function monitorarFilaDeEntrevistas() {
             const db = getFirestore();
             const filaRef = collection(db, 'fila_atendimento_ae');
             const hojeInicio = new Date();
             hojeInicio.setHours(0, 0, 0, 0);
 
+            // A nova query é mais específica para buscar exatamente o que precisamos
             const q = query(
                 filaRef,
-                where("status", "==", "chamado_entrevista"),
-                where("chegadaEm", ">=", Timestamp.fromDate(hojeInicio))
+                where("chegadaEm", ">=", Timestamp.fromDate(hojeInicio)),
+                where("semana_atual", "==", 5),
+                where("status", "==", "entrevista_realizada"),
+                where("decisao_registrada", "==", false)
             );
 
             onSnapshot(q, (snapshot) => {
@@ -288,12 +292,12 @@
 
             if (count > 0) {
                 card.classList.add('notificacao-ativa');
-                status.textContent = `Atenção: ${count} assistido(s) aguardando decisão do Colegiado.`;
+                status.textContent = `Atenção: ${count} decisão(ões) do Colegiado pendente(s).`;
                 badge.textContent = count;
                 badge.classList.remove('hidden');
             } else {
                 card.classList.remove('notificacao-ativa');
-                status.textContent = 'Gerenciar todo o fluxo de atendimento, da recepção ao arquivo.';
+                status.textContent = 'Gerenciar todo o fluxo de atendimento Fraterno.';
                 badge.classList.add('hidden');
             }
         }
