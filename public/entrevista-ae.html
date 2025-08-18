@@ -151,14 +151,14 @@
                 const assistidoDoc = await getDoc(doc(db, 'assistidos', atendimento.assistidoId));
                 const nomeAssistido = assistidoDoc.exists() ? assistidoDoc.data().nome : "Assistido não encontrado";
 
-                // Passamos o objeto 'atendimento' inteiro para a função criarFormulario
                 const formHtml = criarFormulario(atendimento);
                 formularioContainer.innerHTML = formHtml;
                 preencherFormulario(atendimento, nomeAssistido);
 
                 manipularEstadoFormulario(atendimento.detalhes_preenchidos === true);
                 
-                if (atendimento.semana === 5) {
+                // A lógica de segurança da 5ª semana foi movida para depois da criação do formulário
+                if (document.getElementById('colegiado-para')) { // Verifica se a seção colegiado existe
                     const colegiadoParaSelect = document.getElementById('colegiado-para');
                     const btnDarAlta = document.getElementById('btn-dar-alta');
 
@@ -225,7 +225,7 @@
                             });
                             
                             dadosParaAtualizar.tratamentoId = novoTratamentoRef.id;
-                            dadosParaAtualizar.semana = 1; // Reseta para semana 1
+                            dadosParaAtualizar.semana = 1;
                             dadosParaAtualizar.passePara = passePara;
                             dadosParaAtualizar.passeRecomendado = passePara;
                             
@@ -270,7 +270,14 @@
             function preencherFormulario(atendimento, nomeAssistido) {
                 document.getElementById('assistido-nome').textContent = nomeAssistido;
                 if (document.getElementById('entrevistador-nome')) {
-                    document.getElementById('entrevistador-nome').value = atendimento.entrevistador === 'Aguardando Detalhes' || atendimento.entrevistador === 'Passe Direto' ? user.displayName : (atendimento.entrevistador || '');
+                    // CORREÇÃO 2: A regra de preenchimento do entrevistador.
+                    // Se o campo já tem um valor salvo E não é o placeholder, mantém o valor salvo.
+                    // Se for um placeholder, preenche com o nome do usuário logado.
+                    if (atendimento.entrevistador && atendimento.entrevistador !== 'Aguardando Detalhes' && atendimento.entrevistador !== 'Passe Direto') {
+                        document.getElementById('entrevistador-nome').value = atendimento.entrevistador;
+                    } else {
+                        document.getElementById('entrevistador-nome').value = user.displayName || '';
+                    }
                 }
                 if (document.getElementById('entrevista-notas')) {
                     document.getElementById('entrevista-notas').value = atendimento.notas || '';
@@ -285,7 +292,7 @@
                     const evolucaoRadio = document.querySelector(`input[name="evolucao"][value="${atendimento.evolucao}"]`);
                     if (evolucaoRadio) evolucaoRadio.checked = true;
                 }
-                if (atendimento.semana === 5) {
+                if (atendimento.semana === 5 || atendimento.passePara) { // Mostra os dados do colegiado se for semana 5 OU virada de ciclo
                     if (document.getElementById('colegiado-para') && atendimento.passePara) {
                         document.getElementById('colegiado-para').value = atendimento.passePara;
                     }
@@ -313,13 +320,14 @@
             function criarFormulario(atendimento) {
                 const semanaNum = atendimento.semana;
                 const passeDe = atendimento.passeRecomendado;
-                const mostrarColegiado = atendimento.semana === 5;
+                
+                // ===================================================================
+                // CORREÇÃO 1: LÓGICA DO FORMULÁRIO
+                // ===================================================================
+                const isReavaliacao = (atendimento.semana === 5 || atendimento.passePara);
+                const isInicioRealDeTratamento = (atendimento.semana === 1 && !atendimento.passePara);
                 
                 const dataAtendimento = atendimento.dataAtendimento ? atendimento.dataAtendimento.toDate().toLocaleDateString('pt-br') : new Date().toLocaleDateString('pt-br');
-                
-                // Esta é a nova regra: O formulário completo só aparece se não for a primeira semana,
-                // OU se for a primeira semana de um tratamento que já teve um passe anterior (indicando uma virada de ciclo)
-                const isInicioRealDeTratamento = (atendimento.semana === 1 && !atendimento.passePara);
                 
                 let acompanhamentoHtml = '';
                 if (!isInicioRealDeTratamento) {
@@ -332,7 +340,7 @@
                 }
 
                 let colegiadoHtml = '';
-                if (mostrarColegiado) {
+                if (isReavaliacao) {
                     colegiadoHtml = `<hr><h5>Colegiado</h5>
                         <div class="form-grid"><div class="form-item"><label for="colegiado-de">DE:</label><select id="colegiado-de" class="readonly-input" disabled>${gerarOpcoesPasse(passeDe)}</select></div><div class="form-item"><label for="colegiado-para">PARA (Mudar o passe):</label><select id="colegiado-para">${gerarOpcoesPasse()}</select></div></div>
                         <div class="form-item" style="margin-top:15px;"><label>Encaminhamentos (Múltipla Escolha):</label><div class="multiselect">
@@ -345,14 +353,15 @@
                 }
 
                 const legenda = isInicioRealDeTratamento ? "Entrevista de Início de Tratamento" : `Detalhes do Atendimento da ${semanaNum}ª Semana`;
+                const tituloH1 = isReavaliacao ? `Reavaliação da ${atendimento.semana}ª Semana` : legenda;
 
-                return `<fieldset><legend>${legenda}</legend>
+                return `<fieldset><legend>${tituloH1}</legend>
                     <div class="form-grid" style="background-color: #f8f9fa; padding: 10px; border-radius: 6px;">
                         <div class="form-item"><label>Assistido:</label><h3 id="assistido-nome" style="text-align:left; margin:0;">Carregando...</h3></div>
                         <div class="form-item"><label>Data do Atendimento:</label><p id="data-atendimento" style="margin:0; font-weight:bold;">${dataAtendimento}</p></div>
                     </div><hr>
                     <div class="form-grid">
-                        <div class="form-item"><label for="entrevistador-nome">Entrevistador:</label><input type="text" id="entrevistador-nome" value="${user.displayName || ''}"></div>
+                        <div class="form-item"><label for="entrevistador-nome">Entrevistador:</label><input type="text" id="entrevistador-nome"></div>
                     </div>
                     <div class="form-item" style="margin-top: 15px;"><label for="entrevista-notas">Descrição da Entrevista:</label><textarea id="entrevista-notas" rows="6"></textarea></div>
                     ${acompanhamentoHtml}
