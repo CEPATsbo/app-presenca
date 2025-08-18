@@ -191,85 +191,81 @@
                 }
             }
             
+            // ===================================================================
+            // FUNÇÃO SALVAREDICAO REESCRITA E CORRIGIDA
+            // ===================================================================
             async function salvarEdicao(atendimento) {
                 const btn = document.getElementById('btn-salvar-entrevista');
-                const entrevistadorNome = document.getElementById('entrevistador-nome').value.trim();
-                const entrevistaNotas = document.getElementById('entrevista-notas').value.trim();
-                const isReavaliacao = (atendimento.semana === 5 || !!atendimento.passePara);
-                const passeParaSelecionado = document.getElementById('colegiado-para')?.value;
-                const colegiadoNotas = isReavaliacao ? document.getElementById('colegiado-notas').value.trim() : '';
-
-                let tentarMarcarComoConcluido = false;
-                let detalhesPreenchidosFinal = atendimento.detalhes_preenchidos || false;
-
-                if (isReavaliacao) {
-                    if (passeParaSelecionado) {
-                        // Está salvando a DECISÃO
-                    } else if (entrevistadorNome && entrevistaNotas && colegiadoNotas) {
-                        tentarMarcarComoConcluido = true;
-                    }
-                } else {
-                    if (entrevistadorNome && entrevistaNotas) {
-                        tentarMarcarComoConcluido = true;
-                    }
-                }
-                
-                if (tentarMarcarComoConcluido) {
-                    detalhesPreenchidosFinal = true;
-                } else if (!isReavaliacao && (!entrevistadorNome || !entrevistaNotas) && atendimento.detalhes_preenchidos) {
-                    alert('Atenção: Para salvar, os campos "Entrevistador" e "Descrição da Entrevista" não podem ficar em branco.');
-                    return;
-                }
-
                 btn.disabled = true;
                 btn.textContent = 'Salvando...';
 
                 try {
+                    const isReavaliacao = (atendimento.semana === 5 || !!atendimento.passePara);
+                    
+                    const dadosFormulario = {
+                        entrevistador: document.getElementById('entrevistador-nome').value.trim(),
+                        notas: document.getElementById('entrevista-notas').value.trim(),
+                        horarioInicio: document.getElementById('retorno-inicio')?.value || null,
+                        horarioFim: document.getElementById('retorno-fim')?.value || null,
+                        evolucao: document.querySelector('input[name="evolucao"]:checked')?.value || null,
+                        colegiadoNotas: document.getElementById('colegiado-notas')?.value.trim() || null,
+                        encaminhamentos: Array.from(document.querySelectorAll('.checkboxes input:checked')).map(cb => cb.value),
+                        passePara: document.getElementById('colegiado-para')?.value || null
+                    };
+
+                    let detalhesPreenchidos = atendimento.detalhes_preenchidos || false;
+                    
+                    // Valida se a ficha está completa para mudar o ícone para ✅
+                    if (isReavaliacao) {
+                        if (dadosFormulario.entrevistador && dadosFormulario.notas && dadosFormulario.colegiadoNotas) {
+                            detalhesPreenchidos = true;
+                        }
+                    } else {
+                        if (dadosFormulario.entrevistador && dadosFormulario.notas) {
+                            detalhesPreenchidos = true;
+                        }
+                    }
+                    
                     const batch = writeBatch(db);
                     const atendimentoDocRef = doc(db, 'atendimentos_ae', atendimento.id);
                     
                     const dadosParaAtualizar = {
-                        entrevistador: entrevistadorNome,
-                        notas: entrevistaNotas,
-                        horarioInicio: document.getElementById('retorno-inicio')?.value || null,
-                        horarioFim: document.getElementById('retorno-fim')?.value || null,
-                        evolucao: document.querySelector('input[name="evolucao"]:checked')?.value || null,
-                        detalhes_preenchidos: detalhesPreenchidosFinal
+                        ...dadosFormulario,
+                        detalhes_preenchidos: detalhesPreenchidos
                     };
-                    
-                    if (isReavaliacao) {
-                        const filaDocRef = await encontrarFilaDoDia(atendimento);
-                        if (passeParaSelecionado) { 
-                            const tratamentoDocRef = doc(db, 'tratamentos_ae', atendimento.tratamentoId);
-                            batch.update(tratamentoDocRef, { status: 'concluido_por_reavaliacao', dataFim: serverTimestamp() });
-                            
-                            const novoTratamentoRef = doc(tratamentosRef);
-                            batch.set(novoTratamentoRef, {
-                                assistidoId: atendimento.assistidoId, dataInicio: serverTimestamp(), status: 'ativo',
-                                faltas_acumuladas: 0, passe_ciclo_atual: passeParaSelecionado
-                            });
-                            
-                            dadosParaAtualizar.tratamentoId = novoTratamentoRef.id;
-                            dadosParaAtualizar.semana = 1;
-                            dadosParaAtualizar.passePara = passeParaSelecionado;
-                            dadosParaAtualizar.passeRecomendado = passeParaSelecionado;
-                            
-                            if (filaDocRef) {
-                                batch.update(filaDocRef, {
-                                    tratamentoId: novoTratamentoRef.id,
-                                    semana_atual: 1,
-                                    passeRecomendado: passeParaSelecionado,
-                                    decisao_registrada: true
-                                });
-                            }
-                        } else if(filaDocRef && !atendimento.decisao_registrada) {
-                             batch.update(filaDocRef, { decisao_registrada: true });
-                        }
-                        
-                        dadosParaAtualizar.colegiadoNotas = colegiadoNotas;
-                        dadosParaAtualizar.encaminhamentos = Array.from(document.querySelectorAll('.checkboxes input:checked')).map(cb => cb.value);
-                    }
 
+                    // Lógica de virada de ciclo (só executa se um novo passe for selecionado)
+                    if (isReavaliacao && dadosFormulario.passePara) {
+                        const tratamentoDocRef = doc(db, 'tratamentos_ae', atendimento.tratamentoId);
+                        batch.update(tratamentoDocRef, { status: 'concluido_por_reavaliacao', dataFim: serverTimestamp() });
+                        
+                        const novoTratamentoRef = doc(tratamentosRef);
+                        batch.set(novoTratamentoRef, {
+                            assistidoId: atendimento.assistidoId, dataInicio: serverTimestamp(), status: 'ativo',
+                            faltas_acumuladas: 0, passe_ciclo_atual: dadosFormulario.passePara
+                        });
+                        
+                        dadosParaAtualizar.tratamentoId = novoTratamentoRef.id;
+                        dadosParaAtualizar.semana = 1;
+                        dadosParaAtualizar.passeRecomendado = dadosFormulario.passePara;
+
+                        const filaDocRef = await encontrarFilaDoDia(atendimento);
+                        if (filaDocRef) {
+                            batch.update(filaDocRef, {
+                                tratamentoId: novoTratamentoRef.id,
+                                semana_atual: 1,
+                                passeRecomendado: dadosFormulario.passePara,
+                                decisao_registrada: true
+                            });
+                        }
+                    } else if (isReavaliacao) {
+                        // Se for reavaliação mas sem mudar de passe, apenas registra a decisão
+                        const filaDocRef = await encontrarFilaDoDia(atendimento);
+                        if (filaDocRef) {
+                            batch.update(filaDocRef, { decisao_registrada: true });
+                        }
+                    }
+                    
                     batch.update(atendimentoDocRef, dadosParaAtualizar);
 
                     registrarLog('Edição de Entrevista (AE)', {
