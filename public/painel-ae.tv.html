@@ -80,7 +80,7 @@
                 const chamadaHist = historico[index];
                 const nomeEl = item.querySelector('.nome');
                 const salaEl = item.querySelector('.sala');
-                if (chamadaHist) {
+                if (chamadaHist && nome !== 'Aguardando...') { // Condição adicionada para limpar histórico junto
                     nomeEl.textContent = chamadaHist.nome || '';
                     salaEl.textContent = chamadaHist.sala || '';
                 } else {
@@ -97,28 +97,22 @@
                 const agora = new Date();
                 const timestampChamada = dados.timestamp ? dados.timestamp.toDate() : null;
                 
-                // ===================================================================
-                // LÓGICA DE AUTOLIMPEZA ADICIONADA AQUI
-                // ===================================================================
                 let chamadaExpirou = false;
                 if (timestampChamada) {
-                    const diffHoras = (agora.getTime() - timestampChamada.getTime()) / 3600000; // Diferença em horas
-                    if (diffHoras > 6) { // Se a chamada tem mais de 6 horas, é considerada antiga
+                    const diffHoras = (agora.getTime() - timestampChamada.getTime()) / 3600000;
+                    if (diffHoras > 6) { 
                         chamadaExpirou = true;
                     }
                 }
 
                 if (chamadaExpirou || !timestampChamada) {
-                    // Se a chamada é antiga ou não existe, limpa o painel
                     atualizarPainel({ nome: 'Aguardando...', sala: '', historico: [] });
                 } else {
-                    // Se a chamada é recente, exibe normalmente
                     atualizarPainel(dados);
                 }
 
             } else {
-                // Se o documento não existe, mostra a tela de aguardando
-                atualizarPainel({});
+                atualizarPainel({ nome: 'Aguardando...', sala: '', historico: [] }); // Garante limpeza se o doc for deletado
             }
         });
         

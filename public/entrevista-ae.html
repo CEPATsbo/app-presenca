@@ -151,14 +151,14 @@
                 const assistidoDoc = await getDoc(doc(db, 'assistidos', atendimento.assistidoId));
                 const nomeAssistido = assistidoDoc.exists() ? assistidoDoc.data().nome : "Assistido não encontrado";
 
-                const isQuintaSemana = atendimento.semana === 5;
-                const formHtml = criarFormulario(atendimento.semana, atendimento.passeRecomendado, isQuintaSemana, atendimento);
+                // Passamos o objeto 'atendimento' inteiro para a função criarFormulario
+                const formHtml = criarFormulario(atendimento);
                 formularioContainer.innerHTML = formHtml;
                 preencherFormulario(atendimento, nomeAssistido);
 
                 manipularEstadoFormulario(atendimento.detalhes_preenchidos === true);
                 
-                if (isQuintaSemana) {
+                if (atendimento.semana === 5) {
                     const colegiadoParaSelect = document.getElementById('colegiado-para');
                     const btnDarAlta = document.getElementById('btn-dar-alta');
 
@@ -204,9 +204,9 @@
                     const dadosParaAtualizar = {
                         entrevistador: document.getElementById('entrevistador-nome').value,
                         notas: document.getElementById('entrevista-notas').value,
-                        horarioInicio: document.getElementById('retorno-inicio').value,
-                        horarioFim: document.getElementById('retorno-fim').value,
-                        evolucao: document.querySelector('input[name="evolucao"]:checked').value,
+                        horarioInicio: document.getElementById('retorno-inicio')?.value || null,
+                        horarioFim: document.getElementById('retorno-fim')?.value || null,
+                        evolucao: document.querySelector('input[name="evolucao"]:checked')?.value || null,
                         detalhes_preenchidos: true
                     };
                     
@@ -225,7 +225,7 @@
                             });
                             
                             dadosParaAtualizar.tratamentoId = novoTratamentoRef.id;
-                            dadosParaAtualizar.semana = 1;
+                            dadosParaAtualizar.semana = 1; // Reseta para semana 1
                             dadosParaAtualizar.passePara = passePara;
                             dadosParaAtualizar.passeRecomendado = passePara;
                             
@@ -310,8 +310,27 @@
                 return html;
             };
 
-            function criarFormulario(semanaNum, passeDe, mostrarColegiado, atendimento) {
+            function criarFormulario(atendimento) {
+                const semanaNum = atendimento.semana;
+                const passeDe = atendimento.passeRecomendado;
+                const mostrarColegiado = atendimento.semana === 5;
+                
                 const dataAtendimento = atendimento.dataAtendimento ? atendimento.dataAtendimento.toDate().toLocaleDateString('pt-br') : new Date().toLocaleDateString('pt-br');
+                
+                // Esta é a nova regra: O formulário completo só aparece se não for a primeira semana,
+                // OU se for a primeira semana de um tratamento que já teve um passe anterior (indicando uma virada de ciclo)
+                const isInicioRealDeTratamento = (atendimento.semana === 1 && !atendimento.passePara);
+                
+                let acompanhamentoHtml = '';
+                if (!isInicioRealDeTratamento) {
+                    acompanhamentoHtml = `<hr><h5>Detalhes do Passe</h5><div class="form-grid">
+                        <div class="form-item"><label for="retorno-passe">Passe:</label><input type="text" id="retorno-passe" class="readonly-input" value="${passeDe}" readonly></div>
+                        <div class="form-item"><label for="retorno-inicio">Início:</label><input type="time" id="retorno-inicio"></div>
+                        <div class="form-item"><label for="retorno-fim">Fim:</label><input type="time" id="retorno-fim"></div>
+                    </div>
+                    <div class="form-item" style="margin-top:15px;"><label>Evolução:</label><div style="display:flex; gap: 15px;"><label><input type="radio" name="evolucao" value="melhorou"> Melhorou</label><label><input type="radio" name="evolucao" value="piorou"> Piorou</label><label><input type="radio" name="evolucao" value="na_mesma" checked> Na Mesma</label></div></div>`;
+                }
+
                 let colegiadoHtml = '';
                 if (mostrarColegiado) {
                     colegiadoHtml = `<hr><h5>Colegiado</h5>
@@ -324,7 +343,10 @@
                         <div class="form-item" style="margin-top: 15px;"><label for="colegiado-notas">Orientações do Colegiado:</label><textarea id="colegiado-notas" rows="4"></textarea></div>
                         <button id="btn-dar-alta" type="button" class="btn btn-danger" style="width: 100%; margin-top: 10px;">Confirmar e Dar Alta</button>`;
                 }
-                return `<fieldset><legend>Detalhes do Atendimento da ${semanaNum}ª Semana</legend>
+
+                const legenda = isInicioRealDeTratamento ? "Entrevista de Início de Tratamento" : `Detalhes do Atendimento da ${semanaNum}ª Semana`;
+
+                return `<fieldset><legend>${legenda}</legend>
                     <div class="form-grid" style="background-color: #f8f9fa; padding: 10px; border-radius: 6px;">
                         <div class="form-item"><label>Assistido:</label><h3 id="assistido-nome" style="text-align:left; margin:0;">Carregando...</h3></div>
                         <div class="form-item"><label>Data do Atendimento:</label><p id="data-atendimento" style="margin:0; font-weight:bold;">${dataAtendimento}</p></div>
@@ -333,12 +355,7 @@
                         <div class="form-item"><label for="entrevistador-nome">Entrevistador:</label><input type="text" id="entrevistador-nome" value="${user.displayName || ''}"></div>
                     </div>
                     <div class="form-item" style="margin-top: 15px;"><label for="entrevista-notas">Descrição da Entrevista:</label><textarea id="entrevista-notas" rows="6"></textarea></div>
-                    <hr><h5>Detalhes do Passe</h5><div class="form-grid">
-                        <div class="form-item"><label for="retorno-passe">Passe:</label><input type="text" id="retorno-passe" class="readonly-input" value="${passeDe}" readonly></div>
-                        <div class="form-item"><label for="retorno-inicio">Início:</label><input type="time" id="retorno-inicio"></div>
-                        <div class="form-item"><label for="retorno-fim">Fim:</label><input type="time" id="retorno-fim"></div>
-                    </div>
-                    <div class="form-item" style="margin-top:15px;"><label>Evolução:</label><div style="display:flex; gap: 15px;"><label><input type="radio" name="evolucao" value="melhorou"> Melhorou</label><label><input type="radio" name="evolucao" value="piorou"> Piorou</label><label><input type="radio" name="evolucao" value="na_mesma" checked> Na Mesma</label></div></div>
+                    ${acompanhamentoHtml}
                     ${colegiadoHtml}
                     <button id="btn-salvar-entrevista" type="button" class="btn btn-primary" style="width: 100%; margin-top: 20px;">Salvar Alterações</button>
                 </fieldset>`;
@@ -362,7 +379,7 @@
             }
 
             async function darAlta(atendimento) {
-                 const btn = document.getElementById('btn-dar-alta');
+                const btn = document.getElementById('btn-dar-alta');
                 btn.disabled = true;
                 if (confirm(`Tem certeza que deseja dar alta para este assistido?`)) {
                     
