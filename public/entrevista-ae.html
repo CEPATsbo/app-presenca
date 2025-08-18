@@ -157,8 +157,7 @@
 
                 manipularEstadoFormulario(atendimento.detalhes_preenchidos === true);
                 
-                // A lógica de segurança da 5ª semana foi movida para depois da criação do formulário
-                if (document.getElementById('colegiado-para')) { // Verifica se a seção colegiado existe
+                if (document.getElementById('colegiado-para')) {
                     const colegiadoParaSelect = document.getElementById('colegiado-para');
                     const btnDarAlta = document.getElementById('btn-dar-alta');
 
@@ -194,6 +193,26 @@
             
             async function salvarEdicao(atendimento) {
                 const btn = document.getElementById('btn-salvar-entrevista');
+                
+                // --- NOVA VALIDAÇÃO ---
+                const entrevistadorNome = document.getElementById('entrevistador-nome').value.trim();
+                const entrevistaNotas = document.getElementById('entrevista-notas').value.trim();
+                const isReavaliacao = (atendimento.semana === 5 || atendimento.passePara);
+                
+                if (!entrevistadorNome || !entrevistaNotas) {
+                    alert('Para concluir o preenchimento, os campos "Entrevistador" e "Descrição da Entrevista" são obrigatórios.');
+                    return;
+                }
+
+                if (isReavaliacao) {
+                    const colegiadoNotas = document.getElementById('colegiado-notas').value.trim();
+                    if (!colegiadoNotas) {
+                        alert('Para concluir uma reavaliação da 5ª semana, o campo "Orientações do Colegiado" é obrigatório.');
+                        return;
+                    }
+                }
+                // --- FIM DA VALIDAÇÃO ---
+
                 btn.disabled = true;
                 btn.textContent = 'Salvando...';
 
@@ -202,15 +221,15 @@
                     const atendimentoDocRef = doc(db, 'atendimentos_ae', atendimento.id);
                     
                     const dadosParaAtualizar = {
-                        entrevistador: document.getElementById('entrevistador-nome').value,
-                        notas: document.getElementById('entrevista-notas').value,
+                        entrevistador: entrevistadorNome,
+                        notas: entrevistaNotas,
                         horarioInicio: document.getElementById('retorno-inicio')?.value || null,
                         horarioFim: document.getElementById('retorno-fim')?.value || null,
                         evolucao: document.querySelector('input[name="evolucao"]:checked')?.value || null,
-                        detalhes_preenchidos: true
+                        detalhes_preenchidos: true // Agora só é 'true' se passar na validação
                     };
                     
-                    if (atendimento.semana === 5) {
+                    if (isReavaliacao) {
                         const passePara = document.getElementById('colegiado-para')?.value;
                         const filaDocRef = await encontrarFilaDoDia(atendimento);
                         
@@ -241,7 +260,7 @@
                             batch.update(filaDocRef, { decisao_registrada: true });
                         }
                         
-                        dadosParaAtualizar.colegiadoNotas = document.getElementById('colegiado-notas').value;
+                        dadosParaAtualizar.colegiadoNotas = document.getElementById('colegiado-notas').value; // Já pegamos o valor na validação
                         dadosParaAtualizar.encaminhamentos = Array.from(document.querySelectorAll('.checkboxes input:checked')).map(cb => cb.value);
                     }
 
@@ -270,9 +289,6 @@
             function preencherFormulario(atendimento, nomeAssistido) {
                 document.getElementById('assistido-nome').textContent = nomeAssistido;
                 if (document.getElementById('entrevistador-nome')) {
-                    // CORREÇÃO 2: A regra de preenchimento do entrevistador.
-                    // Se o campo já tem um valor salvo E não é o placeholder, mantém o valor salvo.
-                    // Se for um placeholder, preenche com o nome do usuário logado.
                     if (atendimento.entrevistador && atendimento.entrevistador !== 'Aguardando Detalhes' && atendimento.entrevistador !== 'Passe Direto') {
                         document.getElementById('entrevistador-nome').value = atendimento.entrevistador;
                     } else {
@@ -288,12 +304,14 @@
                 if (document.getElementById('retorno-fim')) {
                     document.getElementById('retorno-fim').value = atendimento.horarioFim || '';
                 }
-                if (atendimento.evolucao) {
-                    const evolucaoRadio = document.querySelector(`input[name="evolucao"][value="${atendimento.evolucao}"]`);
-                    if (evolucaoRadio) evolucaoRadio.checked = true;
+                if (document.querySelector('input[name="evolucao"]')) { // Verifica se a seção existe
+                     if (atendimento.evolucao) {
+                        const evolucaoRadio = document.querySelector(`input[name="evolucao"][value="${atendimento.evolucao}"]`);
+                        if (evolucaoRadio) evolucaoRadio.checked = true;
+                    }
                 }
-                if (atendimento.semana === 5 || atendimento.passePara) { // Mostra os dados do colegiado se for semana 5 OU virada de ciclo
-                    if (document.getElementById('colegiado-para') && atendimento.passePara) {
+                if (document.getElementById('colegiado-para')) { // Verifica se a seção existe
+                    if (atendimento.passePara) {
                         document.getElementById('colegiado-para').value = atendimento.passePara;
                     }
                     if (document.getElementById('colegiado-notas')) {
@@ -321,10 +339,7 @@
                 const semanaNum = atendimento.semana;
                 const passeDe = atendimento.passeRecomendado;
                 
-                // ===================================================================
-                // CORREÇÃO 1: LÓGICA DO FORMULÁRIO
-                // ===================================================================
-                const isReavaliacao = (atendimento.semana === 5 || atendimento.passePara);
+                const isReavaliacao = (atendimento.semana === 5 || !!atendimento.passePara);
                 const isInicioRealDeTratamento = (atendimento.semana === 1 && !atendimento.passePara);
                 
                 const dataAtendimento = atendimento.dataAtendimento ? atendimento.dataAtendimento.toDate().toLocaleDateString('pt-br') : new Date().toLocaleDateString('pt-br');
@@ -353,9 +368,8 @@
                 }
 
                 const legenda = isInicioRealDeTratamento ? "Entrevista de Início de Tratamento" : `Detalhes do Atendimento da ${semanaNum}ª Semana`;
-                const tituloH1 = isReavaliacao ? `Reavaliação da ${atendimento.semana}ª Semana` : legenda;
 
-                return `<fieldset><legend>${tituloH1}</legend>
+                return `<fieldset><legend>${legenda}</legend>
                     <div class="form-grid" style="background-color: #f8f9fa; padding: 10px; border-radius: 6px;">
                         <div class="form-item"><label>Assistido:</label><h3 id="assistido-nome" style="text-align:left; margin:0;">Carregando...</h3></div>
                         <div class="form-item"><label>Data do Atendimento:</label><p id="data-atendimento" style="margin:0; font-weight:bold;">${dataAtendimento}</p></div>
