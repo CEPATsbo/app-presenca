@@ -193,32 +193,32 @@
             
             async function salvarEdicao(atendimento) {
                 const btn = document.getElementById('btn-salvar-entrevista');
-                
+                const entrevistadorNome = document.getElementById('entrevistador-nome').value.trim();
+                const entrevistaNotas = document.getElementById('entrevista-notas').value.trim();
                 const isReavaliacao = (atendimento.semana === 5 || !!atendimento.passePara);
                 const passeParaSelecionado = document.getElementById('colegiado-para')?.value;
+                const colegiadoNotas = isReavaliacao ? document.getElementById('colegiado-notas').value.trim() : '';
 
-                // Se for reavaliação E o usuário está apenas salvando a decisão (sem preencher o resto), não valida tudo
-                const isSalvandoApenasDecisao = isReavaliacao && !!passeParaSelecionado && !atendimento.detalhes_preenchidos;
+                let tentarMarcarComoConcluido = false;
+                let detalhesPreenchidosFinal = atendimento.detalhes_preenchidos || false;
 
-                let detalhesPreenchidos = atendimento.detalhes_preenchidos;
-
-                if (!isSalvandoApenasDecisao) {
-                    const entrevistadorNome = document.getElementById('entrevistador-nome').value.trim();
-                    const entrevistaNotas = document.getElementById('entrevista-notas').value.trim();
-                    
-                    if (!entrevistadorNome || !entrevistaNotas) {
-                        alert('Para marcar a entrevista como concluída, os campos "Entrevistador" e "Descrição da Entrevista" são obrigatórios.');
-                        return;
+                if (isReavaliacao) {
+                    if (passeParaSelecionado) {
+                        // Está salvando a DECISÃO
+                    } else if (entrevistadorNome && entrevistaNotas && colegiadoNotas) {
+                        tentarMarcarComoConcluido = true;
                     }
-
-                    if (isReavaliacao) {
-                        const colegiadoNotas = document.getElementById('colegiado-notas').value.trim();
-                        if (!colegiadoNotas) {
-                            alert('Para concluir uma reavaliação da 5ª semana, o campo "Orientações do Colegiado" é obrigatório.');
-                            return;
-                        }
+                } else {
+                    if (entrevistadorNome && entrevistaNotas) {
+                        tentarMarcarComoConcluido = true;
                     }
-                    detalhesPreenchidos = true; // Só marca como concluído se passar na validação
+                }
+                
+                if (tentarMarcarComoConcluido) {
+                    detalhesPreenchidosFinal = true;
+                } else if (!isReavaliacao && (!entrevistadorNome || !entrevistaNotas) && atendimento.detalhes_preenchidos) {
+                    alert('Atenção: Para salvar, os campos "Entrevistador" e "Descrição da Entrevista" não podem ficar em branco.');
+                    return;
                 }
 
                 btn.disabled = true;
@@ -229,17 +229,16 @@
                     const atendimentoDocRef = doc(db, 'atendimentos_ae', atendimento.id);
                     
                     const dadosParaAtualizar = {
-                        entrevistador: document.getElementById('entrevistador-nome').value.trim(),
-                        notas: document.getElementById('entrevista-notas').value.trim(),
+                        entrevistador: entrevistadorNome,
+                        notas: entrevistaNotas,
                         horarioInicio: document.getElementById('retorno-inicio')?.value || null,
                         horarioFim: document.getElementById('retorno-fim')?.value || null,
                         evolucao: document.querySelector('input[name="evolucao"]:checked')?.value || null,
-                        detalhes_preenchidos: detalhesPreenchidos
+                        detalhes_preenchidos: detalhesPreenchidosFinal
                     };
                     
                     if (isReavaliacao) {
                         const filaDocRef = await encontrarFilaDoDia(atendimento);
-                        
                         if (passeParaSelecionado) { 
                             const tratamentoDocRef = doc(db, 'tratamentos_ae', atendimento.tratamentoId);
                             batch.update(tratamentoDocRef, { status: 'concluido_por_reavaliacao', dataFim: serverTimestamp() });
@@ -267,7 +266,7 @@
                              batch.update(filaDocRef, { decisao_registrada: true });
                         }
                         
-                        dadosParaAtualizar.colegiadoNotas = document.getElementById('colegiado-notas').value.trim();
+                        dadosParaAtualizar.colegiadoNotas = colegiadoNotas;
                         dadosParaAtualizar.encaminhamentos = Array.from(document.querySelectorAll('.checkboxes input:checked')).map(cb => cb.value);
                     }
 
