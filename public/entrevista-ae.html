@@ -191,9 +191,6 @@
                 }
             }
             
-            // ===================================================================
-            // FUNÇÃO SALVAREDICAO REESCRITA E CORRIGIDA
-            // ===================================================================
             async function salvarEdicao(atendimento) {
                 const btn = document.getElementById('btn-salvar-entrevista');
                 btn.disabled = true;
@@ -201,7 +198,7 @@
 
                 try {
                     const isReavaliacao = (atendimento.semana === 5 || !!atendimento.passePara);
-                    
+
                     const dadosFormulario = {
                         entrevistador: document.getElementById('entrevistador-nome').value.trim(),
                         notas: document.getElementById('entrevista-notas').value.trim(),
@@ -213,60 +210,61 @@
                         passePara: document.getElementById('colegiado-para')?.value || null
                     };
 
-                    let detalhesPreenchidos = atendimento.detalhes_preenchidos || false;
-                    
-                    // Valida se a ficha está completa para mudar o ícone para ✅
+                    let marcarComoConcluido = false;
                     if (isReavaliacao) {
                         if (dadosFormulario.entrevistador && dadosFormulario.notas && dadosFormulario.colegiadoNotas) {
-                            detalhesPreenchidos = true;
+                            marcarComoConcluido = true;
                         }
                     } else {
                         if (dadosFormulario.entrevistador && dadosFormulario.notas) {
-                            detalhesPreenchidos = true;
+                            marcarComoConcluido = true;
                         }
                     }
-                    
+
+                    const dadosParaAtualizar = { ...dadosFormulario, detalhes_preenchidos: marcarComoConcluido };
                     const batch = writeBatch(db);
                     const atendimentoDocRef = doc(db, 'atendimentos_ae', atendimento.id);
-                    
-                    const dadosParaAtualizar = {
-                        ...dadosFormulario,
-                        detalhes_preenchidos: detalhesPreenchidos
-                    };
 
-                    // Lógica de virada de ciclo (só executa se um novo passe for selecionado)
                     if (isReavaliacao && dadosFormulario.passePara) {
                         const tratamentoDocRef = doc(db, 'tratamentos_ae', atendimento.tratamentoId);
-                        batch.update(tratamentoDocRef, { status: 'concluido_por_reavaliacao', dataFim: serverTimestamp() });
+                        const tratamentoDoc = await getDoc(tratamentoDocRef);
                         
-                        const novoTratamentoRef = doc(tratamentosRef);
-                        batch.set(novoTratamentoRef, {
-                            assistidoId: atendimento.assistidoId, dataInicio: serverTimestamp(), status: 'ativo',
-                            faltas_acumuladas: 0, passe_ciclo_atual: dadosFormulario.passePara
-                        });
-                        
-                        dadosParaAtualizar.tratamentoId = novoTratamentoRef.id;
-                        dadosParaAtualizar.semana = 1;
-                        dadosParaAtualizar.passeRecomendado = dadosFormulario.passePara;
-
-                        const filaDocRef = await encontrarFilaDoDia(atendimento);
-                        if (filaDocRef) {
-                            batch.update(filaDocRef, {
-                                tratamentoId: novoTratamentoRef.id,
-                                semana_atual: 1,
-                                passeRecomendado: dadosFormulario.passePara,
-                                decisao_registrada: true
+                        if (tratamentoDoc.exists() && tratamentoDoc.data().status === 'ativo') {
+                            batch.update(tratamentoDocRef, { status: 'concluido_por_reavaliacao', dataFim: serverTimestamp() });
+                            
+                            const novoTratamentoRef = doc(tratamentosRef);
+                            batch.set(novoTratamentoRef, {
+                                assistidoId: atendimento.assistidoId, dataInicio: serverTimestamp(), status: 'ativo',
+                                faltas_acumuladas: 0, passe_ciclo_atual: dadosFormulario.passePara
                             });
+                            
+                            dadosParaAtualizar.tratamentoId = novoTratamentoRef.id;
+                            dadosParaAtualizar.semana = 1;
+                            dadosParaAtualizar.passeRecomendado = dadosFormulario.passePara;
+
+                            const filaDocRef = await encontrarFilaDoDia(atendimento);
+                            if (filaDocRef) {
+                                batch.update(filaDocRef, {
+                                    tratamentoId: novoTratamentoRef.id,
+                                    semana_atual: 1,
+                                    passeRecomendado: dadosFormulario.passePara,
+                                    decisao_registrada: true
+                                });
+                            }
                         }
                     } else if (isReavaliacao) {
-                        // Se for reavaliação mas sem mudar de passe, apenas registra a decisão
                         const filaDocRef = await encontrarFilaDoDia(atendimento);
                         if (filaDocRef) {
-                            batch.update(filaDocRef, { decisao_registrada: true });
+                            const filaDoc = await getDoc(filaDocRef);
+                            if (filaDoc.exists() && !filaDoc.data().decisao_registrada) {
+                                batch.update(filaDocRef, { decisao_registrada: true });
+                            }
                         }
                     }
                     
                     batch.update(atendimentoDocRef, dadosParaAtualizar);
+                    
+                    await batch.commit();
 
                     registrarLog('Edição de Entrevista (AE)', {
                         assistidoId: atendimento.assistidoId,
@@ -275,7 +273,6 @@
                         assistidoNome: document.getElementById('assistido-nome').textContent
                     });
                     
-                    await batch.commit();
                     alert('Detalhes do atendimento atualizados com sucesso!');
                     manipularEstadoFormulario(true);
 
