@@ -31,6 +31,7 @@
         .checkboxes.visible { display: block; }
         .erro { color: #dc3545; font-weight: bold; text-align: center; }
         .hidden { display: none; }
+        .botoes-colegiado { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 10px; }
     </style>
 </head>
 <body>
@@ -102,7 +103,6 @@
             function manipularEstadoFormulario(travado) {
                 const form = formularioContainer.querySelector('fieldset');
                 if (!form) return;
-
                 form.querySelectorAll('input, select, textarea').forEach(el => {
                     if (!el.classList.contains('readonly-input')) {
                         el.disabled = travado;
@@ -112,15 +112,11 @@
                 if (selectBox) {
                     travado ? selectBox.setAttribute('disabled', 'disabled') : selectBox.removeAttribute('disabled');
                 }
-
                 const btnSalvar = document.getElementById('btn-salvar-entrevista');
                 if(btnSalvar) btnSalvar.style.display = travado ? 'none' : 'block';
-                const btnAlta = document.getElementById('btn-dar-alta');
-                if(btnAlta) btnAlta.style.display = travado ? 'none' : 'block';
-
+                
                 const btnHabilitarExistente = document.getElementById('btn-habilitar-edicao');
                 if(btnHabilitarExistente) btnHabilitarExistente.remove();
-
                 if (travado) {
                     const btnHabilitar = document.createElement('button');
                     btnHabilitar.id = 'btn-habilitar-edicao';
@@ -141,134 +137,137 @@
             async function carregarFormularioParaEdicao(atendimentoId) {
                 const atendimentoDocRef = doc(db, 'atendimentos_ae', atendimentoId);
                 const atendimentoDoc = await getDoc(atendimentoDocRef);
-
                 if (!atendimentoDoc.exists()) {
                     formularioContainer.innerHTML = `<p class="erro">Atendimento com ID ${atendimentoId} não encontrado.</p>`;
                     return;
                 }
                 const atendimento = { id: atendimentoDoc.id, ...atendimentoDoc.data() };
-                
                 const assistidoDoc = await getDoc(doc(db, 'assistidos', atendimento.assistidoId));
                 const nomeAssistido = assistidoDoc.exists() ? assistidoDoc.data().nome : "Assistido não encontrado";
-
                 const formHtml = criarFormulario(atendimento);
                 formularioContainer.innerHTML = formHtml;
                 preencherFormulario(atendimento, nomeAssistido);
-
                 manipularEstadoFormulario(atendimento.detalhes_preenchidos === true);
                 
-                if (document.getElementById('colegiado-para')) {
-                    const colegiadoParaSelect = document.getElementById('colegiado-para');
-                    const btnDarAlta = document.getElementById('btn-dar-alta');
+                // Adiciona os event listeners para os botões que podem existir no formulário
+                document.getElementById('btn-salvar-decisao')?.addEventListener('click', () => salvarDecisaoColegiado(atendimento));
+                document.getElementById('btn-salvar-entrevista')?.addEventListener('click', () => salvarEntrevistaCompleta(atendimento));
+                document.getElementById('btn-dar-alta')?.addEventListener('click', () => darAlta(atendimento));
+            }
 
-                    if (colegiadoParaSelect && btnDarAlta) {
-                        colegiadoParaSelect.addEventListener('change', () => {
-                            btnDarAlta.disabled = !!colegiadoParaSelect.value;
-                        });
+            async function salvarDecisaoColegiado(atendimento) {
+                const btn = document.getElementById('btn-salvar-decisao');
+                btn.disabled = true;
+                btn.textContent = 'Salvando Decisão...';
 
-                        btnDarAlta.addEventListener('click', () => {
-                            colegiadoParaSelect.disabled = true;
+                const passePara = document.getElementById('colegiado-para')?.value;
+                if (!passePara) {
+                    alert('Por favor, selecione um passe no campo "PARA:" para iniciar um novo ciclo.');
+                    btn.disabled = false;
+                    btn.textContent = 'Salvar Decisão e Iniciar Novo Ciclo';
+                    return;
+                }
+
+                try {
+                    const batch = writeBatch(db);
+                    const tratamentoDocRef = doc(db, 'tratamentos_ae', atendimento.tratamentoId);
+                    
+                    batch.update(tratamentoDocRef, { status: 'concluido_por_reavaliacao', dataFim: serverTimestamp() });
+                    
+                    const novoTratamentoRef = doc(tratamentosRef);
+                    batch.set(novoTratamentoRef, {
+                        assistidoId: atendimento.assistidoId, dataInicio: serverTimestamp(), status: 'ativo',
+                        faltas_acumuladas: 0, passe_ciclo_atual: passePara
+                    });
+                    
+                    const atendimentoDocRef = doc(db, 'atendimentos_ae', atendimento.id);
+                    batch.update(atendimentoDocRef, {
+                        tratamentoId: novoTratamentoRef.id,
+                        semana: 1,
+                        passePara: passePara,
+                        passeRecomendado: passePara,
+                        // Não alteramos 'detalhes_preenchidos' aqui
+                    });
+
+                    const filaDocRef = await encontrarFilaDoDia(atendimento);
+                    if (filaDocRef) {
+                        batch.update(filaDocRef, {
+                            tratamentoId: novoTratamentoRef.id,
+                            semana_atual: 1,
+                            passeRecomendado: passePara,
+                            decisao_registrada: true
                         });
                     }
-                }
+                    
+                    await batch.commit();
 
-                document.getElementById('btn-salvar-entrevista')?.addEventListener('click', () => salvarEdicao(atendimento));
-                document.getElementById('btn-dar-alta')?.addEventListener('click', () => darAlta(atendimento));
-                
-                const selectBox = document.querySelector('.select-box');
-                const checkboxes = document.querySelector('.checkboxes');
-                if (selectBox && checkboxes) {
-                    selectBox.addEventListener('click', () => { if (!selectBox.hasAttribute('disabled')) checkboxes.classList.toggle('visible'); });
+                    registrarLog('Decisão de Reavaliação (AE)', {
+                        assistidoId: atendimento.assistidoId,
+                        assistidoNome: document.getElementById('assistido-nome').textContent,
+                        dePasse: atendimento.passeRecomendado,
+                        paraPasse: passePara
+                    });
+                    
+                    alert('Decisão salva com sucesso! O novo ciclo foi iniciado e o card no encaminhamento foi liberado.');
+                    location.reload();
+
+                } catch (error) {
+                    console.error("Erro ao salvar decisão:", error);
+                    alert("Falha ao salvar a decisão. Tente novamente.");
+                    btn.disabled = false;
+                    btn.textContent = 'Salvar Decisão e Iniciar Novo Ciclo';
                 }
             }
-            
-            async function salvarEdicao(atendimento) {
+
+            async function salvarEntrevistaCompleta(atendimento) {
                 const btn = document.getElementById('btn-salvar-entrevista');
+                
+                const entrevistadorNome = document.getElementById('entrevistador-nome').value.trim();
+                const entrevistaNotas = document.getElementById('entrevista-notas').value.trim();
+                const isReavaliacao = (atendimento.semana === 5 || !!atendimento.passePara);
+
+                if (!entrevistadorNome || !entrevistaNotas) {
+                    alert('Para marcar a entrevista como concluída, os campos "Entrevistador" e "Descrição da Entrevista" são obrigatórios.');
+                    return;
+                }
+                if (isReavaliacao) {
+                    const colegiadoNotas = document.getElementById('colegiado-notas')?.value.trim();
+                    if (!colegiadoNotas) {
+                        alert('Para concluir uma reavaliação, o campo "Orientações do Colegiado" também é obrigatório.');
+                        return;
+                    }
+                }
+                
                 btn.disabled = true;
                 btn.textContent = 'Salvando...';
 
                 try {
-                    const isReavaliacao = (atendimento.semana === 5 || !!atendimento.passePara);
-                    
-                    const dadosFormulario = {
-                        entrevistador: document.getElementById('entrevistador-nome').value.trim(),
-                        notas: document.getElementById('entrevista-notas').value.trim(),
+                    const atendimentoDocRef = doc(db, 'atendimentos_ae', atendimento.id);
+                    const dadosParaAtualizar = {
+                        entrevistador: entrevistadorNome,
+                        notas: entrevistaNotas,
                         horarioInicio: document.getElementById('retorno-inicio')?.value || null,
                         horarioFim: document.getElementById('retorno-fim')?.value || null,
                         evolucao: document.querySelector('input[name="evolucao"]:checked')?.value || null,
                         colegiadoNotas: document.getElementById('colegiado-notas')?.value.trim() || null,
                         encaminhamentos: Array.from(document.querySelectorAll('.checkboxes input:checked')).map(cb => cb.value),
-                        passePara: document.getElementById('colegiado-para')?.value || null
+                        detalhes_preenchidos: true // Agora marcamos como concluído
                     };
 
-                    let marcarComoConcluido = false;
-                    if (isReavaliacao) {
-                        if (dadosFormulario.entrevistador && dadosFormulario.notas && dadosFormulario.colegiadoNotas) {
-                            marcarComoConcluido = true;
-                        }
-                    } else {
-                        if (dadosFormulario.entrevistador && dadosFormulario.notas) {
-                            marcarComoConcluido = true;
-                        }
-                    }
-                    
-                    const dadosParaAtualizar = { ...dadosFormulario, detalhes_preenchidos: marcarComoConcluido };
-                    const batch = writeBatch(db);
-                    const atendimentoDocRef = doc(db, 'atendimentos_ae', atendimento.id);
+                    await updateDoc(atendimentoDocRef, dadosParaAtualizar);
 
-                    if (isReavaliacao && dadosFormulario.passePara) {
-                        const tratamentoDocRef = doc(db, 'tratamentos_ae', atendimento.tratamentoId);
-                        const tratamentoDoc = await getDoc(tratamentoDocRef);
-                        
-                        if (tratamentoDoc.exists() && tratamentoDoc.data().status === 'ativo') {
-                            batch.update(tratamentoDocRef, { status: 'concluido_por_reavaliacao', dataFim: serverTimestamp() });
-                            
-                            const novoTratamentoRef = doc(tratamentosRef);
-                            batch.set(novoTratamentoRef, {
-                                assistidoId: atendimento.assistidoId, dataInicio: serverTimestamp(), status: 'ativo',
-                                faltas_acumuladas: 0, passe_ciclo_atual: dadosFormulario.passePara
-                            });
-                            
-                            dadosParaAtualizar.tratamentoId = novoTratamentoRef.id;
-                            dadosParaAtualizar.semana = 1;
-                            dadosParaAtualizar.passeRecomendado = dadosFormulario.passePara;
-
-                            const filaDocRef = await encontrarFilaDoDia(atendimento);
-                            if (filaDocRef) {
-                                batch.update(filaDocRef, {
-                                    tratamentoId: novoTratamentoRef.id,
-                                    semana_atual: 1,
-                                    passeRecomendado: dadosFormulario.passePara,
-                                    decisao_registrada: true
-                                });
-                            }
-                        }
-                    } else if (isReavaliacao) {
-                        const filaDocRef = await encontrarFilaDoDia(atendimento);
-                        if (filaDocRef) {
-                            const filaDoc = await getDoc(filaDocRef);
-                            if (filaDoc.exists() && !filaDoc.data().decisao_registrada) {
-                                batch.update(filaDocRef, { decisao_registrada: true });
-                            }
-                        }
-                    }
-                    
-                    batch.update(atendimentoDocRef, dadosParaAtualizar);
-                    
-                    await batch.commit();
-
-                    registrarLog('Edição de Entrevista (AE)', {
+                    registrarLog('Preenchimento de Entrevista (AE)', {
                         assistidoId: atendimento.assistidoId,
                         atendimentoId: atendimento.id,
                         semana: atendimento.semana,
                         assistidoNome: document.getElementById('assistido-nome').textContent
                     });
                     
-                    alert('Detalhes do atendimento atualizados com sucesso!');
+                    alert('Entrevista salva com sucesso!');
                     manipularEstadoFormulario(true);
 
                 } catch (error) {
-                    console.error("Erro ao salvar edição:", error);
+                    console.error("Erro ao salvar entrevista completa:", error);
                     alert("Falha ao salvar. Tente novamente.");
                 } finally {
                     btn.disabled = false;
@@ -328,10 +327,8 @@
             function criarFormulario(atendimento) {
                 const semanaNum = atendimento.semana;
                 const passeDe = atendimento.passeRecomendado;
-                
                 const isReavaliacao = (atendimento.semana === 5 || !!atendimento.passePara);
                 const isInicioRealDeTratamento = (atendimento.semana === 1 && !atendimento.passePara);
-                
                 const dataAtendimento = atendimento.dataAtendimento ? atendimento.dataAtendimento.toDate().toLocaleDateString('pt-br') : new Date().toLocaleDateString('pt-br');
                 
                 let acompanhamentoHtml = '';
@@ -345,6 +342,8 @@
                 }
 
                 let colegiadoHtml = '';
+                let botoesHtml = '';
+
                 if (isReavaliacao) {
                     colegiadoHtml = `<hr><h5>Colegiado</h5>
                         <div class="form-grid"><div class="form-item"><label for="colegiado-de">DE:</label><select id="colegiado-de" class="readonly-input" disabled>${gerarOpcoesPasse(passeDe)}</select></div><div class="form-item"><label for="colegiado-para">PARA (Mudar o passe):</label><select id="colegiado-para">${gerarOpcoesPasse()}</select></div></div>
@@ -354,7 +353,14 @@
                                 <label><input type="checkbox" value="ENL"/> ENL</label><label><input type="checkbox" value="LEITURAS"/> Leituras</label><label><input type="checkbox" value="EAE"/> EAE</label><label><input type="checkbox" value="VOLUNTARIADO"/> Voluntariado</label><label><input type="checkbox" value="MÉDICO"/> Médico</label><label><input type="checkbox" value="ALIMENTO"/> Alimento</label><label><input type="checkbox" value="NATUREZA"/> Natureza</label><label><input type="checkbox" value="MOCIDADE"/> Mocidade</label><label><input type="checkbox" value="EVANGELIZAÇÃO"/> Evangelização</label>
                             </div></div></div>
                         <div class="form-item" style="margin-top: 15px;"><label for="colegiado-notas">Orientações do Colegiado:</label><textarea id="colegiado-notas" rows="4"></textarea></div>
-                        <button id="btn-dar-alta" type="button" class="btn btn-danger" style="width: 100%; margin-top: 10px;">Confirmar e Dar Alta</button>`;
+                        <div class="botoes-colegiado">
+                           <button id="btn-salvar-decisao" type="button" class="btn btn-success">Salvar Decisão e Iniciar Novo Ciclo</button>
+                           <button id="btn-dar-alta" type="button" class="btn btn-danger">Confirmar e Dar Alta</button>
+                        </div>`;
+                    // Na 5a semana, o botão de salvar geral não aparece
+                    botoesHtml = `<button id="btn-salvar-entrevista" type="button" class="btn btn-primary" style="width: 100%; margin-top: 20px; display:none;">Salvar Alterações Finais</button>`;
+                } else {
+                    botoesHtml = `<button id="btn-salvar-entrevista" type="button" class="btn btn-primary" style="width: 100%; margin-top: 20px;">Salvar Alterações</button>`;
                 }
 
                 const legenda = isInicioRealDeTratamento ? "Entrevista de Início de Tratamento" : `Detalhes do Atendimento da ${semanaNum}ª Semana`;
@@ -370,24 +376,22 @@
                     <div class="form-item" style="margin-top: 15px;"><label for="entrevista-notas">Descrição da Entrevista:</label><textarea id="entrevista-notas" rows="6"></textarea></div>
                     ${acompanhamentoHtml}
                     ${colegiadoHtml}
-                    <button id="btn-salvar-entrevista" type="button" class="btn btn-primary" style="width: 100%; margin-top: 20px;">Salvar Alterações</button>
+                    ${botoesHtml}
                 </fieldset>`;
             }
 
             async function encontrarFilaDoDia(atendimento) {
                 const q = query(filaRef, where("atendimentoId", "==", atendimento.id), limit(1));
                 const filaSnapshot = await getDocs(q);
-                if (!filaSnapshot.empty) {
-                    return filaSnapshot.docs[0].ref;
-                }
+                if (!filaSnapshot.empty) return filaSnapshot.docs[0].ref;
+
                 const dataDoAtendimento = atendimento.dataAtendimento.toDate();
                 const inicioDoDia = new Date(dataDoAtendimento.setHours(0,0,0,0));
                 const fimDoDia = new Date(dataDoAtendimento.setHours(23,59,59,999));
                 const qFallback = query(filaRef, where("assistidoId", "==", atendimento.assistidoId), where("chegadaEm", ">=", Timestamp.fromDate(inicioDoDia)), where("chegadaEm", "<=", Timestamp.fromDate(fimDoDia)), limit(1));
                 const filaSnapshotFallback = await getDocs(qFallback);
-                if (!filaSnapshotFallback.empty) {
-                    return filaSnapshotFallback.docs[0].ref;
-                }
+                if (!filaSnapshotFallback.empty) return filaSnapshotFallback.docs[0].ref;
+                
                 return null;
             }
 
