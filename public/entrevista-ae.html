@@ -179,15 +179,6 @@
                 const checkboxes = document.querySelector('.checkboxes');
                 if (selectBox && checkboxes) {
                     selectBox.addEventListener('click', () => { if (!selectBox.hasAttribute('disabled')) checkboxes.classList.toggle('visible'); });
-                    checkboxes.addEventListener('change', () => {
-                        const selecionados = Array.from(checkboxes.querySelectorAll('input:checked')).map(cb => cb.value);
-                        selectBox.textContent = selecionados.length > 0 ? selecionados.join(', ') : 'Selecione...';
-                    });
-                    document.addEventListener('click', (e) => {
-                        if (selectBox && !selectBox.contains(e.target) && !checkboxes.contains(e.target)) {
-                            checkboxes.classList.remove('visible');
-                        }
-                    });
                 }
             }
             
@@ -198,7 +189,7 @@
 
                 try {
                     const isReavaliacao = (atendimento.semana === 5 || !!atendimento.passePara);
-
+                    
                     const dadosFormulario = {
                         entrevistador: document.getElementById('entrevistador-nome').value.trim(),
                         notas: document.getElementById('entrevista-notas').value.trim(),
@@ -220,7 +211,7 @@
                             marcarComoConcluido = true;
                         }
                     }
-
+                    
                     const dadosParaAtualizar = { ...dadosFormulario, detalhes_preenchidos: marcarComoConcluido };
                     const batch = writeBatch(db);
                     const atendimentoDocRef = doc(db, 'atendimentos_ae', atendimento.id);
