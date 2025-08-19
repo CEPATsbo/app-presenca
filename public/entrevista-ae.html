@@ -27,7 +27,14 @@
         .multiselect { position: relative; }
         .select-box { border: 1px solid #ccc; border-radius: 6px; padding: 10px; cursor: pointer; background-color: #fff; min-height: 1.5em; }
         .select-box[disabled] { background-color: var(--fundo-desabilitado); cursor: not-allowed; }
-        .checkboxes { display: none; position: absolute; background: white; border: 1px solid var(--cor-borda); border-radius: 6px; z-index: 100; max-height: 200px; overflow-y: auto; padding: 5px; width: 100%; box-sizing: border-box; }
+        .checkboxes { 
+            display: none; position: absolute; background: white; border: 1px solid var(--cor-borda); 
+            border-radius: 6px; z-index: 100; max-height: 200px; overflow-y: auto; 
+            padding: 5px; width: 100%; box-sizing: border-box;
+            top: 100%;
+            margin-top: 2px;
+            left: 0;
+        }
         .checkboxes.visible { display: block; }
         .erro { color: #dc3545; font-weight: bold; text-align: center; }
         .hidden { display: none; }
@@ -149,10 +156,28 @@
                 preencherFormulario(atendimento, nomeAssistido);
                 manipularEstadoFormulario(atendimento.detalhes_preenchidos === true);
                 
-                // Adiciona os event listeners para os botões que podem existir no formulário
                 document.getElementById('btn-salvar-decisao')?.addEventListener('click', () => salvarDecisaoColegiado(atendimento));
                 document.getElementById('btn-salvar-entrevista')?.addEventListener('click', () => salvarEntrevistaCompleta(atendimento));
                 document.getElementById('btn-dar-alta')?.addEventListener('click', () => darAlta(atendimento));
+                
+                const selectBox = document.querySelector('.select-box');
+                const checkboxes = document.querySelector('.checkboxes');
+                if (selectBox && checkboxes) {
+                    selectBox.addEventListener('click', () => { 
+                        if (!selectBox.hasAttribute('disabled')) {
+                            checkboxes.classList.toggle('visible');
+                        }
+                    });
+                    checkboxes.addEventListener('change', () => {
+                        const selecionados = Array.from(checkboxes.querySelectorAll('input:checked')).map(cb => cb.value);
+                        selectBox.textContent = selecionados.length > 0 ? selecionados.join(', ') : 'Selecione...';
+                    });
+                    document.addEventListener('click', (e) => {
+                        if (selectBox && !selectBox.contains(e.target) && !checkboxes.contains(e.target)) {
+                            checkboxes.classList.remove('visible');
+                        }
+                    });
+                }
             }
 
             async function salvarDecisaoColegiado(atendimento) {
@@ -186,7 +211,7 @@
                         semana: 1,
                         passePara: passePara,
                         passeRecomendado: passePara,
-                        // Não alteramos 'detalhes_preenchidos' aqui
+                        decisaoColegiadoSalva: true 
                     });
 
                     const filaDocRef = await encontrarFilaDoDia(atendimento);
@@ -251,7 +276,7 @@
                         evolucao: document.querySelector('input[name="evolucao"]:checked')?.value || null,
                         colegiadoNotas: document.getElementById('colegiado-notas')?.value.trim() || null,
                         encaminhamentos: Array.from(document.querySelectorAll('.checkboxes input:checked')).map(cb => cb.value),
-                        detalhes_preenchidos: true // Agora marcamos como concluído
+                        detalhes_preenchidos: true
                     };
 
                     await updateDoc(atendimentoDocRef, dadosParaAtualizar);
@@ -345,6 +370,14 @@
                 let botoesHtml = '';
 
                 if (isReavaliacao) {
+                    let botoesColegiadoHtml = '';
+                    if (!atendimento.decisaoColegiadoSalva) {
+                        botoesColegiadoHtml = `<div class="botoes-colegiado">
+                           <button id="btn-salvar-decisao" type="button" class="btn btn-success">Salvar Decisão e Iniciar Novo Ciclo</button>
+                           <button id="btn-dar-alta" type="button" class="btn btn-danger">Confirmar e Dar Alta</button>
+                        </div>`;
+                    }
+
                     colegiadoHtml = `<hr><h5>Colegiado</h5>
                         <div class="form-grid"><div class="form-item"><label for="colegiado-de">DE:</label><select id="colegiado-de" class="readonly-input" disabled>${gerarOpcoesPasse(passeDe)}</select></div><div class="form-item"><label for="colegiado-para">PARA (Mudar o passe):</label><select id="colegiado-para">${gerarOpcoesPasse()}</select></div></div>
                         <div class="form-item" style="margin-top:15px;"><label>Encaminhamentos (Múltipla Escolha):</label><div class="multiselect">
@@ -353,12 +386,9 @@
                                 <label><input type="checkbox" value="ENL"/> ENL</label><label><input type="checkbox" value="LEITURAS"/> Leituras</label><label><input type="checkbox" value="EAE"/> EAE</label><label><input type="checkbox" value="VOLUNTARIADO"/> Voluntariado</label><label><input type="checkbox" value="MÉDICO"/> Médico</label><label><input type="checkbox" value="ALIMENTO"/> Alimento</label><label><input type="checkbox" value="NATUREZA"/> Natureza</label><label><input type="checkbox" value="MOCIDADE"/> Mocidade</label><label><input type="checkbox" value="EVANGELIZAÇÃO"/> Evangelização</label>
                             </div></div></div>
                         <div class="form-item" style="margin-top: 15px;"><label for="colegiado-notas">Orientações do Colegiado:</label><textarea id="colegiado-notas" rows="4"></textarea></div>
-                        <div class="botoes-colegiado">
-                           <button id="btn-salvar-decisao" type="button" class="btn btn-success">Salvar Decisão e Iniciar Novo Ciclo</button>
-                           <button id="btn-dar-alta" type="button" class="btn btn-danger">Confirmar e Dar Alta</button>
-                        </div>`;
-                    // Na 5a semana, o botão de salvar geral não aparece
-                    botoesHtml = `<button id="btn-salvar-entrevista" type="button" class="btn btn-primary" style="width: 100%; margin-top: 20px; display:none;">Salvar Alterações Finais</button>`;
+                        ${botoesColegiadoHtml}`;
+                    
+                    botoesHtml = `<button id="btn-salvar-entrevista" type="button" class="btn btn-primary" style="width: 100%; margin-top: 20px;">Salvar Alterações</button>`;
                 } else {
                     botoesHtml = `<button id="btn-salvar-entrevista" type="button" class="btn btn-primary" style="width: 100%; margin-top: 20px;">Salvar Alterações</button>`;
                 }
@@ -408,7 +438,8 @@
                     batch.update(atendimentoDocRef, {
                          tipo: 'alta',
                          colegiadoNotas: document.getElementById('colegiado-notas')?.value || "Atendimento de reavaliação finalizado com alta.",
-                         detalhes_preenchidos: true
+                         detalhes_preenchidos: true,
+                         decisaoColegiadoSalva: true
                     });
                     
                     const filaDocRef = await encontrarFilaDoDia(atendimento);
