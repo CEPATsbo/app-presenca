@@ -3,142 +3,172 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Registro de Presença</title>
-    <link rel="stylesheet" href="/style.css">
-    <link rel="manifest" href="/manifest.json">
+    <title>Registro de Presença - CEPAT</title>
     <style>
-        .links-adicionais {
+        /* Estilos Gerais */
+        body {
+            margin: 0;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background-color: #f4f7f9;
+            color: #333;
+        }
+        .container {
+            max-width: 500px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #ffffff;
+            min-height: 100vh;
+            box-shadow: 0 0 15px rgba(0,0,0,0.05);
+        }
+
+        /* Cabeçalho */
+        .header {
+            text-align: center;
+            padding-bottom: 20px;
+            border-bottom: 1px solid #e0e0e0;
+        }
+        .header h1 {
+            font-size: 1.5em;
+            margin: 0;
+            color: #0277BD; /* Azul do CEPAT */
+        }
+        .header p {
+            margin: 5px 0 0;
+            color: #555;
+        }
+
+        /* Mural de Avisos */
+        .mural {
+            background-color: #e8f5e9; /* Verde claro */
+            color: #2e7d32; /* Verde escuro */
+            padding: 12px;
+            border-radius: 8px;
+            margin: 20px 0;
+            text-align: center;
+            font-size: 0.9em;
+        }
+
+        /* Estilos dos Formulários */
+        .form-section {
+            margin-top: 25px;
+        }
+        .form-section h2 {
+            font-size: 1.2em;
+            color: #444;
+            margin-bottom: 15px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        input[type="text"], input[type="email"], input[type="password"] {
+            width: 100%;
+            padding: 12px;
+            margin-bottom: 15px;
+            border: 1px solid #ccc;
+            border-radius: 8px;
+            box-sizing: border-box; /* Garante que o padding não afete a largura total */
+            font-size: 1em;
+        }
+        .btn {
+            width: 100%;
+            padding: 14px;
+            border: none;
+            border-radius: 8px;
+            font-size: 1.1em;
+            font-weight: bold;
+            color: white;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+        .btn-primary { background-color: #0277BD; } /* Azul */
+        .btn-primary:hover { background-color: #01579B; }
+        
+        .btn-secondary { background-color: #388e3c; } /* Verde */
+        .btn-secondary:hover { background-color: #2e7d32; }
+
+        .btn-tertiary {
+            background-color: transparent;
+            color: #555;
+            border: 1px solid #ccc;
+            margin-top: 10px;
+        }
+
+
+        /* Divisor "OU" */
+        .divider {
+            display: flex;
+            align-items: center;
+            text-align: center;
+            margin: 30px 0;
+            color: #aaa;
+        }
+        .divider::before, .divider::after {
+            content: '';
+            flex: 1;
+            border-bottom: 1px solid #e0e0e0;
+        }
+        .divider:not(:empty)::before { margin-right: .5em; }
+        .divider:not(:empty)::after { margin-left: .5em; }
+
+        /* Links de Apoio */
+        .support-links {
+            text-align: center;
+            margin-top: 15px;
+            font-size: 0.9em;
+        }
+        .support-links a {
+            color: #0277BD;
+            text-decoration: none;
+        }
+
+        /* Rodapé */
+        .footer {
+            margin-top: 30px;
+            text-align: center;
             display: flex;
             flex-direction: column;
             gap: 15px;
-            margin-top: 20px;
-            align-items: center;
         }
-        .btn-portal {
-            display: inline-block;
-            padding: 12px 25px;
-            background-color: #0277BD;
-            color: white;
-            text-decoration: none;
-            font-size: 1.2em;
-            font-weight: bold;
-            border-radius: 8px;
-            text-align: center;
-            box-shadow: 0 2px 5px rgba(0,0,0,0.2);
-            transition: background-color 0.3s;
-            width: 80%;
-            max-width: 350px;
-        }
-        .btn-portal:hover {
-            background-color: #01579B;
-        }
+
     </style>
 </head>
 <body>
+
     <div class="container">
-        <h1 class="titulo-principal">Registro de Presença Voluntária</h1>
-        <p class="subtitulo">Casa Espírita Paulo de Tarso</p>
-        
-        <div id="mural-container"></div>
-        
-        <div id="login-area">
-            <input type="text" id="nome" placeholder="Digite seu nome completo" required>
-            <button type="button" id="toggle-atividades" class="seletor-atividades">
-                Selecione suas atividades (até 3) &#9660;
-            </button>
-            <div id="atividade-wrapper" class="hidden">
-                <fieldset id="atividade-fieldset"><div id="atividade-container"></div></fieldset>
-            </div>
-            <button id="btn-registrar">Registrar e Ativar Monitoramento</button>
+        <header class="header">
+            <h1>CEPAT</h1>
+            <p>Casa Espírita Paulo de Tarso</p>
+        </header>
+
+        <div class="mural">
+            <span>❗️</span> Mural: A reunião da diretoria foi reagendada para a próxima sexta-feira.
         </div>
 
-        <div id="status-area" class="hidden">
-            <h2>Olá, <span id="display-nome"></span>!</h2>
-            <p>Sua(s) atividade(s): <span id="display-atividade"></span></p>
-            <p id="status-text">Monitoramento de localização ativo.</p>
-            <p id="feedback"></p>
-            
-            <div id="links-adicionais-container" class="links-adicionais">
-                </div>
+        <section class="form-section">
+            <h2>➡️ Registro de Presença Rápido</h2>
+            <input type="text" placeholder="Digite seu nome completo">
+            <button class="btn btn-tertiary">Selecione suas atividades ▼</button>
+            <button class="btn btn-primary" style="margin-top: 15px;">Registrar Presença</button>
+        </section>
 
-            <button id="btn-ativar-notificacoes" class="botao-secundario">Ativar Notificações</button>
-            
-            <button id="btn-ver-historico" class="botao-secundario">Ver Meu Histórico</button>
-            <div id="historico-container" class="hidden">
-                <h3>Suas Presenças Registradas:</h3>
-                <ul id="lista-historico"></ul>
+        <div class="divider">OU</div>
+
+        <section class="form-section">
+            <h2>⭐ Acesse o Portal do Voluntário</h2>
+            <input type="email" placeholder="Email">
+            <input type="password" placeholder="Senha">
+            <button class="btn btn-secondary">Entrar</button>
+            <div class="support-links">
+                <a href="#">Esqueci minha senha</a> | <a href="#">Ainda não tem conta? <b>Crie aqui</b></a>
             </div>
+        </section>
 
-            <a href="#" id="btn-sair" class="link-sair">Sair / Corrigir meus dados</a>
-        </div>
+        <footer class="footer">
+            <button class="btn btn-tertiary">Portal da Transparência</button>
+            <button class="btn btn-tertiary">Pedidos de Vibração</button>
+        </footer>
+
     </div>
 
-    <script type="module" src="/script.js"></script>
-
-    <script type="module">
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
-        import { getFirestore, doc, getDoc } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
-        import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-auth.js";
-
-        const firebaseConfig = {
-            apiKey: "AIzaSyBV7RPjk3cFTqL-aIpflJcUojKg1ZXMLuU",
-            authDomain: "voluntarios-ativos---cepat.firebaseapp.com",
-            projectId: "voluntarios-ativos---cepat",
-            storageBucket: "voluntarios-ativos---cepat.firebasestorage.app",
-            messagingSenderId: "66122858261",
-            appId: "1:66122858261:web:7fa21f1805463b5c08331c"
-        };
-        
-        const app = initializeApp(firebaseConfig, "botoesDinamicosApp");
-        const db = getFirestore(app);
-        const auth = getAuth(app);
-
-        async function carregarLinksDinamicos() {
-            try {
-                const configRef = doc(db, "configuracoes", "geral");
-                const docSnap = await getDoc(configRef);
-
-                if (docSnap.exists()) {
-                    const configData = docSnap.data();
-                    const container = document.getElementById('links-adicionais-container');
-                    container.innerHTML = ''; 
-
-                    // Verifica a chave do Portal da Transparência
-                    if (configData.portalTransparenciaAtivo === true) {
-                        const portalLink = document.createElement('a');
-                        portalLink.href = '/transparencia.html';
-                        portalLink.className = 'btn-portal';
-                        portalLink.textContent = 'Portal da Transparência';
-                        container.appendChild(portalLink);
-                    }
-
-                    // Verifica a chave do Módulo de Vibrações
-                    if (configData.vibracoesAtivo === true) {
-                        const vibracoesLink = document.createElement('a');
-                        vibracoesLink.href = '/vibracoes.html';
-                        vibracoesLink.className = 'btn-portal';
-                        vibracoesLink.textContent = 'Pedidos de Vibração';
-                        container.appendChild(vibracoesLink);
-                    }
-                }
-            } catch (error) {
-                console.error("Erro ao verificar configurações:", error);
-            }
-        }
-
-        const observer = new MutationObserver((mutationsList, observer) => {
-            for(const mutation of mutationsList) {
-                if (mutation.type === 'attributes' && mutation.attributeName === 'class') {
-                    const statusArea = document.getElementById('status-area');
-                    if (!statusArea.classList.contains('hidden')) {
-                        carregarLinksDinamicos();
-                        observer.disconnect();
-                    }
-                }
-            }
-        });
-
-        observer.observe(document.getElementById('status-area'), { attributes: true });
-    </script>
 </body>
 </html>
