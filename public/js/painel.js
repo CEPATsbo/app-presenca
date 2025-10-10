@@ -34,10 +34,7 @@ const feedbackElement = document.getElementById('feedback-geolocalizacao');
 const modalOverlay = document.getElementById('modal-atividades');
 const activitiesListContainer = document.getElementById('activities-list-container');
 const btnConfirmarPresenca = document.getElementById('btn-confirmar-presenca');
-// NOVOS ELEMENTOS DO MURAL
-const muralContainer = document.getElementById('mural-container');
-const muralMessage = document.getElementById('mural-message');
-
+const muralContainer = document.getElementById('mural-container'); // O container principal do mural
 
 // --- VARIÁVEIS DE ESTADO ---
 let currentUser = null;
@@ -50,8 +47,7 @@ let atividadesDoDia = [];
 onAuthStateChanged(auth, async (user) => {
     if (user) {
         currentUser = user;
-        // Carrega o mural assim que o usuário loga
-        carregarMural();
+        carregarMural(); // Carrega o mural assim que o usuário loga
 
         const voluntariosRef = collection(db, "voluntarios");
         const q = query(voluntariosRef, where("authUid", "==", user.uid), limit(1));
@@ -70,14 +66,15 @@ onAuthStateChanged(auth, async (user) => {
     }
 });
 
-// --- NOVA FUNÇÃO PARA CARREGAR O MURAL ---
+// --- FUNÇÃO PARA CARREGAR O MURAL (CORRIGIDA) ---
 async function carregarMural() {
-    if (!muralContainer || !muralMessage) return;
+    if (!muralContainer) return; // Se a 'caixa' do mural não existir, não faz nada
     try {
         const docRef = doc(db, "configuracoes", "mural");
         const docSnap = await getDoc(docRef);
         if (docSnap.exists() && docSnap.data().mensagem) {
-            muralMessage.textContent = docSnap.data().mensagem;
+            // Coloca a mensagem diretamente na 'caixa' principal
+            muralContainer.innerText = docSnap.data().mensagem;
             muralContainer.style.display = 'block';
         } else {
             muralContainer.style.display = 'none';
@@ -97,7 +94,6 @@ function preencherPainel(profile) {
 
 async function buscarPendenciasEEmprestimos(profile) {
     if (!profile || !profile.id) return;
-
     try {
         const qCantina = query(collection(db, "contas_a_receber"), where("compradorId", "==", profile.id), where("status", "==", "pendente"));
         const snapshotCantina = await getDocs(qCantina);
@@ -105,7 +101,6 @@ async function buscarPendenciasEEmprestimos(profile) {
         snapshotCantina.forEach(doc => { totalCantina += doc.data().total; });
         if (pendenciaCantinaElement) pendenciaCantinaElement.textContent = `R$ ${totalCantina.toFixed(2).replace('.', ',')}`;
     } catch (e) { console.error("Erro ao buscar pendências da cantina:", e); }
-
     try {
         const qBibVendas = query(collection(db, "biblioteca_contas_a_receber"), where("compradorId", "==", profile.id), where("status", "==", "pendente"));
         const snapshotBibVendas = await getDocs(qBibVendas);
@@ -113,7 +108,6 @@ async function buscarPendenciasEEmprestimos(profile) {
         snapshotBibVendas.forEach(doc => { totalBibVendas += doc.data().total; });
         if (pendenciaBibliotecaElement) pendenciaBibliotecaElement.textContent = `R$ ${totalBibVendas.toFixed(2).replace('.', ',')}`;
     } catch (e) { console.error("Erro ao buscar pendências da biblioteca:", e); }
-
     try {
         const qBibEmprestimos = query(collection(db, "biblioteca_emprestimos"), where("leitor.id", "==", profile.id), where("status", "==", "emprestado"));
         const snapshotBibEmprestimos = await getDocs(qBibEmprestimos);
