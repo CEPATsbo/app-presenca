@@ -41,7 +41,6 @@
     <nav class="admin-nav">
         <a href="/index.html">Presença</a>
         <a href="/transparencia.html" class="active">Portal da Transparência</a>
-        <a href="#" id="btn-logout" style="color: #c62828;">Sair</a>
     </nav>
     <div class="portal-container">
         <h1>Portal da Transparência</h1>
@@ -59,7 +58,6 @@
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
         import { getFirestore, collection, getDoc, getDocs, query, where, orderBy, doc, documentId } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
-        import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-auth.js";
         
         const firebaseConfig = {
             apiKey: "AIzaSyBV7RPjk3cFTqL-aIpflJcUojKg1ZXMLuU",
@@ -72,20 +70,13 @@
         
         const app = initializeApp(firebaseConfig);
         const db = getFirestore(app);
-        const auth = getAuth(app);
         
         const seletorWrapper = document.getElementById('seletor-wrapper');
         const seletorBalancete = document.getElementById('seletor-balancete');
         const balanceteDisplay = document.getElementById('balancete-display');
         const loadingMessage = document.getElementById('loading-message');
 
-        onAuthStateChanged(auth, (user) => {
-            if (!user) {
-                window.location.href = '/login.html';
-            } else {
-                inicializarPortal();
-            }
-        });
+    
         
         function formatarNomeOpcao(periodoId) {
             if (periodoId.includes('_')) {
@@ -279,7 +270,8 @@
                 </div>
             `;
         }
-
+// A verificação de login foi REMOVIDA. A página agora inicializa diretamente.
+        inicializarPortal();
     </script>
 </body>
 </html>
