@@ -133,13 +133,27 @@ async function buscarPendenciasEEmprestimos(profile) {
     } catch (e) { console.error("Erro ao buscar empréstimos da biblioteca:", e); }
 }
 
+// ***** FUNÇÃO ATUALIZADA PARA MOSTRAR OS ITENS *****
 function preencherModalDetalhes() {
+    // Função auxiliar para criar a lista de itens de uma compra
+    const criarListaDeItens = (itens) => {
+        if (!itens || itens.length === 0) return '';
+        let listaHtml = '<ul class="item-details-list">';
+        itens.forEach(produto => {
+            // Usa 'descricao' para a cantina e 'titulo' para a biblioteca
+            const nomeItem = produto.descricao || produto.titulo; 
+            listaHtml += `<li>${produto.qtd}x ${nomeItem}</li>`;
+        });
+        listaHtml += '</ul>';
+        return listaHtml;
+    };
+
     let cantinaHtml = '<h4>Pendências da Cantina</h4>';
     if (detalhesPendenciasCantina.length > 0) {
         cantinaHtml += '<ul>';
         detalhesPendenciasCantina.forEach(item => {
             const data = item.registradoEm.toDate().toLocaleDateString('pt-BR');
-            cantinaHtml += `<li>Em ${data}: R$ ${item.total.toFixed(2).replace('.', ',')}</li>`;
+            cantinaHtml += `<li><strong>Em ${data}: R$ ${item.total.toFixed(2).replace('.', ',')}</strong>${criarListaDeItens(item.itens)}</li>`;
         });
         cantinaHtml += '</ul>';
     } else { cantinaHtml += '<p>Nenhuma pendência na cantina.</p>'; }
@@ -150,7 +164,7 @@ function preencherModalDetalhes() {
         bibHtml += '<ul>';
         detalhesPendenciasBiblioteca.forEach(item => {
             const data = item.registradoEm.toDate().toLocaleDateString('pt-BR');
-            bibHtml += `<li>Em ${data}: R$ ${item.total.toFixed(2).replace('.', ',')}</li>`;
+            bibHtml += `<li><strong>Em ${data}: R$ ${item.total.toFixed(2).replace('.', ',')}</strong>${criarListaDeItens(item.itens)}</li>`;
         });
         bibHtml += '</ul>';
     } else { bibHtml += '<p>Nenhuma pendência de vendas na biblioteca.</p>'; }
