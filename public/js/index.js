@@ -1,8 +1,8 @@
-// === ARQUIVO FINAL: public/js/index.js ===
+// === ARQUIVO FINAL CORRIGIDO: public/js/index.js ===
 
 import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
 import { getAuth, signInWithEmailAndPassword } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-auth.js";
-import { getFirestore, collection, query, where, getDocs, addDoc, serverTimestamp, setDoc, doc, getDoc } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
+import { getFirestore, collection, query, where, getDocs, addDoc, serverTimestamp, setDoc, doc, getDoc, orderBy } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
 import Fuse from 'https://cdn.jsdelivr.net/npm/fuse.js@7.0.0/dist/fuse.mjs';
 
 const firebaseConfig = {
@@ -67,7 +67,7 @@ if (btnSelecionarAtividades) {
     btnSelecionarAtividades.addEventListener('click', () => {
         atividadesWrapper.style.display = atividadesWrapper.style.display === 'block' ? 'none' : 'block';
     });
-    buscarAtividadesDoFirestore();
+    document.addEventListener('DOMContentLoaded', buscarAtividadesDoFirestore);
 }
 
 function getDataDeHojeSP() {
@@ -94,7 +94,6 @@ if (formPresencaRapida) {
         btnSubmit.textContent = 'Registrando...';
 
         try {
-            // Lógica do Fuse.js para encontrar o nome correto
             const voluntariosSnapshot = await getDocs(query(collection(db, "voluntarios")));
             const listaDeVoluntarios = voluntariosSnapshot.docs.map(d => ({ id: d.id, ...d.data() }));
             const fuse = new Fuse(listaDeVoluntarios, { keys: ['nome'], includeScore: true, threshold: 0.45 });
@@ -112,7 +111,6 @@ if (formPresencaRapida) {
                 }
             }
 
-            // Salvar a presença no Firestore
             const dataHoje = getDataDeHojeSP();
             const presencaId = `${dataHoje}_${nomeFinalParaRegistro.replace(/\s+/g, '_')}`;
             const docRef = doc(db, "presencas", presencaId);
@@ -123,8 +121,8 @@ if (formPresencaRapida) {
                 data: dataHoje,
                 primeiroCheckin: serverTimestamp(),
                 ultimaAtualizacao: serverTimestamp(),
-                status: 'presente', // Marcado como presente, pois não há geolocalização neste modo
-                authUid: null // Indicação de que foi um registro anônimo
+                status: 'presente',
+                authUid: null
             }, { merge: true });
 
             alert(`Presença registrada com sucesso para ${nomeFinalParaRegistro}!`);
