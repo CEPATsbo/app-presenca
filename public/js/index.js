@@ -21,7 +21,7 @@ const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
 
-// --- LÓGICA DO PORTAL DE LOGIN (SEM ALTERAÇÃO) ---
+// --- LÓGICA DO PORTAL DE LOGIN ---
 const formLogin = document.getElementById('form-login-portal');
 if (formLogin) {
     formLogin.addEventListener('submit', (event) => {
@@ -38,7 +38,7 @@ if (formLogin) {
     });
 }
 
-// --- LÓGICA DO REGISTRO DE PRESENÇA RÁPIDO (COM GEOLOCALIZAÇÃO) ---
+// --- LÓGICA DO REGISTRO DE PRESENÇA RÁPIDO ---
 const formPresencaRapida = document.getElementById('form-presenca-rapida');
 const nomeInput = document.getElementById('nome-presenca');
 const btnSelecionarAtividades = document.getElementById('btn-selecionar-atividades');
@@ -54,7 +54,7 @@ const feedbackGeoRapido = document.getElementById('feedback-geolocalizacao-rapid
 let monitorIntervalRapido;
 let statusAtualVoluntarioRapido = 'ausente';
 
-// --- FUNÇÕES AUXILIARES REINTEGRADAS ---
+// --- FUNÇÕES AUXILIARES ---
 function getDistance(lat1, lon1, lat2, lon2) {
     const R = 6371e3;
     const φ1 = lat1 * Math.PI / 180, φ2 = lat2 * Math.PI / 180;
@@ -69,19 +69,14 @@ function getDataDeHojeSP() {
     return formatador.format(new Date());
 }
 
-async function atualizarPresencaRapida(novoStatus, nome) {
+async function atualizarStatusPresenca(novoStatus, nome) {
     const dataHoje = getDataDeHojeSP();
     const presencaId = `${dataHoje}_${nome.replace(/\s+/g, '_')}`;
     const docRef = doc(db, "presencas", presencaId);
     try {
-        const dadosParaSalvar = { status: novoStatus, ultimaAtualizacao: serverTimestamp() };
-        await setDoc(docRef, dadosParaSalvar, { merge: true });
+        await setDoc(docRef, { status: novoStatus, ultimaAtualizacao: serverTimestamp() }, { merge: true });
         statusAtualVoluntarioRapido = novoStatus;
-        if (feedbackGeoRapido) {
-            feedbackGeoRapido.textContent = novoStatus === 'presente' ? `Presença confirmada na casa.` : `Saída da casa registrada.`;
-            feedbackGeoRapido.style.color = novoStatus === 'presente' ? "green" : "#1565c0";
-        }
-    } catch (e) { console.error("Erro ao atualizar presença:", e); }
+    } catch (e) { console.error("Erro ao atualizar status da presença:", e); }
 }
 
 function checarLocalizacaoRapida(nome) {
@@ -92,15 +87,25 @@ function checarLocalizacaoRapida(nome) {
     navigator.geolocation.getCurrentPosition(
         (position) => {
             const distancia = getDistance(position.coords.latitude, position.coords.longitude, CASA_ESPIRITA_LAT, CASA_ESPIRITA_LON);
-            if (feedbackGeoRapido) feedbackGeoRapido.textContent = `Você está a ${distancia.toFixed(0)} metros de distância.`;
-
+            
             if (distancia <= RAIO_EM_METROS) {
-                if (statusAtualVoluntarioRapido !== 'presente') { atualizarPresencaRapida('presente', nome); }
+                if (statusAtualVoluntarioRapido !== 'presente') {
+                    feedbackGeoRapido.textContent = "✅ Presença confirmada na casa!";
+                    feedbackGeoRapido.style.color = "green";
+                    atualizarStatusPresenca('presente', nome);
+                }
             } else {
-                if (statusAtualVoluntarioRapido === 'presente') { atualizarPresencaRapida('ausente', nome); }
+                if (statusAtualVoluntarioRapido === 'presente') {
+                    feedbackGeoRapido.textContent = "Saída da casa registrada.";
+                    feedbackGeoRapido.style.color = "#1565c0";
+                    atualizarStatusPresenca('ausente', nome);
+                } else {
+                    feedbackGeoRapido.textContent = `Você está a ${distancia.toFixed(0)} metros de distância.`;
+                    feedbackGeoRapido.style.color = "#333";
+                }
             }
         },
-        () => { if (feedbackGeoRapido) feedbackGeoRapido.textContent = "Não foi possível obter localização."; },
+        () => { if (feedbackGeoRapido) feedbackGeoRapido.textContent = "Não foi possível obter localização. Verifique as permissões."; },
         { enableHighAccuracy: true }
     );
 }
@@ -132,7 +137,7 @@ if (formPresencaRapida) {
         const atividadesSelecionadasNode = document.querySelectorAll('#form-presenca-rapida input[name="atividade"]:checked');
         const atividadesSelecionadas = Array.from(atividadesSelecionadasNode).map(cb => cb.value);
 
-        if (!nomeDigitado || nomeDigitado.split(' ').length < 2) { return alert("Por favor, digite seu nome completo (nome e sobrenome)."); }
+        if (!nomeDigitado || nomeDigitado.split(' ').length < 2) { return alert("Por favor, digite seu nome completo."); }
         if (atividadesSelecionadas.length === 0) { return alert("Por favor, selecione pelo menos uma atividade."); }
         
         const btnSubmit = formPresencaRapida.querySelector('button[type="submit"]');
@@ -155,6 +160,7 @@ if (formPresencaRapida) {
             const dataHoje = getDataDeHojeSP();
             const presencaId = `${dataHoje}_${nomeFinalParaRegistro.replace(/\s+/g, '_')}`;
             const docRef = doc(db, "presencas", presencaId);
+            // REGISTRO INICIAL COM STATUS 'AUSENTE'
             await setDoc(docRef, { nome: nomeFinalParaRegistro, atividade: atividadesSelecionadas.join(', '), data: dataHoje, primeiroCheckin: serverTimestamp(), ultimaAtualizacao: serverTimestamp(), status: 'ausente', authUid: null }, { merge: true });
 
             statusNome.textContent = nomeFinalParaRegistro;
@@ -163,8 +169,8 @@ if (formPresencaRapida) {
             statusRapidoSection.classList.remove('hidden');
 
             if (monitorIntervalRapido) clearInterval(monitorIntervalRapido);
-            checarLocalizacaoRapida(nomeFinalParaRegistro);
-            monitorIntervalRapido = setInterval(() => checarLocalizacaoRapida(nomeFinalParaRegistro), 600000);
+            checarLocalizacaoRapida(nomeFinalParaRegistro); // Verifica imediatamente
+            monitorIntervalRapido = setInterval(() => checarLocalizacaoRapida(nomeFinalParaRegistro), 600000); // E depois a cada 10 min
 
         } catch (error) {
             console.error("ERRO CRÍTICO no registro rápido:", error);
