@@ -31,10 +31,17 @@ const infoFrequenciaElement = document.getElementById('info-frequencia');
 const btnRegistrarPresenca = document.getElementById('btn-registrar-presenca');
 const btnSair = document.getElementById('btn-sair');
 const feedbackElement = document.getElementById('feedback-geolocalizacao');
-const modalOverlay = document.getElementById('modal-atividades');
+const muralContainer = document.getElementById('mural-container');
+const modalOverlayAtividades = document.getElementById('modal-atividades');
+const closeModalAtividadesBtn = document.getElementById('close-modal-atividades');
 const activitiesListContainer = document.getElementById('activities-list-container');
 const btnConfirmarPresenca = document.getElementById('btn-confirmar-presenca');
-const muralContainer = document.getElementById('mural-container'); // O container principal do mural
+const modalOverlayDetalhes = document.getElementById('modal-detalhes');
+const closeModalDetalhesBtn = document.getElementById('close-modal-detalhes');
+const linkVerDetalhes = document.getElementById('link-ver-detalhes');
+const detalhesCantinaContainer = document.getElementById('detalhes-cantina-container');
+const detalhesBibliotecaContainer = document.getElementById('detalhes-biblioteca-container');
+const detalhesEmprestimosContainer = document.getElementById('detalhes-emprestimos-container');
 
 // --- VARIÁVEIS DE ESTADO ---
 let currentUser = null;
@@ -42,17 +49,18 @@ let voluntarioProfile = null;
 let monitorInterval;
 let statusAtualVoluntario = 'ausente';
 let atividadesDoDia = [];
+let detalhesPendenciasCantina = [];
+let detalhesPendenciasBiblioteca = [];
+let detalhesEmprestimos = [];
 
 // --- LÓGICA PRINCIPAL ---
 onAuthStateChanged(auth, async (user) => {
     if (user) {
         currentUser = user;
-        carregarMural(); // Carrega o mural assim que o usuário loga
-
+        carregarMural();
         const voluntariosRef = collection(db, "voluntarios");
         const q = query(voluntariosRef, where("authUid", "==", user.uid), limit(1));
         const querySnapshot = await getDocs(q);
-
         if (!querySnapshot.empty) {
             const voluntarioDoc = querySnapshot.docs[0];
             voluntarioProfile = { id: voluntarioDoc.id, ...voluntarioDoc.data() };
@@ -66,23 +74,18 @@ onAuthStateChanged(auth, async (user) => {
     }
 });
 
-// --- FUNÇÃO PARA CARREGAR O MURAL (CORRIGIDA) ---
 async function carregarMural() {
-    if (!muralContainer) return; // Se a 'caixa' do mural não existir, não faz nada
+    if (!muralContainer) return;
     try {
         const docRef = doc(db, "configuracoes", "mural");
         const docSnap = await getDoc(docRef);
         if (docSnap.exists() && docSnap.data().mensagem) {
-            // Coloca a mensagem diretamente na 'caixa' principal
             muralContainer.innerText = docSnap.data().mensagem;
             muralContainer.style.display = 'block';
         } else {
             muralContainer.style.display = 'none';
         }
-    } catch (e) {
-        console.error("Erro ao carregar mural:", e);
-        muralContainer.style.display = 'none';
-    }
+    } catch (e) { console.error("Erro ao carregar mural:", e); }
 }
 
 function preencherPainel(profile) {
@@ -94,20 +97,26 @@ function preencherPainel(profile) {
 
 async function buscarPendenciasEEmprestimos(profile) {
     if (!profile || !profile.id) return;
+    detalhesPendenciasCantina = [];
+    detalhesPendenciasBiblioteca = [];
+    detalhesEmprestimos = [];
+
     try {
         const qCantina = query(collection(db, "contas_a_receber"), where("compradorId", "==", profile.id), where("status", "==", "pendente"));
         const snapshotCantina = await getDocs(qCantina);
         let totalCantina = 0;
-        snapshotCantina.forEach(doc => { totalCantina += doc.data().total; });
+        snapshotCantina.forEach(doc => { const data = doc.data(); totalCantina += data.total; detalhesPendenciasCantina.push(data); });
         if (pendenciaCantinaElement) pendenciaCantinaElement.textContent = `R$ ${totalCantina.toFixed(2).replace('.', ',')}`;
     } catch (e) { console.error("Erro ao buscar pendências da cantina:", e); }
+
     try {
         const qBibVendas = query(collection(db, "biblioteca_contas_a_receber"), where("compradorId", "==", profile.id), where("status", "==", "pendente"));
         const snapshotBibVendas = await getDocs(qBibVendas);
         let totalBibVendas = 0;
-        snapshotBibVendas.forEach(doc => { totalBibVendas += doc.data().total; });
+        snapshotBibVendas.forEach(doc => { const data = doc.data(); totalBibVendas += data.total; detalhesPendenciasBiblioteca.push(data); });
         if (pendenciaBibliotecaElement) pendenciaBibliotecaElement.textContent = `R$ ${totalBibVendas.toFixed(2).replace('.', ',')}`;
     } catch (e) { console.error("Erro ao buscar pendências da biblioteca:", e); }
+
     try {
         const qBibEmprestimos = query(collection(db, "biblioteca_emprestimos"), where("leitor.id", "==", profile.id), where("status", "==", "emprestado"));
         const snapshotBibEmprestimos = await getDocs(qBibEmprestimos);
@@ -116,14 +125,47 @@ async function buscarPendenciasEEmprestimos(profile) {
                 emprestimosBibliotecaElement.innerHTML = `<p><strong>Livros Emprestados:</strong> Nenhum.</p>`;
             } else {
                 let livrosHtml = '<p><strong>Livros Emprestados:</strong></p><ul style="margin: 0; padding-left: 20px;">';
-                snapshotBibEmprestimos.forEach(doc => {
-                    livrosHtml += `<li>${doc.data().livroTitulo}</li>`;
-                });
+                snapshotBibEmprestimos.forEach(doc => { const data = doc.data(); livrosHtml += `<li>${data.livroTitulo}</li>`; detalhesEmprestimos.push(data); });
                 livrosHtml += '</ul>';
                 emprestimosBibliotecaElement.innerHTML = livrosHtml;
             }
         }
     } catch (e) { console.error("Erro ao buscar empréstimos da biblioteca:", e); }
+}
+
+function preencherModalDetalhes() {
+    let cantinaHtml = '<h4>Pendências da Cantina</h4>';
+    if (detalhesPendenciasCantina.length > 0) {
+        cantinaHtml += '<ul>';
+        detalhesPendenciasCantina.forEach(item => {
+            const data = item.registradoEm.toDate().toLocaleDateString('pt-BR');
+            cantinaHtml += `<li>Em ${data}: R$ ${item.total.toFixed(2).replace('.', ',')}</li>`;
+        });
+        cantinaHtml += '</ul>';
+    } else { cantinaHtml += '<p>Nenhuma pendência na cantina.</p>'; }
+    detalhesCantinaContainer.innerHTML = cantinaHtml;
+
+    let bibHtml = '<h4>Pendências da Biblioteca (Vendas)</h4>';
+    if (detalhesPendenciasBiblioteca.length > 0) {
+        bibHtml += '<ul>';
+        detalhesPendenciasBiblioteca.forEach(item => {
+            const data = item.registradoEm.toDate().toLocaleDateString('pt-BR');
+            bibHtml += `<li>Em ${data}: R$ ${item.total.toFixed(2).replace('.', ',')}</li>`;
+        });
+        bibHtml += '</ul>';
+    } else { bibHtml += '<p>Nenhuma pendência de vendas na biblioteca.</p>'; }
+    detalhesBibliotecaContainer.innerHTML = bibHtml;
+
+    let emprestimosHtml = '<h4>Livros Emprestados</h4>';
+    if (detalhesEmprestimos.length > 0) {
+        emprestimosHtml += '<ul>';
+        detalhesEmprestimos.forEach(item => {
+            const data = item.dataEmprestimo.toDate().toLocaleDateString('pt-BR');
+            emprestimosHtml += `<li>${item.livroTitulo} (retirado em ${data})</li>`;
+        });
+        emprestimosHtml += '</ul>';
+    } else { emprestimosHtml += '<p>Nenhum livro emprestado.</p>'; }
+    detalhesEmprestimosContainer.innerHTML = emprestimosHtml;
 }
 
 async function carregarAtividadesNoModal() {
@@ -205,25 +247,16 @@ function checarLocalizacao() {
     );
 }
 
-btnRegistrarPresenca.addEventListener('click', () => {
-    carregarAtividadesNoModal();
-    modalOverlay.classList.add('visible');
-});
+// --- EVENTOS ---
+if(btnRegistrarPresenca) btnRegistrarPresenca.addEventListener('click', () => { carregarAtividadesNoModal(); modalOverlayAtividades.classList.add('visible'); });
+if(closeModalAtividadesBtn) closeModalAtividadesBtn.addEventListener('click', () => { modalOverlayAtividades.classList.remove('visible'); });
+if(modalOverlayAtividades) modalOverlayAtividades.addEventListener('click', (event) => { if (event.target === modalOverlayAtividades) { modalOverlayAtividades.classList.remove('visible'); } });
 
-modalOverlay.addEventListener('click', (event) => {
-    if (event.target === modalOverlay) {
-        modalOverlay.classList.remove('visible');
-    }
-});
-
-btnConfirmarPresenca.addEventListener('click', () => {
+if(btnConfirmarPresenca) btnConfirmarPresenca.addEventListener('click', () => {
     const selecionadas = activitiesListContainer.querySelectorAll('input[type="checkbox"]:checked');
-    if (selecionadas.length === 0) {
-        alert("Por favor, selecione pelo menos uma atividade.");
-        return;
-    }
+    if (selecionadas.length === 0) { alert("Por favor, selecione pelo menos uma atividade."); return; }
     atividadesDoDia = Array.from(selecionadas).map(cb => cb.value);
-    modalOverlay.classList.remove('visible');
+    modalOverlayAtividades.classList.remove('visible');
     if (monitorInterval) clearInterval(monitorInterval);
     checarLocalizacao();
     monitorInterval = setInterval(checarLocalizacao, 600000);
@@ -231,11 +264,8 @@ btnConfirmarPresenca.addEventListener('click', () => {
     btnRegistrarPresenca.textContent = "MONITORAMENTO ATIVO";
 });
 
-btnSair.addEventListener('click', () => {
-    if (confirm("Tem certeza que deseja sair?")) {
-        signOut(auth).catch((error) => {
-            console.error("Erro ao fazer logout:", error);
-            alert("Erro ao tentar sair.");
-        });
-    }
-});
+if(linkVerDetalhes) linkVerDetalhes.addEventListener('click', () => { preencherModalDetalhes(); modalOverlayDetalhes.classList.add('visible'); });
+if(closeModalDetalhesBtn) closeModalDetalhesBtn.addEventListener('click', () => { modalOverlayDetalhes.classList.remove('visible'); });
+if(modalOverlayDetalhes) modalOverlayDetalhes.addEventListener('click', (event) => { if (event.target === modalOverlayDetalhes) { modalOverlayDetalhes.classList.remove('visible'); } });
+
+if(btnSair) btnSair.addEventListener('click', () => { if (confirm("Tem certeza que deseja sair?")) { signOut(auth); } });
