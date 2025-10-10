@@ -6,58 +6,150 @@
     <title>Meu Painel - CEPAT</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
     <style>
-        /* MESMOS ESTILOS DE ANTES... */
-        body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; background-color: #f4f7f9; color: #333; }
-        .container { max-width: 500px; margin: 0 auto; padding: 20px; }
-        .greeting { font-size: 1.8em; font-weight: bold; color: #333; margin-bottom: 20px; }
-        .btn { width: 100%; padding: 14px; border: none; border-radius: 8px; font-size: 1.1em; font-weight: bold; color: white; cursor: pointer; transition: background-color 0.3s; display: block; text-align: center; text-decoration: none; box-sizing: border-box; }
-        .btn-primary { background-color: #0277BD; }
+        /* Estilos Gerais (Consistente com as telas anteriores) */
+        body {
+            margin: 0;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background-color: #f4f7f9;
+            color: #333;
+        }
+        .container {
+            max-width: 500px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        /* Saudação */
+        .greeting {
+            font-size: 1.8em;
+            font-weight: bold;
+            color: #333;
+            margin-bottom: 20px;
+        }
+
+        /* Botão Principal */
+        .btn {
+            width: 100%;
+            padding: 14px;
+            border: none;
+            border-radius: 8px;
+            font-size: 1.1em;
+            font-weight: bold;
+            color: white;
+            cursor: pointer;
+            transition: background-color 0.3s;
+            display: block; /* Garante que o botão ocupe a linha inteira */
+            text-align: center;
+            text-decoration: none;
+            box-sizing: border-box;
+        }
+        .btn-primary { background-color: #0277BD; } /* Azul */
         .btn-primary:hover { background-color: #01579B; }
         .btn-primary:disabled { background-color: #9E9E9E; cursor: not-allowed; }
-        .btn-logout { background-color: #d32f2f; }
+        .btn-logout { background-color: #d32f2f; } /* Vermelho para Sair */
         .btn-logout:hover { background-color: #c62828; }
-        .btn-tertiary { background-color: transparent; color: #555; border: 1px solid #ccc; }
-        .card { background-color: #ffffff; border-radius: 10px; box-shadow: 0 4px 8px rgba(0,0,0,0.08); margin-top: 20px; padding: 18px; }
-        .card-header { display: flex; align-items: center; font-size: 1.2em; font-weight: bold; color: #0277BD; margin-bottom: 10px; padding-bottom: 10px; border-bottom: 1px solid #f0f0f0; }
-        .card-header i { margin-right: 12px; }
-        .card-body p { margin: 8px 0; line-height: 1.5; color: #555; }
-        .card-action { text-align: right; margin-top: 15px; }
-        .card-action a { color: #0277BD; text-decoration: none; font-weight: bold; }
-        .footer { margin-top: 30px; display: flex; flex-direction: column; gap: 15px; }
-        #feedback-geolocalizacao { text-align: center; margin-top: 15px; font-weight: bold; }
+        .btn-tertiary {
+            background-color: transparent;
+            color: #555;
+            border: 1px solid #ccc;
+        }
+        
+        /* Feedback da Geolocalização */
+        #feedback-geolocalizacao {
+            text-align: center;
+            margin-top: 15px;
+            font-weight: bold;
+            min-height: 1.2em; /* Evita que a página "pule" quando o texto aparece */
+        }
+
+        /* Estrutura dos Cards */
+        .card {
+            background-color: #ffffff;
+            border-radius: 10px;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.08);
+            margin-top: 20px;
+            padding: 18px;
+        }
+        .card-header {
+            display: flex;
+            align-items: center;
+            font-size: 1.2em;
+            font-weight: bold;
+            color: #0277BD;
+            margin-bottom: 10px;
+            padding-bottom: 10px;
+            border-bottom: 1px solid #f0f0f0;
+        }
+        .card-header i {
+            margin-right: 12px;
+        }
+        .card-body p {
+            margin: 8px 0;
+            line-height: 1.5;
+            color: #555;
+        }
+        .card-action {
+            text-align: right;
+            margin-top: 15px;
+        }
+        .card-action a {
+            color: #0277BD;
+            text-decoration: none;
+            font-weight: bold;
+        }
+        
+        /* Rodapé */
+        .footer {
+            margin-top: 30px;
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
     </style>
 </head>
 <body>
+
     <div class="container">
         <h2 class="greeting" id="greeting">Carregando...</h2>
 
         <button class="btn btn-primary" id="btn-registrar-presenca">REGISTRAR MINHA PRESENÇA HOJE</button>
 
         <p id="feedback-geolocalizacao"></p>
-
+        
         <div class="card">
             <div class="card-header"><i class="fas fa-user-circle"></i> Meu Perfil</div>
-            <div class="card-body"><p><strong>Email:</strong> --</p><p><strong>Telefone:</strong> --</p></div>
+            <div class="card-body">
+                <p><strong>Email:</strong> <span id="profile-email">--</span></p>
+                <p><strong>Telefone:</strong> <span id="profile-telefone">--</span></p>
+            </div>
             <div class="card-action"><a href="#">Editar Dados</a></div>
         </div>
+
         <div class="card">
             <div class="card-header"><i class="fas fa-credit-card"></i> Minhas Pendências</div>
-            <div class="card-body"><p><strong>Cantina:</strong> --</p><p><strong>Biblioteca:</strong> --</p></div>
+            <div class="card-body">
+                <p><strong>Cantina:</strong> <span id="pendencia-cantina">--</span></p>
+                <p><strong>Biblioteca:</strong> <span id="pendencia-biblioteca">--</span></p>
+            </div>
             <div class="card-action"><a href="#">Ver Detalhes</a></div>
         </div>
+
         <div class="card">
             <div class="card-header"><i class="fas fa-calendar-check"></i> Minha Frequência</div>
-            <div class="card-body"><p>--</p></div>
+            <div class="card-body">
+                <p id="info-frequencia">--</p>
+            </div>
             <div class="card-action"><a href="#">Ver Histórico Completo</a></div>
         </div>
-
+        
         <footer class="footer">
-            <a href="#" class="btn btn-tertiary">Portal da Transparência</a>
-            <a href="#" class="btn btn-tertiary">Pedidos de Vibração</a>
+            <a href="/transparencia.html" class="btn btn-tertiary">Portal da Transparência</a>
+            <a href="/vibracoes.html" class="btn btn-tertiary">Pedidos de Vibração</a>
             <button class="btn btn-logout" id="btn-sair">Sair (Logout)</button>
         </footer>
     </div>
 
     <script type="module" src="/js/painel.js"></script>
+
 </body>
 </html>
