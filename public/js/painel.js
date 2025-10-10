@@ -1,6 +1,6 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
 import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-auth.js";
-import { getFirestore, collection, query, where, getDocs, doc, setDoc, serverTimestamp, orderBy, limit } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
+import { getFirestore, collection, query, where, getDocs, doc, setDoc, serverTimestamp, orderBy, limit, getDoc } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
 
 // --- CONFIGURAÇÕES ---
 const firebaseConfig = {
@@ -34,6 +34,10 @@ const feedbackElement = document.getElementById('feedback-geolocalizacao');
 const modalOverlay = document.getElementById('modal-atividades');
 const activitiesListContainer = document.getElementById('activities-list-container');
 const btnConfirmarPresenca = document.getElementById('btn-confirmar-presenca');
+// NOVOS ELEMENTOS DO MURAL
+const muralContainer = document.getElementById('mural-container');
+const muralMessage = document.getElementById('mural-message');
+
 
 // --- VARIÁVEIS DE ESTADO ---
 let currentUser = null;
@@ -46,6 +50,9 @@ let atividadesDoDia = [];
 onAuthStateChanged(auth, async (user) => {
     if (user) {
         currentUser = user;
+        // Carrega o mural assim que o usuário loga
+        carregarMural();
+
         const voluntariosRef = collection(db, "voluntarios");
         const q = query(voluntariosRef, where("authUid", "==", user.uid), limit(1));
         const querySnapshot = await getDocs(q);
@@ -62,6 +69,24 @@ onAuthStateChanged(auth, async (user) => {
         window.location.href = '/index.html';
     }
 });
+
+// --- NOVA FUNÇÃO PARA CARREGAR O MURAL ---
+async function carregarMural() {
+    if (!muralContainer || !muralMessage) return;
+    try {
+        const docRef = doc(db, "configuracoes", "mural");
+        const docSnap = await getDoc(docRef);
+        if (docSnap.exists() && docSnap.data().mensagem) {
+            muralMessage.textContent = docSnap.data().mensagem;
+            muralContainer.style.display = 'block';
+        } else {
+            muralContainer.style.display = 'none';
+        }
+    } catch (e) {
+        console.error("Erro ao carregar mural:", e);
+        muralContainer.style.display = 'none';
+    }
+}
 
 function preencherPainel(profile) {
     if (greetingElement) greetingElement.textContent = `Olá, ${profile.nome || 'Voluntário'}! 👋`;
