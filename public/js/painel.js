@@ -1,6 +1,6 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
 import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-auth.js";
-import { getFirestore, collection, query, where, getDocs, doc, setDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
+import { getFirestore, collection, query, where, getDocs, doc, setDoc, serverTimestamp, orderBy } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
 
 // --- CONFIGURAÇÕES ---
 const firebaseConfig = {
@@ -15,7 +15,7 @@ const CASA_ESPIRITA_LAT = -22.75553;
 const CASA_ESPIRITA_LON = -47.36945;
 const RAIO_EM_METROS = 40;
 
-// --- INICIALIZAÇÃO DO FIREBASE ---
+// --- INICIALIZAÇÃO ---
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
@@ -30,23 +30,22 @@ const infoFrequenciaElement = document.getElementById('info-frequencia');
 const btnRegistrarPresenca = document.getElementById('btn-registrar-presenca');
 const btnSair = document.getElementById('btn-sair');
 const feedbackElement = document.getElementById('feedback-geolocalizacao');
+// Elementos do Modal
+const modalOverlay = document.getElementById('modal-atividades');
+const activitiesListContainer = document.getElementById('activities-list-container');
+const btnConfirmarPresenca = document.getElementById('btn-confirmar-presenca');
 
 // --- VARIÁVEIS DE ESTADO ---
 let currentUser = null;
-let voluntarioProfile = null; // Armazenará o perfil completo do Firestore
+let voluntarioProfile = null;
 let monitorInterval;
 let statusAtualVoluntario = 'ausente';
-// ATENÇÃO: A seleção de atividades será implementada no próximo passo (com um modal)
-// Por enquanto, usaremos uma atividade fixa para teste.
-let atividadesDoDia = "Atividade de Teste"; 
+let atividadesDoDia = []; // Agora é um array
 
 // --- LÓGICA PRINCIPAL ---
 onAuthStateChanged(auth, async (user) => {
     if (user) {
         currentUser = user;
-        console.log("Usuário autenticado:", user.uid);
-
-        // Busca o perfil completo do voluntário no Firestore usando o UID do login.
         const voluntariosRef = collection(db, "voluntarios");
         const q = query(voluntariosRef, where("authUid", "==", user.uid));
         const querySnapshot = await getDocs(q);
@@ -54,20 +53,11 @@ onAuthStateChanged(auth, async (user) => {
         if (!querySnapshot.empty) {
             const voluntarioDoc = querySnapshot.docs[0];
             voluntarioProfile = { id: voluntarioDoc.id, ...voluntarioDoc.data() };
-            console.log("Perfil do voluntário encontrado no Firestore:", voluntarioProfile);
-            
-            // Agora, preenchemos a página com os dados do FIRESTORE (a fonte da verdade)
             preencherPainel(voluntarioProfile);
         } else {
-            // Cenário raro: usuário autenticado mas sem perfil no Firestore.
-            // Usamos o que tivermos do Auth como fallback.
-            console.warn("Usuário autenticado mas não encontrado no Firestore. Usando dados de fallback.");
             preencherPainel({ nome: user.displayName || 'Voluntário', email: user.email });
         }
-
     } else {
-        // Usuário não está logado, redireciona para a página inicial
-        console.log("Nenhum usuário logado. Redirecionando...");
         window.location.href = '/index.html';
     }
 });
@@ -77,25 +67,59 @@ function preencherPainel(profile) {
     if (emailElement) emailElement.textContent = profile.email || '--';
     if (telefoneElement) telefoneElement.textContent = profile.telefone || '--';
     if (infoFrequenciaElement) infoFrequenciaElement.textContent = `Sua última presença foi em ${profile.ultimaPresenca || 'não registrada'}.`;
-    
-    // Futuramente, buscaremos os dados reais de pendências aqui
     if (pendenciaCantinaElement) pendenciaCantinaElement.textContent = 'R$ 0,00';
     if (pendenciaBibliotecaElement) pendenciaBibliotecaElement.textContent = 'Nenhum item pendente.';
 }
 
+// --- LÓGICA DO MODAL E ATIVIDADES ---
+async function carregarAtividadesNoModal() {
+    console.log("Buscando atividades no Firestore...");
+    try {
+        const q = query(collection(db, "atividades"), where("ativo", "==", true), orderBy("nome"));
+        const snapshot = await getDocs(q);
+        activitiesListContainer.innerHTML = '';
+        
+        if (snapshot.empty) {
+            activitiesListContainer.innerHTML = '<p>Nenhuma atividade encontrada.</p>';
+            return;
+        }
+
+        snapshot.forEach(doc => {
+            const atividadeNome = doc.data().nome;
+            const checkboxDiv = document.createElement('div');
+            checkboxDiv.innerHTML = `
+                <label>
+                    <input type="checkbox" name="atividade" value="${atividadeNome}">
+                    ${atividadeNome}
+                </label>
+            `;
+            activitiesListContainer.appendChild(checkboxDiv);
+        });
+
+        activitiesListContainer.querySelectorAll('input[type="checkbox"]').forEach(checkbox => {
+            checkbox.addEventListener('change', () => {
+                const checkedCount = activitiesListContainer.querySelectorAll('input[type="checkbox"]:checked').length;
+                if (checkedCount >= 3) {
+                    activitiesListContainer.querySelectorAll('input[type="checkbox"]:not(:checked)').forEach(cb => cb.disabled = true);
+                } else {
+                    activitiesListContainer.querySelectorAll('input[type="checkbox"]:not(:checked)').forEach(cb => cb.disabled = false);
+                }
+            });
+        });
+
+    } catch (error) {
+        console.error("Erro ao carregar atividades:", error);
+        activitiesListContainer.innerHTML = '<p style="color:red;">Erro ao carregar atividades.</p>';
+    }
+}
+
 // --- FUNÇÕES DE GEOLOCALIZAÇÃO ---
 function getDistance(lat1, lon1, lat2, lon2) {
-    const R = 6371e3; // Raio da Terra em metros
-    const φ1 = lat1 * Math.PI / 180;
-    const φ2 = lat2 * Math.PI / 180;
-    const Δφ = (lat2 - lat1) * Math.PI / 180;
-    const Δλ = (lon2 - lon1) * Math.PI / 180;
-
-    const a = Math.sin(Δφ / 2) * Math.sin(Δφ / 2) +
-              Math.cos(φ1) * Math.cos(φ2) *
-              Math.sin(Δλ / 2) * Math.sin(Δλ / 2);
+    const R = 6371e3;
+    const φ1 = lat1 * Math.PI / 180, φ2 = lat2 * Math.PI / 180;
+    const Δφ = (lat2 - lat1) * Math.PI / 180, Δλ = (lon2 - lon1) * Math.PI / 180;
+    const a = Math.sin(Δφ / 2) * Math.sin(Δφ / 2) + Math.cos(φ1) * Math.cos(φ2) * Math.sin(Δλ / 2) * Math.sin(Δλ / 2);
     const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-
     return R * c;
 }
 
@@ -105,94 +129,84 @@ function getDataDeHojeSP() {
 }
 
 async function atualizarPresenca(novoStatus) {
-    if (!voluntarioProfile || !atividadesDoDia) return;
-
+    if (!voluntarioProfile || atividadesDoDia.length === 0) return;
     const dataHoje = getDataDeHojeSP();
     const nomeVoluntario = voluntarioProfile.nome;
-    // Cria um ID de presença único para o dia e para o voluntário
     const presencaId = `${dataHoje}_${nomeVoluntario.replace(/\s+/g, '_')}`;
     const docRef = doc(db, "presencas", presencaId);
-
     try {
-        const dadosParaSalvar = { 
-            status: novoStatus, 
+        const dadosParaSalvar = {
+            status: novoStatus,
             ultimaAtualizacao: serverTimestamp(),
-            authUid: currentUser.uid, // Salvando o UID para referência
+            authUid: currentUser.uid,
             nome: nomeVoluntario,
-            atividade: atividadesDoDia,
+            atividade: atividadesDoDia.join(', '), // Salva as atividades como string
             data: dataHoje
         };
-
-        // Usamos { merge: true } para não sobrescrever os dados de primeiro checkin
         await setDoc(docRef, dadosParaSalvar, { merge: true });
         statusAtualVoluntario = novoStatus;
-        
         if (feedbackElement) {
-            if (novoStatus === 'presente') {
-                feedbackElement.textContent = `Presença confirmada na casa.`;
-                feedbackElement.style.color = "green";
-            } else {
-                feedbackElement.textContent = `Saída da casa registrada.`;
-                feedbackElement.style.color = "#1565c0";
-            }
+            feedbackElement.textContent = novoStatus === 'presente' ? `Presença confirmada.` : `Saída registrada.`;
+            feedbackElement.style.color = novoStatus === 'presente' ? "green" : "#1565c0";
         }
     } catch (e) {
         console.error("Erro ao atualizar presença:", e);
-        if (feedbackElement) feedbackElement.textContent = "Erro ao registrar presença.";
     }
 }
 
 function checarLocalizacao() {
     if (!navigator.geolocation) {
-        if (feedbackElement) feedbackElement.textContent = "Geolocalização não é suportada neste navegador.";
+        if (feedbackElement) feedbackElement.textContent = "Geolocalização não suportada.";
         return;
     }
-
     navigator.geolocation.getCurrentPosition(
         (position) => {
             const distancia = getDistance(position.coords.latitude, position.coords.longitude, CASA_ESPIRITA_LAT, CASA_ESPIRITA_LON);
-            if (feedbackElement) feedbackElement.textContent = `Você está a ${distancia.toFixed(0)} metros de distância.`;
-
+            if (feedbackElement) feedbackElement.textContent = `Distância: ${distancia.toFixed(0)} metros.`;
             if (distancia <= RAIO_EM_METROS) {
-                if (statusAtualVoluntario !== 'presente') {
-                    atualizarPresenca('presente');
-                }
+                if (statusAtualVoluntario !== 'presente') { atualizarPresenca('presente'); }
             } else {
-                if (statusAtualVoluntario === 'presente') {
-                    atualizarPresenca('ausente');
-                }
+                if (statusAtualVoluntario === 'presente') { atualizarPresenca('ausente'); }
             }
         },
-        () => {
-            if (feedbackElement) feedbackElement.textContent = "Não foi possível obter sua localização. Verifique as permissões do navegador.";
-        },
+        () => { if (feedbackElement) feedbackElement.textContent = "Não foi possível obter localização."; },
         { enableHighAccuracy: true }
     );
 }
 
 // --- EVENTOS DOS BOTÕES ---
-if (btnRegistrarPresenca) {
-    btnRegistrarPresenca.addEventListener('click', () => {
-        // ATENÇÃO: Futuramente, aqui abriremos o MODAL para selecionar atividades.
-        alert("Iniciando monitoramento de presença... Por favor, aceite a permissão de localização.");
-        
-        if (monitorInterval) clearInterval(monitorInterval);
-        checarLocalizacao(); // Checa imediatamente ao clicar
-        monitorInterval = setInterval(checarLocalizacao, 600000); // E depois a cada 10 minutos
+btnRegistrarPresenca.addEventListener('click', () => {
+    carregarAtividadesNoModal();
+    modalOverlay.classList.add('visible');
+});
 
-        btnRegistrarPresenca.disabled = true;
-        btnRegistrarPresenca.textContent = "MONITORAMENTO ATIVO";
-    });
-}
+modalOverlay.addEventListener('click', (event) => {
+    if (event.target === modalOverlay) {
+        modalOverlay.classList.remove('visible');
+    }
+});
 
-if (btnSair) {
-    btnSair.addEventListener('click', () => {
-        if (confirm("Tem certeza que deseja sair?")) {
-            signOut(auth).catch((error) => {
-                console.error("Erro ao fazer logout:", error);
-                alert("Erro ao tentar sair.");
-            });
-            // O onAuthStateChanged vai detectar a saída e redirecionar automaticamente.
-        }
-    });
-}
+btnConfirmarPresenca.addEventListener('click', () => {
+    const selecionadas = activitiesListContainer.querySelectorAll('input[type="checkbox"]:checked');
+    if (selecionadas.length === 0) {
+        alert("Por favor, selecione pelo menos uma atividade.");
+        return;
+    }
+    atividadesDoDia = Array.from(selecionadas).map(cb => cb.value);
+    console.log("Atividades selecionadas:", atividadesDoDia.join(', '));
+    modalOverlay.classList.remove('visible');
+    if (monitorInterval) clearInterval(monitorInterval);
+    checarLocalizacao();
+    monitorInterval = setInterval(checarLocalizacao, 600000);
+    btnRegistrarPresenca.disabled = true;
+    btnRegistrarPresenca.textContent = "MONITORAMENTO ATIVO";
+});
+
+btnSair.addEventListener('click', () => {
+    if (confirm("Tem certeza que deseja sair?")) {
+        signOut(auth).catch((error) => {
+            console.error("Erro ao fazer logout:", error);
+            alert("Erro ao tentar sair.");
+        });
+    }
+});
