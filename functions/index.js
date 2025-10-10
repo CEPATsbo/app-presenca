@@ -6,15 +6,13 @@ const { onCall, HttpsError } = require("firebase-functions/v2/https");
 const { onDocumentCreated, onDocumentWritten } = require("firebase-functions/v2/firestore");
 const { onSchedule } = require("firebase-functions/v2/scheduler");
 const { onRequest } = require("firebase-functions/v2/https");
-const { defineString } = require("firebase-functions/params"); // <-- MUDANÇA 1: Nova importação
+const { defineString } = require("firebase-functions/params");
 
-// Pacotes que não mudam
 const admin = require("firebase-admin");
 const webpush = require("web-push");
 const cors = require("cors")({ origin: true });
 const Fuse = require("fuse.js");
 const axios = require("axios");
-const stream = require('stream');
 const sharp = require('sharp');
 const bwipjs = require('bwip-js');
 
@@ -22,64 +20,30 @@ admin.initializeApp();
 const db = admin.firestore();
 const storage = admin.storage();
 
-// Constantes e Opções Globais para as Funções
 const REGIAO = 'southamerica-east1';
 const OPCOES_FUNCAO = { region: REGIAO };
 const OPCOES_FUNCAO_SAOPAULO = { region: REGIAO, timeZone: 'America/Sao_Paulo' };
 
-// MUDANÇA 2: Definição das variáveis de ambiente com o novo padrão V2
 const vapidPublicKey = defineString("VAPID_PUBLIC_KEY");
 const vapidPrivateKey = defineString("VAPID_PRIVATE_KEY");
 
+// --- FUNÇÕES AUXILIARES ---
 
-// ===================================================================
-// Funções Auxiliares (Não mudam)
-// ===================================================================
-function calcularCicloVibracoes(dataBase) {
-    const agora = new Date(dataBase);
-    const proximaQuinta = new Date(agora);
-    proximaQuinta.setUTCHours(proximaQuinta.getUTCHours() - 3);
-    const diaDaSemana = proximaQuinta.getDay();
-    let diasAteProximaQuinta = (4 - diaDaSemana + 7) % 7;
-    if (diasAteProximaQuinta === 0 && agora.getTime() > proximaQuinta.getTime()) {
-        diasAteProximaQuinta = 7;
-    }
-    proximaQuinta.setDate(proximaQuinta.getDate() + diasAteProximaQuinta);
-    proximaQuinta.setHours(19, 20, 0, 0);
-    const dataFimCiclo = new Date(proximaQuinta);
-    const dataArquivamento = new Date(dataFimCiclo);
-    dataArquivamento.setDate(dataArquivamento.getDate() + 21);
-    return {
-        dataFimCiclo: admin.firestore.Timestamp.fromDate(dataFimCiclo),
-        dataArquivamento: admin.firestore.Timestamp.fromDate(dataArquivamento)
-    };
-}
-
-// MUDANÇA 3: Função configurarWebPush totalmente corrigida para o padrão V2
 function configurarWebPush() {
     try {
-        // Acessa os valores das variáveis de ambiente definidas no topo do arquivo
         const publicKey = vapidPublicKey.value();
         const privateKey = vapidPrivateKey.value();
-
         if (publicKey && privateKey) {
-            webpush.setVapidDetails(
-                "mailto:cepaulodetarso.sbo@gmail.com",
-                publicKey,
-                privateKey
-            );
+            webpush.setVapidDetails("mailto:cepaulodetarso.sbo@gmail.com", publicKey, privateKey);
             return true;
         }
-        
-        console.error("ERRO CRÍTICO: Chaves VAPID (VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY) não encontradas nas variáveis de ambiente.");
+        console.error("ERRO CRÍTICO: Chaves VAPID não encontradas nas variáveis de ambiente.");
         return false;
-
     } catch (error) {
         console.error("ERRO CRÍTICO ao configurar web-push:", error);
         return false;
     }
 }
-
 
 async function enviarNotificacoesParaTodos(titulo, corpo) {
     if (!configurarWebPush()) { return { successCount: 0, failureCount: 0, totalCount: 0 }; }
@@ -103,19 +67,36 @@ const promoverUsuario = async (uid, novoPapel) => {
     if (!userQuery.empty) await userQuery.docs[0].ref.update({ role: novoPapel });
 };
 
+function calcularCicloVibracoes(dataBase) {
+    const agora = new Date(dataBase);
+    const proximaQuinta = new Date(agora);
+    proximaQuinta.setUTCHours(proximaQuinta.getUTCHours() - 3);
+    const diaDaSemana = proximaQuinta.getDay();
+    let diasAteProximaQuinta = (4 - diaDaSemana + 7) % 7;
+    if (diasAteProximaQuinta === 0 && agora.getTime() > proximaQuinta.getTime()) {
+        diasAteProximaQuinta = 7;
+    }
+    proximaQuinta.setDate(proximaQuinta.getDate() + diasAteProximaQuinta);
+    proximaQuinta.setHours(19, 20, 0, 0);
+    const dataFimCiclo = new Date(proximaQuinta);
+    const dataArquivamento = new Date(dataFimCiclo);
+    dataArquivamento.setDate(dataArquivamento.getDate() + 21);
+    return {
+        dataFimCiclo: admin.firestore.Timestamp.fromDate(dataFimCiclo),
+        dataArquivamento: admin.firestore.Timestamp.fromDate(dataArquivamento)
+    };
+}
 
-// ===================================================================
-// Funções Principais (Convertidas e Corrigidas para a Nova Sintaxe v2)
-// ===================================================================
+
+// --- FUNÇÕES PRINCIPAIS ---
 
 exports.sincronizarStatusVoluntario = onDocumentWritten({ ...OPCOES_FUNCAO, document: 'presencas/{presencaId}' }, async (event) => {
     const dadosPresenca = event.data.after.exists ? event.data.after.data() : null;
-    const dadosAntigos = event.data.before.exists ? event.data.before.data() : null;
     if (!dadosPresenca || dadosPresenca.status !== 'presente') { return null; }
+    const dadosAntigos = event.data.before.exists ? event.data.before.data() : null;
     if (dadosAntigos && dadosAntigos.status === 'presente') { return null; }
-    const nomeVoluntario = dadosPresenca.nome;
     const voluntariosRef = db.collection('voluntarios');
-    const q = voluntariosRef.where('nome', '==', nomeVoluntario).limit(1);
+    const q = voluntariosRef.where('nome', '==', dadosPresenca.nome).limit(1);
     const snapshot = await q.get();
     if (snapshot.empty) { return null; }
     return snapshot.docs[0].ref.update({ ultimaPresenca: dadosPresenca.data, statusVoluntario: 'ativo' });
@@ -272,32 +253,46 @@ exports.registrarVotoConselho = onCall(OPCOES_FUNCAO, async (request) => {
     if (!['conselheiro', 'super-admin'].includes(userRole)) { throw new HttpsError('permission-denied', 'Apenas membros do conselho ou super-admin podem votar.'); }
     const { balanceteId, voto, mensagem } = request.data;
     if (!balanceteId || !voto) { throw new HttpsError('invalid-argument', 'ID do balancete e voto são obrigatórios.'); }
+    
     const balanceteRef = db.collection('balancetes').doc(balanceteId);
-    const logAuditoriaCollection = db.collection('log_auditoria');
     const autor = { uid: request.auth.uid, nome: request.auth.token.name || request.auth.token.email };
+    
     try {
         const balanceteDoc = await balanceteRef.get();
         if (!balanceteDoc.exists) { throw new HttpsError('not-found', 'Balancete não encontrado.'); }
         const balanceteData = balanceteDoc.data();
         if (balanceteData.status !== 'em revisão') { throw new HttpsError('failed-precondition', 'Este balancete não está mais aberto para revisão.'); }
         if (balanceteData.aprovacoes && balanceteData.aprovacoes[autor.uid]) { throw new HttpsError('already-exists', 'Você já votou neste balancete.'); }
+        
         let updateData = {};
+        let logAcao = "VOTOU_BALANCETE";
         let logDetalhes = {};
+
         if (voto === 'aprovado') {
             const campoAprovacao = `aprovacoes.${autor.uid}`;
             updateData[campoAprovacao] = { nome: autor.nome, data: admin.firestore.FieldValue.serverTimestamp() };
-            logDetalhes = { balanceteId, voto: 'APROVADO' };
+            logDetalhes = { voto: 'APROVADO' };
         } else if (voto === 'reprovado') {
             if (!mensagem) { throw new HttpsError('invalid-argument', 'Uma mensagem com a ressalva é obrigatória para reprovar.'); }
             updateData.status = 'com_ressalva';
             updateData.mensagens = admin.firestore.FieldValue.arrayUnion({ autor, texto: mensagem, data: new Date(), isResposta: false });
-            logDetalhes = { balanceteId, voto: 'REPROVADO', ressalva: mensagem };
+            logDetalhes = { voto: 'REPROVADO', ressalva: mensagem };
         }
+        
         await balanceteRef.update(updateData);
-        await logAuditoriaCollection.add({ acao: "VOTOU_BALANCETE", autor, timestamp: admin.firestore.FieldValue.serverTimestamp(), detalhes: logDetalhes });
+
+        // --- AJUSTE AQUI: O 'balanceteId' agora é um campo de nível superior ---
+        await db.collection('log_auditoria').add({
+            acao: logAcao,
+            autor: autor,
+            timestamp: admin.firestore.FieldValue.serverTimestamp(),
+            balanceteId: balanceteId, // Campo principal para a busca
+            detalhes: logDetalhes
+        });
+
         return { success: true, message: 'Ação registrada com sucesso!' };
     } catch (error) {
-        console.error("Erro interno ao registrar voto do conselho:", error);
+        console.error("Erro interno ao registrar voto:", error);
         throw new HttpsError('internal', 'Ocorreu um erro interno ao processar seu voto.');
     }
 });
@@ -306,10 +301,21 @@ exports.verificarAprovacaoFinal = onDocumentWritten({ ...OPCOES_FUNCAO, document
     if (!event.data.after.exists) return null;
     const balanceteNovo = event.data.after.data();
     if (balanceteNovo.status !== 'em revisão') { return null; }
+    
     const totalAprovacoes = Object.keys(balanceteNovo.aprovacoes || {}).length;
+    
+    // A regra de 3 votos para aprovação automática
     if (totalAprovacoes >= 3) {
         await event.data.after.ref.update({ status: 'aprovado' });
-        await db.collection('log_auditoria').add({ acao: "BALANCETE_APROVADO_AUTO", autor: { nome: 'SISTEMA' }, timestamp: admin.firestore.FieldValue.serverTimestamp(), detalhes: { balanceteId: event.params.balanceteId, totalVotos: totalAprovacoes } });
+
+        // --- AJUSTE AQUI: O 'balanceteId' agora é um campo de nível superior ---
+        await db.collection('log_auditoria').add({
+            acao: "BALANCETE_APROVADO_AUTO",
+            autor: { nome: 'SISTEMA' },
+            timestamp: admin.firestore.FieldValue.serverTimestamp(),
+            balanceteId: event.params.balanceteId, // Campo principal
+            detalhes: { totalVotos: totalAprovacoes }
+        });
     }
     return null;
 });
