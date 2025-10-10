@@ -4,7 +4,6 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Portal da Transparência</title>
-    <script type="module" src="/auth-guard.js"></script>
     <style>
         body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background-color: #f4f6f9; display: flex; flex-direction: column; align-items: center; margin: 0; padding: 20px; box-sizing: border-box; }
         .admin-nav { width: 100%; max-width: 1100px; background-color: #fff; padding: 15px; margin-bottom: 30px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); text-align: center; display: flex; flex-wrap: wrap; justify-content: center; gap: 15px 25px; }
@@ -41,6 +40,7 @@
     <nav class="admin-nav">
         <a href="/index.html">Presença</a>
         <a href="/transparencia.html" class="active">Portal da Transparência</a>
+        <a href="/login.html" style="color: #1b5e20;">Área da Diretoria</a>
     </nav>
     <div class="portal-container">
         <h1>Portal da Transparência</h1>
@@ -60,13 +60,13 @@
         import { getFirestore, collection, getDoc, getDocs, query, where, orderBy, doc, documentId } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
         
         const firebaseConfig = {
-            apiKey: "AIzaSyBV7RPjk3cFTqL-aIpflJcUojKg1ZXMLuU",
-            authDomain: "voluntarios-ativos---cepat.firebaseapp.com",
-            projectId: "voluntarios-ativos---cepat",
-            storageBucket: "voluntarios-ativos---cepat.firebasestorage.app",
-            messagingSenderId: "66122858261",
-            appId: "1:66122858261:web:7fa21f1805463b5c08331c"
-        };
+  apiKey: "AIzaSyBV7RPjk3cFTqL-aIpflJcUojKg1ZXMLuU",
+  authDomain: "voluntarios-ativos---cepat.firebaseapp.com",
+  projectId: "voluntarios-ativos---cepat",
+  storageBucket: "voluntarios-ativos---cepat.firebasestorage.app",
+  messagingSenderId: "66122858261",
+  appId: "1:66122858261:web:7fa21f1805463b5c08331c"
+};
         
         const app = initializeApp(firebaseConfig);
         const db = getFirestore(app);
@@ -75,8 +75,8 @@
         const seletorBalancete = document.getElementById('seletor-balancete');
         const balanceteDisplay = document.getElementById('balancete-display');
         const loadingMessage = document.getElementById('loading-message');
-
-    
+        
+        // A lógica de autenticação foi removida. A página agora carrega diretamente.
         
         function formatarNomeOpcao(periodoId) {
             if (periodoId.includes('_')) {
@@ -114,14 +114,12 @@
                 }
                 
                 balancetesSnapshot.docs.forEach(doc => {
-                    const periodoId = doc.id;
-                    const nomeFormatado = formatarNomeOpcao(periodoId);
-                    const option = new Option(nomeFormatado, periodoId);
+                    const option = new Option(formatarNomeOpcao(doc.id), doc.id);
                     seletorBalancete.add(option);
                 });
 
                 seletorWrapper.style.display = 'flex';
-
+                
                 const balanceteMaisRecenteId = balancetesSnapshot.docs[0].id;
                 await carregarBalanceteSelecionado(balanceteMaisRecenteId);
 
@@ -141,21 +139,17 @@
             balanceteDisplay.innerHTML = `<h2>Carregando balancete...</h2>`;
 
             try {
-                const balanceteRef = doc(db, "balancetes", balanceteId);
-                const balanceteDoc = await getDoc(balanceteRef);
-
+                const balanceteDoc = await getDoc(doc(db, "balancetes", balanceteId));
                 if (!balanceteDoc.exists()) {
                     balanceteDisplay.innerHTML = `<h2>Balancete não encontrado.</h2>`;
                     return;
                 }
                 const balanceteData = balanceteDoc.data();
 
-                // ===================================================================
-                // CORREÇÃO: A busca agora usa 'balanceteId' no log, que é o padrão
-                // ===================================================================
+                // LÓGICA DE BUSCA CORRIGIDA para usar um campo principal
                 const logsQuery = query(
                     collection(db, "log_auditoria"),
-                    where("detalhes.balanceteId", "==", balanceteId)
+                    where("balanceteId", "==", balanceteId)
                 );
                 const logsSnapshot = await getDocs(logsQuery);
                 
@@ -171,7 +165,7 @@
 
             } catch (error) {
                 console.error(`Erro ao carregar dados para ${balanceteId}:`, error);
-                balanceteDisplay.innerHTML = `<h2>Ocorreu um erro ao carregar este balancete.</h2>`;
+                balanceteDisplay.innerHTML = `<h2>Ocorreu um erro. Pode ser necessário criar um índice no Firebase.</h2>`;
             }
         }
 
