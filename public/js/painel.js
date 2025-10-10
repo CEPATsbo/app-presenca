@@ -100,7 +100,6 @@ async function buscarPendenciasEEmprestimos(profile) {
     detalhesPendenciasCantina = [];
     detalhesPendenciasBiblioteca = [];
     detalhesEmprestimos = [];
-
     try {
         const qCantina = query(collection(db, "contas_a_receber"), where("compradorId", "==", profile.id), where("status", "==", "pendente"));
         const snapshotCantina = await getDocs(qCantina);
@@ -108,7 +107,6 @@ async function buscarPendenciasEEmprestimos(profile) {
         snapshotCantina.forEach(doc => { const data = doc.data(); totalCantina += data.total; detalhesPendenciasCantina.push(data); });
         if (pendenciaCantinaElement) pendenciaCantinaElement.textContent = `R$ ${totalCantina.toFixed(2).replace('.', ',')}`;
     } catch (e) { console.error("Erro ao buscar pendências da cantina:", e); }
-
     try {
         const qBibVendas = query(collection(db, "biblioteca_contas_a_receber"), where("compradorId", "==", profile.id), where("status", "==", "pendente"));
         const snapshotBibVendas = await getDocs(qBibVendas);
@@ -116,7 +114,6 @@ async function buscarPendenciasEEmprestimos(profile) {
         snapshotBibVendas.forEach(doc => { const data = doc.data(); totalBibVendas += data.total; detalhesPendenciasBiblioteca.push(data); });
         if (pendenciaBibliotecaElement) pendenciaBibliotecaElement.textContent = `R$ ${totalBibVendas.toFixed(2).replace('.', ',')}`;
     } catch (e) { console.error("Erro ao buscar pendências da biblioteca:", e); }
-
     try {
         const qBibEmprestimos = query(collection(db, "biblioteca_emprestimos"), where("leitor.id", "==", profile.id), where("status", "==", "emprestado"));
         const snapshotBibEmprestimos = await getDocs(qBibEmprestimos);
@@ -133,15 +130,14 @@ async function buscarPendenciasEEmprestimos(profile) {
     } catch (e) { console.error("Erro ao buscar empréstimos da biblioteca:", e); }
 }
 
-// ***** FUNÇÃO ATUALIZADA PARA MOSTRAR OS ITENS *****
+// ***** FUNÇÃO CORRIGIDA PARA USAR O CAMPO 'nome' *****
 function preencherModalDetalhes() {
-    // Função auxiliar para criar a lista de itens de uma compra
     const criarListaDeItens = (itens) => {
         if (!itens || itens.length === 0) return '';
         let listaHtml = '<ul class="item-details-list">';
         itens.forEach(produto => {
-            // Usa 'descricao' para a cantina e 'titulo' para a biblioteca
-            const nomeItem = produto.descricao || produto.titulo; 
+            // CORREÇÃO: Agora ele procura por 'nome' primeiro.
+            const nomeItem = produto.nome || produto.descricao || produto.titulo; 
             listaHtml += `<li>${produto.qtd}x ${nomeItem}</li>`;
         });
         listaHtml += '</ul>';
