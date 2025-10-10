@@ -1,6 +1,6 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
 import { getAuth, signInWithEmailAndPassword } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-auth.js";
-import { getFirestore, collection, query, where, getDocs, serverTimestamp, setDoc, doc, orderBy } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
+import { getFirestore, collection, query, where, getDocs, serverTimestamp, setDoc, doc, orderBy, getDoc } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
 import Fuse from 'https://cdn.jsdelivr.net/npm/fuse.js@7.0.0/dist/fuse.mjs';
 
 // --- CONFIGURAÇÕES GLOBAIS ---
@@ -21,24 +21,9 @@ const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
 
-// --- LÓGICA DO PORTAL DE LOGIN ---
+// --- ELEMENTOS DA PÁGINA ---
+const muralContainer = document.getElementById('mural-container');
 const formLogin = document.getElementById('form-login-portal');
-if (formLogin) {
-    formLogin.addEventListener('submit', (event) => {
-        event.preventDefault();
-        const email = document.getElementById('email-login').value;
-        const senha = document.getElementById('senha-login').value;
-        if (!email || !senha) { return alert("Por favor, preencha email e senha."); }
-        signInWithEmailAndPassword(auth, email, senha)
-            .then(() => { window.location.href = '/painel.html'; })
-            .catch((error) => {
-                console.error("Erro de login:", error.code);
-                alert("Email ou senha incorretos. Tente novamente.");
-            });
-    });
-}
-
-// --- LÓGICA DO REGISTRO DE PRESENÇA RÁPIDO ---
 const formPresencaRapida = document.getElementById('form-presenca-rapida');
 const nomeInput = document.getElementById('nome-presenca');
 const btnSelecionarAtividades = document.getElementById('btn-selecionar-atividades');
@@ -55,6 +40,23 @@ let monitorIntervalRapido;
 let statusAtualVoluntarioRapido = 'ausente';
 
 // --- FUNÇÕES AUXILIARES ---
+async function carregarMural() {
+    if (!muralContainer) return;
+    try {
+        const docRef = doc(db, "configuracoes", "mural");
+        const docSnap = await getDoc(docRef);
+        if (docSnap.exists() && docSnap.data().mensagem) {
+            muralContainer.innerText = docSnap.data().mensagem;
+            muralContainer.style.display = 'block';
+        } else {
+            muralContainer.style.display = 'none';
+        }
+    } catch (e) {
+        console.error("Erro ao carregar mural:", e);
+        muralContainer.style.display = 'none';
+    }
+}
+
 function getDistance(lat1, lon1, lat2, lon2) {
     const R = 6371e3;
     const φ1 = lat1 * Math.PI / 180, φ2 = lat2 * Math.PI / 180;
@@ -87,7 +89,6 @@ function checarLocalizacaoRapida(nome) {
     navigator.geolocation.getCurrentPosition(
         (position) => {
             const distancia = getDistance(position.coords.latitude, position.coords.longitude, CASA_ESPIRITA_LAT, CASA_ESPIRITA_LON);
-            
             if (distancia <= RAIO_EM_METROS) {
                 if (statusAtualVoluntarioRapido !== 'presente') {
                     feedbackGeoRapido.textContent = "✅ Presença confirmada na casa!";
@@ -105,12 +106,29 @@ function checarLocalizacaoRapida(nome) {
                 }
             }
         },
-        () => { if (feedbackGeoRapido) feedbackGeoRapido.textContent = "Não foi possível obter localização. Verifique as permissões."; },
+        () => { if (feedbackGeoRapido) feedbackGeoRapido.textContent = "Não foi possível obter localização."; },
         { enableHighAccuracy: true }
     );
 }
 
-// --- LÓGICA PRINCIPAL DO FORMULÁRIO ---
+// --- LÓGICA PRINCIPAL ---
+carregarMural();
+
+if (formLogin) {
+    formLogin.addEventListener('submit', (event) => {
+        event.preventDefault();
+        const email = document.getElementById('email-login').value;
+        const senha = document.getElementById('senha-login').value;
+        if (!email || !senha) { return alert("Por favor, preencha email e senha."); }
+        signInWithEmailAndPassword(auth, email, senha)
+            .then(() => { window.location.href = '/painel.html'; })
+            .catch((error) => {
+                console.error("Erro de login:", error.code);
+                alert("Email ou senha incorretos. Tente novamente.");
+            });
+    });
+}
+
 if (formPresencaRapida) {
     (async function buscarAtividadesDoFirestore() {
         if (!atividadesContainer) return;
@@ -136,19 +154,15 @@ if (formPresencaRapida) {
         const nomeDigitado = nomeInput.value.trim();
         const atividadesSelecionadasNode = document.querySelectorAll('#form-presenca-rapida input[name="atividade"]:checked');
         const atividadesSelecionadas = Array.from(atividadesSelecionadasNode).map(cb => cb.value);
-
         if (!nomeDigitado || nomeDigitado.split(' ').length < 2) { return alert("Por favor, digite seu nome completo."); }
         if (atividadesSelecionadas.length === 0) { return alert("Por favor, selecione pelo menos uma atividade."); }
-        
         const btnSubmit = formPresencaRapida.querySelector('button[type="submit"]');
         btnSubmit.disabled = true;
-
         try {
             const voluntariosSnapshot = await getDocs(query(collection(db, "voluntarios")));
             const listaDeVoluntarios = voluntariosSnapshot.docs.map(d => ({ id: d.id, ...d.data() }));
             const fuse = new Fuse(listaDeVoluntarios, { keys: ['nome'], includeScore: true, threshold: 0.45 });
             const resultados = fuse.search(nomeDigitado);
-
             let nomeFinalParaRegistro = nomeDigitado;
             if (resultados.length > 0) {
                 const melhorResultado = resultados[0].item.nome;
@@ -156,22 +170,17 @@ if (formPresencaRapida) {
                     if (confirm(`Encontramos um nome parecido: "${melhorResultado}".\n\nÉ você?`)) { nomeFinalParaRegistro = melhorResultado; }
                 } else { nomeFinalParaRegistro = melhorResultado; }
             }
-
             const dataHoje = getDataDeHojeSP();
             const presencaId = `${dataHoje}_${nomeFinalParaRegistro.replace(/\s+/g, '_')}`;
             const docRef = doc(db, "presencas", presencaId);
-            // REGISTRO INICIAL COM STATUS 'AUSENTE'
             await setDoc(docRef, { nome: nomeFinalParaRegistro, atividade: atividadesSelecionadas.join(', '), data: dataHoje, primeiroCheckin: serverTimestamp(), ultimaAtualizacao: serverTimestamp(), status: 'ausente', authUid: null }, { merge: true });
-
             statusNome.textContent = nomeFinalParaRegistro;
             statusAtividades.textContent = atividadesSelecionadas.join(', ');
             registroRapidoSection.classList.add('hidden');
             statusRapidoSection.classList.remove('hidden');
-
             if (monitorIntervalRapido) clearInterval(monitorIntervalRapido);
-            checarLocalizacaoRapida(nomeFinalParaRegistro); // Verifica imediatamente
-            monitorIntervalRapido = setInterval(() => checarLocalizacaoRapida(nomeFinalParaRegistro), 600000); // E depois a cada 10 min
-
+            checarLocalizacaoRapida(nomeFinalParaRegistro);
+            monitorIntervalRapido = setInterval(() => checarLocalizacaoRapida(nomeFinalParaRegistro), 600000);
         } catch (error) {
             console.error("ERRO CRÍTICO no registro rápido:", error);
             alert("Ocorreu um erro crítico ao registrar a presença.");
