@@ -1,6 +1,6 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
 import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-auth.js";
-import { getFirestore, collection, query, where, getDocs, doc, addDoc, onSnapshot, orderBy, limit } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
+import { getFirestore, collection, query, where, getDocs, doc, addDoc, onSnapshot, orderBy, limit, serverTimestamp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
 
 // --- CONFIGURAÇÕES ---
 const firebaseConfig = {
@@ -39,7 +39,7 @@ onAuthStateChanged(auth, async (user) => {
         if (!querySnapshot.empty) {
             const userProfile = querySnapshot.docs[0].data();
             const userRole = userProfile.role;
-            if (userRole === 'super-admin' || userRole === 'diretor' || userRole === 'tesoureiro') {
+            if (userRole === 'super-admin' || userRole === 'diretor') {
                 carregarTurmas();
             } else {
                 document.body.innerHTML = '<h1>Acesso Negado</h1><p>Você não tem permissão para acessar esta página.</p>';
@@ -88,14 +88,20 @@ async function carregarDadosParaModal() {
         const option = document.createElement('option');
         option.value = doc.id;
         option.textContent = doc.data().nome;
-        option.dataset.isEae = doc.data().isEAE || false; // Guarda se é EAE
+        option.dataset.isEae = doc.data().isEAE || false;
         selectCursoGabarito.appendChild(option);
     });
 
     // Carregar Voluntários
     selectFacilitadores.innerHTML = '';
     const voluntariosSnapshot = await getDocs(collection(db, "voluntarios"));
-    voluntariosSnapshot.forEach(doc => {
+    
+    // ORDENA OS VOLUNTÁRIOS POR NOME
+    const voluntariosOrdenados = voluntariosSnapshot.docs.sort((a, b) => {
+        return a.data().nome.localeCompare(b.data().nome);
+    });
+
+    voluntariosOrdenados.forEach(doc => {
         const option = document.createElement('option');
         option.value = doc.id;
         option.textContent = doc.data().nome;
@@ -113,7 +119,7 @@ async function salvarTurma(event) {
     event.preventDefault();
     const nomeDaTurma = inputTurmaNome.value.trim();
     const cursoGabaritoId = selectCursoGabarito.value;
-    const facilitadoresSelecionados = Array.from(selectFacilitadores.selectedOptions).map(option => option.value);
+    const facilitadoresSelecionados = Array.from(selectFacilitadores.selectedOptions).map(option => ({ id: option.value, nome: option.textContent }));
     
     if (!nomeDaTurma || !cursoGabaritoId || facilitadoresSelecionados.length === 0) {
         return alert("Por favor, preencha todos os campos.");
@@ -130,17 +136,15 @@ async function salvarTurma(event) {
         await addDoc(collection(db, "turmas"), {
             nomeDaTurma: nomeDaTurma,
             cursoId: cursoGabaritoId,
-            cursoNome: cursoNome, // Salva o nome para exibição fácil
-            isEAE: isEAE, // Salva se é EAE para exibição fácil
-            facilitadores: facilitadoresSelecionados,
+            cursoNome: cursoNome,
+            isEAE: isEAE,
+            facilitadores: facilitadoresSelecionados, // Salva o array de objetos {id, nome}
             dataInicio: inputDataInicio.value,
             diaDaSemana: parseInt(selectDiaSemana.value, 10),
             status: "Ativa",
-            anoAtual: 1, // Todas as turmas começam no ano 1
-            criadaEm: serverTimestamp()
+            anoAtual: 1,
+            criadaEm: serverTimestamp() // Agora esta função está definida
         });
-
-        // NOTA: Aqui, no futuro, será disparado o robô que gera o cronograma.
         
         modalTurma.classList.remove('visible');
         alert("Turma iniciada com sucesso!");
@@ -155,11 +159,11 @@ async function salvarTurma(event) {
 }
 
 // --- EVENTOS ---
-btnIniciarTurma.addEventListener('click', abrirModalTurma);
-closeModalTurmaBtn.addEventListener('click', () => modalTurma.classList.remove('visible'));
-modalTurma.addEventListener('click', (event) => {
+if(btnIniciarTurma) btnIniciarTurma.addEventListener('click', abrirModalTurma);
+if(closeModalTurmaBtn) closeModalTurmaBtn.addEventListener('click', () => modalTurma.classList.remove('visible'));
+if(modalTurma) modalTurma.addEventListener('click', (event) => {
     if (event.target === modalTurma) {
         modalTurma.classList.remove('visible');
     }
 });
-formTurma.addEventListener('submit', salvarTurma);
+if(formTurma) formTurma.addEventListener('submit', salvarTurma);
