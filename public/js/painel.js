@@ -1,6 +1,6 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
 import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-auth.js";
-import { getFirestore, collection, query, where, getDocs, doc, setDoc, serverTimestamp, orderBy, limit, getDoc } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
+import { getFirestore, collection, query, where, getDocs, doc, setDoc, serverTimestamp, orderBy, limit, getDoc, updateDoc } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
 
 // --- CONFIGURAÇÕES ---
 const firebaseConfig = {
@@ -42,6 +42,15 @@ const linkVerDetalhes = document.getElementById('link-ver-detalhes');
 const detalhesCantinaContainer = document.getElementById('detalhes-cantina-container');
 const detalhesBibliotecaContainer = document.getElementById('detalhes-biblioteca-container');
 const detalhesEmprestimosContainer = document.getElementById('detalhes-emprestimos-container');
+const modalOverlayEditarPerfil = document.getElementById('modal-editar-perfil');
+const closeModalEditarPerfilBtn = document.getElementById('close-modal-editar-perfil');
+const linkEditarDados = document.getElementById('link-editar-dados');
+const formEditarPerfil = document.getElementById('form-editar-perfil');
+const inputEditNome = document.getElementById('edit-nome');
+const inputEditTelefone = document.getElementById('edit-telefone');
+const inputEditEndereco = document.getElementById('edit-endereco');
+const inputEditAniversario = document.getElementById('edit-aniversario');
+const btnSalvarPerfil = document.getElementById('btn-salvar-perfil');
 
 // --- VARIÁVEIS DE ESTADO ---
 let currentUser = null;
@@ -178,6 +187,46 @@ function preencherModalDetalhes() {
     detalhesEmprestimosContainer.innerHTML = emprestimosHtml;
 }
 
+// --- NOVAS FUNÇÕES PARA EDITAR O PERFIL ---
+function abrirModalEdicao() {
+    if (!voluntarioProfile) return;
+    inputEditNome.value = voluntarioProfile.nome || '';
+    inputEditTelefone.value = voluntarioProfile.telefone || '';
+    inputEditEndereco.value = voluntarioProfile.endereco || '';
+    inputEditAniversario.value = voluntarioProfile.aniversario || '';
+    modalOverlayEditarPerfil.classList.add('visible');
+}
+
+async function salvarAlteracoesPerfil(event) {
+    event.preventDefault();
+    if (!voluntarioProfile || !voluntarioProfile.id) return;
+
+    const dadosAtualizados = {
+        nome: inputEditNome.value.trim(),
+        telefone: inputEditTelefone.value.trim(),
+        endereco: inputEditEndereco.value.trim(),
+        aniversario: inputEditAniversario.value.trim()
+    };
+
+    btnSalvarPerfil.disabled = true;
+    btnSalvarPerfil.textContent = 'Salvando...';
+
+    try {
+        const voluntarioDocRef = doc(db, "voluntarios", voluntarioProfile.id);
+        await updateDoc(voluntarioDocRef, dadosAtualizados);
+        voluntarioProfile = { ...voluntarioProfile, ...dadosAtualizados };
+        preencherPainel(voluntarioProfile);
+        alert("Dados atualizados com sucesso!");
+        modalOverlayEditarPerfil.classList.remove('visible');
+    } catch (error) {
+        console.error("Erro ao atualizar o perfil:", error);
+        alert("Ocorreu um erro ao salvar. Tente novamente.");
+    } finally {
+        btnSalvarPerfil.disabled = false;
+        btnSalvarPerfil.textContent = 'Salvar Alterações';
+    }
+}
+
 async function carregarAtividadesNoModal() {
     try {
         const q = query(collection(db, "atividades"), where("ativo", "==", true), orderBy("nome"));
@@ -258,24 +307,94 @@ function checarLocalizacao() {
 }
 
 // --- EVENTOS ---
-if(btnRegistrarPresenca) btnRegistrarPresenca.addEventListener('click', () => { carregarAtividadesNoModal(); modalOverlayAtividades.classList.add('visible'); });
-if(closeModalAtividadesBtn) closeModalAtividadesBtn.addEventListener('click', () => { modalOverlayAtividades.classList.remove('visible'); });
-if(modalOverlayAtividades) modalOverlayAtividades.addEventListener('click', (event) => { if (event.target === modalOverlayAtividades) { modalOverlayAtividades.classList.remove('visible'); } });
 
-if(btnConfirmarPresenca) btnConfirmarPresenca.addEventListener('click', () => {
-    const selecionadas = activitiesListContainer.querySelectorAll('input[type="checkbox"]:checked');
-    if (selecionadas.length === 0) { alert("Por favor, selecione pelo menos uma atividade."); return; }
-    atividadesDoDia = Array.from(selecionadas).map(cb => cb.value);
-    modalOverlayAtividades.classList.remove('visible');
-    if (monitorInterval) clearInterval(monitorInterval);
-    checarLocalizacao();
-    monitorInterval = setInterval(checarLocalizacao, 600000);
-    btnRegistrarPresenca.disabled = true;
-    btnRegistrarPresenca.textContent = "MONITORAMENTO ATIVO";
-});
+// Evento para abrir o modal de atividades
+if(btnRegistrarPresenca) {
+    btnRegistrarPresenca.addEventListener('click', () => { 
+        carregarAtividadesNoModal(); 
+        modalOverlayAtividades.classList.add('visible'); 
+    });
+}
 
-if(linkVerDetalhes) linkVerDetalhes.addEventListener('click', () => { preencherModalDetalhes(); modalOverlayDetalhes.classList.add('visible'); });
-if(closeModalDetalhesBtn) closeModalDetalhesBtn.addEventListener('click', () => { modalOverlayDetalhes.classList.remove('visible'); });
-if(modalOverlayDetalhes) modalOverlayDetalhes.addEventListener('click', (event) => { if (event.target === modalOverlayDetalhes) { modalOverlayDetalhes.classList.remove('visible'); } });
+// Eventos para fechar o modal de atividades
+if(closeModalAtividadesBtn) {
+    closeModalAtividadesBtn.addEventListener('click', () => { 
+        modalOverlayAtividades.classList.remove('visible'); 
+    });
+}
+if(modalOverlayAtividades) {
+    modalOverlayAtividades.addEventListener('click', (event) => { 
+        if (event.target === modalOverlayAtividades) { 
+            modalOverlayAtividades.classList.remove('visible'); 
+        } 
+    });
+}
 
-if(btnSair) btnSair.addEventListener('click', () => { if (confirm("Tem certeza que deseja sair?")) { signOut(auth); } });
+// Evento para confirmar a presença e iniciar monitoramento
+if(btnConfirmarPresenca) {
+    btnConfirmarPresenca.addEventListener('click', () => {
+        const selecionadas = activitiesListContainer.querySelectorAll('input[type="checkbox"]:checked');
+        if (selecionadas.length === 0) { 
+            alert("Por favor, selecione pelo menos uma atividade."); 
+            return; 
+        }
+        atividadesDoDia = Array.from(selecionadas).map(cb => cb.value);
+        modalOverlayAtividades.classList.remove('visible');
+        if (monitorInterval) clearInterval(monitorInterval);
+        checarLocalizacao();
+        monitorInterval = setInterval(checarLocalizacao, 600000);
+        btnRegistrarPresenca.disabled = true;
+        btnRegistrarPresenca.textContent = "MONITORAMENTO ATIVO";
+    });
+}
+
+// Evento para abrir o modal de detalhes
+if(linkVerDetalhes) {
+    linkVerDetalhes.addEventListener('click', () => { 
+        preencherModalDetalhes(); 
+        modalOverlayDetalhes.classList.add('visible'); 
+    });
+}
+
+// Eventos para fechar o modal de detalhes
+if(closeModalDetalhesBtn) {
+    closeModalDetalhesBtn.addEventListener('click', () => { 
+        modalOverlayDetalhes.classList.remove('visible'); 
+    });
+}
+if(modalOverlayDetalhes) {
+    modalOverlayDetalhes.addEventListener('click', (event) => { 
+        if (event.target === modalOverlayDetalhes) { 
+            modalOverlayDetalhes.classList.remove('visible'); 
+        } 
+    });
+}
+
+// Eventos para o novo modal de edição de perfil
+if(linkEditarDados) {
+    linkEditarDados.addEventListener('click', abrirModalEdicao);
+}
+if(closeModalEditarPerfilBtn) {
+    closeModalEditarPerfilBtn.addEventListener('click', () => {
+        modalOverlayEditarPerfil.classList.remove('visible');
+    });
+}
+if(modalOverlayEditarPerfil) {
+    modalOverlayEditarPerfil.addEventListener('click', (event) => { 
+        if (event.target === modalOverlayEditarPerfil) { 
+            modalOverlayEditarPerfil.classList.remove('visible'); 
+        } 
+    });
+}
+if(formEditarPerfil) {
+    formEditarPerfil.addEventListener('submit', salvarAlteracoesPerfil);
+}
+
+// Evento para o botão de Sair (Logout)
+if(btnSair) {
+    btnSair.addEventListener('click', () => { 
+        if (confirm("Tem certeza que deseja sair?")) { 
+            signOut(auth); 
+        } 
+    });
+}
