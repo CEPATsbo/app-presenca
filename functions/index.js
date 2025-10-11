@@ -1020,3 +1020,97 @@ exports.cadastrarAulasEAEAutomaticamente = onDocumentCreated({ ...OPCOES_FUNCAO,
         return null;
     }
 });
+
+// ===================================================================
+// ===== NOVO ROBÔ PARA GERAR O CRONOGRAMA DAS TURMAS ================
+// ===================================================================
+
+/**
+ * Acionado quando uma nova turma é criada.
+ * Gera o cronograma de aulas completo para a turma com base no gabarito do curso.
+ */
+exports.gerarCronogramaAutomaticamente = onDocumentCreated({ ...OPCOES_FUNCAO, document: 'turmas/{turmaId}' }, async (event) => {
+    const snap = event.data;
+    if (!snap) {
+        console.log("Nenhum dado no evento de criação da turma.");
+        return null;
+    }
+
+    const dadosTurma = snap.data();
+    const turmaId = event.params.turmaId;
+
+    const { cursoId, dataInicio, diaDaSemana } = dadosTurma;
+
+    if (!cursoId || !dataInicio || diaDaSemana === undefined) {
+        console.log(`Dados incompletos para a turma ${turmaId}. Abortando geração de cronograma.`);
+        return null;
+    }
+
+    console.log(`Iniciando geração de cronograma para a turma: ${dadosTurma.nomeDaTurma} (ID: ${turmaId})`);
+
+    try {
+        // 1. Buscar todas as aulas do currículo do curso gabarito
+        const aulasRef = db.collection('cursos').doc(cursoId).collection('curriculo');
+        const aulasSnapshot = await aulasRef.orderBy('numeroDaAula').get();
+
+        if (aulasSnapshot.empty) {
+            console.log(`O curso gabarito ${cursoId} não possui aulas cadastradas. Nenhum cronograma foi gerado.`);
+            return null;
+        }
+
+        const aulasDoCurso = [];
+        aulasSnapshot.forEach(doc => {
+            aulasDoCurso.push({ id: doc.id, ...doc.data() });
+        });
+
+        // 2. Calcular as datas das aulas
+        const cronograma = [];
+        // Converte a data de início (string 'YYYY-MM-DD') para um objeto Date, ajustando para o fuso horário correto.
+        let dataAtual = new Date(`${dataInicio}T12:00:00.000Z`);
+
+        aulasDoCurso.forEach(aula => {
+            // Encontra a próxima data que corresponde ao dia da semana da aula
+            while (dataAtual.getUTCDay() !== diaDaSemana) {
+                dataAtual.setUTCDate(dataAtual.getUTCDate() + 1);
+            }
+            
+            // Cria a entrada do cronograma com a data calculada
+            cronograma.push({
+                ...aula, // Inclui todos os dados da aula (numero, titulo, ano, etc)
+                aulaId: aula.id,
+                dataAgendada: admin.firestore.Timestamp.fromDate(dataAtual),
+                status: 'agendada' // Status inicial da aula
+            });
+
+            // Avança a data para a próxima semana para a próxima iteração
+            dataAtual.setUTCDate(dataAtual.getUTCDate() + 7);
+        });
+
+        // 3. Salvar o cronograma gerado em uma subcoleção da turma
+        const cronogramaRef = db.collection('turmas').doc(turmaId).collection('cronograma');
+        const batch = db.batch();
+
+        cronograma.forEach(aulaAgendada => {
+            const novaAulaCronogramaRef = cronogramaRef.doc();
+            batch.set(novaAulaCronogramaRef, aulaAgendada);
+        });
+
+        await batch.commit();
+        console.log(`Sucesso! ${cronograma.length} aulas foram agendadas para a turma ${turmaId}.`);
+        return null;
+
+    } catch (error) {
+        console.error(`Erro ao gerar cronograma para a turma ${turmaId}:`, error);
+        return null;
+    }
+});
+
+// ===================================================================
+// ===== NOVA FUNÇÃO DE TESTE "ISCA" =================================
+// ===================================================================
+
+exports.testeDeGatilhoTurma = onDocumentCreated({ ...OPCOES_FUNCAO, document: 'turmas/{turmaId}' }, (event) => {
+    const turmaId = event.params.turmaId;
+    console.log(`--- GATILHO DE CRIAÇÃO DE TURMA ACIONADO COM SUCESSO! --- ID da Turma: ${turmaId}`);
+    return null;
+});

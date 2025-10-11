@@ -22,6 +22,10 @@ const turmaTituloHeader = document.getElementById('turma-titulo-header');
 const participantesTable = document.getElementById('participantes-table');
 const participantesTableBody = document.getElementById('participantes-table-body');
 const btnInscreverParticipante = document.getElementById('btn-inscrever-participante');
+const cronogramaTableBody = document.getElementById('cronograma-table-body');
+const tabs = document.querySelectorAll('.tab-link');
+const tabContents = document.querySelectorAll('.tab-content');
+
 // Modal de Inscrição
 const modalInscricao = document.getElementById('modal-inscricao');
 const closeModalInscricaoBtn = document.getElementById('close-modal-inscricao');
@@ -73,6 +77,7 @@ async function carregarDadosDaTurma() {
         
         configurarTabelaParticipantes();
         escutarParticipantes();
+        escutarCronograma(); // Inicia a escuta do cronograma
     } else {
         document.body.innerHTML = '<h1>Erro: Turma não encontrada.</h1>';
     }
@@ -107,13 +112,43 @@ function escutarParticipantes() {
             if (turmaData.isEAE) {
                 rowHTML += `<td>${participante.grau || 'Aluno'}</td>`;
             }
-            rowHTML += `<td>Ativo</td>`; // Placeholder para o status
+            rowHTML += `<td>Ativo</td>`;
             rowHTML += `<td class="actions"><button class="icon-btn delete" data-id="${doc.id}"><i class="fas fa-trash-alt"></i></button></td>`;
             tr.innerHTML = rowHTML;
             participantesTableBody.appendChild(tr);
         });
     });
 }
+
+function escutarCronograma() {
+    const cronogramaRef = collection(db, "turmas", turmaId, "cronograma");
+    const q = query(cronogramaRef, orderBy("numeroDaAula"));
+
+    onSnapshot(q, (snapshot) => {
+        cronogramaTableBody.innerHTML = '';
+        if (snapshot.empty) {
+            cronogramaTableBody.innerHTML = '<tr><td colspan="5" style="text-align: center;">Cronograma ainda não gerado ou vazio.</td></tr>';
+            return;
+        }
+        snapshot.forEach(doc => {
+            const aula = doc.data();
+            const dataFormatada = aula.dataAgendada.toDate().toLocaleDateString('pt-BR');
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+                <td>${aula.numeroDaAula}</td>
+                <td>${dataFormatada}</td>
+                <td>${aula.titulo}</td>
+                <td>${aula.status}</td>
+                <td class="actions">
+                    <button class="icon-btn edit" title="Reagendar Aula" data-id="${doc.id}"><i class="fas fa-calendar-alt"></i></button>
+                    <button class="icon-btn recess" title="Marcar como Recesso" data-id="${doc.id}"><i class="fas fa-coffee"></i></button>
+                </td>
+            `;
+            cronogramaTableBody.appendChild(tr);
+        });
+    });
+}
+
 
 async function carregarVoluntariosParaInscricao() {
     participanteSelect.innerHTML = '<option value="">Selecione um voluntário/assistido</option>';
@@ -173,9 +208,21 @@ async function inscreverParticipante(event) {
 }
 
 // --- EVENTOS ---
+tabs.forEach(tab => {
+    tab.addEventListener('click', () => {
+        tabs.forEach(item => item.classList.remove('active'));
+        tab.classList.add('active');
+
+        const targetTab = document.getElementById(tab.dataset.tab);
+        tabContents.forEach(content => content.classList.remove('active'));
+        targetTab.classList.add('active');
+    });
+});
+
 if(btnInscreverParticipante) btnInscreverParticipante.addEventListener('click', abrirModalInscricao);
 if(closeModalInscricaoBtn) closeModalInscricaoBtn.addEventListener('click', () => modalInscricao.classList.remove('visible'));
 if(modalInscricao) modalInscricao.addEventListener('click', (event) => {
     if (event.target === modalInscricao) modalInscricao.classList.remove('visible');
 });
 if(formInscricao) formInscricao.addEventListener('submit', inscreverParticipante);
+
