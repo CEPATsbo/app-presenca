@@ -42,7 +42,6 @@ onAuthStateChanged(auth, async (user) => {
         const voluntariosRef = collection(db, "voluntarios");
         const q = query(voluntariosRef, where("authUid", "==", user.uid), limit(1));
         const querySnapshot = await getDocs(q);
-
         if (!querySnapshot.empty) {
             const userProfile = querySnapshot.docs[0].data();
             const userRole = userProfile.role;
@@ -67,27 +66,25 @@ onAuthStateChanged(auth, async (user) => {
 
 // --- FUNÇÕES ---
 async function carregarDetalhesDoCursoEAulas() {
-    try {
-        const cursoRef = doc(db, "cursos", cursoId);
-        const cursoSnap = await getDoc(cursoRef);
+    const cursoRef = doc(db, "cursos", cursoId);
+    const cursoSnap = await getDoc(cursoRef);
 
-        if (cursoSnap.exists()) {
-            const cursoData = cursoSnap.data();
-            cursoTituloHeader.innerHTML = `<small>Editando Currículo de:</small>${cursoData.nome}`;
-            cursoIsEAE = cursoData.isEAE || false;
+    if (cursoSnap.exists()) {
+        const cursoData = cursoSnap.data();
+        cursoTituloHeader.innerHTML = `<small>Editando Currículo de:</small>${cursoData.nome}`;
+        cursoIsEAE = cursoData.isEAE || false;
 
-            if (cursoIsEAE) {
-                colunaAno.classList.remove('hidden');
-                formGroupAno.classList.remove('hidden');
-            }
+        if (cursoIsEAE) {
+            colunaAno.classList.remove('hidden');
+            formGroupAno.classList.remove('hidden');
         }
+    }
 
-        const aulasRef = collection(db, "cursos", cursoId, "curriculo");
-        const q = query(aulasRef, orderBy("numeroDaAula"));
-        
-        // ***** MUDANÇA CRÍTICA AQUI: Trocamos onSnapshot por getDocs *****
-        const snapshot = await getDocs(q); // Esta linha vai gerar o erro que precisamos!
-
+    const aulasRef = collection(db, "cursos", cursoId, "curriculo");
+    const q = query(aulasRef, orderBy("numeroDaAula"));
+    
+    // ***** CORREÇÃO APLICADA AQUI: Voltamos a usar onSnapshot *****
+    onSnapshot(q, (snapshot) => {
         aulasTableBody.innerHTML = '';
         if (snapshot.empty) {
             aulasTableBody.innerHTML = '<tr><td colspan="4" style="text-align: center;">Nenhuma aula cadastrada. Clique em "Adicionar Nova Aula" para começar.</td></tr>';
@@ -108,10 +105,11 @@ async function carregarDetalhesDoCursoEAulas() {
             `;
             aulasTableBody.appendChild(tr);
         });
-    } catch (error) {
-        // O erro que queremos vai ser capturado aqui!
-        console.error("ERRO CAPTURADO:", error);
-    }
+    }, (error) => {
+        // Se houver um erro no listener (como falta de índice), ele aparecerá aqui
+        console.error("Erro no listener de aulas:", error);
+        aulasTableBody.innerHTML = '<tr><td colspan="4" style="text-align: center; color: red;">Erro ao carregar aulas. Verifique o console.</td></tr>';
+    });
 }
 
 function abrirModalAula(aulaId = null) {
@@ -170,7 +168,7 @@ async function salvarAula(event) {
 }
 
 async function deletarAula(aulaId) {
-    if (!confirm("Tem certeza que deseja excluir esta aula?")) {
+    if (!confirm("Tem certeza que deseja excluir esta aula? Esta ação não pode ser desfeita.")) {
         return;
     }
     try {
