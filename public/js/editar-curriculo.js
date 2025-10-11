@@ -83,7 +83,6 @@ async function carregarDetalhesDoCursoEAulas() {
     const aulasRef = collection(db, "cursos", cursoId, "curriculo");
     const q = query(aulasRef, orderBy("numeroDaAula"));
     
-    // ***** CORREÇÃO APLICADA AQUI: Voltamos a usar onSnapshot *****
     onSnapshot(q, (snapshot) => {
         aulasTableBody.innerHTML = '';
         if (snapshot.empty) {
@@ -106,7 +105,6 @@ async function carregarDetalhesDoCursoEAulas() {
             aulasTableBody.appendChild(tr);
         });
     }, (error) => {
-        // Se houver um erro no listener (como falta de índice), ele aparecerá aqui
         console.error("Erro no listener de aulas:", error);
         aulasTableBody.innerHTML = '<tr><td colspan="4" style="text-align: center; color: red;">Erro ao carregar aulas. Verifique o console.</td></tr>';
     });
@@ -151,10 +149,13 @@ async function salvarAula(event) {
     btnSalvarAula.textContent = 'Salvando...';
 
     try {
-        const aulasRef = collection(db, "cursos", cursoId, "curriculo");
         if (id) {
-            await updateDoc(doc(aulasRef, id), dadosAula);
+            // CORREÇÃO: Usar a referência direta ao documento
+            const aulaRef = doc(db, "cursos", cursoId, "curriculo", id);
+            await updateDoc(aulaRef, dadosAula);
         } else {
+            // A adição de um novo documento já estava correta
+            const aulasRef = collection(db, "cursos", cursoId, "curriculo");
             await addDoc(aulasRef, dadosAula);
         }
         modalAula.classList.remove('visible');
@@ -172,7 +173,10 @@ async function deletarAula(aulaId) {
         return;
     }
     try {
-        await deleteDoc(doc(db, "cursos", cursoId, "curriculo", aulaId));
+        // A lógica de exclusão já estava correta, mas a mantemos aqui para consistência.
+        const aulaRef = doc(db, "cursos", cursoId, "curriculo", aulaId);
+        await deleteDoc(aulaRef);
+        // O onSnapshot cuidará de remover a linha da tela automaticamente.
     } catch (error) {
         console.error("Erro ao deletar aula:", error);
         alert("Ocorreu um erro ao excluir a aula.");
