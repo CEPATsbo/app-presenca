@@ -1,6 +1,7 @@
+// Substitua o conteúdo de public/js/gerenciar-cursos.js por este código
 import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
 import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-auth.js";
-import { getFirestore, collection, query, where, getDocs, doc, getDoc, addDoc, updateDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
+import { getFirestore, collection, query, where, getDocs, doc, getDoc, addDoc, updateDoc, onSnapshot, limit } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
 
 // --- CONFIGURAÇÕES ---
 const firebaseConfig = {
@@ -33,29 +34,24 @@ const btnSalvarCurso = document.getElementById('btn-salvar-curso');
 // --- VERIFICAÇÃO DE PERMISSÃO ---
 onAuthStateChanged(auth, async (user) => {
     if (user) {
-        // CORREÇÃO APLICADA AQUI:
-        // Buscamos o perfil do voluntário pelo 'authUid' que é a forma correta e mais segura.
         const voluntariosRef = collection(db, "voluntarios");
         const q = query(voluntariosRef, where("authUid", "==", user.uid), limit(1));
         const querySnapshot = await getDocs(q);
 
         if (!querySnapshot.empty) {
             const userProfile = querySnapshot.docs[0].data();
-            const userCargos = userProfile.cargos; // O campo correto é 'cargos', que é um array
+            const userCargos = userProfile.cargos;
 
-            // Verificamos se 'cargos' é um array e se ele inclui as permissões necessárias.
             if (Array.isArray(userCargos) && (userCargos.includes('super-admin') || userCargos.includes('diretor'))) {
-                // Permissão concedida
                 carregarCursos();
             } else {
-                // Permissão negada
                 document.body.innerHTML = '<h1>Acesso Negado</h1><p>Você não tem permissão para acessar esta página.</p>';
             }
         } else {
             document.body.innerHTML = '<h1>Acesso Negado</h1><p>Seu perfil de voluntário não foi encontrado.</p>';
         }
     } else {
-        window.location.href = '/index.html'; // Redireciona para login se não estiver autenticado
+        window.location.href = '/index.html';
     }
 });
 
