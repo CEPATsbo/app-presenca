@@ -1,9 +1,8 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
 import { getAuth, signInWithEmailAndPassword } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-auth.js";
-import { getFirestore, collection, query, where, getDocs, serverTimestamp, setDoc, doc, orderBy, getDoc } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
+import { getFirestore, collection, query, where, getDocs, serverTimestamp, setDoc, doc, orderBy, getDoc, addDoc } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
 import Fuse from 'https://cdn.jsdelivr.net/npm/fuse.js@7.0.0/dist/fuse.mjs';
 
-// --- CONFIGURAÇÕES GLOBAIS ---
 const firebaseConfig = {
     apiKey: "AIzaSyBV7RPjk3cFTqL-aIpflJcUojKg1ZXMLuU",
     authDomain: "voluntarios-ativos---cepat.firebaseapp.com",
@@ -16,12 +15,10 @@ const CASA_ESPIRITA_LAT = -22.75553;
 const CASA_ESPIRITA_LON = -47.36945;
 const RAIO_EM_METROS = 40;
 
-// --- INICIALIZAÇÃO ---
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
 
-// --- ELEMENTOS DA PÁGINA ---
 const muralContainer = document.getElementById('mural-container');
 const formLogin = document.getElementById('form-login-portal');
 const formPresencaRapida = document.getElementById('form-presenca-rapida');
@@ -39,7 +36,6 @@ const feedbackGeoRapido = document.getElementById('feedback-geolocalizacao-rapid
 let monitorIntervalRapido;
 let statusAtualVoluntarioRapido = 'ausente';
 
-// --- FUNÇÕES AUXILIARES ---
 async function carregarMural() {
     if (!muralContainer) return;
     try {
@@ -51,10 +47,7 @@ async function carregarMural() {
         } else {
             muralContainer.style.display = 'none';
         }
-    } catch (e) {
-        console.error("Erro ao carregar mural:", e);
-        muralContainer.style.display = 'none';
-    }
+    } catch (e) { console.error("Erro ao carregar mural:", e); }
 }
 
 function getDistance(lat1, lon1, lat2, lon2) {
@@ -111,7 +104,6 @@ function checarLocalizacaoRapida(nome) {
     );
 }
 
-// --- LÓGICA PRINCIPAL ---
 carregarMural();
 
 if (formLogin) {
@@ -144,11 +136,9 @@ if (formPresencaRapida) {
             });
         } catch (e) { console.error("Erro ao buscar atividades:", e); }
     })();
-
     btnSelecionarAtividades.addEventListener('click', () => {
         atividadesWrapper.style.display = atividadesWrapper.style.display === 'block' ? 'none' : 'block';
     });
-
     formPresencaRapida.addEventListener('submit', async (event) => {
         event.preventDefault();
         const nomeDigitado = nomeInput.value.trim();
@@ -163,24 +153,45 @@ if (formPresencaRapida) {
             const listaDeVoluntarios = voluntariosSnapshot.docs.map(d => ({ id: d.id, ...d.data() }));
             const fuse = new Fuse(listaDeVoluntarios, { keys: ['nome'], includeScore: true, threshold: 0.45 });
             const resultados = fuse.search(nomeDigitado);
-            let nomeFinalParaRegistro = nomeDigitado;
+            let voluntarioParaRegistrar = { id: null, nome: nomeDigitado };
             if (resultados.length > 0) {
-                const melhorResultado = resultados[0].item.nome;
-                if (nomeDigitado.toLowerCase() !== melhorResultado.toLowerCase()) {
-                    if (confirm(`Encontramos um nome parecido: "${melhorResultado}".\n\nÉ você?`)) { nomeFinalParaRegistro = melhorResultado; }
-                } else { nomeFinalParaRegistro = melhorResultado; }
+                const melhorResultado = resultados[0].item;
+                if (nomeDigitado.toLowerCase() !== melhorResultado.nome.toLowerCase()) {
+                    if (confirm(`Encontramos um nome parecido: "${melhorResultado.nome}".\n\nÉ você?`)) { 
+                        voluntarioParaRegistrar = melhorResultado;
+                    }
+                } else { 
+                    voluntarioParaRegistrar = melhorResultado;
+                }
+            }
+            if (!voluntarioParaRegistrar.id) {
+                const novoVoluntarioDoc = await addDoc(collection(db, "voluntarios"), {
+                    nome: voluntarioParaRegistrar.nome,
+                    statusVoluntario: 'ativo',
+                    criadoEm: serverTimestamp()
+                });
+                voluntarioParaRegistrar.id = novoVoluntarioDoc.id;
             }
             const dataHoje = getDataDeHojeSP();
-            const presencaId = `${dataHoje}_${nomeFinalParaRegistro.replace(/\s+/g, '_')}`;
+            const presencaId = `${dataHoje}_${voluntarioParaRegistrar.nome.replace(/\s+/g, '_')}`;
             const docRef = doc(db, "presencas", presencaId);
-            await setDoc(docRef, { nome: nomeFinalParaRegistro, atividade: atividadesSelecionadas.join(', '), data: dataHoje, primeiroCheckin: serverTimestamp(), ultimaAtualizacao: serverTimestamp(), status: 'ausente', authUid: null }, { merge: true });
-            statusNome.textContent = nomeFinalParaRegistro;
+            await setDoc(docRef, { 
+                nome: voluntarioParaRegistrar.nome, 
+                atividade: atividadesSelecionadas.join(', '), 
+                data: dataHoje, 
+                primeiroCheckin: serverTimestamp(), 
+                ultimaAtualizacao: serverTimestamp(), 
+                status: 'ausente', 
+                authUid: null,
+                voluntarioId: voluntarioParaRegistrar.id
+            }, { merge: true });
+            statusNome.textContent = voluntarioParaRegistrar.nome;
             statusAtividades.textContent = atividadesSelecionadas.join(', ');
             registroRapidoSection.classList.add('hidden');
             statusRapidoSection.classList.remove('hidden');
             if (monitorIntervalRapido) clearInterval(monitorIntervalRapido);
-            checarLocalizacaoRapida(nomeFinalParaRegistro);
-            monitorIntervalRapido = setInterval(() => checarLocalizacaoRapida(nomeFinalParaRegistro), 600000);
+            checarLocalizacaoRapida(voluntarioParaRegistrar.nome);
+            monitorIntervalRapido = setInterval(() => checarLocalizacaoRapida(voluntarioParaRegistrar.nome), 600000);
         } catch (error) {
             console.error("ERRO CRÍTICO no registro rápido:", error);
             alert("Ocorreu um erro crítico ao registrar a presença.");
