@@ -1,4 +1,3 @@
-// Substitua o conteúdo de public/js/gerenciar-cursos.js por este código
 import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
 import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-auth.js";
 import { getFirestore, collection, query, where, getDocs, doc, getDoc, addDoc, updateDoc, onSnapshot, limit } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
@@ -40,18 +39,24 @@ onAuthStateChanged(auth, async (user) => {
 
         if (!querySnapshot.empty) {
             const userProfile = querySnapshot.docs[0].data();
-            const userCargos = userProfile.cargos;
+            
+            // ***** CORREÇÃO APLICADA AQUI *****
+            // Lemos o campo 'role' que é uma string.
+            const userRole = userProfile.role; 
 
-            if (Array.isArray(userCargos) && (userCargos.includes('super-admin') || userCargos.includes('diretor'))) {
+            // Verificamos se 'role' é a string 'super-admin' ou 'diretor'.
+            if (userRole === 'super-admin' || userRole === 'diretor') {
+                // Permissão concedida
                 carregarCursos();
             } else {
+                // Permissão negada
                 document.body.innerHTML = '<h1>Acesso Negado</h1><p>Você não tem permissão para acessar esta página.</p>';
             }
         } else {
             document.body.innerHTML = '<h1>Acesso Negado</h1><p>Seu perfil de voluntário não foi encontrado.</p>';
         }
     } else {
-        window.location.href = '/index.html';
+        window.location.href = '/index.html'; // Redireciona para login se não estiver autenticado
     }
 });
 
