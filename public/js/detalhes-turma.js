@@ -1,6 +1,6 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
 import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-auth.js";
-import { getFirestore, collection, query, where, getDocs, doc, getDoc, addDoc, onSnapshot, orderBy, limit, serverTimestamp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
+import { getFirestore, collection, query, where, getDocs, doc, getDoc, addDoc, onSnapshot, orderBy, limit, serverTimestamp, Timestamp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
 
 // --- CONFIGURAÇÕES ---
 const firebaseConfig = {
@@ -25,6 +25,7 @@ const btnInscreverParticipante = document.getElementById('btn-inscrever-particip
 const cronogramaTableBody = document.getElementById('cronograma-table-body');
 const tabs = document.querySelectorAll('.tab-link');
 const tabContents = document.querySelectorAll('.tab-content');
+const btnAddAulaExtra = document.getElementById('btn-add-aula-extra');
 
 // Modal de Inscrição
 const modalInscricao = document.getElementById('modal-inscricao');
@@ -34,6 +35,14 @@ const participanteSelect = document.getElementById('participante-select');
 const formGroupGrau = document.getElementById('form-group-grau');
 const participanteGrauSelect = document.getElementById('participante-grau');
 const btnSalvarInscricao = document.getElementById('btn-salvar-inscricao');
+
+// Modal de Aula Extra
+const modalAulaExtra = document.getElementById('modal-aula-extra');
+const closeModalAulaExtraBtn = document.getElementById('close-modal-aula-extra');
+const formAulaExtra = document.getElementById('form-aula-extra');
+const inputAulaExtraTitulo = document.getElementById('aula-extra-titulo');
+const inputAulaExtraData = document.getElementById('aula-extra-data');
+const btnSalvarAulaExtra = document.getElementById('btn-salvar-aula-extra');
 
 let turmaId = null;
 let turmaData = null;
@@ -70,19 +79,16 @@ onAuthStateChanged(auth, async (user) => {
 async function carregarDadosDaTurma() {
     const turmaRef = doc(db, "turmas", turmaId);
     const turmaSnap = await getDoc(turmaRef);
-
     if (turmaSnap.exists()) {
         turmaData = turmaSnap.data();
         turmaTituloHeader.innerHTML = `<small>Gerenciando a Turma:</small>${turmaData.nomeDaTurma}`;
-        
         configurarTabelaParticipantes();
         escutarParticipantes();
-        escutarCronograma(); // Inicia a escuta do cronograma
+        escutarCronograma();
     } else {
         document.body.innerHTML = '<h1>Erro: Turma não encontrada.</h1>';
     }
 }
-
 function configurarTabelaParticipantes() {
     let tableHeaderHTML = '<tr><th>Nome do Participante</th>';
     if (turmaData.isEAE) {
@@ -122,7 +128,7 @@ function escutarParticipantes() {
 
 function escutarCronograma() {
     const cronogramaRef = collection(db, "turmas", turmaId, "cronograma");
-    const q = query(cronogramaRef, orderBy("numeroDaAula"));
+    const q = query(cronogramaRef, orderBy("dataAgendada", "asc")); // Ordenar por data
 
     onSnapshot(q, (snapshot) => {
         cronogramaTableBody.innerHTML = '';
@@ -134,8 +140,10 @@ function escutarCronograma() {
             const aula = doc.data();
             const dataFormatada = aula.dataAgendada.toDate().toLocaleDateString('pt-BR');
             const tr = document.createElement('tr');
+            // Se for aula extra, o número da aula pode não existir, então mostramos "Extra"
+            const numeroAulaDisplay = aula.isExtra ? '<strong>Extra</strong>' : aula.numeroDaAula;
             tr.innerHTML = `
-                <td>${aula.numeroDaAula}</td>
+                <td>${numeroAulaDisplay}</td>
                 <td>${dataFormatada}</td>
                 <td>${aula.titulo}</td>
                 <td>${aula.status}</td>
@@ -207,6 +215,38 @@ async function inscreverParticipante(event) {
     }
 }
 
+function abrirModalAulaExtra() {
+    formAulaExtra.reset();
+    modalAulaExtra.classList.add('visible');
+}
+
+async function salvarAulaExtra(event) {
+    event.preventDefault();
+    const titulo = inputAulaExtraTitulo.value.trim();
+    const data = inputAulaExtraData.value;
+    if (!titulo || !data) {
+        return alert("Por favor, preencha o título e a data da aula.");
+    }
+    btnSalvarAulaExtra.disabled = true;
+    try {
+        const novaAulaExtra = {
+            titulo: titulo,
+            dataAgendada: Timestamp.fromDate(new Date(`${data}T12:00:00.000Z`)),
+            status: 'agendada',
+            isExtra: true,
+            numeroDaAula: 999 // Um número alto para ordenação, caso a ordenação por data falhe
+        };
+        const cronogramaRef = collection(db, "turmas", turmaId, "cronograma");
+        await addDoc(cronogramaRef, novaAulaExtra);
+        modalAulaExtra.classList.remove('visible');
+    } catch (error) {
+        console.error("Erro ao salvar aula extra:", error);
+        alert("Ocorreu um erro ao salvar a aula extra.");
+    } finally {
+        btnSalvarAulaExtra.disabled = false;
+    }
+}
+
 // --- EVENTOS ---
 tabs.forEach(tab => {
     tab.addEventListener('click', () => {
@@ -221,8 +261,12 @@ tabs.forEach(tab => {
 
 if(btnInscreverParticipante) btnInscreverParticipante.addEventListener('click', abrirModalInscricao);
 if(closeModalInscricaoBtn) closeModalInscricaoBtn.addEventListener('click', () => modalInscricao.classList.remove('visible'));
-if(modalInscricao) modalInscricao.addEventListener('click', (event) => {
-    if (event.target === modalInscricao) modalInscricao.classList.remove('visible');
-});
+if(modalInscricao) modalInscricao.addEventListener('click', (event) => { if (event.target === modalInscricao) modalInscricao.classList.remove('visible'); });
 if(formInscricao) formInscricao.addEventListener('submit', inscreverParticipante);
+
+if(btnAddAulaExtra) btnAddAulaExtra.addEventListener('click', abrirModalAulaExtra);
+if(closeModalAulaExtraBtn) closeModalAulaExtraBtn.addEventListener('click', () => modalAulaExtra.classList.remove('visible'));
+if(modalAulaExtra) modalAulaExtra.addEventListener('click', (event) => { if (event.target === modalAulaExtra) modalAulaExtra.classList.remove('visible'); });
+if(formAulaExtra) formAulaExtra.addEventListener('submit', salvarAulaExtra);
+
 
