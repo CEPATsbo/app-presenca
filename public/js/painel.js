@@ -51,6 +51,10 @@ const inputEditTelefone = document.getElementById('edit-telefone');
 const inputEditEndereco = document.getElementById('edit-endereco');
 const inputEditAniversario = document.getElementById('edit-aniversario');
 const btnSalvarPerfil = document.getElementById('btn-salvar-perfil');
+const modalOverlayHistorico = document.getElementById('modal-historico');
+const closeModalHistoricoBtn = document.getElementById('close-modal-historico');
+const linkVerHistorico = document.getElementById('link-ver-historico');
+const historyListContainer = document.getElementById('history-list-container');
 
 // --- VARIÁVEIS DE ESTADO ---
 let currentUser = null;
@@ -109,6 +113,7 @@ async function buscarPendenciasEEmprestimos(profile) {
     detalhesPendenciasCantina = [];
     detalhesPendenciasBiblioteca = [];
     detalhesEmprestimos = [];
+
     try {
         const qCantina = query(collection(db, "contas_a_receber"), where("compradorId", "==", profile.id), where("status", "==", "pendente"));
         const snapshotCantina = await getDocs(qCantina);
@@ -116,6 +121,7 @@ async function buscarPendenciasEEmprestimos(profile) {
         snapshotCantina.forEach(doc => { const data = doc.data(); totalCantina += data.total; detalhesPendenciasCantina.push(data); });
         if (pendenciaCantinaElement) pendenciaCantinaElement.textContent = `R$ ${totalCantina.toFixed(2).replace('.', ',')}`;
     } catch (e) { console.error("Erro ao buscar pendências da cantina:", e); }
+
     try {
         const qBibVendas = query(collection(db, "biblioteca_contas_a_receber"), where("compradorId", "==", profile.id), where("status", "==", "pendente"));
         const snapshotBibVendas = await getDocs(qBibVendas);
@@ -123,6 +129,7 @@ async function buscarPendenciasEEmprestimos(profile) {
         snapshotBibVendas.forEach(doc => { const data = doc.data(); totalBibVendas += data.total; detalhesPendenciasBiblioteca.push(data); });
         if (pendenciaBibliotecaElement) pendenciaBibliotecaElement.textContent = `R$ ${totalBibVendas.toFixed(2).replace('.', ',')}`;
     } catch (e) { console.error("Erro ao buscar pendências da biblioteca:", e); }
+
     try {
         const qBibEmprestimos = query(collection(db, "biblioteca_emprestimos"), where("leitor.id", "==", profile.id), where("status", "==", "emprestado"));
         const snapshotBibEmprestimos = await getDocs(qBibEmprestimos);
@@ -139,20 +146,17 @@ async function buscarPendenciasEEmprestimos(profile) {
     } catch (e) { console.error("Erro ao buscar empréstimos da biblioteca:", e); }
 }
 
-// ***** FUNÇÃO CORRIGIDA PARA USAR O CAMPO 'nome' *****
 function preencherModalDetalhes() {
     const criarListaDeItens = (itens) => {
         if (!itens || itens.length === 0) return '';
         let listaHtml = '<ul class="item-details-list">';
         itens.forEach(produto => {
-            // CORREÇÃO: Agora ele procura por 'nome' primeiro.
             const nomeItem = produto.nome || produto.descricao || produto.titulo; 
             listaHtml += `<li>${produto.qtd}x ${nomeItem}</li>`;
         });
         listaHtml += '</ul>';
         return listaHtml;
     };
-
     let cantinaHtml = '<h4>Pendências da Cantina</h4>';
     if (detalhesPendenciasCantina.length > 0) {
         cantinaHtml += '<ul>';
@@ -163,7 +167,6 @@ function preencherModalDetalhes() {
         cantinaHtml += '</ul>';
     } else { cantinaHtml += '<p>Nenhuma pendência na cantina.</p>'; }
     detalhesCantinaContainer.innerHTML = cantinaHtml;
-
     let bibHtml = '<h4>Pendências da Biblioteca (Vendas)</h4>';
     if (detalhesPendenciasBiblioteca.length > 0) {
         bibHtml += '<ul>';
@@ -174,7 +177,6 @@ function preencherModalDetalhes() {
         bibHtml += '</ul>';
     } else { bibHtml += '<p>Nenhuma pendência de vendas na biblioteca.</p>'; }
     detalhesBibliotecaContainer.innerHTML = bibHtml;
-
     let emprestimosHtml = '<h4>Livros Emprestados</h4>';
     if (detalhesEmprestimos.length > 0) {
         emprestimosHtml += '<ul>';
@@ -187,7 +189,6 @@ function preencherModalDetalhes() {
     detalhesEmprestimosContainer.innerHTML = emprestimosHtml;
 }
 
-// --- NOVAS FUNÇÕES PARA EDITAR O PERFIL ---
 function abrirModalEdicao() {
     if (!voluntarioProfile) return;
     inputEditNome.value = voluntarioProfile.nome || '';
@@ -200,17 +201,14 @@ function abrirModalEdicao() {
 async function salvarAlteracoesPerfil(event) {
     event.preventDefault();
     if (!voluntarioProfile || !voluntarioProfile.id) return;
-
     const dadosAtualizados = {
         nome: inputEditNome.value.trim(),
         telefone: inputEditTelefone.value.trim(),
         endereco: inputEditEndereco.value.trim(),
         aniversario: inputEditAniversario.value.trim()
     };
-
     btnSalvarPerfil.disabled = true;
     btnSalvarPerfil.textContent = 'Salvando...';
-
     try {
         const voluntarioDocRef = doc(db, "voluntarios", voluntarioProfile.id);
         await updateDoc(voluntarioDocRef, dadosAtualizados);
@@ -224,6 +222,36 @@ async function salvarAlteracoesPerfil(event) {
     } finally {
         btnSalvarPerfil.disabled = false;
         btnSalvarPerfil.textContent = 'Salvar Alterações';
+    }
+}
+
+async function carregarHistoricoDePresenca() {
+    if (!voluntarioProfile) return;
+    historyListContainer.innerHTML = '<p>Carregando histórico...</p>';
+    modalOverlayHistorico.classList.add('visible');
+
+    try {
+        const q = query(collection(db, "presencas"), where("nome", "==", voluntarioProfile.nome), orderBy("data", "desc"));
+        const snapshot = await getDocs(q);
+
+        if (snapshot.empty) {
+            historyListContainer.innerHTML = '<p>Nenhuma presença encontrada em seu histórico.</p>';
+            return;
+        }
+
+        let historicoHtml = '<ul>';
+        snapshot.forEach(doc => {
+            const presenca = doc.data();
+            const [ano, mes, dia] = presenca.data.split('-');
+            const dataFormatada = `${dia}/${mes}/${ano}`;
+            historicoHtml += `<li><strong>${dataFormatada}:</strong> ${presenca.atividade}</li>`;
+        });
+        historicoHtml += '</ul>';
+        historyListContainer.innerHTML = historicoHtml;
+
+    } catch (error) {
+        console.error("Erro ao carregar histórico de presença:", error);
+        historyListContainer.innerHTML = '<p style="color:red;">Ocorreu um erro ao buscar seu histórico.</p>';
     }
 }
 
@@ -307,94 +335,33 @@ function checarLocalizacao() {
 }
 
 // --- EVENTOS ---
+if(btnRegistrarPresenca) btnRegistrarPresenca.addEventListener('click', () => { carregarAtividadesNoModal(); modalOverlayAtividades.classList.add('visible'); });
+if(closeModalAtividadesBtn) closeModalAtividadesBtn.addEventListener('click', () => { modalOverlayAtividades.classList.remove('visible'); });
+if(modalOverlayAtividades) modalOverlayAtividades.addEventListener('click', (event) => { if (event.target === modalOverlayAtividades) { modalOverlayAtividades.classList.remove('visible'); } });
 
-// Evento para abrir o modal de atividades
-if(btnRegistrarPresenca) {
-    btnRegistrarPresenca.addEventListener('click', () => { 
-        carregarAtividadesNoModal(); 
-        modalOverlayAtividades.classList.add('visible'); 
-    });
-}
+if(btnConfirmarPresenca) btnConfirmarPresenca.addEventListener('click', () => {
+    const selecionadas = activitiesListContainer.querySelectorAll('input[type="checkbox"]:checked');
+    if (selecionadas.length === 0) { alert("Por favor, selecione pelo menos uma atividade."); return; }
+    atividadesDoDia = Array.from(selecionadas).map(cb => cb.value);
+    modalOverlayAtividades.classList.remove('visible');
+    if (monitorInterval) clearInterval(monitorInterval);
+    checarLocalizacao();
+    monitorInterval = setInterval(checarLocalizacao, 600000);
+    btnRegistrarPresenca.disabled = true;
+    btnRegistrarPresenca.textContent = "MONITORAMENTO ATIVO";
+});
 
-// Eventos para fechar o modal de atividades
-if(closeModalAtividadesBtn) {
-    closeModalAtividadesBtn.addEventListener('click', () => { 
-        modalOverlayAtividades.classList.remove('visible'); 
-    });
-}
-if(modalOverlayAtividades) {
-    modalOverlayAtividades.addEventListener('click', (event) => { 
-        if (event.target === modalOverlayAtividades) { 
-            modalOverlayAtividades.classList.remove('visible'); 
-        } 
-    });
-}
+if(linkVerDetalhes) linkVerDetalhes.addEventListener('click', () => { preencherModalDetalhes(); modalOverlayDetalhes.classList.add('visible'); });
+if(closeModalDetalhesBtn) closeModalDetalhesBtn.addEventListener('click', () => { modalOverlayDetalhes.classList.remove('visible'); });
+if(modalOverlayDetalhes) modalOverlayDetalhes.addEventListener('click', (event) => { if (event.target === modalOverlayDetalhes) { modalOverlayDetalhes.classList.remove('visible'); } });
 
-// Evento para confirmar a presença e iniciar monitoramento
-if(btnConfirmarPresenca) {
-    btnConfirmarPresenca.addEventListener('click', () => {
-        const selecionadas = activitiesListContainer.querySelectorAll('input[type="checkbox"]:checked');
-        if (selecionadas.length === 0) { 
-            alert("Por favor, selecione pelo menos uma atividade."); 
-            return; 
-        }
-        atividadesDoDia = Array.from(selecionadas).map(cb => cb.value);
-        modalOverlayAtividades.classList.remove('visible');
-        if (monitorInterval) clearInterval(monitorInterval);
-        checarLocalizacao();
-        monitorInterval = setInterval(checarLocalizacao, 600000);
-        btnRegistrarPresenca.disabled = true;
-        btnRegistrarPresenca.textContent = "MONITORAMENTO ATIVO";
-    });
-}
+if(linkEditarDados) linkEditarDados.addEventListener('click', abrirModalEdicao);
+if(closeModalEditarPerfilBtn) closeModalEditarPerfilBtn.addEventListener('click', () => { modalOverlayEditarPerfil.classList.remove('visible'); });
+if(modalOverlayEditarPerfil) modalOverlayEditarPerfil.addEventListener('click', (event) => { if (event.target === modalOverlayEditarPerfil) { modalOverlayEditarPerfil.classList.remove('visible'); } });
+if(formEditarPerfil) formEditarPerfil.addEventListener('submit', salvarAlteracoesPerfil);
 
-// Evento para abrir o modal de detalhes
-if(linkVerDetalhes) {
-    linkVerDetalhes.addEventListener('click', () => { 
-        preencherModalDetalhes(); 
-        modalOverlayDetalhes.classList.add('visible'); 
-    });
-}
+if(linkVerHistorico) linkVerHistorico.addEventListener('click', carregarHistoricoDePresenca);
+if(closeModalHistoricoBtn) closeModalHistoricoBtn.addEventListener('click', () => { modalOverlayHistorico.classList.remove('visible'); });
+if(modalOverlayHistorico) modalOverlayHistorico.addEventListener('click', (event) => { if (event.target === modalOverlayHistorico) { modalOverlayHistorico.classList.remove('visible'); } });
 
-// Eventos para fechar o modal de detalhes
-if(closeModalDetalhesBtn) {
-    closeModalDetalhesBtn.addEventListener('click', () => { 
-        modalOverlayDetalhes.classList.remove('visible'); 
-    });
-}
-if(modalOverlayDetalhes) {
-    modalOverlayDetalhes.addEventListener('click', (event) => { 
-        if (event.target === modalOverlayDetalhes) { 
-            modalOverlayDetalhes.classList.remove('visible'); 
-        } 
-    });
-}
-
-// Eventos para o novo modal de edição de perfil
-if(linkEditarDados) {
-    linkEditarDados.addEventListener('click', abrirModalEdicao);
-}
-if(closeModalEditarPerfilBtn) {
-    closeModalEditarPerfilBtn.addEventListener('click', () => {
-        modalOverlayEditarPerfil.classList.remove('visible');
-    });
-}
-if(modalOverlayEditarPerfil) {
-    modalOverlayEditarPerfil.addEventListener('click', (event) => { 
-        if (event.target === modalOverlayEditarPerfil) { 
-            modalOverlayEditarPerfil.classList.remove('visible'); 
-        } 
-    });
-}
-if(formEditarPerfil) {
-    formEditarPerfil.addEventListener('submit', salvarAlteracoesPerfil);
-}
-
-// Evento para o botão de Sair (Logout)
-if(btnSair) {
-    btnSair.addEventListener('click', () => { 
-        if (confirm("Tem certeza que deseja sair?")) { 
-            signOut(auth); 
-        } 
-    });
-}
+if(btnSair) btnSair.addEventListener('click', () => { if (confirm("Tem certeza que deseja sair?")) { signOut(auth); } });
