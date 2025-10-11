@@ -858,3 +858,165 @@ exports.backfillNomesCracha = onCall(OPCOES_FUNCAO, async (request) => {
     await batch.commit();
     return { success: true, message: `${atualizacoes} voluntários foram processados.` };
 });
+
+// ===================================================================
+// ===== NOVO ROBÔ PARA O MÓDULO EDUCACIONAL =========================
+// ===================================================================
+
+// Lista completa das 118 aulas da EAE
+const aulasEAE = [
+    { numeroDaAula: 1, titulo: "Aula inaugural", anoCorrespondente: "1" },
+    { numeroDaAula: 2, titulo: "A Criação", anoCorrespondente: "1" },
+    { numeroDaAula: 3, titulo: "O nosso Planeta", anoCorrespondente: "1" },
+    { numeroDaAula: 4, titulo: "As raças primitivas", anoCorrespondente: "1" },
+    { numeroDaAula: 5, titulo: "Constituição Geográfica da Terra", anoCorrespondente: "1" },
+    { numeroDaAula: 6, titulo: "Civilização da Mesopotâmia", anoCorrespondente: "1" },
+    { numeroDaAula: 7, titulo: "Missão Planetária de Moisés/Preparação dos Hebreus no deserto", anoCorrespondente: "1" },
+    { numeroDaAula: 8, titulo: "Introdução ao Processo de Reforma Íntima", anoCorrespondente: "1" },
+    { numeroDaAula: 9, titulo: "O Decálogo/Regresso a Canaã/A morte de Moisés", anoCorrespondente: "1" },
+    { numeroDaAula: 10, titulo: "O governo dos Juízes/O governo dos Reis até Salomão", anoCorrespondente: "1" },
+    { numeroDaAula: 11, titulo: "Separação dos Reinos/Sua Destruição/O período do cativeiro até a rec de Jerusalém", anoCorrespondente: "1" },
+    { numeroDaAula: 12, titulo: "História de Israel e dominação estrangeira", anoCorrespondente: "1" },
+    { numeroDaAula: 13, titulo: "Implantação do Caderno de Temas", anoCorrespondente: "1" },
+    { numeroDaAula: 14, titulo: "O nascimento e controvérsias doutrinárias", anoCorrespondente: "1" },
+    { numeroDaAula: 15, titulo: "Os reis magos e o exílio no estrangeiro", anoCorrespondente: "1" },
+    { numeroDaAula: 16, titulo: "Infância e juventude do Messias", anoCorrespondente: "1" },
+    { numeroDaAula: 17, titulo: "Jerusalém e o grande templo/Reis e líderes", anoCorrespondente: "1" },
+    { numeroDaAula: 18, titulo: "As seitas nacionais/Os costumes da época", anoCorrespondente: "1" },
+    { numeroDaAula: 19, titulo: "A Fraternidade Essênia", anoCorrespondente: "1" },
+    { numeroDaAula: 20, titulo: "O precursor", anoCorrespondente: "1" },
+    { numeroDaAula: 21, titulo: "O início da tarefa pública/Os primeiros discípulos", anoCorrespondente: "1" },
+    { numeroDaAula: 22, titulo: "A volta a Jerusalém e as escolas rabínicas", anoCorrespondente: "1" },
+    { numeroDaAula: 23, titulo: "Promoção do candidato ao grau de aprendiz", anoCorrespondente: "1" },
+    { numeroDaAula: 24, titulo: "Implantação da Caderneta Pessoal", anoCorrespondente: "1" },
+    { numeroDaAula: 25, titulo: "Regresso à Galiléia/A morte de João Batista", anoCorrespondente: "1" },
+    { numeroDaAula: 26, titulo: "Os trabalhos na Galiléia", anoCorrespondente: "1" },
+    { numeroDaAula: 27, titulo: "As parábolas. Introdução. (I) Usos e costumes sociais", anoCorrespondente: "1" },
+    { numeroDaAula: 28, titulo: "Pregações e curas", anoCorrespondente: "1" },
+    { numeroDaAula: 29, titulo: "Hostilidades do Sinédrio", anoCorrespondente: "1" },
+    { numeroDaAula: 30, titulo: "O desenvolvimento da pregação", anoCorrespondente: "1" },
+    { numeroDaAula: 31, titulo: "As parábolas. (II) Domésticas e Familiares. Distribuição do 1º teste", anoCorrespondente: "1" },
+    { numeroDaAula: 32, titulo: "Implantação das Caravanas de Evangelização e Auxílio", anoCorrespondente: "1" },
+    { numeroDaAula: 33, titulo: "O quadro dos apóstolos e a consagração", anoCorrespondente: "1" },
+    { numeroDaAula: 34, titulo: "Excursões ao estrangeiro", anoCorrespondente: "1" },
+    { numeroDaAula: 35, titulo: "As parábolas. (III) Vida rural", anoCorrespondente: "1" },
+    { numeroDaAula: 36, titulo: "O Sermão do Monte", anoCorrespondente: "1" },
+    { numeroDaAula: 37, titulo: "A gênese da alma", anoCorrespondente: "1" },
+    { numeroDaAula: 38, titulo: "Atos finais na Galiléia", anoCorrespondente: "1" },
+    { numeroDaAula: 39, titulo: "Últimos dias em Jerusalém", anoCorrespondente: "1" },
+    { numeroDaAula: 40, titulo: "Encerramento da Tarefa Planetária", anoCorrespondente: "1" },
+    { numeroDaAula: 41, titulo: "Prisão e entrega aos romanos. Distribuição do 2º teste", anoCorrespondente: "1" },
+    { numeroDaAula: 42, titulo: "O tribunal judaíco", anoCorrespondente: "1" },
+    { numeroDaAula: 43, titulo: "O julgamento de Pilatos", anoCorrespondente: "1" },
+    { numeroDaAula: 44, titulo: "O Calvário", anoCorrespondente: "1" },
+    { numeroDaAula: 45, titulo: "Ressurreição", anoCorrespondente: "1" },
+    { numeroDaAula: 46, titulo: "Exame espiritual", anoCorrespondente: "1" },
+    { numeroDaAula: 47, titulo: "Exame espiritual", anoCorrespondente: "1" },
+    { numeroDaAula: 48, titulo: "Passagem para o grau de servidor/Inscrição para o Curso de Médiuns", anoCorrespondente: "2" },
+    { numeroDaAula: 49, titulo: "Evolução do Homem animal para o homem espiritual", anoCorrespondente: "2" },
+    { numeroDaAula: 50, titulo: "Interpretação do Sermão do Monte", anoCorrespondente: "2" },
+    { numeroDaAula: 51, titulo: "Interpretação do Sermão do Monte", anoCorrespondente: "2" },
+    { numeroDaAula: 52, titulo: "Interpretação do Sermão do Monte", anoCorrespondente: "2" },
+    { numeroDaAula: 53, titulo: "Interpretação do Sermão do Monte", anoCorrespondente: "2" },
+    { numeroDaAula: 54, titulo: "Fundação da igreja cristã", anoCorrespondente: "2" },
+    { numeroDaAula: 55, titulo: "Ascensão", anoCorrespondente: "2" },
+    { numeroDaAula: 56, titulo: "Vida Plena – Conceito", anoCorrespondente: "2" },
+    { numeroDaAula: 57, titulo: "Instituição dos diáconos. Distribuição do 3º teste", anoCorrespondente: "2" },
+    { numeroDaAula: 58, titulo: "A conversão de Paulo", anoCorrespondente: "2" },
+    { numeroDaAula: 59, titulo: "O apóstolo Paulo e suas pregações", anoCorrespondente: "2" },
+    { numeroDaAula: 60, titulo: "Paulo defende-se em Jerusalém", anoCorrespondente: "2" },
+    { numeroDaAula: 61, titulo: "Os apóstolos que mais se destacaram e seus principais atos", anoCorrespondente: "2" },
+    { numeroDaAula: 62, titulo: "Preconceito – Definição", anoCorrespondente: "2" },
+    { numeroDaAula: 63, titulo: "Preconceito / Vivência (Exercício de Vida Plena)", anoCorrespondente: "2" },
+    { numeroDaAula: 64, titulo: "O estudo das epístolas", anoCorrespondente: "2" },
+    { numeroDaAula: 65, titulo: "A predestinação segundo a doutrina de Paulo", anoCorrespondente: "2" },
+    { numeroDaAula: 66, titulo: "Justificação dos pecados", anoCorrespondente: "2" },
+    { numeroDaAula: 67, titulo: "Continuação das epístolas", anoCorrespondente: "2" },
+    { numeroDaAula: 68, titulo: "Vícios e defeitos – Conceitos", anoCorrespondente: "2" },
+    { numeroDaAula: 69, titulo: "A doutrina de Tiago sobre a salvação", anoCorrespondente: "2" },
+    { numeroDaAula: 70, titulo: "A doutrina de Pedro, João e Judas", anoCorrespondente: "2" },
+    { numeroDaAula: 71, titulo: "O apocalipse de João", anoCorrespondente: "2" },
+    { numeroDaAula: 72, titulo: "O apocalipse de João. Distrib. do 4º teste", anoCorrespondente: "2" },
+    { numeroDaAula: 73, titulo: "Vícios e defeitos / Vivência (Exercício de Vida Plena)", anoCorrespondente: "2" },
+    { numeroDaAula: 74, titulo: "Ciência e Religião", anoCorrespondente: "2" },
+    { numeroDaAula: 75, titulo: "Pensamento e Vontade", anoCorrespondente: "2" },
+    { numeroDaAula: 76, titulo: "Lei de Ação e Reação", anoCorrespondente: "2" },
+    { numeroDaAula: 77, titulo: "Amor como lei soberana, o valor científico da prece, lei da solidariedade", anoCorrespondente: "2" },
+    { numeroDaAula: 78, titulo: "A Medicina Psicossomática", anoCorrespondente: "2" },
+    { numeroDaAula: 79, titulo: "Exercício de Vida Plena", anoCorrespondente: "2" },
+    { numeroDaAula: 80, titulo: "Curas e milagres do Evangelho", anoCorrespondente: "2" },
+    { numeroDaAula: 81, titulo: "Cosmogonias e concepções do Universo", anoCorrespondente: "2" },
+    { numeroDaAula: 82, titulo: "Estudos dos seres e das formas", anoCorrespondente: "2" },
+    { numeroDaAula: 83, titulo: "Evolução nos diferentes reinos/Histórico da evolução dos seres vivos", anoCorrespondente: "2" },
+    { numeroDaAula: 84, titulo: "Leis universais", anoCorrespondente: "2" },
+    { numeroDaAula: 85, titulo: "Exercício de Vida Plena", anoCorrespondente: "2" },
+    { numeroDaAula: 86, titulo: "O Plano Divino / A Lei da Evolução. Distrib. do 5º teste", anoCorrespondente: "2" },
+    { numeroDaAula: 87, titulo: "A Lei do Trabalho / A Lei da Justiça", anoCorrespondente: "2" },
+    { numeroDaAula: 88, titulo: "A Lei do Amor", anoCorrespondente: "2" },
+    { numeroDaAula: 89, titulo: "Amor a Deus, ao próximo e aos inimigos", anoCorrespondente: "2" },
+    { numeroDaAula: 90, titulo: "A filosofia da dor", anoCorrespondente: "2" },
+    { numeroDaAula: 91, titulo: "Normas da vida espiritual", anoCorrespondente: "2" },
+    { numeroDaAula: 92, titulo: "Exame espiritual", anoCorrespondente: "2" },
+    { numeroDaAula: 93, titulo: "Exame espiritual", anoCorrespondente: "2" },
+    { numeroDaAula: 94, titulo: "Estrutura da Aliança e de um Centro Espírtia. Como abrir um Centro Espírita", anoCorrespondente: "3" },
+    { numeroDaAula: 95, titulo: "Nova frente de trabalho", anoCorrespondente: "3" },
+    { numeroDaAula: 96, titulo: "Evolução Anímica (I)", anoCorrespondente: "3" },
+    { numeroDaAula: 97, titulo: "Evolução Anímica (II)", anoCorrespondente: "3" },
+    { numeroDaAula: 98, titulo: "Categoria dos mundos", anoCorrespondente: "3" },
+    { numeroDaAula: 99, titulo: "Imortalidade", anoCorrespondente: "3" },
+    { numeroDaAula: 100, titulo: "A Fraternidade do Trevo e FDJ", anoCorrespondente: "3" },
+    { numeroDaAula: 101, titulo: "Reencarnação", anoCorrespondente: "3" },
+    { numeroDaAula: 102, titulo: "Exercício de Vida Plena", anoCorrespondente: "3" },
+    { numeroDaAula: 103, titulo: "Regras para a educação. Conduta e aperfeiçoamento dos seres", anoCorrespondente: "3" },
+    { numeroDaAula: 104, titulo: "Regras para a educação. Conduta e aperfeiçoamento dos seres", anoCorrespondente: "3" },
+    { numeroDaAula: 105, titulo: "Regras para a educação. Conduta e aperfeiçoamento dos seres", anoCorrespondente: "3" },
+    { numeroDaAula: 106, titulo: "O papel do discípulo. Distrib. do 6º teste", anoCorrespondente: "3" },
+    { numeroDaAula: 107, titulo: "O cristão no lar", anoCorrespondente: "3" },
+    { numeroDaAula: 108, titulo: "O cristão no meio religioso e no meio profano", anoCorrespondente: "3" },
+    { numeroDaAula: 109, titulo: "Os recursos do cristão", anoCorrespondente: "3" },
+    { numeroDaAula: 110, titulo: "Exercício de Vida Plena", anoCorrespondente: "3" },
+    { numeroDaAula: 111, titulo: "Iniciação espiritual", anoCorrespondente: "3" },
+    { numeroDaAula: 112, titulo: "Estudo do perispírito / Centros de força", anoCorrespondente: "3" },
+    { numeroDaAula: 113, titulo: "Regras de conduta", anoCorrespondente: "3" },
+    { numeroDaAula: 114, titulo: "O espírito e o sexo", anoCorrespondente: "3" },
+    { numeroDaAula: 115, titulo: "Problemas da propagação do Espiritismo", anoCorrespondente: "3" },
+    { numeroDaAula: 116, titulo: "Exame espiritual", anoCorrespondente: "3" },
+    { numeroDaAula: 117, titulo: "Exame espiritual", anoCorrespondente: "3" },
+    { numeroDaAula: 118, titulo: "Exame espiritual. Devolução das cadernetas.Esclarecimentos sobre o período probatório de três meses após o estudo de O Livro dos Espíritos", anoCorrespondente: "3" }
+];
+
+exports.cadastrarAulasEAEAutomaticamente = onDocumentCreated({ ...OPCOES_FUNCAO, document: 'cursos/{cursoId}' }, async (event) => {
+    const snap = event.data;
+    if (!snap) {
+        console.log("Nenhum dado no evento.");
+        return null;
+    }
+
+    const dadosCurso = snap.data();
+
+    if (dadosCurso.isEAE === true) {
+        console.log(`Novo curso EAE detectado: ${dadosCurso.nome}. Iniciando cadastro automático de ${aulasEAE.length} aulas.`);
+        
+        const cursoId = event.params.cursoId;
+        const aulasRef = db.collection('cursos').doc(cursoId).collection('curriculo');
+        
+        const batch = db.batch();
+
+        aulasEAE.forEach(aula => {
+            const novaAulaRef = aulasRef.doc();
+            batch.set(novaAulaRef, aula);
+        });
+
+        try {
+            await batch.commit();
+            console.log("Sucesso! Todas as aulas da EAE foram cadastradas para o curso:", cursoId);
+            return null;
+        } catch (error) {
+            console.error("Erro ao cadastrar aulas da EAE em batch:", error);
+            return null;
+        }
+    } else {
+        console.log(`Novo curso (${dadosCurso.nome}) não é da EAE. Nenhuma ação automática necessária.`);
+        return null;
+    }
+});
