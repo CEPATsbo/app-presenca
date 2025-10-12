@@ -17,7 +17,7 @@ const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
 
-// --- ELEMENTOS DA PÁGINA ---
+// --- ELEMENTOS ---
 const turmaTituloHeader = document.getElementById('turma-titulo-header');
 const participantesTable = document.getElementById('participantes-table');
 const participantesTableBody = document.getElementById('participantes-table-body');
@@ -27,7 +27,7 @@ const tabs = document.querySelectorAll('.tab-link');
 const tabContents = document.querySelectorAll('.tab-content');
 const btnAddAulaExtra = document.getElementById('btn-add-aula-extra');
 const btnGerenciarRecessos = document.getElementById('btn-gerenciar-recessos');
-
+const recalculatingOverlay = document.getElementById('recalculating-overlay');
 const modalInscricao = document.getElementById('modal-inscricao');
 const closeModalInscricaoBtn = document.getElementById('close-modal-inscricao');
 const formInscricao = document.getElementById('form-inscricao');
@@ -35,7 +35,6 @@ const participanteSelect = document.getElementById('participante-select');
 const formGroupGrau = document.getElementById('form-group-grau');
 const participanteGrauSelect = document.getElementById('participante-grau');
 const btnSalvarInscricao = document.getElementById('btn-salvar-inscricao');
-
 const modalAula = document.getElementById('modal-aula');
 const closeModalAulaBtn = document.getElementById('close-modal-aula');
 const formAula = document.getElementById('form-aula');
@@ -47,7 +46,6 @@ const inputAulaData = document.getElementById('aula-data');
 const formGroupNumeroAula = document.getElementById('form-group-numero-aula');
 const inputAulaNumero = document.getElementById('aula-numero');
 const btnSalvarAula = document.getElementById('btn-salvar-aula');
-
 const modalRecessos = document.getElementById('modal-recessos');
 const closeModalRecessosBtn = document.getElementById('close-modal-recessos');
 const formRecesso = document.getElementById('form-recesso');
@@ -136,9 +134,13 @@ function escutarCronograma() {
     const cronogramaRef = collection(db, "turmas", turmaId, "cronograma");
     const q = query(cronogramaRef, orderBy("dataAgendada", "asc"));
     onSnapshot(q, (snapshot) => {
-        let rowsHTML = []; // Cria a lista de linhas em memória
+        let rowsHTML = [];
         if (snapshot.empty) {
-            rowsHTML.push('<tr><td colspan="5" style="text-align: center;">Cronograma ainda não gerado ou vazio.</td></tr>');
+            if (!recalculatingOverlay.classList.contains('hidden')) {
+                // Não faz nada, espera o recalculo terminar
+            } else {
+                rowsHTML.push('<tr><td colspan="5" style="text-align: center;">Cronograma ainda não gerado ou vazio.</td></tr>');
+            }
         } else {
             snapshot.forEach(doc => {
                 const aula = doc.data();
@@ -150,19 +152,13 @@ function escutarCronograma() {
                 } else {
                     actionsHTML += `<button class="icon-btn recess" title="Marcar como Recesso" data-action="recess" data-id="${doc.id}"><i class="fas fa-coffee"></i></button>`;
                 }
-                rowsHTML.push(`
-                    <tr>
-                        <td>${numeroAulaDisplay}</td>
-                        <td>${dataFormatada}</td>
-                        <td>${aula.titulo}</td>
-                        <td>${aula.status}</td>
-                        <td class="actions">${actionsHTML}</td>
-                    </tr>
-                `);
+                rowsHTML.push(`<tr><td>${numeroAulaDisplay}</td><td>${dataFormatada}</td><td>${aula.titulo}</td><td>${aula.status}</td><td class="actions">${actionsHTML}</td></tr>`);
             });
         }
-        // Atualiza a tabela na tela UMA ÚNICA VEZ no final
-        cronogramaTableBody.innerHTML = rowsHTML.join('');
+        if (rowsHTML.length > 0) {
+            cronogramaTableBody.innerHTML = rowsHTML.join('');
+            recalculatingOverlay.classList.add('hidden');
+        }
     });
 }
 
@@ -300,6 +296,8 @@ async function salvarRecesso(event) {
     const dataInicio = inputRecessoInicio.value;
     const dataFim = inputRecessoFim.value;
     if (!dataInicio || !dataFim || dataFim < dataInicio) { return alert("Por favor, selecione uma data de início e fim válidas."); }
+    recalculatingOverlay.classList.remove('hidden');
+    modalRecessos.classList.remove('visible');
     try {
         const recessosRef = collection(db, "turmas", turmaId, "recessos");
         await addDoc(recessosRef, {
@@ -309,16 +307,19 @@ async function salvarRecesso(event) {
         formRecesso.reset();
     } catch (error) {
         console.error("Erro ao salvar recesso:", error);
+        recalculatingOverlay.classList.add('hidden');
     }
 }
 
 async function deletarRecesso(recessoId) {
     if (!confirm("Tem certeza que deseja remover este período de recesso? O cronograma será recalculado.")) return;
+    recalculatingOverlay.classList.remove('hidden');
     try {
         const recessoRef = doc(db, "turmas", turmaId, "recessos", recessoId);
         await deleteDoc(recessoRef);
     } catch (error) {
         console.error("Erro ao deletar recesso:", error);
+        recalculatingOverlay.classList.add('hidden');
     }
 }
 
