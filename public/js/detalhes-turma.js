@@ -2,6 +2,7 @@ import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebas
 import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-auth.js";
 import { getFirestore, collection, query, where, getDocs, doc, getDoc, addDoc, onSnapshot, orderBy, limit, serverTimestamp, Timestamp, updateDoc, deleteDoc } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
 
+// --- CONFIGURAÇÕES ---
 const firebaseConfig = {
     apiKey: "AIzaSyBV7RPjk3cFTqL-aIpflJcUojKg1ZXMLuU",
     authDomain: "voluntarios-ativos---cepat.firebaseapp.com",
@@ -11,11 +12,12 @@ const firebaseConfig = {
     appId: "1:66122858261:web:7fa21f1805463b5c08331c"
 };
 
+// --- INICIALIZAÇÃO ---
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
 
-// --- ELEMENTOS DA PÁGINA (CORRIGIDO) ---
+// --- ELEMENTOS DA PÁGINA ---
 const turmaTituloHeader = document.getElementById('turma-titulo-header');
 const participantesTable = document.getElementById('participantes-table');
 const participantesTableBody = document.getElementById('participantes-table-body');
@@ -25,8 +27,8 @@ const tabs = document.querySelectorAll('.tab-link');
 const tabContents = document.querySelectorAll('.tab-content');
 const btnAddAulaExtra = document.getElementById('btn-add-aula-extra');
 const btnGerenciarRecessos = document.getElementById('btn-gerenciar-recessos');
-const btnSair = null; // ESTA PÁGINA NÃO TEM BOTÃO DE SAIR, ENTÃO DEFINIMOS COMO NULL PARA EVITAR ERROS.
 
+// Modais e seus componentes...
 const modalInscricao = document.getElementById('modal-inscricao');
 const closeModalInscricaoBtn = document.getElementById('close-modal-inscricao');
 const formInscricao = document.getElementById('form-inscricao');
@@ -57,6 +59,7 @@ const recessoListContainer = document.getElementById('recesso-list-container');
 let turmaId = null;
 let turmaData = null;
 
+// --- VERIFICAÇÃO DE PERMISSÃO E CARREGAMENTO ---
 onAuthStateChanged(auth, async (user) => {
     if (user) {
         const voluntariosRef = collection(db, "voluntarios");
@@ -84,6 +87,7 @@ onAuthStateChanged(auth, async (user) => {
     }
 });
 
+// --- FUNÇÕES ---
 async function carregarDadosDaTurma() {
     const turmaRef = doc(db, "turmas", turmaId);
     const turmaSnap = await getDoc(turmaRef);
@@ -100,11 +104,8 @@ async function carregarDadosDaTurma() {
 
 function configurarTabelaParticipantes() {
     let tableHeaderHTML = '<tr><th>Nome do Participante</th>';
-    if (turmaData.isEAE) {
-        tableHeaderHTML += '<th>Grau</th><th>Status</th><th>Ações</th>';
-    } else {
-        tableHeaderHTML += '<th>Status</th><th>Ações</th>';
-    }
+    if (turmaData.isEAE) { tableHeaderHTML += '<th>Grau</th><th>Status</th><th>Ações</th>'; } 
+    else { tableHeaderHTML += '<th>Status</th><th>Ações</th>'; }
     tableHeaderHTML += '</tr>';
     participantesTable.querySelector('thead').innerHTML = tableHeaderHTML;
 }
@@ -113,50 +114,56 @@ function escutarParticipantes() {
     const participantesRef = collection(db, "turmas", turmaId, "participantes");
     const q = query(participantesRef, orderBy("nome"));
     onSnapshot(q, (snapshot) => {
-        participantesTableBody.innerHTML = '';
+        let rowsHTML = [];
         if (snapshot.empty) {
             const colspan = turmaData.isEAE ? 4 : 3;
-            participantesTableBody.innerHTML = `<tr><td colspan="${colspan}" style="text-align: center;">Nenhum participante inscrito.</td></tr>`;
-            return;
+            rowsHTML.push(`<tr><td colspan="${colspan}" style="text-align: center;">Nenhum participante inscrito.</td></tr>`);
+        } else {
+            snapshot.forEach(doc => {
+                const participante = doc.data();
+                let row = `<td>${participante.nome}</td>`;
+                if (turmaData.isEAE) { row += `<td>${participante.grau || 'Aluno'}</td>`; }
+                row += `<td>Ativo</td>`;
+                row += `<td class="actions"><button class="icon-btn delete" data-id="${doc.id}"><i class="fas fa-trash-alt"></i></button></td>`;
+                rowsHTML.push(`<tr>${row}</tr>`);
+            });
         }
-        snapshot.forEach(doc => {
-            const participante = doc.data();
-            const tr = document.createElement('tr');
-            let rowHTML = `<td>${participante.nome}</td>`;
-            if (turmaData.isEAE) {
-                rowHTML += `<td>${participante.grau || 'Aluno'}</td>`;
-            }
-            rowHTML += `<td>Ativo</td>`;
-            rowHTML += `<td class="actions"><button class="icon-btn delete" data-id="${doc.id}"><i class="fas fa-trash-alt"></i></button></td>`;
-            tr.innerHTML = rowHTML;
-            participantesTableBody.appendChild(tr);
-        });
+        participantesTableBody.innerHTML = rowsHTML.join('');
     });
 }
 
+// ***** FUNÇÃO CORRIGIDA PARA EVITAR O PISCA-PISCA *****
 function escutarCronograma() {
     const cronogramaRef = collection(db, "turmas", turmaId, "cronograma");
     const q = query(cronogramaRef, orderBy("dataAgendada", "asc"));
     onSnapshot(q, (snapshot) => {
-        cronogramaTableBody.innerHTML = '';
+        let rowsHTML = []; // Cria a lista de linhas em memória
         if (snapshot.empty) {
-            cronogramaTableBody.innerHTML = '<tr><td colspan="5" style="text-align: center;">Cronograma ainda não gerado ou vazio.</td></tr>';
-            return;
+            rowsHTML.push('<tr><td colspan="5" style="text-align: center;">Cronograma ainda não gerado ou vazio.</td></tr>');
+        } else {
+            snapshot.forEach(doc => {
+                const aula = doc.data();
+                const dataFormatada = aula.dataAgendada.toDate().toLocaleDateString('pt-BR', { timeZone: 'UTC' });
+                const numeroAulaDisplay = aula.isExtra ? '<strong>Extra</strong>' : aula.numeroDaAula;
+                let actionsHTML = `<button class="icon-btn edit" title="Editar Aula" data-action="edit" data-id="${doc.id}"><i class="fas fa-pencil-alt"></i></button>`;
+                if (aula.isExtra) {
+                    actionsHTML += `<button class="icon-btn delete" title="Excluir Aula Extra" data-action="delete" data-id="${doc.id}"><i class="fas fa-trash-alt"></i></button>`;
+                } else {
+                    actionsHTML += `<button class="icon-btn recess" title="Marcar como Recesso" data-action="recess" data-id="${doc.id}"><i class="fas fa-coffee"></i></button>`;
+                }
+                rowsHTML.push(`
+                    <tr>
+                        <td>${numeroAulaDisplay}</td>
+                        <td>${dataFormatada}</td>
+                        <td>${aula.titulo}</td>
+                        <td>${aula.status}</td>
+                        <td class="actions">${actionsHTML}</td>
+                    </tr>
+                `);
+            });
         }
-        snapshot.forEach(doc => {
-            const aula = doc.data();
-            const dataFormatada = aula.dataAgendada.toDate().toLocaleDateString('pt-BR', { timeZone: 'UTC' });
-            const tr = document.createElement('tr');
-            const numeroAulaDisplay = aula.isExtra ? '<strong>Extra</strong>' : aula.numeroDaAula;
-            let actionsHTML = `<button class="icon-btn edit" title="Editar Aula" data-action="edit" data-id="${doc.id}"><i class="fas fa-pencil-alt"></i></button>`;
-            if (aula.isExtra) {
-                actionsHTML += `<button class="icon-btn delete" title="Excluir Aula Extra" data-action="delete" data-id="${doc.id}"><i class="fas fa-trash-alt"></i></button>`;
-            } else {
-                actionsHTML += `<button class="icon-btn recess" title="Marcar como Recesso" data-action="recess" data-id="${doc.id}"><i class="fas fa-coffee"></i></button>`;
-            }
-            tr.innerHTML = `<td>${numeroAulaDisplay}</td><td>${dataFormatada}</td><td>${aula.titulo}</td><td>${aula.status}</td><td class="actions">${actionsHTML}</td>`;
-            cronogramaTableBody.appendChild(tr);
-        });
+        // Atualiza a tabela na tela UMA ÚNICA VEZ no final
+        cronogramaTableBody.innerHTML = rowsHTML.join('');
     });
 }
 
