@@ -26,6 +26,7 @@ const cronogramaTableBody = document.getElementById('cronograma-table-body');
 const tabs = document.querySelectorAll('.tab-link');
 const tabContents = document.querySelectorAll('.tab-content');
 const btnAddAulaExtra = document.getElementById('btn-add-aula-extra');
+const btnGerenciarRecessos = document.getElementById('btn-gerenciar-recessos');
 
 // Modal de Inscrição
 const modalInscricao = document.getElementById('modal-inscricao');
@@ -48,6 +49,14 @@ const inputAulaData = document.getElementById('aula-data');
 const formGroupNumeroAula = document.getElementById('form-group-numero-aula');
 const inputAulaNumero = document.getElementById('aula-numero');
 const btnSalvarAula = document.getElementById('btn-salvar-aula');
+
+// Modal de Recessos
+const modalRecessos = document.getElementById('modal-recessos');
+const closeModalRecessosBtn = document.getElementById('close-modal-recessos');
+const formRecesso = document.getElementById('form-recesso');
+const inputRecessoInicio = document.getElementById('recesso-data-inicio');
+const inputRecessoFim = document.getElementById('recesso-data-fim');
+const recessoListContainer = document.getElementById('recesso-list-container');
 
 let turmaId = null;
 let turmaData = null;
@@ -145,23 +154,13 @@ function escutarCronograma() {
             const dataFormatada = aula.dataAgendada.toDate().toLocaleDateString('pt-BR', { timeZone: 'UTC' });
             const tr = document.createElement('tr');
             const numeroAulaDisplay = aula.isExtra ? '<strong>Extra</strong>' : aula.numeroDaAula;
-            
-            let actionsHTML = `
-                <button class="icon-btn edit" title="Editar Aula" data-action="edit" data-id="${doc.id}"><i class="fas fa-pencil-alt"></i></button>
-            `;
-            if(aula.isExtra) {
+            let actionsHTML = `<button class="icon-btn edit" title="Editar Aula" data-action="edit" data-id="${doc.id}"><i class="fas fa-pencil-alt"></i></button>`;
+            if (aula.isExtra) {
                 actionsHTML += `<button class="icon-btn delete" title="Excluir Aula Extra" data-action="delete" data-id="${doc.id}"><i class="fas fa-trash-alt"></i></button>`;
             } else {
                 actionsHTML += `<button class="icon-btn recess" title="Marcar como Recesso" data-action="recess" data-id="${doc.id}"><i class="fas fa-coffee"></i></button>`;
             }
-
-            tr.innerHTML = `
-                <td>${numeroAulaDisplay}</td>
-                <td>${dataFormatada}</td>
-                <td>${aula.titulo}</td>
-                <td>${aula.status}</td>
-                <td class="actions">${actionsHTML}</td>
-            `;
+            tr.innerHTML = `<td>${numeroAulaDisplay}</td><td>${dataFormatada}</td><td>${aula.titulo}</td><td>${aula.status}</td><td class="actions">${actionsHTML}</td>`;
             cronogramaTableBody.appendChild(tr);
         });
     });
@@ -198,14 +197,8 @@ async function inscreverParticipante(event) {
     if (!participanteId) { return alert("Por favor, selecione um participante."); }
     btnSalvarInscricao.disabled = true;
     try {
-        const novoParticipante = {
-            participanteId: participanteId,
-            nome: participanteNome,
-            inscritoEm: serverTimestamp()
-        };
-        if (turmaData.isEAE) {
-            novoParticipante.grau = participanteGrauSelect.value;
-        }
+        const novoParticipante = { participanteId: participanteId, nome: participanteNome, inscritoEm: serverTimestamp() };
+        if (turmaData.isEAE) { novoParticipante.grau = participanteGrauSelect.value; }
         const participantesRef = collection(db, "turmas", turmaId, "participantes");
         await addDoc(participantesRef, novoParticipante);
         modalInscricao.classList.remove('visible');
@@ -221,8 +214,7 @@ function abrirModalAula(aulaId = null, isExtra = false) {
     formAula.reset();
     inputAulaId.value = '';
     inputAulaIsExtra.value = isExtra;
-
-    if (aulaId) { // MODO EDIÇÃO
+    if (aulaId) {
         modalAulaTitulo.textContent = 'Editar Aula';
         const aulaRef = doc(db, "turmas", turmaId, "cronograma", aulaId);
         getDoc(aulaRef).then(docSnap => {
@@ -232,17 +224,16 @@ function abrirModalAula(aulaId = null, isExtra = false) {
                 inputAulaTitulo.value = data.titulo;
                 inputAulaData.value = data.dataAgendada.toDate().toISOString().split('T')[0];
                 inputAulaIsExtra.value = data.isExtra || false;
-
                 if (!data.isExtra) {
                     formGroupNumeroAula.classList.remove('hidden');
                     inputAulaNumero.value = data.numeroDaAula;
-                    inputAulaNumero.readOnly = true; // Não permite editar o número da aula regular
+                    inputAulaNumero.readOnly = true;
                 } else {
                     formGroupNumeroAula.classList.add('hidden');
                 }
             }
         });
-    } else { // MODO CRIAÇÃO (AULA EXTRA)
+    } else {
         modalAulaTitulo.textContent = 'Adicionar Aula Extra';
         formGroupNumeroAula.classList.add('hidden');
         inputAulaIsExtra.value = true;
@@ -254,20 +245,8 @@ async function salvarAula(event) {
     event.preventDefault();
     const id = inputAulaId.value;
     const isExtra = inputAulaIsExtra.value === 'true';
-
-    const dadosAula = {
-        titulo: inputAulaTitulo.value.trim(),
-        dataAgendada: Timestamp.fromDate(new Date(`${inputAulaData.value}T12:00:00.000Z`)),
-    };
-
-    if(!isExtra) {
-        dadosAula.numeroDaAula = Number(inputAulaNumero.value);
-    } else {
-        dadosAula.isExtra = true;
-        dadosAula.numeroDaAula = 999;
-        dadosAula.status = 'agendada';
-    }
-    
+    const dadosAula = { titulo: inputAulaTitulo.value.trim(), dataAgendada: Timestamp.fromDate(new Date(`${inputAulaData.value}T12:00:00.000Z`)) };
+    if (!isExtra) { dadosAula.numeroDaAula = Number(inputAulaNumero.value); } else { dadosAula.isExtra = true; dadosAula.numeroDaAula = 999; dadosAula.status = 'agendada'; }
     btnSalvarAula.disabled = true;
     try {
         const cronogramaRef = collection(db, "turmas", turmaId, "cronograma");
@@ -286,17 +265,69 @@ async function salvarAula(event) {
 }
 
 async function deletarAula(aulaId) {
-    if (!confirm("Tem certeza que deseja excluir esta aula extra? Esta ação não pode ser desfeita.")) return;
+    if (!confirm("Tem certeza que deseja excluir esta aula extra?")) return;
     try {
         const aulaRef = doc(db, "turmas", turmaId, "cronograma", aulaId);
         await deleteDoc(aulaRef);
-        // O onSnapshot cuidará de remover a linha da tela automaticamente.
     } catch (error) {
         console.error("Erro ao deletar aula:", error);
         alert("Ocorreu um erro ao excluir a aula.");
     }
 }
 
+function abrirModalRecessos() {
+    formRecesso.reset();
+    escutarRecessos();
+    modalRecessos.classList.add('visible');
+}
+
+function escutarRecessos() {
+    const recessosRef = collection(db, "turmas", turmaId, "recessos");
+    onSnapshot(recessosRef, (snapshot) => {
+        recessoListContainer.innerHTML = '';
+        if (snapshot.empty) {
+            recessoListContainer.innerHTML = '<li>Nenhum recesso cadastrado.</li>';
+            return;
+        }
+        snapshot.forEach(doc => {
+            const recesso = doc.data();
+            const inicio = recesso.dataInicio.toDate().toLocaleDateString('pt-BR', { timeZone: 'UTC' });
+            const fim = recesso.dataFim.toDate().toLocaleDateString('pt-BR', { timeZone: 'UTC' });
+            const li = document.createElement('li');
+            li.innerHTML = `<span>De ${inicio} até ${fim}</span><button class="icon-btn delete" data-id="${doc.id}"><i class="fas fa-trash-alt"></i></button>`;
+            recessoListContainer.appendChild(li);
+        });
+    });
+}
+
+async function salvarRecesso(event) {
+    event.preventDefault();
+    const dataInicio = inputRecessoInicio.value;
+    const dataFim = inputRecessoFim.value;
+    if (!dataInicio || !dataFim || dataFim < dataInicio) { return alert("Por favor, selecione uma data de início e fim válidas."); }
+    try {
+        const recessosRef = collection(db, "turmas", turmaId, "recessos");
+        await addDoc(recessosRef, {
+            dataInicio: Timestamp.fromDate(new Date(`${dataInicio}T12:00:00.000Z`)),
+            dataFim: Timestamp.fromDate(new Date(`${dataFim}T12:00:00.000Z`))
+        });
+        formRecesso.reset();
+    } catch (error) {
+        console.error("Erro ao salvar recesso:", error);
+        alert("Ocorreu um erro ao adicionar o período de recesso.");
+    }
+}
+
+async function deletarRecesso(recessoId) {
+    if (!confirm("Tem certeza que deseja remover este período de recesso? O cronograma será recalculado.")) return;
+    try {
+        const recessoRef = doc(db, "turmas", turmaId, "recessos", recessoId);
+        await deleteDoc(recessoRef);
+    } catch (error) {
+        console.error("Erro ao deletar recesso:", error);
+        alert("Ocorreu um erro ao remover o recesso.");
+    }
+}
 
 // --- EVENTOS ---
 tabs.forEach(tab => {
@@ -308,18 +339,15 @@ tabs.forEach(tab => {
         targetTab.classList.add('active');
     });
 });
-
 if(btnInscreverParticipante) btnInscreverParticipante.addEventListener('click', abrirModalInscricao);
 if(closeModalInscricaoBtn) closeModalInscricaoBtn.addEventListener('click', () => modalInscricao.classList.remove('visible'));
 if(modalInscricao) modalInscricao.addEventListener('click', (event) => { if (event.target === modalInscricao) modalInscricao.classList.remove('visible'); });
 if(formInscricao) formInscricao.addEventListener('submit', inscreverParticipante);
-
 if(btnAddAulaExtra) btnAddAulaExtra.addEventListener('click', () => abrirModalAula(null, true));
 if(closeModalAulaBtn) closeModalAulaBtn.addEventListener('click', () => modalAula.classList.remove('visible'));
 if(modalAula) modalAula.addEventListener('click', (event) => { if (event.target === modalAula) modalAula.classList.remove('visible'); });
 if(formAula) formAula.addEventListener('submit', salvarAula);
-
-cronogramaTableBody.addEventListener('click', (event) => {
+if(cronogramaTableBody) cronogramaTableBody.addEventListener('click', (event) => {
     const target = event.target.closest('button');
     if (!target || !target.dataset.action) return;
     const action = target.dataset.action;
@@ -329,5 +357,15 @@ cronogramaTableBody.addEventListener('click', (event) => {
     } else if (action === 'delete') {
         deletarAula(id);
     }
-    // Ação 'recess' será implementada depois
 });
+if(btnGerenciarRecessos) btnGerenciarRecessos.addEventListener('click', abrirModalRecessos);
+if(closeModalRecessosBtn) closeModalRecessosBtn.addEventListener('click', () => modalRecessos.classList.remove('visible'));
+if(modalRecessos) modalRecessos.addEventListener('click', (event) => { if (event.target === modalRecessos) modalRecessos.classList.remove('visible'); });
+if(formRecesso) formRecesso.addEventListener('submit', salvarRecesso);
+if(recessoListContainer) recessoListContainer.addEventListener('click', (event) => {
+    const target = event.target.closest('button.delete');
+    if (target && target.dataset.id) {
+        deletarRecesso(target.dataset.id);
+    }
+});
+if(btnSair) btnSair.addEventListener('click', () => { if (confirm("Tem certeza que deseja sair?")) { signOut(auth); } });
