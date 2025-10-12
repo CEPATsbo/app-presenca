@@ -1,8 +1,7 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
-import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-auth.js";
+import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-auth.js";
 import { getFirestore, collection, query, where, getDocs, doc, getDoc, addDoc, onSnapshot, orderBy, limit, serverTimestamp, Timestamp, updateDoc, deleteDoc } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
 
-// --- CONFIGURAÇÕES ---
 const firebaseConfig = {
     apiKey: "AIzaSyBV7RPjk3cFTqL-aIpflJcUojKg1ZXMLuU",
     authDomain: "voluntarios-ativos---cepat.firebaseapp.com",
@@ -12,12 +11,11 @@ const firebaseConfig = {
     appId: "1:66122858261:web:7fa21f1805463b5c08331c"
 };
 
-// --- INICIALIZAÇÃO ---
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
 
-// --- ELEMENTOS DA PÁGINA ---
+// --- ELEMENTOS DA PÁGINA (CORRIGIDO) ---
 const turmaTituloHeader = document.getElementById('turma-titulo-header');
 const participantesTable = document.getElementById('participantes-table');
 const participantesTableBody = document.getElementById('participantes-table-body');
@@ -27,8 +25,8 @@ const tabs = document.querySelectorAll('.tab-link');
 const tabContents = document.querySelectorAll('.tab-content');
 const btnAddAulaExtra = document.getElementById('btn-add-aula-extra');
 const btnGerenciarRecessos = document.getElementById('btn-gerenciar-recessos');
+const btnSair = null; // ESTA PÁGINA NÃO TEM BOTÃO DE SAIR, ENTÃO DEFINIMOS COMO NULL PARA EVITAR ERROS.
 
-// Modal de Inscrição
 const modalInscricao = document.getElementById('modal-inscricao');
 const closeModalInscricaoBtn = document.getElementById('close-modal-inscricao');
 const formInscricao = document.getElementById('form-inscricao');
@@ -37,7 +35,6 @@ const formGroupGrau = document.getElementById('form-group-grau');
 const participanteGrauSelect = document.getElementById('participante-grau');
 const btnSalvarInscricao = document.getElementById('btn-salvar-inscricao');
 
-// Modal de Aula (Adicionar/Editar)
 const modalAula = document.getElementById('modal-aula');
 const closeModalAulaBtn = document.getElementById('close-modal-aula');
 const formAula = document.getElementById('form-aula');
@@ -50,7 +47,6 @@ const formGroupNumeroAula = document.getElementById('form-group-numero-aula');
 const inputAulaNumero = document.getElementById('aula-numero');
 const btnSalvarAula = document.getElementById('btn-salvar-aula');
 
-// Modal de Recessos
 const modalRecessos = document.getElementById('modal-recessos');
 const closeModalRecessosBtn = document.getElementById('close-modal-recessos');
 const formRecesso = document.getElementById('form-recesso');
@@ -61,7 +57,6 @@ const recessoListContainer = document.getElementById('recesso-list-container');
 let turmaId = null;
 let turmaData = null;
 
-// --- VERIFICAÇÃO DE PERMISSÃO E CARREGAMENTO ---
 onAuthStateChanged(auth, async (user) => {
     if (user) {
         const voluntariosRef = collection(db, "voluntarios");
@@ -89,7 +84,6 @@ onAuthStateChanged(auth, async (user) => {
     }
 });
 
-// --- FUNÇÕES ---
 async function carregarDadosDaTurma() {
     const turmaRef = doc(db, "turmas", turmaId);
     const turmaSnap = await getDoc(turmaRef);
@@ -329,7 +323,6 @@ async function deletarRecesso(recessoId) {
     }
 }
 
-// --- EVENTOS ---
 tabs.forEach(tab => {
     tab.addEventListener('click', () => {
         tabs.forEach(item => item.classList.remove('active'));
@@ -343,10 +336,12 @@ if(btnInscreverParticipante) btnInscreverParticipante.addEventListener('click', 
 if(closeModalInscricaoBtn) closeModalInscricaoBtn.addEventListener('click', () => modalInscricao.classList.remove('visible'));
 if(modalInscricao) modalInscricao.addEventListener('click', (event) => { if (event.target === modalInscricao) modalInscricao.classList.remove('visible'); });
 if(formInscricao) formInscricao.addEventListener('submit', inscreverParticipante);
+
 if(btnAddAulaExtra) btnAddAulaExtra.addEventListener('click', () => abrirModalAula(null, true));
 if(closeModalAulaBtn) closeModalAulaBtn.addEventListener('click', () => modalAula.classList.remove('visible'));
 if(modalAula) modalAula.addEventListener('click', (event) => { if (event.target === modalAula) modalAula.classList.remove('visible'); });
 if(formAula) formAula.addEventListener('submit', salvarAula);
+
 if(cronogramaTableBody) cronogramaTableBody.addEventListener('click', (event) => {
     const target = event.target.closest('button');
     if (!target || !target.dataset.action) return;
@@ -358,14 +353,15 @@ if(cronogramaTableBody) cronogramaTableBody.addEventListener('click', (event) =>
         deletarAula(id);
     }
 });
+
 if(btnGerenciarRecessos) btnGerenciarRecessos.addEventListener('click', abrirModalRecessos);
 if(closeModalRecessosBtn) closeModalRecessosBtn.addEventListener('click', () => modalRecessos.classList.remove('visible'));
 if(modalRecessos) modalRecessos.addEventListener('click', (event) => { if (event.target === modalRecessos) modalRecessos.classList.remove('visible'); });
 if(formRecesso) formRecesso.addEventListener('submit', salvarRecesso);
+
 if(recessoListContainer) recessoListContainer.addEventListener('click', (event) => {
     const target = event.target.closest('button.delete');
     if (target && target.dataset.id) {
         deletarRecesso(target.dataset.id);
     }
 });
-if(btnSair) btnSair.addEventListener('click', () => { if (confirm("Tem certeza que deseja sair?")) { signOut(auth); } });
