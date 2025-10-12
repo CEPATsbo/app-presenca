@@ -860,10 +860,9 @@ exports.backfillNomesCracha = onCall(OPCOES_FUNCAO, async (request) => {
 });
 
 // ===================================================================
-// ===== NOVO ROBÔ PARA O MÓDULO EDUCACIONAL =========================
+// ROBÔS DO MÓDULO EDUCACIONAL
 // ===================================================================
 
-// Lista completa das 118 aulas da EAE
 const aulasEAE = [
     { numeroDaAula: 1, titulo: "Aula inaugural", anoCorrespondente: "1" },
     { numeroDaAula: 2, titulo: "A Criação", anoCorrespondente: "1" },
@@ -987,254 +986,65 @@ const aulasEAE = [
 
 exports.cadastrarAulasEAEAutomaticamente = onDocumentCreated({ ...OPCOES_FUNCAO, document: 'cursos/{cursoId}' }, async (event) => {
     const snap = event.data;
-    if (!snap) {
-        console.log("Nenhum dado no evento.");
-        return null;
-    }
-
+    if (!snap) { return null; }
     const dadosCurso = snap.data();
-
     if (dadosCurso.isEAE === true) {
-        console.log(`Novo curso EAE detectado: ${dadosCurso.nome}. Iniciando cadastro automático de ${aulasEAE.length} aulas.`);
-        
         const cursoId = event.params.cursoId;
         const aulasRef = db.collection('cursos').doc(cursoId).collection('curriculo');
-        
         const batch = db.batch();
-
         aulasEAE.forEach(aula => {
             const novaAulaRef = aulasRef.doc();
             batch.set(novaAulaRef, aula);
         });
-
         try {
             await batch.commit();
-            console.log("Sucesso! Todas as aulas da EAE foram cadastradas para o curso:", cursoId);
-            return null;
+            console.log("Sucesso! Aulas da EAE cadastradas para o curso:", cursoId);
         } catch (error) {
-            console.error("Erro ao cadastrar aulas da EAE em batch:", error);
-            return null;
+            console.error("Erro ao cadastrar aulas da EAE:", error);
         }
-    } else {
-        console.log(`Novo curso (${dadosCurso.nome}) não é da EAE. Nenhuma ação automática necessária.`);
-        return null;
     }
+    return null;
 });
 
-// ===================================================================
-// ===== NOVO ROBÔ PARA GERAR O CRONOGRAMA DAS TURMAS ================
-// ===================================================================
-
-/**
- * Acionado quando uma nova turma é criada.
- * Gera o cronograma de aulas completo para a turma com base no gabarito do curso.
- */
 exports.gerarCronogramaAutomaticamente = onDocumentCreated({ ...OPCOES_FUNCAO, document: 'turmas/{turmaId}' }, async (event) => {
     const snap = event.data;
-    if (!snap) {
-        console.log("Nenhum dado no evento de criação da turma.");
-        return null;
-    }
-
+    if (!snap) { return null; }
     const dadosTurma = snap.data();
     const turmaId = event.params.turmaId;
-
     const { cursoId, dataInicio, diaDaSemana } = dadosTurma;
-
-    if (!cursoId || !dataInicio || diaDaSemana === undefined) {
-        console.log(`Dados incompletos para a turma ${turmaId}. Abortando geração de cronograma.`);
-        return null;
-    }
-
-    console.log(`Iniciando geração de cronograma para a turma: ${dadosTurma.nomeDaTurma} (ID: ${turmaId})`);
-
+    if (!cursoId || !dataInicio || diaDaSemana === undefined) { return null; }
     try {
-        // 1. Buscar todas as aulas do currículo do curso gabarito
         const aulasRef = db.collection('cursos').doc(cursoId).collection('curriculo');
         const aulasSnapshot = await aulasRef.orderBy('numeroDaAula').get();
-
-        if (aulasSnapshot.empty) {
-            console.log(`O curso gabarito ${cursoId} não possui aulas cadastradas. Nenhum cronograma foi gerado.`);
-            return null;
-        }
-
+        if (aulasSnapshot.empty) { return null; }
         const aulasDoCurso = [];
-        aulasSnapshot.forEach(doc => {
-            aulasDoCurso.push({ id: doc.id, ...doc.data() });
-        });
-
-        // 2. Calcular as datas das aulas
+        aulasSnapshot.forEach(doc => aulasDoCurso.push({ id: doc.id, ...doc.data() }));
         const cronograma = [];
-        // Converte a data de início (string 'YYYY-MM-DD') para um objeto Date, ajustando para o fuso horário correto.
         let dataAtual = new Date(`${dataInicio}T12:00:00.000Z`);
-
         aulasDoCurso.forEach(aula => {
-            // Encontra a próxima data que corresponde ao dia da semana da aula
             while (dataAtual.getUTCDay() !== diaDaSemana) {
                 dataAtual.setUTCDate(dataAtual.getUTCDate() + 1);
             }
-            
-            // Cria a entrada do cronograma com a data calculada
-            cronograma.push({
-                ...aula, // Inclui todos os dados da aula (numero, titulo, ano, etc)
-                aulaId: aula.id,
-                dataAgendada: admin.firestore.Timestamp.fromDate(dataAtual),
-                status: 'agendada' // Status inicial da aula
-            });
-
-            // Avança a data para a próxima semana para a próxima iteração
+            cronograma.push({ ...aula, aulaId: aula.id, dataAgendada: admin.firestore.Timestamp.fromDate(dataAtual), status: 'agendada' });
             dataAtual.setUTCDate(dataAtual.getUTCDate() + 7);
         });
-
-        // 3. Salvar o cronograma gerado em uma subcoleção da turma
         const cronogramaRef = db.collection('turmas').doc(turmaId).collection('cronograma');
         const batch = db.batch();
-
         cronograma.forEach(aulaAgendada => {
-            const novaAulaCronogramaRef = cronogramaRef.doc();
+            // Usa o ID da aula do gabarito como ID do documento no cronograma
+            const novaAulaCronogramaRef = cronogramaRef.doc(aulaAgendada.id); 
             batch.set(novaAulaCronogramaRef, aulaAgendada);
         });
-
         await batch.commit();
-        console.log(`Sucesso! ${cronograma.length} aulas foram agendadas para a turma ${turmaId}.`);
-        return null;
-
     } catch (error) {
         console.error(`Erro ao gerar cronograma para a turma ${turmaId}:`, error);
-        return null;
     }
+    return null;
 });
 
-
-// ===================================================================
-// ===== NOVO ROBÔ PARA RECALCULAR O CRONOGRAMA (RECESSOS) ===========
-// ===================================================================
-exports.recalcularCronogramaAposRecesso = onDocumentWritten({ ...OPCOES_FUNCAO, document: 'turmas/{turmaId}/recessos/{recessoId}' }, async (event) => {
-    const turmaId = event.params.turmaId;
-    console.log(`Gatilho de recesso acionado para a turma: ${turmaId}. Iniciando recálculo do cronograma.`);
-
-    try {
-        // 1. Buscar os dados base da turma (data de início, dia da semana, cursoId)
-        const turmaRef = db.collection('turmas').doc(turmaId);
-        const turmaSnap = await turmaRef.get();
-        if (!turmaSnap.exists) {
-            console.error(`Turma ${turmaId} não encontrada.`);
-            return null;
-        }
-        const dadosTurma = turmaSnap.data();
-        const { cursoId, dataInicio, diaDaSemana } = dadosTurma;
-
-        // 2. Buscar todas as aulas do GABARITO do curso (a fonte original)
-        const aulasGabaritoRef = db.collection('cursos').doc(cursoId).collection('curriculo');
-        const aulasGabaritoSnapshot = await aulasGabaritoRef.orderBy('numeroDaAula').get();
-        if (aulasGabaritoSnapshot.empty) {
-            console.log(`Curso ${cursoId} não possui aulas no gabarito. Nada a recalcular.`);
-            return null;
-        }
-        const aulasDoGabarito = [];
-        aulasGabaritoSnapshot.forEach(doc => aulasDoGabarito.push({ id: doc.id, ...doc.data() }));
-
-        // 3. Buscar a lista ATUALIZADA de todos os períodos de recesso
-        const recessosRef = turmaRef.collection('recessos');
-        const recessosSnapshot = await recessosRef.get();
-        const periodosDeRecesso = [];
-        recessosSnapshot.forEach(doc => {
-            const data = doc.data();
-            periodosDeRecesso.push({
-                inicio: data.dataInicio.toDate(),
-                fim: data.dataFim.toDate()
-            });
-        });
-        console.log(`Encontrados ${periodosDeRecesso.length} períodos de recesso.`);
-
-        // 4. Apagar o cronograma antigo para reconstruí-lo
-        const cronogramaAntigoRef = turmaRef.collection('cronograma');
-        const cronogramaAntigoSnapshot = await cronogramaAntigoRef.get();
-        const deleteBatch = db.batch();
-        cronogramaAntigoSnapshot.docs.forEach(doc => deleteBatch.delete(doc.ref));
-        await deleteBatch.commit();
-        console.log(`Cronograma antigo com ${cronogramaAntigoSnapshot.size} aulas foi apagado.`);
-
-        // 5. Recalcular as datas do novo cronograma
-        const novoCronograma = [];
-        let dataAtual = new Date(`${dataInicio}T12:00:00.000Z`);
-
-        aulasDoGabarito.forEach(aula => {
-            let dataEncontrada = false;
-            while (!dataEncontrada) {
-                // Encontra o próximo dia da semana correto
-                while (dataAtual.getUTCDay() !== diaDaSemana) {
-                    dataAtual.setUTCDate(dataAtual.getUTCDate() + 1);
-                }
-
-                // Verifica se a data encontrada cai em algum período de recesso
-                let emRecesso = false;
-                for (const periodo of periodosDeRecesso) {
-                    if (dataAtual >= periodo.inicio && dataAtual <= periodo.fim) {
-                        emRecesso = true;
-                        break;
-                    }
-                }
-
-                if (emRecesso) {
-                    // Se estiver em recesso, pula para a próxima semana e tenta de novo
-                    dataAtual.setUTCDate(dataAtual.getUTCDate() + 7);
-                } else {
-                    // Se não estiver em recesso, a data é válida
-                    dataEncontrada = true;
-                }
-            }
-            
-            novoCronograma.push({
-                ...aula,
-                aulaId: aula.id,
-                dataAgendada: admin.firestore.Timestamp.fromDate(dataAtual),
-                status: 'agendada'
-            });
-
-            // Avança para a próxima semana para a próxima aula
-            dataAtual.setUTCDate(dataAtual.getUTCDate() + 7);
-        });
-
-        // 6. Salvar o novo cronograma recalculado
-        const cronogramaNovoRef = turmaRef.collection('cronograma');
-        const writeBatch = db.batch();
-        novoCronograma.forEach(aulaAgendada => {
-            const novaAulaCronogramaRef = cronogramaNovoRef.doc();
-            writeBatch.set(novaAulaCronogramaRef, aulaAgendada);
-        });
-        await writeBatch.commit();
-
-        console.log(`SUCESSO! Novo cronograma com ${novoCronograma.length} aulas foi gerado e salvo para a turma ${turmaId}.`);
-        return null;
-
-    } catch (error) {
-        console.error(`Erro GERAL ao recalcular cronograma para a turma ${turmaId}:`, error);
-        return null;
-    }
-});
-
-// ===== NOVO ROBÔ PARA REAJUSTAR CRONOGRAMA APÓS AULA EXTRA =====
-exports.reajustarCronogramaPorMudanca = onDocumentWritten({ ...OPCOES_FUNCAO, document: 'turmas/{turmaId}/cronograma/{aulaId}' }, async (event) => {
-    const turmaId = event.params.turmaId;
-    const change = event.data;
-
-    // Se não há dados depois (aula foi deletada) ou antes (aula foi criada), aciona o recálculo.
-    // Também aciona se a data de uma aula foi alterada.
-    const aulaAntes = change.before.data();
-    const aulaDepois = change.after.data();
-
-    // Condição de disparo: aula nova, aula deletada, ou data de uma aula foi alterada.
-    const precisaRecalcular = !change.before.exists || !change.after.exists || 
-                              (aulaAntes.dataAgendada.toMillis() !== aulaDepois.dataAgendada.toMillis());
-
-    if (!precisaRecalcular) {
-        console.log(`Alteração na aula ${event.params.aulaId} não requer recálculo do cronograma.`);
-        return null;
-    }
-
-    console.log(`Gatilho de mudança no cronograma acionado para a turma: ${turmaId}. Iniciando recálculo completo.`);
-
+// ===== O "CÉREBRO" UNIFICADO DE RECÁLCULO =====
+async function recalcularCronogramaCompleto(turmaId) {
+    console.log(`Disparando recálculo completo para a turma: ${turmaId}.`);
     try {
         const turmaRef = db.collection('turmas').doc(turmaId);
         const turmaSnap = await turmaRef.get();
@@ -1242,39 +1052,23 @@ exports.reajustarCronogramaPorMudanca = onDocumentWritten({ ...OPCOES_FUNCAO, do
         const dadosTurma = turmaSnap.data();
         const { cursoId, dataInicio, diaDaSemana } = dadosTurma;
         
-        // Busca o gabarito original do curso
         const aulasGabaritoRef = db.collection('cursos').doc(cursoId).collection('curriculo');
         const aulasGabaritoSnapshot = await aulasGabaritoRef.orderBy('numeroDaAula').get();
         if (aulasGabaritoSnapshot.empty) { return null; }
         const aulasDoGabarito = [];
         aulasGabaritoSnapshot.forEach(doc => aulasDoGabarito.push({ id: doc.id, ...doc.data() }));
 
-        // Busca todos os recessos
-        const recessosRef = turmaRef.collection('recessos');
-        const recessosSnapshot = await recessosRef.get();
+        const recessosSnapshot = await turmaRef.collection('recessos').get();
         const periodosDeRecesso = [];
         recessosSnapshot.forEach(doc => periodosDeRecesso.push({ inicio: doc.data().dataInicio.toDate(), fim: doc.data().dataFim.toDate() }));
         
-        // Busca todas as aulas extras que já existem
-        const aulasExtrasRef = turmaRef.collection('cronograma');
-        const aulasExtrasSnapshot = await aulasExtrasRef.where('isExtra', '==', true).get();
+        const aulasExtrasSnapshot = await turmaRef.collection('cronograma').where('isExtra', '==', true).get();
         const aulasExtras = [];
         aulasExtrasSnapshot.forEach(doc => aulasExtras.push({ id: doc.id, ...doc.data() }));
 
-        // Apaga o cronograma antigo completamente
-        const cronogramaAntigoSnapshot = await turmaRef.collection('cronograma').get();
-        const deleteBatch = db.batch();
-        cronogramaAntigoSnapshot.docs.forEach(doc => deleteBatch.delete(doc.ref));
-        await deleteBatch.commit();
-
-        // --- LÓGICA DE RECONSTRUÇÃO ---
-        const novoCronograma = [];
         let dataAtual = new Date(`${dataInicio}T12:00:00.000Z`);
+        const batch = db.batch();
 
-        // Adiciona as aulas extras à lista de aulas a serem agendadas
-        const todasAsAulas = [...aulasDoGabarito, ...aulasExtras];
-        
-        // Recalcula as datas das aulas REGULARES
         aulasDoGabarito.forEach(aula => {
             let dataEncontrada = false;
             while (!dataEncontrada) {
@@ -1283,6 +1077,7 @@ exports.reajustarCronogramaPorMudanca = onDocumentWritten({ ...OPCOES_FUNCAO, do
                 }
                 
                 let emRecesso = periodosDeRecesso.some(p => dataAtual >= p.inicio && dataAtual <= p.fim);
+                // Verifica se a data já foi "reservada" por uma aula extra
                 let dataOcupadaPorExtra = aulasExtras.some(extra => extra.dataAgendada.toDate().getTime() === dataAtual.getTime());
 
                 if (emRecesso || dataOcupadaPorExtra) {
@@ -1291,29 +1086,37 @@ exports.reajustarCronogramaPorMudanca = onDocumentWritten({ ...OPCOES_FUNCAO, do
                     dataEncontrada = true;
                 }
             }
-            novoCronograma.push({ ...aula, aulaId: aula.id, dataAgendada: admin.firestore.Timestamp.fromDate(dataAtual), status: 'agendada' });
+            // ATUALIZA o documento da aula regular que já existe
+            const aulaRef = turmaRef.collection('cronograma').doc(aula.id); 
+            batch.update(aulaRef, { dataAgendada: admin.firestore.Timestamp.fromDate(dataAtual) });
             dataAtual.setUTCDate(dataAtual.getUTCDate() + 7);
         });
 
-        // Adiciona as aulas extras (que já têm data fixa) ao cronograma final
-        aulasExtras.forEach(extra => {
-            novoCronograma.push(extra);
-        });
-
-        // Salva o novo cronograma completo
-        const cronogramaNovoRef = turmaRef.collection('cronograma');
-        const writeBatch = db.batch();
-        novoCronograma.forEach(aulaAgendada => {
-            // Se a aula tem um ID (veio do gabarito ou já existia), usamos ele. Se não, geramos um novo.
-            const docRef = aulaAgendada.id ? cronogramaNovoRef.doc(aulaAgendada.id) : cronogramaNovoRef.doc();
-            writeBatch.set(docRef, aulaAgendada);
-        });
-        await writeBatch.commit();
-
-        console.log(`SUCESSO! Cronograma recalculado e salvo para a turma ${turmaId}.`);
+        await batch.commit();
+        console.log(`SUCESSO! Cronograma recalculado para a turma ${turmaId}.`);
 
     } catch (error) {
         console.error(`Erro GERAL ao recalcular cronograma para a turma ${turmaId}:`, error);
     }
     return null;
+}
+
+// ===== SENSOR 1: MUDANÇA NAS AULAS EXTRAS =====
+exports.reajustarCronogramaPorAulaExtra = onDocumentWritten({ ...OPCOES_FUNCAO, document: 'turmas/{turmaId}/cronograma/{aulaId}' }, async (event) => {
+    const aulaAntes = event.data.before.data();
+    const aulaDepois = event.data.after.data();
+
+    // Dispara apenas se a aula que mudou é uma AULA EXTRA
+    const isExtraAntes = aulaAntes ? aulaAntes.isExtra === true : false;
+    const isExtraDepois = aulaDepois ? aulaDepois.isExtra === true : false;
+    
+    if (isExtraAntes || isExtraDepois) {
+        return recalcularCronogramaCompleto(event.params.turmaId);
+    }
+    return null;
+});
+
+// ===== SENSOR 2: MUDANÇA NOS RECESSOS =====
+exports.recalcularCronogramaAposRecesso = onDocumentWritten({ ...OPCOES_FUNCAO, document: 'turmas/{turmaId}/recessos/{recessoId}' }, (event) => {
+    return recalcularCronogramaCompleto(event.params.turmaId);
 });
