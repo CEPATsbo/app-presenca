@@ -14,6 +14,7 @@
         .btn { padding: 10px 18px; border: none; border-radius: 6px; font-size: 1em; font-weight: bold; color: white; cursor: pointer; transition: background-color 0.3s; text-decoration: none; }
         .btn-primary { background-color: #0277BD; }
         .btn-secondary { background-color: #555; }
+        .actions-header { display: flex; gap: 10px; }
         
         .tabs { border-bottom: 2px solid #ccc; margin-bottom: 20px; display: flex; }
         .tab-link { background: none; border: none; padding: 12px 18px; cursor: pointer; font-size: 1.05em; border-bottom: 3px solid transparent; margin-bottom: -2px; }
@@ -26,13 +27,13 @@
         table { width: 100%; border-collapse: collapse; margin-top: 20px; }
         th, td { padding: 12px 15px; text-align: left; border-bottom: 1px solid #ddd; }
         th { background-color: #f8f8f8; }
-        td .actions { display: flex; gap: 10px; }
+        td .actions { display: flex; gap: 15px; }
         .icon-btn { background: none; border: none; cursor: pointer; font-size: 1.1em; color: #555; }
         .icon-btn.edit { color: #0277BD; }
         .icon-btn.delete { color: #d32f2f; }
         .icon-btn.recess { color: #f59e0b; }
 
-        .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0, 0, 0, 0.6); display: flex; justify-content: center; align-items: center; z-index: 1000; visibility: hidden; opacity: 0; }
+        .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0, 0, 0, 0.6); display: flex; justify-content: center; align-items: center; z-index: 1000; visibility: hidden; opacity: 0; transition: opacity 0.3s; }
         .modal-overlay.visible { visibility: visible; opacity: 1; }
         .modal-content { background-color: white; padding: 25px; border-radius: 10px; width: 90%; max-width: 500px; position: relative; }
         .modal-content h3 { margin-top: 0; }
@@ -47,13 +48,8 @@
 
     <div class="container">
         <div class="header">
-            <h1 id="turma-titulo-header">
-                <small>Gerenciando a Turma:</small>
-                Carregando...
-            </h1>
-            <div>
-                <a href="/gerenciar-turmas.html" class="btn btn-secondary">&lt; Voltar para Turmas</a>
-            </div>
+            <h1 id="turma-titulo-header"><small>Gerenciando a Turma:</small>Carregando...</h1>
+            <div><a href="/gerenciar-turmas.html" class="btn btn-secondary">&lt; Voltar para Turmas</a></div>
         </div>
 
         <nav class="tabs">
@@ -64,30 +60,15 @@
 
         <div id="tab-participantes" class="tab-content active">
             <button class="btn btn-primary" id="btn-inscrever-participante"><i class="fas fa-user-plus"></i> Inscrever Novo Participante</button>
-            <div class="table-container">
-                <table id="participantes-table">
-                    <thead></thead>
-                    <tbody id="participantes-table-body"></tbody>
-                </table>
-            </div>
+            <div class="table-container"><table id="participantes-table"><thead></thead><tbody id="participantes-table-body"></tbody></table></div>
         </div>
 
         <div id="tab-aulas" class="tab-content">
-            <button class="btn btn-primary" id="btn-add-aula-extra"><i class="fas fa-plus"></i> Adicionar Aula Extra</button>
-            <div class="table-container">
-                <table id="cronograma-table">
-                    <thead>
-                        <tr>
-                            <th>Nº</th>
-                            <th>Data Agendada</th>
-                            <th>Título da Aula</th>
-                            <th>Status</th>
-                            <th>Ações</th>
-                        </tr>
-                    </thead>
-                    <tbody id="cronograma-table-body"></tbody>
-                </table>
+            <div class="actions-header">
+                <button class="btn btn-primary" id="btn-add-aula-extra"><i class="fas fa-plus"></i> Adicionar Aula Extra</button>
+                <button class="btn btn-secondary" id="btn-gerenciar-recessos"><i class="fas fa-umbrella-beach"></i> Gerenciar Recessos</button>
             </div>
+            <div class="table-container"><table id="cronograma-table"><thead><tr><th>Nº</th><th>Data Agendada</th><th>Título da Aula</th><th>Status</th><th>Ações</th></tr></thead><tbody id="cronograma-table-body"></tbody></table></div>
         </div>
 
         <div id="tab-relatorios" class="tab-content">
@@ -101,37 +82,33 @@
             <button class="modal-close-btn" id="close-modal-inscricao">&times;</button>
             <h3>Inscrever Participante</h3>
             <form id="form-inscricao">
-                <div class="form-group">
-                    <label for="participante-select">Buscar por nome (Voluntário ou Assistido)</label>
-                    <select id="participante-select" required></select>
-                </div>
-                <div class="form-group hidden" id="form-group-grau">
-                    <label for="participante-grau">Grau Inicial (EAE)</label>
-                    <select id="participante-grau">
-                        <option value="Aluno">Aluno</option>
-                        <option value="Aprendiz">Aprendiz</option>
-                        <option value="Servidor">Servidor</option>
-                    </select>
-                </div>
+                <div class="form-group"><label for="participante-select">Buscar por nome (Voluntário ou Assistido)</label><select id="participante-select" required></select></div>
+                <div class="form-group hidden" id="form-group-grau"><label for="participante-grau">Grau Inicial (EAE)</label><select id="participante-grau"><option value="Aluno">Aluno</option><option value="Aprendiz">Aprendiz</option><option value="Servidor">Servidor</option></select></div>
                 <button type="submit" class="btn btn-primary" id="btn-salvar-inscricao">Confirmar Inscrição</button>
             </form>
         </div>
     </div>
 
-    <div class="modal-overlay" id="modal-aula-extra">
+    <div class="modal-overlay" id="modal-aula">
         <div class="modal-content">
-            <button class="modal-close-btn" id="close-modal-aula-extra">&times;</button>
-            <h3>Adicionar Aula Extra</h3>
-            <form id="form-aula-extra">
+            <button class="modal-close-btn" id="close-modal-aula">&times;</button>
+            <h3 id="modal-aula-titulo">Adicionar/Editar Aula</h3>
+            <form id="form-aula">
+                <input type="hidden" id="aula-id">
+                <input type="hidden" id="aula-is-extra">
                 <div class="form-group">
-                    <label for="aula-extra-titulo">Título da Aula</label>
-                    <input type="text" id="aula-extra-titulo" required>
+                    <label for="aula-titulo">Título da Aula</label>
+                    <input type="text" id="aula-titulo" required>
                 </div>
                 <div class="form-group">
-                    <label for="aula-extra-data">Data da Aula</label>
-                    <input type="date" id="aula-extra-data" required>
+                    <label for="aula-data">Data da Aula</label>
+                    <input type="date" id="aula-data" required>
                 </div>
-                <button type="submit" class="btn btn-primary" id="btn-salvar-aula-extra">Salvar Aula Extra</button>
+                <div class="form-group hidden" id="form-group-numero-aula">
+                    <label for="aula-numero">Número da Aula (Apenas para aulas regulares)</label>
+                    <input type="number" id="aula-numero">
+                </div>
+                <button type="submit" class="btn btn-primary" id="btn-salvar-aula">Salvar Aula</button>
             </form>
         </div>
     </div>

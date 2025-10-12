@@ -1,6 +1,6 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
 import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-auth.js";
-import { getFirestore, collection, query, where, getDocs, doc, getDoc, addDoc, onSnapshot, orderBy, limit, serverTimestamp, Timestamp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
+import { getFirestore, collection, query, where, getDocs, doc, getDoc, addDoc, onSnapshot, orderBy, limit, serverTimestamp, Timestamp, updateDoc, deleteDoc } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
 
 // --- CONFIGURAÇÕES ---
 const firebaseConfig = {
@@ -36,13 +36,18 @@ const formGroupGrau = document.getElementById('form-group-grau');
 const participanteGrauSelect = document.getElementById('participante-grau');
 const btnSalvarInscricao = document.getElementById('btn-salvar-inscricao');
 
-// Modal de Aula Extra
-const modalAulaExtra = document.getElementById('modal-aula-extra');
-const closeModalAulaExtraBtn = document.getElementById('close-modal-aula-extra');
-const formAulaExtra = document.getElementById('form-aula-extra');
-const inputAulaExtraTitulo = document.getElementById('aula-extra-titulo');
-const inputAulaExtraData = document.getElementById('aula-extra-data');
-const btnSalvarAulaExtra = document.getElementById('btn-salvar-aula-extra');
+// Modal de Aula (Adicionar/Editar)
+const modalAula = document.getElementById('modal-aula');
+const closeModalAulaBtn = document.getElementById('close-modal-aula');
+const formAula = document.getElementById('form-aula');
+const modalAulaTitulo = document.getElementById('modal-aula-titulo');
+const inputAulaId = document.getElementById('aula-id');
+const inputAulaIsExtra = document.getElementById('aula-is-extra');
+const inputAulaTitulo = document.getElementById('aula-titulo');
+const inputAulaData = document.getElementById('aula-data');
+const formGroupNumeroAula = document.getElementById('form-group-numero-aula');
+const inputAulaNumero = document.getElementById('aula-numero');
+const btnSalvarAula = document.getElementById('btn-salvar-aula');
 
 let turmaId = null;
 let turmaData = null;
@@ -89,6 +94,7 @@ async function carregarDadosDaTurma() {
         document.body.innerHTML = '<h1>Erro: Turma não encontrada.</h1>';
     }
 }
+
 function configurarTabelaParticipantes() {
     let tableHeaderHTML = '<tr><th>Nome do Participante</th>';
     if (turmaData.isEAE) {
@@ -103,7 +109,6 @@ function configurarTabelaParticipantes() {
 function escutarParticipantes() {
     const participantesRef = collection(db, "turmas", turmaId, "participantes");
     const q = query(participantesRef, orderBy("nome"));
-
     onSnapshot(q, (snapshot) => {
         participantesTableBody.innerHTML = '';
         if (snapshot.empty) {
@@ -128,8 +133,7 @@ function escutarParticipantes() {
 
 function escutarCronograma() {
     const cronogramaRef = collection(db, "turmas", turmaId, "cronograma");
-    const q = query(cronogramaRef, orderBy("dataAgendada", "asc")); // Ordenar por data
-
+    const q = query(cronogramaRef, orderBy("dataAgendada", "asc"));
     onSnapshot(q, (snapshot) => {
         cronogramaTableBody.innerHTML = '';
         if (snapshot.empty) {
@@ -138,25 +142,30 @@ function escutarCronograma() {
         }
         snapshot.forEach(doc => {
             const aula = doc.data();
-            const dataFormatada = aula.dataAgendada.toDate().toLocaleDateString('pt-BR');
+            const dataFormatada = aula.dataAgendada.toDate().toLocaleDateString('pt-BR', { timeZone: 'UTC' });
             const tr = document.createElement('tr');
-            // Se for aula extra, o número da aula pode não existir, então mostramos "Extra"
             const numeroAulaDisplay = aula.isExtra ? '<strong>Extra</strong>' : aula.numeroDaAula;
+            
+            let actionsHTML = `
+                <button class="icon-btn edit" title="Editar Aula" data-action="edit" data-id="${doc.id}"><i class="fas fa-pencil-alt"></i></button>
+            `;
+            if(aula.isExtra) {
+                actionsHTML += `<button class="icon-btn delete" title="Excluir Aula Extra" data-action="delete" data-id="${doc.id}"><i class="fas fa-trash-alt"></i></button>`;
+            } else {
+                actionsHTML += `<button class="icon-btn recess" title="Marcar como Recesso" data-action="recess" data-id="${doc.id}"><i class="fas fa-coffee"></i></button>`;
+            }
+
             tr.innerHTML = `
                 <td>${numeroAulaDisplay}</td>
                 <td>${dataFormatada}</td>
                 <td>${aula.titulo}</td>
                 <td>${aula.status}</td>
-                <td class="actions">
-                    <button class="icon-btn edit" title="Reagendar Aula" data-id="${doc.id}"><i class="fas fa-calendar-alt"></i></button>
-                    <button class="icon-btn recess" title="Marcar como Recesso" data-id="${doc.id}"><i class="fas fa-coffee"></i></button>
-                </td>
+                <td class="actions">${actionsHTML}</td>
             `;
             cronogramaTableBody.appendChild(tr);
         });
     });
 }
-
 
 async function carregarVoluntariosParaInscricao() {
     participanteSelect.innerHTML = '<option value="">Selecione um voluntário/assistido</option>';
@@ -186,13 +195,8 @@ async function inscreverParticipante(event) {
     event.preventDefault();
     const participanteId = participanteSelect.value;
     const participanteNome = participanteSelect.options[participanteSelect.selectedIndex].text;
-    
-    if (!participanteId) {
-        return alert("Por favor, selecione um participante.");
-    }
-
+    if (!participanteId) { return alert("Por favor, selecione um participante."); }
     btnSalvarInscricao.disabled = true;
-    
     try {
         const novoParticipante = {
             participanteId: participanteId,
@@ -202,10 +206,8 @@ async function inscreverParticipante(event) {
         if (turmaData.isEAE) {
             novoParticipante.grau = participanteGrauSelect.value;
         }
-        
         const participantesRef = collection(db, "turmas", turmaId, "participantes");
         await addDoc(participantesRef, novoParticipante);
-
         modalInscricao.classList.remove('visible');
     } catch (error) {
         console.error("Erro ao inscrever participante:", error);
@@ -215,44 +217,92 @@ async function inscreverParticipante(event) {
     }
 }
 
-function abrirModalAulaExtra() {
-    formAulaExtra.reset();
-    modalAulaExtra.classList.add('visible');
+function abrirModalAula(aulaId = null, isExtra = false) {
+    formAula.reset();
+    inputAulaId.value = '';
+    inputAulaIsExtra.value = isExtra;
+
+    if (aulaId) { // MODO EDIÇÃO
+        modalAulaTitulo.textContent = 'Editar Aula';
+        const aulaRef = doc(db, "turmas", turmaId, "cronograma", aulaId);
+        getDoc(aulaRef).then(docSnap => {
+            if (docSnap.exists()) {
+                const data = docSnap.data();
+                inputAulaId.value = docSnap.id;
+                inputAulaTitulo.value = data.titulo;
+                inputAulaData.value = data.dataAgendada.toDate().toISOString().split('T')[0];
+                inputAulaIsExtra.value = data.isExtra || false;
+
+                if (!data.isExtra) {
+                    formGroupNumeroAula.classList.remove('hidden');
+                    inputAulaNumero.value = data.numeroDaAula;
+                    inputAulaNumero.readOnly = true; // Não permite editar o número da aula regular
+                } else {
+                    formGroupNumeroAula.classList.add('hidden');
+                }
+            }
+        });
+    } else { // MODO CRIAÇÃO (AULA EXTRA)
+        modalAulaTitulo.textContent = 'Adicionar Aula Extra';
+        formGroupNumeroAula.classList.add('hidden');
+        inputAulaIsExtra.value = true;
+    }
+    modalAula.classList.add('visible');
 }
 
-async function salvarAulaExtra(event) {
+async function salvarAula(event) {
     event.preventDefault();
-    const titulo = inputAulaExtraTitulo.value.trim();
-    const data = inputAulaExtraData.value;
-    if (!titulo || !data) {
-        return alert("Por favor, preencha o título e a data da aula.");
+    const id = inputAulaId.value;
+    const isExtra = inputAulaIsExtra.value === 'true';
+
+    const dadosAula = {
+        titulo: inputAulaTitulo.value.trim(),
+        dataAgendada: Timestamp.fromDate(new Date(`${inputAulaData.value}T12:00:00.000Z`)),
+    };
+
+    if(!isExtra) {
+        dadosAula.numeroDaAula = Number(inputAulaNumero.value);
+    } else {
+        dadosAula.isExtra = true;
+        dadosAula.numeroDaAula = 999;
+        dadosAula.status = 'agendada';
     }
-    btnSalvarAulaExtra.disabled = true;
+    
+    btnSalvarAula.disabled = true;
     try {
-        const novaAulaExtra = {
-            titulo: titulo,
-            dataAgendada: Timestamp.fromDate(new Date(`${data}T12:00:00.000Z`)),
-            status: 'agendada',
-            isExtra: true,
-            numeroDaAula: 999 // Um número alto para ordenação, caso a ordenação por data falhe
-        };
         const cronogramaRef = collection(db, "turmas", turmaId, "cronograma");
-        await addDoc(cronogramaRef, novaAulaExtra);
-        modalAulaExtra.classList.remove('visible');
+        if (id) {
+            const aulaRef = doc(cronogramaRef, id);
+            await updateDoc(aulaRef, dadosAula);
+        } else {
+            await addDoc(cronogramaRef, dadosAula);
+        }
+        modalAula.classList.remove('visible');
     } catch (error) {
-        console.error("Erro ao salvar aula extra:", error);
-        alert("Ocorreu um erro ao salvar a aula extra.");
+        console.error("Erro ao salvar aula:", error);
     } finally {
-        btnSalvarAulaExtra.disabled = false;
+        btnSalvarAula.disabled = false;
     }
 }
+
+async function deletarAula(aulaId) {
+    if (!confirm("Tem certeza que deseja excluir esta aula extra? Esta ação não pode ser desfeita.")) return;
+    try {
+        const aulaRef = doc(db, "turmas", turmaId, "cronograma", aulaId);
+        await deleteDoc(aulaRef);
+        // O onSnapshot cuidará de remover a linha da tela automaticamente.
+    } catch (error) {
+        console.error("Erro ao deletar aula:", error);
+        alert("Ocorreu um erro ao excluir a aula.");
+    }
+}
+
 
 // --- EVENTOS ---
 tabs.forEach(tab => {
     tab.addEventListener('click', () => {
         tabs.forEach(item => item.classList.remove('active'));
         tab.classList.add('active');
-
         const targetTab = document.getElementById(tab.dataset.tab);
         tabContents.forEach(content => content.classList.remove('active'));
         targetTab.classList.add('active');
@@ -264,9 +314,20 @@ if(closeModalInscricaoBtn) closeModalInscricaoBtn.addEventListener('click', () =
 if(modalInscricao) modalInscricao.addEventListener('click', (event) => { if (event.target === modalInscricao) modalInscricao.classList.remove('visible'); });
 if(formInscricao) formInscricao.addEventListener('submit', inscreverParticipante);
 
-if(btnAddAulaExtra) btnAddAulaExtra.addEventListener('click', abrirModalAulaExtra);
-if(closeModalAulaExtraBtn) closeModalAulaExtraBtn.addEventListener('click', () => modalAulaExtra.classList.remove('visible'));
-if(modalAulaExtra) modalAulaExtra.addEventListener('click', (event) => { if (event.target === modalAulaExtra) modalAulaExtra.classList.remove('visible'); });
-if(formAulaExtra) formAulaExtra.addEventListener('submit', salvarAulaExtra);
+if(btnAddAulaExtra) btnAddAulaExtra.addEventListener('click', () => abrirModalAula(null, true));
+if(closeModalAulaBtn) closeModalAulaBtn.addEventListener('click', () => modalAula.classList.remove('visible'));
+if(modalAula) modalAula.addEventListener('click', (event) => { if (event.target === modalAula) modalAula.classList.remove('visible'); });
+if(formAula) formAula.addEventListener('submit', salvarAula);
 
-
+cronogramaTableBody.addEventListener('click', (event) => {
+    const target = event.target.closest('button');
+    if (!target || !target.dataset.action) return;
+    const action = target.dataset.action;
+    const id = target.dataset.id;
+    if (action === 'edit') {
+        abrirModalAula(id);
+    } else if (action === 'delete') {
+        deletarAula(id);
+    }
+    // Ação 'recess' será implementada depois
+});
