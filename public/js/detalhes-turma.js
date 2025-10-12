@@ -27,7 +27,6 @@ const tabs = document.querySelectorAll('.tab-link');
 const tabContents = document.querySelectorAll('.tab-content');
 const btnAddAulaExtra = document.getElementById('btn-add-aula-extra');
 const btnGerenciarRecessos = document.getElementById('btn-gerenciar-recessos');
-
 // Modais e seus componentes...
 const modalInscricao = document.getElementById('modal-inscricao');
 const closeModalInscricaoBtn = document.getElementById('close-modal-inscricao');
@@ -36,7 +35,6 @@ const participanteSelect = document.getElementById('participante-select');
 const formGroupGrau = document.getElementById('form-group-grau');
 const participanteGrauSelect = document.getElementById('participante-grau');
 const btnSalvarInscricao = document.getElementById('btn-salvar-inscricao');
-
 const modalAula = document.getElementById('modal-aula');
 const closeModalAulaBtn = document.getElementById('close-modal-aula');
 const formAula = document.getElementById('form-aula');
@@ -48,7 +46,6 @@ const inputAulaData = document.getElementById('aula-data');
 const formGroupNumeroAula = document.getElementById('form-group-numero-aula');
 const inputAulaNumero = document.getElementById('aula-numero');
 const btnSalvarAula = document.getElementById('btn-salvar-aula');
-
 const modalRecessos = document.getElementById('modal-recessos');
 const closeModalRecessosBtn = document.getElementById('close-modal-recessos');
 const formRecesso = document.getElementById('form-recesso');
@@ -110,11 +107,12 @@ function configurarTabelaParticipantes() {
     participantesTable.querySelector('thead').innerHTML = tableHeaderHTML;
 }
 
+// ***** FUNÇÃO CORRIGIDA PARA EVITAR O PISCA-PISCA *****
 function escutarParticipantes() {
     const participantesRef = collection(db, "turmas", turmaId, "participantes");
     const q = query(participantesRef, orderBy("nome"));
     onSnapshot(q, (snapshot) => {
-        let rowsHTML = [];
+        let rowsHTML = []; // Cria a lista de linhas em memória
         if (snapshot.empty) {
             const colspan = turmaData.isEAE ? 4 : 3;
             rowsHTML.push(`<tr><td colspan="${colspan}" style="text-align: center;">Nenhum participante inscrito.</td></tr>`);
@@ -128,16 +126,16 @@ function escutarParticipantes() {
                 rowsHTML.push(`<tr>${row}</tr>`);
             });
         }
+        // Atualiza a tabela na tela UMA ÚNICA VEZ no final
         participantesTableBody.innerHTML = rowsHTML.join('');
     });
 }
 
-// ***** FUNÇÃO CORRIGIDA PARA EVITAR O PISCA-PISCA *****
 function escutarCronograma() {
     const cronogramaRef = collection(db, "turmas", turmaId, "cronograma");
     const q = query(cronogramaRef, orderBy("dataAgendada", "asc"));
     onSnapshot(q, (snapshot) => {
-        let rowsHTML = []; // Cria a lista de linhas em memória
+        let rowsHTML = [];
         if (snapshot.empty) {
             rowsHTML.push('<tr><td colspan="5" style="text-align: center;">Cronograma ainda não gerado ou vazio.</td></tr>');
         } else {
@@ -151,18 +149,9 @@ function escutarCronograma() {
                 } else {
                     actionsHTML += `<button class="icon-btn recess" title="Marcar como Recesso" data-action="recess" data-id="${doc.id}"><i class="fas fa-coffee"></i></button>`;
                 }
-                rowsHTML.push(`
-                    <tr>
-                        <td>${numeroAulaDisplay}</td>
-                        <td>${dataFormatada}</td>
-                        <td>${aula.titulo}</td>
-                        <td>${aula.status}</td>
-                        <td class="actions">${actionsHTML}</td>
-                    </tr>
-                `);
+                rowsHTML.push(`<tr><td>${numeroAulaDisplay}</td><td>${dataFormatada}</td><td>${aula.titulo}</td><td>${aula.status}</td><td class="actions">${actionsHTML}</td></tr>`);
             });
         }
-        // Atualiza a tabela na tela UMA ÚNICA VEZ no final
         cronogramaTableBody.innerHTML = rowsHTML.join('');
     });
 }
@@ -183,11 +172,8 @@ async function carregarVoluntariosParaInscricao() {
 function abrirModalInscricao() {
     formInscricao.reset();
     carregarVoluntariosParaInscricao();
-    if (turmaData.isEAE) {
-        formGroupGrau.classList.remove('hidden');
-    } else {
-        formGroupGrau.classList.add('hidden');
-    }
+    if (turmaData.isEAE) { formGroupGrau.classList.remove('hidden'); } 
+    else { formGroupGrau.classList.add('hidden'); }
     modalInscricao.classList.add('visible');
 }
 
@@ -205,7 +191,6 @@ async function inscreverParticipante(event) {
         modalInscricao.classList.remove('visible');
     } catch (error) {
         console.error("Erro ao inscrever participante:", error);
-        alert("Ocorreu um erro ao realizar a inscrição.");
     } finally {
         btnSalvarInscricao.disabled = false;
     }
@@ -247,7 +232,8 @@ async function salvarAula(event) {
     const id = inputAulaId.value;
     const isExtra = inputAulaIsExtra.value === 'true';
     const dadosAula = { titulo: inputAulaTitulo.value.trim(), dataAgendada: Timestamp.fromDate(new Date(`${inputAulaData.value}T12:00:00.000Z`)) };
-    if (!isExtra) { dadosAula.numeroDaAula = Number(inputAulaNumero.value); } else { dadosAula.isExtra = true; dadosAula.numeroDaAula = 999; dadosAula.status = 'agendada'; }
+    if (!isExtra) { dadosAula.numeroDaAula = Number(inputAulaNumero.value); } 
+    else { dadosAula.isExtra = true; dadosAula.numeroDaAula = 999; dadosAula.status = 'agendada'; }
     btnSalvarAula.disabled = true;
     try {
         const cronogramaRef = collection(db, "turmas", turmaId, "cronograma");
@@ -272,7 +258,6 @@ async function deletarAula(aulaId) {
         await deleteDoc(aulaRef);
     } catch (error) {
         console.error("Erro ao deletar aula:", error);
-        alert("Ocorreu um erro ao excluir a aula.");
     }
 }
 
@@ -285,19 +270,18 @@ function abrirModalRecessos() {
 function escutarRecessos() {
     const recessosRef = collection(db, "turmas", turmaId, "recessos");
     onSnapshot(recessosRef, (snapshot) => {
-        recessoListContainer.innerHTML = '';
+        let listItems = [];
         if (snapshot.empty) {
-            recessoListContainer.innerHTML = '<li>Nenhum recesso cadastrado.</li>';
-            return;
+            listItems.push('<li>Nenhum recesso cadastrado.</li>');
+        } else {
+            snapshot.forEach(doc => {
+                const recesso = doc.data();
+                const inicio = recesso.dataInicio.toDate().toLocaleDateString('pt-BR', { timeZone: 'UTC' });
+                const fim = recesso.dataFim.toDate().toLocaleDateString('pt-BR', { timeZone: 'UTC' });
+                listItems.push(`<li><span>De ${inicio} até ${fim}</span><button class="icon-btn delete" data-id="${doc.id}"><i class="fas fa-trash-alt"></i></button></li>`);
+            });
         }
-        snapshot.forEach(doc => {
-            const recesso = doc.data();
-            const inicio = recesso.dataInicio.toDate().toLocaleDateString('pt-BR', { timeZone: 'UTC' });
-            const fim = recesso.dataFim.toDate().toLocaleDateString('pt-BR', { timeZone: 'UTC' });
-            const li = document.createElement('li');
-            li.innerHTML = `<span>De ${inicio} até ${fim}</span><button class="icon-btn delete" data-id="${doc.id}"><i class="fas fa-trash-alt"></i></button>`;
-            recessoListContainer.appendChild(li);
-        });
+        recessoListContainer.innerHTML = listItems.join('');
     });
 }
 
@@ -315,7 +299,6 @@ async function salvarRecesso(event) {
         formRecesso.reset();
     } catch (error) {
         console.error("Erro ao salvar recesso:", error);
-        alert("Ocorreu um erro ao adicionar o período de recesso.");
     }
 }
 
@@ -326,10 +309,10 @@ async function deletarRecesso(recessoId) {
         await deleteDoc(recessoRef);
     } catch (error) {
         console.error("Erro ao deletar recesso:", error);
-        alert("Ocorreu um erro ao remover o recesso.");
     }
 }
 
+// --- EVENTOS ---
 tabs.forEach(tab => {
     tab.addEventListener('click', () => {
         tabs.forEach(item => item.classList.remove('active'));
@@ -343,29 +326,22 @@ if(btnInscreverParticipante) btnInscreverParticipante.addEventListener('click', 
 if(closeModalInscricaoBtn) closeModalInscricaoBtn.addEventListener('click', () => modalInscricao.classList.remove('visible'));
 if(modalInscricao) modalInscricao.addEventListener('click', (event) => { if (event.target === modalInscricao) modalInscricao.classList.remove('visible'); });
 if(formInscricao) formInscricao.addEventListener('submit', inscreverParticipante);
-
 if(btnAddAulaExtra) btnAddAulaExtra.addEventListener('click', () => abrirModalAula(null, true));
 if(closeModalAulaBtn) closeModalAulaBtn.addEventListener('click', () => modalAula.classList.remove('visible'));
 if(modalAula) modalAula.addEventListener('click', (event) => { if (event.target === modalAula) modalAula.classList.remove('visible'); });
 if(formAula) formAula.addEventListener('submit', salvarAula);
-
 if(cronogramaTableBody) cronogramaTableBody.addEventListener('click', (event) => {
     const target = event.target.closest('button');
     if (!target || !target.dataset.action) return;
     const action = target.dataset.action;
     const id = target.dataset.id;
-    if (action === 'edit') {
-        abrirModalAula(id);
-    } else if (action === 'delete') {
-        deletarAula(id);
-    }
+    if (action === 'edit') { abrirModalAula(id); } 
+    else if (action === 'delete') { deletarAula(id); }
 });
-
 if(btnGerenciarRecessos) btnGerenciarRecessos.addEventListener('click', abrirModalRecessos);
 if(closeModalRecessosBtn) closeModalRecessosBtn.addEventListener('click', () => modalRecessos.classList.remove('visible'));
 if(modalRecessos) modalRecessos.addEventListener('click', (event) => { if (event.target === modalRecessos) modalRecessos.classList.remove('visible'); });
 if(formRecesso) formRecesso.addEventListener('submit', salvarRecesso);
-
 if(recessoListContainer) recessoListContainer.addEventListener('click', (event) => {
     const target = event.target.closest('button.delete');
     if (target && target.dataset.id) {
