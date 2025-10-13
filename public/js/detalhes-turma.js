@@ -124,7 +124,6 @@ function configurarTabelaParticipantes() {
     participantesTable.querySelector('thead').innerHTML = tableHeaderHTML;
 }
 
-// ***** FUNÇÃO CORRIGIDA PARA LER A ESTRUTURA DE AVALIAÇÕES ANUAIS *****
 function escutarParticipantes() {
     const participantesRef = collection(db, "turmas", turmaId, "participantes");
     const q = query(participantesRef, orderBy("nome"));
@@ -227,7 +226,6 @@ async function inscreverParticipante(event) {
     }
 }
 
-// ***** FUNÇÃO CORRIGIDA PARA LER A ESTRUTURA DE AVALIAÇÕES ANUAIS *****
 async function abrirModalNotas(participanteId) {
     formNotas.reset();
     inputNotasParticipanteId.value = participanteId;
@@ -237,9 +235,8 @@ async function abrirModalNotas(participanteId) {
         const data = docSnap.data();
         const anoAtual = turmaData.anoAtual || 1;
         modalNotasTitulo.textContent = `Lançar Notas do ${anoAtual}º Ano para ${data.nome}`;
-
         const avaliacaoDoAno = data.avaliacoes ? data.avaliacoes[anoAtual] : null;
-        if(avaliacaoDoAno) {
+        if (avaliacaoDoAno) {
             inputNotaCadernoTemas.value = avaliacaoDoAno.notaCadernoTemas || '';
             inputNotaCadernetaPessoal.value = avaliacaoDoAno.notaCadernetaPessoal || '';
             inputNotaTrabalhos.value = avaliacaoDoAno.notaTrabalhos || '';
@@ -253,14 +250,12 @@ async function salvarNotas(event) {
     event.preventDefault();
     const participanteId = inputNotasParticipanteId.value;
     if (!participanteId) return;
-
     const anoAtual = turmaData.anoAtual || 1;
     const notaFrequencia = 100; // Placeholder
     const notaCadernoTemas = parseFloat(inputNotaCadernoTemas.value) || 0;
     const notaCadernetaPessoal = parseFloat(inputNotaCadernetaPessoal.value) || 0;
     const notaTrabalhos = parseFloat(inputNotaTrabalhos.value) || 0;
     const notaExameEspiritual = parseFloat(inputNotaExameEspiritual.value) || 0;
-
     const notaFreqConvertida = notaFrequencia >= 80 ? 10 : (notaFrequencia >= 60 ? 5 : 1);
     const mediaAT = (notaFreqConvertida + notaCadernoTemas) / 2;
     const mediaRI = (notaCadernetaPessoal + notaTrabalhos + notaExameEspiritual) / 3;
@@ -273,7 +268,6 @@ async function salvarNotas(event) {
             notaFrequencia, mediaAT, mediaRI, mediaFinal, statusAprovacao
         }
     };
-
     btnSalvarNotas.disabled = true;
     try {
         const participanteRef = doc(db, "turmas", turmaId, "participantes", participanteId);
@@ -286,17 +280,48 @@ async function salvarNotas(event) {
     }
 }
 
+// ***** NOVA FUNÇÃO PARA PROMOVER O GRAU *****
+async function promoverGrau(participanteId) {
+    const participanteRef = doc(db, "turmas", turmaId, "participantes", participanteId);
+    const docSnap = await getDoc(participanteRef);
+
+    if (docSnap.exists()) {
+        const participante = docSnap.data();
+        const grauAtual = participante.grau || "Aluno";
+        let proximoGrau = "";
+
+        if (grauAtual === "Aluno") {
+            proximoGrau = "Aprendiz";
+        } else if (grauAtual === "Aprendiz") {
+            proximoGrau = "Servidor";
+        } else {
+            alert(`${participante.nome} já está no grau máximo (Servidor).`);
+            return;
+        }
+
+        if (confirm(`Tem certeza que deseja promover ${participante.nome} para o grau de ${proximoGrau}?`)) {
+            try {
+                await updateDoc(participanteRef, { grau: proximoGrau });
+                alert("Participante promovido com sucesso!");
+            } catch (error) {
+                console.error("Erro ao promover grau:", error);
+                alert("Ocorreu um erro ao tentar promover o participante.");
+            }
+        }
+    }
+}
+
+
 async function avancarAnoDaTurma() {
     const anoAtual = turmaData.anoAtual || 1;
     if (anoAtual >= 3) {
         return alert("Esta turma já concluiu o 3º ano e não pode mais avançar.");
     }
-    if (!confirm(`Tem certeza que deseja avançar esta turma para o ${anoAtual + 1}º ano? Esta ação não pode ser desfeita.`)) return;
-
+    if (!confirm(`Tem certeza que deseja avançar esta turma para o ${anoAtual + 1}º ano?`)) return;
     try {
         const turmaRef = doc(db, "turmas", turmaId);
         await updateDoc(turmaRef, { anoAtual: anoAtual + 1 });
-        alert(`Turma avançou para o ${anoAtual + 1}º ano com sucesso! A página será recarregada para refletir as notas do novo ano.`);
+        alert(`Turma avançou para o ${anoAtual + 1}º ano com sucesso!`);
     } catch (error) {
         console.error("Erro ao avançar o ano da turma:", error);
         alert("Ocorreu um erro ao tentar avançar o ano.");
@@ -467,6 +492,9 @@ participantesTableBody.addEventListener('click', (event) => {
     const id = target.dataset.id;
     if (action === 'notas') {
         abrirModalNotas(id);
+    } else if (action === 'promover') {
+        // ***** NOVA LÓGICA PARA O BOTÃO DE PROMOVER *****
+        promoverGrau(id);
     }
 });
 
