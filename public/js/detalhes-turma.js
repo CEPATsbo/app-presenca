@@ -2,6 +2,7 @@ import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebas
 import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-auth.js";
 import { getFirestore, collection, query, where, getDocs, doc, getDoc, addDoc, onSnapshot, orderBy, limit, serverTimestamp, Timestamp, updateDoc, deleteDoc } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
 
+// --- CONFIGURAÇÕES ---
 const firebaseConfig = {
     apiKey: "AIzaSyBV7RPjk3cFTqL-aIpflJcUojKg1ZXMLuU",
     authDomain: "voluntarios-ativos---cepat.firebaseapp.com",
@@ -11,11 +12,12 @@ const firebaseConfig = {
     appId: "1:66122858261:web:7fa21f1805463b5c08331c"
 };
 
+// --- INICIALIZAÇÃO ---
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
 
-// --- ELEMENTOS ---
+// --- ELEMENTOS DA PÁGINA ---
 const turmaTituloHeader = document.getElementById('turma-titulo-header');
 const participantesTable = document.getElementById('participantes-table');
 const participantesTableBody = document.getElementById('participantes-table-body');
@@ -27,6 +29,7 @@ const btnAddAulaExtra = document.getElementById('btn-add-aula-extra');
 const btnGerenciarRecessos = document.getElementById('btn-gerenciar-recessos');
 const btnAvancarAno = document.getElementById('btn-avancar-ano');
 
+// Modais e seus componentes...
 const modalInscricao = document.getElementById('modal-inscricao');
 const closeModalInscricaoBtn = document.getElementById('close-modal-inscricao');
 const formInscricao = document.getElementById('form-inscricao');
@@ -34,7 +37,6 @@ const participanteSelect = document.getElementById('participante-select');
 const formGroupGrau = document.getElementById('form-group-grau');
 const participanteGrauSelect = document.getElementById('participante-grau');
 const btnSalvarInscricao = document.getElementById('btn-salvar-inscricao');
-
 const modalAula = document.getElementById('modal-aula');
 const closeModalAulaBtn = document.getElementById('close-modal-aula');
 const formAula = document.getElementById('form-aula');
@@ -46,14 +48,12 @@ const inputAulaData = document.getElementById('aula-data');
 const formGroupNumeroAula = document.getElementById('form-group-numero-aula');
 const inputAulaNumero = document.getElementById('aula-numero');
 const btnSalvarAula = document.getElementById('btn-salvar-aula');
-
 const modalRecessos = document.getElementById('modal-recessos');
 const closeModalRecessosBtn = document.getElementById('close-modal-recessos');
 const formRecesso = document.getElementById('form-recesso');
 const inputRecessoInicio = document.getElementById('recesso-data-inicio');
 const inputRecessoFim = document.getElementById('recesso-data-fim');
 const recessoListContainer = document.getElementById('recesso-list-container');
-
 const modalNotas = document.getElementById('modal-notas');
 const closeModalNotasBtn = document.getElementById('close-modal-notas');
 const formNotas = document.getElementById('form-notas');
@@ -68,6 +68,7 @@ const btnSalvarNotas = document.getElementById('btn-salvar-notas');
 let turmaId = null;
 let turmaData = null;
 
+// --- VERIFICAÇÃO DE PERMISSÃO E CARREGAMENTO ---
 onAuthStateChanged(auth, async (user) => {
     if (user) {
         const voluntariosRef = collection(db, "voluntarios");
@@ -84,11 +85,18 @@ onAuthStateChanged(auth, async (user) => {
                 } else {
                     document.body.innerHTML = '<h1>Erro: ID da turma não encontrado.</h1>';
                 }
-            } else { document.body.innerHTML = '<h1>Acesso Negado</h1>'; }
-        } else { document.body.innerHTML = '<h1>Acesso Negado</h1>'; }
-    } else { window.location.href = '/index.html'; }
+            } else {
+                document.body.innerHTML = '<h1>Acesso Negado</h1>';
+            }
+        } else {
+            document.body.innerHTML = '<h1>Acesso Negado</h1>';
+        }
+    } else {
+        window.location.href = '/index.html';
+    }
 });
 
+// --- FUNÇÕES ---
 async function carregarDadosDaTurma() {
     const turmaRef = doc(db, "turmas", turmaId);
     onSnapshot(turmaRef, (docSnap) => {
@@ -99,7 +107,9 @@ async function carregarDadosDaTurma() {
             configurarTabelaParticipantes();
             escutarParticipantes();
             escutarCronograma();
-        } else { document.body.innerHTML = '<h1>Erro: Turma não encontrada.</h1>'; }
+        } else {
+            document.body.innerHTML = '<h1>Erro: Turma não encontrada.</h1>';
+        }
     });
 }
 
@@ -114,6 +124,7 @@ function configurarTabelaParticipantes() {
     participantesTable.querySelector('thead').innerHTML = tableHeaderHTML;
 }
 
+// ***** FUNÇÃO CORRIGIDA PARA LER A ESTRUTURA DE AVALIAÇÕES ANUAIS *****
 function escutarParticipantes() {
     const participantesRef = collection(db, "turmas", turmaId, "participantes");
     const q = query(participantesRef, orderBy("nome"));
@@ -129,6 +140,7 @@ function escutarParticipantes() {
                 if (turmaData.isEAE) {
                     const anoAtual = turmaData.anoAtual || 1;
                     const avaliacaoDoAno = participante.avaliacoes ? participante.avaliacoes[anoAtual] : null;
+
                     row += `
                         <td>${participante.grau || 'Aluno'}</td>
                         <td>${(avaliacaoDoAno ? avaliacaoDoAno.notaFrequencia : 0) || 0}%</td>
@@ -215,6 +227,7 @@ async function inscreverParticipante(event) {
     }
 }
 
+// ***** FUNÇÃO CORRIGIDA PARA LER A ESTRUTURA DE AVALIAÇÕES ANUAIS *****
 async function abrirModalNotas(participanteId) {
     formNotas.reset();
     inputNotasParticipanteId.value = participanteId;
@@ -224,8 +237,9 @@ async function abrirModalNotas(participanteId) {
         const data = docSnap.data();
         const anoAtual = turmaData.anoAtual || 1;
         modalNotasTitulo.textContent = `Lançar Notas do ${anoAtual}º Ano para ${data.nome}`;
+
         const avaliacaoDoAno = data.avaliacoes ? data.avaliacoes[anoAtual] : null;
-        if (avaliacaoDoAno) {
+        if(avaliacaoDoAno) {
             inputNotaCadernoTemas.value = avaliacaoDoAno.notaCadernoTemas || '';
             inputNotaCadernetaPessoal.value = avaliacaoDoAno.notaCadernetaPessoal || '';
             inputNotaTrabalhos.value = avaliacaoDoAno.notaTrabalhos || '';
@@ -239,12 +253,14 @@ async function salvarNotas(event) {
     event.preventDefault();
     const participanteId = inputNotasParticipanteId.value;
     if (!participanteId) return;
+
     const anoAtual = turmaData.anoAtual || 1;
     const notaFrequencia = 100; // Placeholder
     const notaCadernoTemas = parseFloat(inputNotaCadernoTemas.value) || 0;
     const notaCadernetaPessoal = parseFloat(inputNotaCadernetaPessoal.value) || 0;
     const notaTrabalhos = parseFloat(inputNotaTrabalhos.value) || 0;
     const notaExameEspiritual = parseFloat(inputNotaExameEspiritual.value) || 0;
+
     const notaFreqConvertida = notaFrequencia >= 80 ? 10 : (notaFrequencia >= 60 ? 5 : 1);
     const mediaAT = (notaFreqConvertida + notaCadernoTemas) / 2;
     const mediaRI = (notaCadernetaPessoal + notaTrabalhos + notaExameEspiritual) / 3;
@@ -257,6 +273,7 @@ async function salvarNotas(event) {
             notaFrequencia, mediaAT, mediaRI, mediaFinal, statusAprovacao
         }
     };
+
     btnSalvarNotas.disabled = true;
     try {
         const participanteRef = doc(db, "turmas", turmaId, "participantes", participanteId);
@@ -275,10 +292,11 @@ async function avancarAnoDaTurma() {
         return alert("Esta turma já concluiu o 3º ano e não pode mais avançar.");
     }
     if (!confirm(`Tem certeza que deseja avançar esta turma para o ${anoAtual + 1}º ano? Esta ação não pode ser desfeita.`)) return;
+
     try {
         const turmaRef = doc(db, "turmas", turmaId);
         await updateDoc(turmaRef, { anoAtual: anoAtual + 1 });
-        alert(`Turma avançou para o ${anoAtual + 1}º ano com sucesso! A página será recarregada.`);
+        alert(`Turma avançou para o ${anoAtual + 1}º ano com sucesso! A página será recarregada para refletir as notas do novo ano.`);
     } catch (error) {
         console.error("Erro ao avançar o ano da turma:", error);
         alert("Ocorreu um erro ao tentar avançar o ano.");
@@ -415,10 +433,12 @@ if(btnInscreverParticipante) btnInscreverParticipante.addEventListener('click', 
 if(closeModalInscricaoBtn) closeModalInscricaoBtn.addEventListener('click', () => modalInscricao.classList.remove('visible'));
 if(modalInscricao) modalInscricao.addEventListener('click', (event) => { if (event.target === modalInscricao) modalInscricao.classList.remove('visible'); });
 if(formInscricao) formInscricao.addEventListener('submit', inscreverParticipante);
+
 if(btnAddAulaExtra) btnAddAulaExtra.addEventListener('click', () => abrirModalAula(null, true));
 if(closeModalAulaBtn) closeModalAulaBtn.addEventListener('click', () => modalAula.classList.remove('visible'));
 if(modalAula) modalAula.addEventListener('click', (event) => { if (event.target === modalAula) modalAula.classList.remove('visible'); });
 if(formAula) formAula.addEventListener('submit', salvarAula);
+
 if(cronogramaTableBody) cronogramaTableBody.addEventListener('click', (event) => {
     const target = event.target.closest('button');
     if (!target || !target.dataset.action) return;
@@ -427,16 +447,19 @@ if(cronogramaTableBody) cronogramaTableBody.addEventListener('click', (event) =>
     if (action === 'edit') { abrirModalAula(id); } 
     else if (action === 'delete') { deletarAula(id); }
 });
+
 if(btnGerenciarRecessos) btnGerenciarRecessos.addEventListener('click', abrirModalRecessos);
 if(closeModalRecessosBtn) closeModalRecessosBtn.addEventListener('click', () => modalRecessos.classList.remove('visible'));
 if(modalRecessos) modalRecessos.addEventListener('click', (event) => { if (event.target === modalRecessos) modalRecessos.classList.remove('visible'); });
 if(formRecesso) formRecesso.addEventListener('submit', salvarRecesso);
+
 if(recessoListContainer) recessoListContainer.addEventListener('click', (event) => {
     const target = event.target.closest('button.delete');
     if (target && target.dataset.id) {
         deletarRecesso(target.dataset.id);
     }
 });
+
 participantesTableBody.addEventListener('click', (event) => {
     const target = event.target.closest('button');
     if (!target || !target.dataset.action) return;
@@ -446,7 +469,9 @@ participantesTableBody.addEventListener('click', (event) => {
         abrirModalNotas(id);
     }
 });
+
 if(formNotas) formNotas.addEventListener('submit', salvarNotas);
 if(closeModalNotasBtn) closeModalNotasBtn.addEventListener('click', () => modalNotas.classList.remove('visible'));
 if(modalNotas) modalNotas.addEventListener('click', (event) => { if (event.target === modalNotas) modalNotas.classList.remove('visible'); });
+
 if(btnAvancarAno) btnAvancarAno.addEventListener('click', avancarAnoDaTurma);
