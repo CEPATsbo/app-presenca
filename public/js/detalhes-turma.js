@@ -1,5 +1,5 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
-import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-auth.js";
+import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-auth.js";
 import { getFirestore, collection, query, where, getDocs, doc, getDoc, addDoc, onSnapshot, orderBy, limit, serverTimestamp, Timestamp, updateDoc, deleteDoc } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
 
 // --- CONFIGURAÇÕES ---
@@ -17,7 +17,7 @@ const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
 
-// --- ELEMENTOS ---
+// --- ELEMENTOS DA PÁGINA ---
 const turmaTituloHeader = document.getElementById('turma-titulo-header');
 const participantesTable = document.getElementById('participantes-table');
 const participantesTableBody = document.getElementById('participantes-table-body');
@@ -27,7 +27,8 @@ const tabs = document.querySelectorAll('.tab-link');
 const tabContents = document.querySelectorAll('.tab-content');
 const btnAddAulaExtra = document.getElementById('btn-add-aula-extra');
 const btnGerenciarRecessos = document.getElementById('btn-gerenciar-recessos');
-const recalculatingOverlay = document.getElementById('recalculating-overlay');
+
+// Modais e seus componentes...
 const modalInscricao = document.getElementById('modal-inscricao');
 const closeModalInscricaoBtn = document.getElementById('close-modal-inscricao');
 const formInscricao = document.getElementById('form-inscricao');
@@ -52,6 +53,16 @@ const formRecesso = document.getElementById('form-recesso');
 const inputRecessoInicio = document.getElementById('recesso-data-inicio');
 const inputRecessoFim = document.getElementById('recesso-data-fim');
 const recessoListContainer = document.getElementById('recesso-list-container');
+const modalNotas = document.getElementById('modal-notas');
+const closeModalNotasBtn = document.getElementById('close-modal-notas');
+const formNotas = document.getElementById('form-notas');
+const modalNotasTitulo = document.getElementById('modal-notas-titulo');
+const inputNotasParticipanteId = document.getElementById('notas-participante-id');
+const inputNotaCadernoTemas = document.getElementById('nota-caderno-temas');
+const inputNotaCadernetaPessoal = document.getElementById('nota-caderneta-pessoal');
+const inputNotaTrabalhos = document.getElementById('nota-trabalhos');
+const inputNotaExameEspiritual = document.getElementById('nota-exame-espiritual');
+const btnSalvarNotas = document.getElementById('btn-salvar-notas');
 
 let turmaId = null;
 let turmaData = null;
@@ -100,9 +111,12 @@ async function carregarDadosDaTurma() {
 }
 
 function configurarTabelaParticipantes() {
-    let tableHeaderHTML = '<tr><th>Nome do Participante</th>';
-    if (turmaData.isEAE) { tableHeaderHTML += '<th>Grau</th><th>Status</th><th>Ações</th>'; } 
-    else { tableHeaderHTML += '<th>Status</th><th>Ações</th>'; }
+    let tableHeaderHTML = '<tr><th>Nome</th>';
+    if (turmaData.isEAE) {
+        tableHeaderHTML += '<th>Grau</th><th>Freq.</th><th>Média RI</th><th>Média Final</th><th>Status</th><th>Ações</th>';
+    } else {
+        tableHeaderHTML += '<th>Freq.</th><th>Status</th><th>Ações</th>';
+    }
     tableHeaderHTML += '</tr>';
     participantesTable.querySelector('thead').innerHTML = tableHeaderHTML;
 }
@@ -113,15 +127,27 @@ function escutarParticipantes() {
     onSnapshot(q, (snapshot) => {
         let rowsHTML = [];
         if (snapshot.empty) {
-            const colspan = turmaData.isEAE ? 4 : 3;
+            const colspan = turmaData.isEAE ? 7 : 4;
             rowsHTML.push(`<tr><td colspan="${colspan}" style="text-align: center;">Nenhum participante inscrito.</td></tr>`);
         } else {
             snapshot.forEach(doc => {
                 const participante = doc.data();
                 let row = `<td>${participante.nome}</td>`;
-                if (turmaData.isEAE) { row += `<td>${participante.grau || 'Aluno'}</td>`; }
-                row += `<td>Ativo</td>`;
-                row += `<td class="actions"><button class="icon-btn delete" data-id="${doc.id}"><i class="fas fa-trash-alt"></i></button></td>`;
+                if (turmaData.isEAE) {
+                    row += `
+                        <td>${participante.grau || 'Aluno'}</td>
+                        <td>${(participante.notaFrequencia || 0)}%</td>
+                        <td>${(participante.mediaRI || 0).toFixed(1)}</td>
+                        <td>${(participante.mediaFinal || 0).toFixed(1)}</td>
+                        <td>${participante.statusAprovacao || 'Em Andamento'}</td>
+                        <td class="actions">
+                            <button class="icon-btn notes" title="Lançar Notas" data-action="notas" data-id="${doc.id}"><i class="fas fa-edit"></i></button>
+                            <button class="icon-btn promote" title="Promover Grau" data-action="promover" data-id="${doc.id}"><i class="fas fa-user-graduate"></i></button>
+                        </td>
+                    `;
+                } else {
+                    row += `<td>--%</td><td>Ativo</td><td class="actions">...</td>`;
+                }
                 rowsHTML.push(`<tr>${row}</tr>`);
             });
         }
@@ -129,18 +155,13 @@ function escutarParticipantes() {
     });
 }
 
-// ***** FUNÇÃO CORRIGIDA PARA EVITAR O PISCA-PISCA *****
 function escutarCronograma() {
     const cronogramaRef = collection(db, "turmas", turmaId, "cronograma");
     const q = query(cronogramaRef, orderBy("dataAgendada", "asc"));
     onSnapshot(q, (snapshot) => {
         let rowsHTML = [];
         if (snapshot.empty) {
-            if (!recalculatingOverlay.classList.contains('hidden')) {
-                // Não faz nada, espera o recalculo terminar
-            } else {
-                rowsHTML.push('<tr><td colspan="5" style="text-align: center;">Cronograma ainda não gerado ou vazio.</td></tr>');
-            }
+            rowsHTML.push('<tr><td colspan="5" style="text-align: center;">Cronograma ainda não gerado ou vazio.</td></tr>');
         } else {
             snapshot.forEach(doc => {
                 const aula = doc.data();
@@ -155,15 +176,12 @@ function escutarCronograma() {
                 rowsHTML.push(`<tr><td>${numeroAulaDisplay}</td><td>${dataFormatada}</td><td>${aula.titulo}</td><td>${aula.status}</td><td class="actions">${actionsHTML}</td></tr>`);
             });
         }
-        if (rowsHTML.length > 0) {
-            cronogramaTableBody.innerHTML = rowsHTML.join('');
-            recalculatingOverlay.classList.add('hidden');
-        }
+        cronogramaTableBody.innerHTML = rowsHTML.join('');
     });
 }
 
 async function carregarVoluntariosParaInscricao() {
-    participanteSelect.innerHTML = '<option value="">Selecione um voluntário/assistido</option>';
+    participanteSelect.innerHTML = '<option value="">Selecione...</option>';
     const voluntariosRef = collection(db, "voluntarios");
     const q = query(voluntariosRef, orderBy("nome"));
     const snapshot = await getDocs(q);
@@ -178,7 +196,7 @@ async function carregarVoluntariosParaInscricao() {
 function abrirModalInscricao() {
     formInscricao.reset();
     carregarVoluntariosParaInscricao();
-    if (turmaData.isEAE) { formGroupGrau.classList.remove('hidden'); } 
+    if (turmaData.isEAE) { formGroupGrau.classList.remove('hidden'); }
     else { formGroupGrau.classList.add('hidden'); }
     modalInscricao.classList.add('visible');
 }
@@ -190,7 +208,7 @@ async function inscreverParticipante(event) {
     if (!participanteId) { return alert("Por favor, selecione um participante."); }
     btnSalvarInscricao.disabled = true;
     try {
-        const novoParticipante = { participanteId: participanteId, nome: participanteNome, inscritoEm: serverTimestamp() };
+        const novoParticipante = { participanteId, nome: participanteNome, inscritoEm: serverTimestamp() };
         if (turmaData.isEAE) { novoParticipante.grau = participanteGrauSelect.value; }
         const participantesRef = collection(db, "turmas", turmaId, "participantes");
         await addDoc(participantesRef, novoParticipante);
@@ -202,124 +220,53 @@ async function inscreverParticipante(event) {
     }
 }
 
-function abrirModalAula(aulaId = null, isExtra = false) {
-    formAula.reset();
-    inputAulaId.value = '';
-    inputAulaIsExtra.value = isExtra;
-    if (aulaId) {
-        modalAulaTitulo.textContent = 'Editar Aula';
-        const aulaRef = doc(db, "turmas", turmaId, "cronograma", aulaId);
-        getDoc(aulaRef).then(docSnap => {
-            if (docSnap.exists()) {
-                const data = docSnap.data();
-                inputAulaId.value = docSnap.id;
-                inputAulaTitulo.value = data.titulo;
-                inputAulaData.value = data.dataAgendada.toDate().toISOString().split('T')[0];
-                inputAulaIsExtra.value = data.isExtra || false;
-                if (!data.isExtra) {
-                    formGroupNumeroAula.classList.remove('hidden');
-                    inputAulaNumero.value = data.numeroDaAula;
-                    inputAulaNumero.readOnly = true;
-                } else {
-                    formGroupNumeroAula.classList.add('hidden');
-                }
-            }
-        });
-    } else {
-        modalAulaTitulo.textContent = 'Adicionar Aula Extra';
-        formGroupNumeroAula.classList.add('hidden');
-        inputAulaIsExtra.value = true;
+async function abrirModalNotas(participanteId) {
+    formNotas.reset();
+    inputNotasParticipanteId.value = participanteId;
+    const participanteRef = doc(db, "turmas", turmaId, "participantes", participanteId);
+    const docSnap = await getDoc(participanteRef);
+    if (docSnap.exists()) {
+        const data = docSnap.data();
+        modalNotasTitulo.textContent = `Lançar Notas para ${data.nome}`;
+        inputNotaCadernoTemas.value = data.notaCadernoTemas || '';
+        inputNotaCadernetaPessoal.value = data.notaCadernetaPessoal || '';
+        inputNotaTrabalhos.value = data.notaTrabalhos || '';
+        inputNotaExameEspiritual.value = data.notaExameEspiritual || '';
+        modalNotas.classList.add('visible');
     }
-    modalAula.classList.add('visible');
 }
 
-async function salvarAula(event) {
+async function salvarNotas(event) {
     event.preventDefault();
-    const id = inputAulaId.value;
-    const isExtra = inputAulaIsExtra.value === 'true';
-    const dadosAula = { titulo: inputAulaTitulo.value.trim(), dataAgendada: Timestamp.fromDate(new Date(`${inputAulaData.value}T12:00:00.000Z`)) };
-    if (!isExtra) { dadosAula.numeroDaAula = Number(inputAulaNumero.value); } 
-    else { dadosAula.isExtra = true; dadosAula.numeroDaAula = 999; dadosAula.status = 'agendada'; }
-    btnSalvarAula.disabled = true;
+    const participanteId = inputNotasParticipanteId.value;
+    if (!participanteId) return;
+
+    const notaFrequencia = 100; // Placeholder
+    const notaCadernoTemas = parseFloat(inputNotaCadernoTemas.value) || 0;
+    const notaCadernetaPessoal = parseFloat(inputNotaCadernetaPessoal.value) || 0;
+    const notaTrabalhos = parseFloat(inputNotaTrabalhos.value) || 0;
+    const notaExameEspiritual = parseFloat(inputNotaExameEspiritual.value) || 0;
+
+    const notaFreqConvertida = notaFrequencia >= 80 ? 10 : (notaFrequencia >= 60 ? 5 : 1);
+    const mediaAT = (notaFreqConvertida + notaCadernoTemas) / 2;
+    const mediaRI = (notaCadernetaPessoal + notaTrabalhos + notaExameEspiritual) / 3;
+    const mediaFinal = (mediaAT + mediaRI) / 2;
+    const statusAprovacao = (mediaFinal >= 5 && mediaRI >= 6) ? "Aprovado" : "Reprovado";
+
+    const dadosAtualizados = {
+        notaCadernoTemas, notaCadernetaPessoal, notaTrabalhos, notaExameEspiritual,
+        notaFrequencia, mediaAT, mediaRI, mediaFinal, statusAprovacao
+    };
+
+    btnSalvarNotas.disabled = true;
     try {
-        const cronogramaRef = collection(db, "turmas", turmaId, "cronograma");
-        if (id) {
-            const aulaRef = doc(cronogramaRef, id);
-            await updateDoc(aulaRef, dadosAula);
-        } else {
-            await addDoc(cronogramaRef, dadosAula);
-        }
-        modalAula.classList.remove('visible');
+        const participanteRef = doc(db, "turmas", turmaId, "participantes", participanteId);
+        await updateDoc(participanteRef, dadosAtualizados);
+        modalNotas.classList.remove('visible');
     } catch (error) {
-        console.error("Erro ao salvar aula:", error);
+        console.error("Erro ao salvar notas:", error);
     } finally {
-        btnSalvarAula.disabled = false;
-    }
-}
-
-async function deletarAula(aulaId) {
-    if (!confirm("Tem certeza que deseja excluir esta aula extra?")) return;
-    try {
-        const aulaRef = doc(db, "turmas", turmaId, "cronograma", aulaId);
-        await deleteDoc(aulaRef);
-    } catch (error) {
-        console.error("Erro ao deletar aula:", error);
-    }
-}
-
-function abrirModalRecessos() {
-    formRecesso.reset();
-    escutarRecessos();
-    modalRecessos.classList.add('visible');
-}
-
-function escutarRecessos() {
-    const recessosRef = collection(db, "turmas", turmaId, "recessos");
-    onSnapshot(recessosRef, (snapshot) => {
-        let listItems = [];
-        if (snapshot.empty) {
-            listItems.push('<li>Nenhum recesso cadastrado.</li>');
-        } else {
-            snapshot.forEach(doc => {
-                const recesso = doc.data();
-                const inicio = recesso.dataInicio.toDate().toLocaleDateString('pt-BR', { timeZone: 'UTC' });
-                const fim = recesso.dataFim.toDate().toLocaleDateString('pt-BR', { timeZone: 'UTC' });
-                listItems.push(`<li><span>De ${inicio} até ${fim}</span><button class="icon-btn delete" data-id="${doc.id}"><i class="fas fa-trash-alt"></i></button></li>`);
-            });
-        }
-        recessoListContainer.innerHTML = listItems.join('');
-    });
-}
-
-async function salvarRecesso(event) {
-    event.preventDefault();
-    const dataInicio = inputRecessoInicio.value;
-    const dataFim = inputRecessoFim.value;
-    if (!dataInicio || !dataFim || dataFim < dataInicio) { return alert("Por favor, selecione uma data de início e fim válidas."); }
-    recalculatingOverlay.classList.remove('hidden');
-    modalRecessos.classList.remove('visible');
-    try {
-        const recessosRef = collection(db, "turmas", turmaId, "recessos");
-        await addDoc(recessosRef, {
-            dataInicio: Timestamp.fromDate(new Date(`${dataInicio}T12:00:00.000Z`)),
-            dataFim: Timestamp.fromDate(new Date(`${dataFim}T12:00:00.000Z`))
-        });
-        formRecesso.reset();
-    } catch (error) {
-        console.error("Erro ao salvar recesso:", error);
-        recalculatingOverlay.classList.add('hidden');
-    }
-}
-
-async function deletarRecesso(recessoId) {
-    if (!confirm("Tem certeza que deseja remover este período de recesso? O cronograma será recalculado.")) return;
-    recalculatingOverlay.classList.remove('hidden');
-    try {
-        const recessoRef = doc(db, "turmas", turmaId, "recessos", recessoId);
-        await deleteDoc(recessoRef);
-    } catch (error) {
-        console.error("Erro ao deletar recesso:", error);
-        recalculatingOverlay.classList.add('hidden');
+        btnSalvarNotas.disabled = false;
     }
 }
 
@@ -338,28 +285,16 @@ if(closeModalInscricaoBtn) closeModalInscricaoBtn.addEventListener('click', () =
 if(modalInscricao) modalInscricao.addEventListener('click', (event) => { if (event.target === modalInscricao) modalInscricao.classList.remove('visible'); });
 if(formInscricao) formInscricao.addEventListener('submit', inscreverParticipante);
 
-if(btnAddAulaExtra) btnAddAulaExtra.addEventListener('click', () => abrirModalAula(null, true));
-if(closeModalAulaBtn) closeModalAulaBtn.addEventListener('click', () => modalAula.classList.remove('visible'));
-if(modalAula) modalAula.addEventListener('click', (event) => { if (event.target === modalAula) modalAula.classList.remove('visible'); });
-if(formAula) formAula.addEventListener('submit', salvarAula);
-
-if(cronogramaTableBody) cronogramaTableBody.addEventListener('click', (event) => {
+participantesTableBody.addEventListener('click', (event) => {
     const target = event.target.closest('button');
     if (!target || !target.dataset.action) return;
     const action = target.dataset.action;
     const id = target.dataset.id;
-    if (action === 'edit') { abrirModalAula(id); } 
-    else if (action === 'delete') { deletarAula(id); }
-});
-
-if(btnGerenciarRecessos) btnGerenciarRecessos.addEventListener('click', abrirModalRecessos);
-if(closeModalRecessosBtn) closeModalRecessosBtn.addEventListener('click', () => modalRecessos.classList.remove('visible'));
-if(modalRecessos) modalRecessos.addEventListener('click', (event) => { if (event.target === modalRecessos) modalRecessos.classList.remove('visible'); });
-if(formRecesso) formRecesso.addEventListener('submit', salvarRecesso);
-
-if(recessoListContainer) recessoListContainer.addEventListener('click', (event) => {
-    const target = event.target.closest('button.delete');
-    if (target && target.dataset.id) {
-        deletarRecesso(target.dataset.id);
+    if (action === 'notas') {
+        abrirModalNotas(id);
     }
 });
+
+if(formNotas) formNotas.addEventListener('submit', salvarNotas);
+if(closeModalNotasBtn) closeModalNotasBtn.addEventListener('click', () => modalNotas.classList.remove('visible'));
+if(modalNotas) modalNotas.addEventListener('click', (event) => { if (event.target === modalNotas) modalNotas.classList.remove('visible'); });

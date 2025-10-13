@@ -20,20 +20,22 @@
         .tab-link { background: none; border: none; padding: 12px 18px; cursor: pointer; font-size: 1.05em; border-bottom: 3px solid transparent; margin-bottom: -2px; }
         .tab-link.active { border-bottom-color: #0277BD; font-weight: bold; color: #0277BD; }
         
-        .tab-content { display: none; position: relative; }
+        .tab-content { display: none; }
         .tab-content.active { display: block; }
 
         .table-container { overflow-x: auto; }
-        table { width: 100%; border-collapse: collapse; margin-top: 20px; }
-        th, td { padding: 12px 15px; text-align: left; border-bottom: 1px solid #ddd; }
+        table { width: 100%; border-collapse: collapse; margin-top: 20px; font-size: 0.9em; }
+        th, td { padding: 12px 10px; text-align: left; border-bottom: 1px solid #ddd; }
         th { background-color: #f8f8f8; }
-        td .actions { display: flex; gap: 15px; align-items: center;}
+        td .actions { display: flex; gap: 10px; align-items: center; }
         .icon-btn { background: none; border: none; cursor: pointer; font-size: 1.1em; color: #555; }
         .icon-btn.edit { color: #0277BD; }
         .icon-btn.delete { color: #d32f2f; }
         .icon-btn.recess { color: #f59e0b; }
+        .icon-btn.notes { color: #16a34a; }
+        .icon-btn.promote { color: #9333ea; }
 
-        .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0, 0, 0, 0.6); display: flex; justify-content: center; align-items: center; z-index: 1000; visibility: hidden; opacity: 0; transition: opacity 0.3s; }
+        .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0, 0, 0, 0.6); display: flex; justify-content: center; align-items: center; z-index: 1000; visibility: hidden; opacity: 0; }
         .modal-overlay.visible { visibility: visible; opacity: 1; }
         .modal-content { background-color: white; padding: 25px; border-radius: 10px; width: 90%; max-width: 500px; position: relative; }
         .modal-content h3 { margin-top: 0; }
@@ -44,24 +46,6 @@
         .recesso-dates { display: flex; gap: 15px; }
         .recesso-list { list-style-type: none; padding-left: 0; }
         .recesso-list li { background-color: #f1f5f9; padding: 10px; border-radius: 6px; margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center; }
-        
-        .recalculating-overlay {
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background-color: rgba(255, 255, 255, 0.85);
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            z-index: 50;
-            font-size: 1.2em;
-            font-weight: bold;
-            color: #333;
-            border-radius: 8px;
-        }
-
         .hidden { display: none !important; }
     </style>
 </head>
@@ -81,23 +65,22 @@
 
         <div id="tab-participantes" class="tab-content active">
             <button class="btn btn-primary" id="btn-inscrever-participante"><i class="fas fa-user-plus"></i> Inscrever Novo Participante</button>
-            <div class="table-container"><table id="participantes-table"><thead></thead><tbody id="participantes-table-body"></tbody></table></div>
+            <div class="table-container">
+                <table id="participantes-table">
+                    <thead></thead>
+                    <tbody id="participantes-table-body">
+                        <tr><td colspan="7" style="text-align: center;">Carregando participantes...</td></tr>
+                    </tbody>
+                </table>
+            </div>
         </div>
 
         <div id="tab-aulas" class="tab-content">
-            <div class="actions-header">
+             <div class="actions-header">
                 <button class="btn btn-primary" id="btn-add-aula-extra"><i class="fas fa-plus"></i> Adicionar Aula Extra</button>
                 <button class="btn btn-secondary" id="btn-gerenciar-recessos"><i class="fas fa-umbrella-beach"></i> Gerenciar Recessos</button>
             </div>
-            <div class="table-container">
-                <table id="cronograma-table">
-                    <thead><tr><th>Nº</th><th>Data Agendada</th><th>Título da Aula</th><th>Status</th><th>Ações</th></tr></thead>
-                    <tbody id="cronograma-table-body"></tbody>
-                </table>
-            </div>
-            <div class="recalculating-overlay hidden" id="recalculating-overlay">
-                <i class="fas fa-spinner fa-spin" style="margin-right: 10px;"></i> Recalculando cronograma...
-            </div>
+            <div class="table-container"><table id="cronograma-table"><thead><tr><th>Nº</th><th>Data Agendada</th><th>Título da Aula</th><th>Status</th><th>Ações</th></tr></thead><tbody id="cronograma-table-body"></tbody></table></div>
         </div>
 
         <div id="tab-relatorios" class="tab-content">
@@ -111,13 +94,13 @@
             <button class="modal-close-btn" id="close-modal-inscricao">&times;</button>
             <h3>Inscrever Participante</h3>
             <form id="form-inscricao">
-                <div class="form-group"><label for="participante-select">Buscar por nome</label><select id="participante-select" required></select></div>
+                <div class="form-group"><label for="participante-select">Buscar por nome (Voluntário ou Assistido)</label><select id="participante-select" required></select></div>
                 <div class="form-group hidden" id="form-group-grau"><label for="participante-grau">Grau Inicial (EAE)</label><select id="participante-grau"><option value="Aluno">Aluno</option><option value="Aprendiz">Aprendiz</option><option value="Servidor">Servidor</option></select></div>
                 <button type="submit" class="btn btn-primary" id="btn-salvar-inscricao">Confirmar Inscrição</button>
             </form>
         </div>
     </div>
-
+    
     <div class="modal-overlay" id="modal-aula">
         <div class="modal-content">
             <button class="modal-close-btn" id="close-modal-aula">&times;</button>
@@ -146,6 +129,21 @@
         </div>
     </div>
 
+    <div class="modal-overlay" id="modal-notas">
+        <div class="modal-content">
+            <button class="modal-close-btn" id="close-modal-notas">&times;</button>
+            <h3 id="modal-notas-titulo">Lançar Notas</h3>
+            <form id="form-notas">
+                <input type="hidden" id="notas-participante-id">
+                <div class="form-group"><label for="nota-caderno-temas">Nota do Caderno de Temas (0-10)</label><input type="number" id="nota-caderno-temas" min="0" max="10" step="0.5"></div>
+                <div class="form-group"><label for="nota-caderneta-pessoal">Nota da Caderneta Pessoal (0-10)</label><input type="number" id="nota-caderneta-pessoal" min="0" max="10" step="0.5"></div>
+                <div class="form-group"><label for="nota-trabalhos">Nota dos Trabalhos Prestados (0-10)</label><input type="number" id="nota-trabalhos" min="0" max="10" step="0.5"></div>
+                <div class="form-group"><label for="nota-exame-espiritual">Nota do Exame Espiritual (0-10)</label><input type="number" id="nota-exame-espiritual" min="0" max="10" step="0.5"></div>
+                <button type="submit" class="btn btn-primary" id="btn-salvar-notas">Salvar Notas e Recalcular Médias</button>
+            </form>
+        </div>
+    </div>
+    
     <script type="module" src="/js/detalhes-turma.js"></script>
 </body>
 </html>
