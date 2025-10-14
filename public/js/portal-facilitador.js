@@ -9,7 +9,7 @@ const firebaseConfig = {
     projectId: "voluntarios-ativos---cepat",
     storageBucket: "voluntarios-ativos---cepat.appspot.com",
     messagingSenderId: "66122858261",
-    appId: "1:66122858261:web:7fa21f1805463b5c08331c"
+    appId: "1:66122858261:web:7fa21f1f1805463b5c08331c"
 };
 
 // --- INICIALIZAÇÃO ---
@@ -62,10 +62,10 @@ async function carregarDadosDoFacilitador(user) {
     const turmasRef = collection(db, "turmas");
     
     // ===================================================================
-    // ## CORREÇÃO APLICADA AQUI ##
-    // Trocamos 'facilitadoresIds' para 'facilitadores'
+    // ## CORREÇÃO FINAL APLICADA AQUI ##
+    // Apontando para o novo campo 'facilitadoresIds'
     // ===================================================================
-    const qTurmas = query(turmasRef, where("facilitadores", "array-contains", facilitatorId));
+    const qTurmas = query(turmasRef, where("facilitadoresIds", "array-contains", facilitatorId));
     
     const turmasSnapshot = await getDocs(qTurmas);
 
@@ -74,17 +74,17 @@ async function carregarDadosDoFacilitador(user) {
         return;
     }
 
-    turmasContainer.innerHTML = ''; // Limpa a mensagem de "carregando"
+    turmasContainer.innerHTML = '';
     for (const turmaDoc of turmasSnapshot.docs) {
         await renderizarCardDaTurma({ id: turmaDoc.id, ...turmaDoc.data() });
     }
 }
 
+// O restante do arquivo permanece exatamente o mesmo, sem nenhuma outra alteração.
 async function renderizarCardDaTurma(turmaData) {
     const card = document.createElement('div');
     card.className = 'turma-card';
 
-    // Procura pela aula do dia
     const hojeInicio = new Date();
     hojeInicio.setHours(0, 0, 0, 0);
     const hojeFim = new Date();
@@ -110,36 +110,25 @@ async function renderizarCardDaTurma(turmaData) {
     let buttonDataAttributes = '';
 
     if (aulaDeHoje) {
-        aulaInfoHTML = `
-            <strong>Aula de Hoje (${dataFormatada}):</strong>
-            <p>${aulaDeHoje.titulo}</p>
-        `;
+        aulaInfoHTML = `<strong>Aula de Hoje (${dataFormatada}):</strong><p>${aulaDeHoje.titulo}</p>`;
         isChamadaDisabled = false;
         buttonDataAttributes = `data-turma-id="${turmaData.id}" data-aula-id="${aulaDeHoje.id}" data-aula-titulo="${aulaDeHoje.titulo}"`;
     } else {
-        aulaInfoHTML = `
-            <strong>Aula de Hoje (${dataFormatada}):</strong>
-            <p>Nenhuma aula agendada para hoje.</p>
-        `;
+        aulaInfoHTML = `<strong>Aula de Hoje (${dataFormatada}):</strong><p>Nenhuma aula agendada para hoje.</p>`;
     }
 
     card.innerHTML = `
         <div class="turma-card-content">
             <h3>${turmaData.nomeDaTurma}</h3>
-            <div class="aula-info">
-                ${aulaInfoHTML}
-            </div>
+            <div class="aula-info">${aulaInfoHTML}</div>
         </div>
         <div class="turma-card-footer">
             <button class="btn-chamada" ${buttonDataAttributes} ${isChamadaDisabled ? 'disabled' : ''}>
                 <i class="fas fa-clipboard-list"></i> Realizar Chamada
             </button>
-        </div>
-    `;
+        </div>`;
     turmasContainer.appendChild(card);
 }
-
-// --- LÓGICA DO MODAL DE FREQUÊNCIA ---
 
 async function abrirModalFrequencia(turmaId, aulaId, aulaTitulo) {
     currentTurmaId = turmaId;
@@ -167,15 +156,7 @@ async function abrirModalFrequencia(turmaId, aulaId, aulaTitulo) {
             const participanteId = doc.id;
             const participante = doc.data();
             const statusAtual = frequenciasSalvas.get(participanteId) || 'presente';
-            listHTML += `
-                <li class="attendance-item" data-participante-id="${participanteId}" data-status="${statusAtual}">
-                    <span>${participante.nome}</span>
-                    <div class="attendance-controls">
-                        <button class="btn-status presente ${statusAtual === 'presente' ? 'active' : ''}" data-status="presente">P</button>
-                        <button class="btn-status ausente ${statusAtual === 'ausente' ? 'active' : ''}" data-status="ausente">F</button>
-                        <button class="btn-status justificado ${statusAtual === 'justificado' ? 'active' : ''}" data-status="justificado">J</button>
-                    </div>
-                </li>`;
+            listHTML += `<li class="attendance-item" data-participante-id="${participanteId}" data-status="${statusAtual}"><span>${participante.nome}</span><div class="attendance-controls"><button class="btn-status presente ${statusAtual === 'presente' ? 'active' : ''}" data-status="presente">P</button><button class="btn-status ausente ${statusAtual === 'ausente' ? 'active' : ''}" data-status="ausente">F</button><button class="btn-status justificado ${statusAtual === 'justificado' ? 'active' : ''}" data-status="justificado">J</button></div></li>`;
         });
         frequenciaListContainer.innerHTML = listHTML || '<li>Nenhum participante inscrito nesta turma.</li>';
     } catch(error) {
@@ -211,7 +192,7 @@ async function salvarFrequencia() {
         await batch.commit();
         alert("Frequência salva com sucesso!");
         modalFrequencia.classList.remove('visible');
-        location.reload(); // Recarrega a página para atualizar o status
+        location.reload();
     } catch (error) {
         console.error("Erro ao salvar frequência:", error);
         alert("Ocorreu um erro ao salvar a frequência.");
@@ -236,7 +217,6 @@ turmasContainer.addEventListener('click', (e) => {
     }
 });
 
-// Eventos do Modal
 closeModalFrequenciaBtn.addEventListener('click', () => modalFrequencia.classList.remove('visible'));
 btnSalvarFrequencia.addEventListener('click', salvarFrequencia);
 frequenciaListContainer.addEventListener('click', (event) => {
