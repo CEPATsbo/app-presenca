@@ -81,7 +81,6 @@ function carregarTurmas() {
 }
 
 async function carregarDadosParaModal() {
-    // Carregar Gabaritos de Cursos
     selectCursoGabarito.innerHTML = '<option value="">Selecione um gabarito</option>';
     const cursosSnapshot = await getDocs(collection(db, "cursos"));
     cursosSnapshot.forEach(doc => {
@@ -92,14 +91,11 @@ async function carregarDadosParaModal() {
         selectCursoGabarito.appendChild(option);
     });
 
-    // Carregar Voluntários
     selectFacilitadores.innerHTML = '';
     const voluntariosSnapshot = await getDocs(collection(db, "voluntarios"));
-    
     const voluntariosOrdenados = voluntariosSnapshot.docs.sort((a, b) => {
         return a.data().nome.localeCompare(b.data().nome);
     });
-
     voluntariosOrdenados.forEach(doc => {
         const option = document.createElement('option');
         option.value = doc.id;
@@ -118,25 +114,26 @@ async function salvarTurma(event) {
     event.preventDefault();
     const nomeDaTurma = inputTurmaNome.value.trim();
     const cursoGabaritoId = selectCursoGabarito.value;
-    const selectedOptionsFacilitadores = Array.from(selectFacilitadores.selectedOptions);
+    const facilitadoresSelecionados = Array.from(selectFacilitadores.selectedOptions);
     
-    if (!nomeDaTurma || !cursoGabaritoId || selectedOptionsFacilitadores.length === 0) {
+    if (!nomeDaTurma || !cursoGabaritoId || facilitadoresSelecionados.length === 0) {
         return alert("Por favor, preencha todos os campos.");
     }
 
     btnSalvarTurma.disabled = true;
     btnSalvarTurma.textContent = 'Criando...';
 
-    const selectedOptionCurso = selectCursoGabarito.options[selectCursoGabarito.selectedIndex];
-    const cursoNome = selectedOptionCurso.textContent;
-    const isEAE = selectedOptionCurso.dataset.isEae === 'true';
+    const selectedOption = selectCursoGabarito.options[selectCursoGabarito.selectedIndex];
+    const cursoNome = selectedOption.textContent;
+    const isEAE = selectedOption.dataset.isEae === 'true';
 
-    // ===================================================================
-    // ## CORREÇÃO APLICADA AQUI ##
-    // Criamos as duas listas de facilitadores: uma com objetos e uma só com os IDs
-    // ===================================================================
-    const facilitadores = selectedOptionsFacilitadores.map(option => ({ id: option.value, nome: option.textContent }));
-    const facilitadoresIds = selectedOptionsFacilitadores.map(option => option.value);
+    // ## CORREÇÃO 1: Criando os dois arrays de facilitadores ##
+    const facilitadores = facilitadoresSelecionados.map(option => ({ id: option.value, nome: option.textContent }));
+    const facilitadoresIds = facilitadoresSelecionados.map(option => option.value);
+
+    // ## CORREÇÃO 2: Convertendo a data de string para Timestamp ##
+    const dataInicioValue = inputDataInicio.value; // ex: "2025-09-24"
+    const dataInicioTimestamp = new Date(dataInicioValue + "T12:00:00Z"); // Transforma em objeto de Data
 
     try {
         await addDoc(collection(db, "turmas"), {
@@ -144,9 +141,9 @@ async function salvarTurma(event) {
             cursoId: cursoGabaritoId,
             cursoNome: cursoNome,
             isEAE: isEAE,
-            facilitadores: facilitadores,         // Salva o array de objetos {id, nome}
-            facilitadoresIds: facilitadoresIds,   // SALVA O NOVO ARRAY apenas com os IDs
-            dataInicio: new Date(inputDataInicio.value + "T12:00:00Z"), // Salva como Data para o robô
+            facilitadores: facilitadores,
+            facilitadoresIds: facilitadoresIds, // Adiciona o campo para o Portal do Facilitador
+            dataInicio: dataInicioTimestamp,   // Salva a data no formato correto para o robô
             diaDaSemana: parseInt(selectDiaSemana.value, 10),
             status: "Ativa",
             anoAtual: 1,
@@ -154,7 +151,7 @@ async function salvarTurma(event) {
         });
         
         modalTurma.classList.remove('visible');
-        alert("Turma iniciada com sucesso!");
+        alert("Turma iniciada com sucesso! O cronograma será gerado em segundo plano.");
 
     } catch (error) {
         console.error("Erro ao iniciar turma:", error);
