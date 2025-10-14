@@ -441,23 +441,27 @@ async function deletarRecesso(recessoId) {
     }
 }
 
-// ----- FUNÇÕES PARA LANÇAMENTO DE FREQUÊNCIA -----
+// --- FUNÇÕES DE FREQUÊNCIA (COM CORREÇÃO) ---
 async function abrirModalFrequencia(aulaId, aulaTitulo) {
     currentAulaIdParaFrequencia = aulaId;
     modalFrequenciaTitulo.textContent = `Frequência da Aula: ${aulaTitulo}`;
     frequenciaListContainer.innerHTML = '<li>Carregando lista de chamada...</li>';
     modalFrequencia.classList.add('visible');
+
     try {
         const participantesRef = collection(db, "turmas", turmaId, "participantes");
         const qParticipantes = query(participantesRef, orderBy("nome"));
         const participantesSnapshot = await getDocs(qParticipantes);
+
         const frequenciaRef = collection(db, "turmas", turmaId, "frequencias");
         const qFrequencia = query(frequenciaRef, where("aulaId", "==", aulaId));
         const frequenciaSnapshot = await getDocs(qFrequencia);
+        
         const frequenciasSalvas = {};
         frequenciaSnapshot.forEach(doc => {
             frequenciasSalvas[doc.data().participanteId] = doc.data().status;
         });
+
         let listHTML = '';
         participantesSnapshot.forEach(doc => {
             const participante = doc.data();
@@ -474,18 +478,20 @@ async function abrirModalFrequencia(aulaId, aulaTitulo) {
                 </li>
             `;
         });
-        frequenciaListContainer.innerHTML = listHTML || '<li>Nenhum participante inscrito.</li>';
+        frequenciaListContainer.innerHTML = listHTML || '<li>Nenhum participante inscrito nesta turma.</li>';
+
     } catch(error) {
         console.error("Erro ao carregar lista de chamada:", error);
-        frequenciaListContainer.innerHTML = '<li>Ocorreu um erro ao carregar a lista.</li>';
     }
 }
 
 async function salvarFrequencia() {
     if (!currentAulaIdParaFrequencia) return;
     btnSalvarFrequencia.disabled = true;
+    
     const batch = writeBatch(db);
     const items = frequenciaListContainer.querySelectorAll('.attendance-item');
+
     items.forEach(item => {
         const participanteId = item.dataset.participanteId;
         const status = item.dataset.status;
@@ -494,21 +500,25 @@ async function salvarFrequencia() {
         batch.set(frequenciaRef, {
             aulaId: currentAulaIdParaFrequencia,
             participanteId: participanteId,
-            status: status
+            status: status,
+            turmaId: turmaId // Adiciona o turmaId para referência do robô
         });
     });
+    
+    // ATUALIZA O STATUS DA AULA PARA 'REALIZADA'
+    const aulaRef = doc(db, "turmas", turmaId, "cronograma", currentAulaIdParaFrequencia);
+    batch.update(aulaRef, { status: 'realizada' });
+
     try {
         await batch.commit();
         alert("Frequência salva com sucesso!");
         modalFrequencia.classList.remove('visible');
     } catch (error) {
         console.error("Erro ao salvar frequência:", error);
-        alert("Ocorreu um erro ao salvar a frequência.");
     } finally {
         btnSalvarFrequencia.disabled = false;
     }
 }
-
 
 // --- EVENTOS ---
 tabs.forEach(tab => {

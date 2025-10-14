@@ -1120,3 +1120,91 @@ exports.reajustarCronogramaPorAulaExtra = onDocumentWritten({ ...OPCOES_FUNCAO, 
 exports.recalcularCronogramaAposRecesso = onDocumentWritten({ ...OPCOES_FUNCAO, document: 'turmas/{turmaId}/recessos/{recessoId}' }, (event) => {
     return recalcularCronogramaCompleto(event.params.turmaId);
 });
+
+// ===== ROBÔ DE CÁLCULO DE FREQUÊNCIA (CORRIGIDO) =====
+exports.calcularFrequencia = onDocumentWritten({ ...OPCOES_FUNCAO, document: 'turmas/{turmaId}/frequencias/{frequenciaId}' }, async (event) => {
+    const turmaId = event.params.turmaId;
+    const dadosFrequencia = event.data.after.exists ? event.data.after.data() : event.data.before.data();
+    const participanteId = dadosFrequencia.participanteId;
+
+    if (!participanteId) {
+        console.log("Documento de frequência sem ID do participante. Abortando.");
+        return null;
+    }
+
+    try {
+        const turmaRef = db.collection('turmas').doc(turmaId);
+        const turmaSnap = await turmaRef.get();
+        if (!turmaSnap.exists) { return null; }
+        const turmaData = turmaSnap.data();
+        const anoAtual = turmaData.anoAtual || 1;
+
+        // 1. Contar o total de aulas dadas (não extras e não recessos)
+        const hoje = new Date();
+        const cronogramaRef = turmaRef.collection('cronograma');
+        // CORREÇÃO DA CONSULTA: Busca por aulas realizadas OU agendadas no passado
+        const aulasDadasSnapshot = await cronogramaRef
+            .where('isExtra', '!=', true)
+            .where('status', '!=', 'recesso') 
+            .where('dataAgendada', '<=', hoje)
+            .get();
+        const totalAulasDadas = aulasDadasSnapshot.size;
+
+        if (totalAulasDadas === 0) {
+            console.log(`Nenhuma aula dada ainda para a turma ${turmaId}, frequência será 0%.`);
+            // Se não há aulas, zera a nota de frequência
+             const participanteRef = turmaRef.collection('participantes').doc(participanteId);
+             await participanteRef.update({ [`avaliacoes.${anoAtual}.notaFrequencia`]: 0 });
+            return null;
+        }
+        
+        // 2. Contar o total de presenças do aluno para aulas dadas
+        const frequenciasRef = turmaRef.collection('frequencias');
+        const presencasSnapshot = await frequenciasRef
+            .where('participanteId', '==', participanteId)
+            .where('status', '==', 'presente')
+            .get();
+            
+        let presencasValidas = 0;
+        const idsAulasDadas = aulasDadasSnapshot.docs.map(doc => doc.id);
+        
+        presencasSnapshot.forEach(doc => {
+            if (idsAulasDadas.includes(doc.data().aulaId)) {
+                presencasValidas++;
+            }
+        });
+
+        // 3. Calcular a porcentagem
+        const porcentagemFrequencia = Math.round((presencasValidas / totalAulasDadas) * 100);
+
+        // 4. Atualizar a ficha do participante com a nova frequência e recalcular médias
+        const participanteRef = turmaRef.collection('participantes').doc(participanteId);
+        const participanteSnap = await participanteRef.get();
+        if(!participanteSnap.exists) return null;
+        
+        const dadosParticipante = participanteSnap.data();
+        const avaliacoes = dadosParticipante.avaliacoes || {};
+        const avaliacaoDoAno = avaliacoes[anoAtual] || {};
+
+        const notaFreqConvertida = porcentagemFrequencia >= 80 ? 10 : (porcentagemFrequencia >= 60 ? 5 : 1);
+        const mediaAT = (notaFreqConvertida + (avaliacaoDoAno.notaCadernoTemas || 0)) / 2;
+        const mediaRI = ((avaliacaoDoAno.notaCadernetaPessoal || 0) + (avaliacaoDoAno.notaTrabalhos || 0) + (avaliacaoDoAno.notaExameEspiritual || 0)) / 3;
+        const mediaFinal = (mediaAT + mediaRI) / 2;
+        const statusAprovacao = (mediaFinal >= 5 && mediaRI >= 6) ? "Aprovado" : "Reprovado";
+
+        const dadosParaAtualizar = {
+            [`avaliacoes.${anoAtual}.notaFrequencia`]: porcentagemFrequencia,
+            [`avaliacoes.${anoAtual}.mediaAT`]: mediaAT,
+            [`avaliacoes.${anoAtual}.mediaRI`]: mediaRI,
+            [`avaliacoes.${anoAtual}.mediaFinal`]: mediaFinal,
+            [`avaliacoes.${anoAtual}.statusAprovacao`]: statusAprovacao
+        };
+
+        await participanteRef.update(dadosParaAtualizar);
+        console.log(`Frequência do participante ${participanteId} atualizada para ${porcentagemFrequencia}%.`);
+        
+    } catch (error) {
+        console.error(`Erro ao calcular frequência para turma ${turmaId}:`, error);
+    }
+    return null;
+});
