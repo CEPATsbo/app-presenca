@@ -29,6 +29,10 @@ const btnAddAulaExtra = document.getElementById('btn-add-aula-extra');
 const btnGerenciarRecessos = document.getElementById('btn-gerenciar-recessos');
 const btnAvancarAno = document.getElementById('btn-avancar-ano');
 
+const reportMenuContainer = document.getElementById('report-menu-container');
+const areaRelatorioGerado = document.getElementById('area-relatorio-gerado');
+const btnImprimirRelatorio = document.getElementById('btn-imprimir-relatorio');
+
 const modalInscricao = document.getElementById('modal-inscricao');
 const closeModalInscricaoBtn = document.getElementById('close-modal-inscricao');
 const formInscricao = document.getElementById('form-inscricao');
@@ -520,6 +524,169 @@ async function salvarFrequencia() {
     }
 }
 
+// --- NOVAS FUNÇÕES DE RELATÓRIO ---
+
+// Função auxiliar para obter todos os dados necessários
+async function getDadosCompletosParaRelatorio() {
+    const participantesRef = collection(db, "turmas", turmaId, "participantes");
+    const cronogramaRef = collection(db, "turmas", turmaId, "cronograma");
+    const frequenciasRef = collection(db, "turmas", turmaId, "frequencias");
+
+    const [participantesSnap, cronogramaSnap, frequenciasSnap] = await Promise.all([
+        getDocs(query(participantesRef, orderBy("nome"))),
+        getDocs(query(cronogramaRef, orderBy("dataAgendada"))),
+        getDocs(frequenciasRef)
+    ]);
+
+    const participantes = participantesSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    const cronograma = cronogramaSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+
+    const frequenciasMap = new Map();
+    frequenciasSnap.forEach(doc => {
+        const data = doc.data();
+        const key = `${data.aulaId}_${data.participanteId}`;
+        frequenciasMap.set(key, data.status);
+    });
+
+    return { participantes, cronograma, frequenciasMap };
+}
+
+async function gerarDiarioDeClasse() {
+    areaRelatorioGerado.innerHTML = '<p>Gerando diário de classe...</p>';
+    btnImprimirRelatorio.classList.add('hidden');
+
+    const { participantes, cronograma, frequenciasMap } = await getDadosCompletosParaRelatorio();
+
+    if (participantes.length === 0 || cronograma.length === 0) {
+        areaRelatorioGerado.innerHTML = '<p>Não há participantes ou aulas suficientes para gerar o diário.</p>';
+        return;
+    }
+
+    let tableHTML = '<div class="table-container"><table id="report-table"><thead><tr><th>Aluno</th>';
+    cronograma.forEach(aula => {
+        const dataFormatada = aula.dataAgendada.toDate().toLocaleDateString('pt-BR', { month: '2-digit', day: '2-digit' });
+        tableHTML += `<th>${dataFormatada}</th>`;
+    });
+    tableHTML += '<th>Freq.%</th></tr></thead><tbody>';
+
+    participantes.forEach(p => {
+        tableHTML += `<tr><td>${p.nome}</td>`;
+        let presencas = 0;
+        let aulasContabilizadas = 0;
+        cronograma.forEach(aula => {
+            if (aula.status === 'realizada') {
+                aulasContabilizadas++;
+                const key = `${aula.id}_${p.id}`;
+                const status = frequenciasMap.get(key);
+                let statusChar = '-';
+                if (status === 'presente') {
+                    statusChar = 'P';
+                    presencas++;
+                } else if (status === 'ausente') {
+                    statusChar = 'F';
+                } else if (status === 'justificado') {
+                    statusChar = 'J';
+                }
+                tableHTML += `<td>${statusChar}</td>`;
+            } else {
+                tableHTML += `<td>-</td>`;
+            }
+        });
+        const freqPercent = aulasContabilizadas > 0 ? ((presencas / aulasContabilizadas) * 100).toFixed(0) : 0;
+        tableHTML += `<td>${freqPercent}%</td></tr>`;
+    });
+
+    tableHTML += '</tbody></table></div>';
+    areaRelatorioGerado.innerHTML = tableHTML;
+    btnImprimirRelatorio.classList.remove('hidden');
+}
+
+async function gerarBoletimIndividual() {
+    areaRelatorioGerado.innerHTML = '<p>Carregando lista de participantes...</p>';
+    btnImprimirRelatorio.classList.add('hidden');
+    const { participantes } = await getDadosCompletosParaRelatorio();
+
+    if (participantes.length === 0) {
+        areaRelatorioGerado.innerHTML = '<p>Nenhum participante inscrito para gerar boletim.</p>';
+        return;
+    }
+
+    let selectHTML = '<div class="form-group"><label>Selecione um participante para ver o boletim:</label><select id="select-boletim-participante"><option value="">Selecione...</option>';
+    participantes.forEach(p => {
+        selectHTML += `<option value="${p.id}">${p.nome}</option>`;
+    });
+    selectHTML += '</select></div><div id="boletim-content"></div>';
+    areaRelatorioGerado.innerHTML = selectHTML;
+
+    document.getElementById('select-boletim-participante').addEventListener('change', (e) => {
+        const participanteId = e.target.value;
+        const boletimContent = document.getElementById('boletim-content');
+        if (!participanteId) {
+            boletimContent.innerHTML = '';
+            btnImprimirRelatorio.classList.add('hidden');
+            return;
+        }
+
+        const participante = participantes.find(p => p.id === participanteId);
+        const anoAtual = turmaData.anoAtual || 1;
+        const avaliacao = participante.avaliacoes ? participante.avaliacoes[anoAtual] : null;
+
+        let boletimHTML = `<div class="boletim-card"><h4>Boletim de ${participante.nome}</h4>`;
+        if (turmaData.isEAE && avaliacao) {
+            boletimHTML += `
+                <p><strong>Frequência:</strong> ${avaliacao.notaFrequencia || 0}%</p>
+                <p><strong>Média Reforma Íntima (RI):</strong> ${avaliacao.mediaRI.toFixed(1)}</p>
+                <p><strong>Média Final:</strong> ${avaliacao.mediaFinal.toFixed(1)}</p>
+                <p><strong>Status:</strong> ${avaliacao.statusAprovacao}</p>
+                <hr>
+                <h5>Notas Detalhadas (${anoAtual}º Ano):</h5>
+                <ul>
+                    <li>Caderno de Temas: ${avaliacao.notaCadernoTemas || '-'}</li>
+                    <li>Caderneta Pessoal: ${avaliacao.notaCadernetaPessoal || '-'}</li>
+                    <li>Trabalhos Prestados: ${avaliacao.notaTrabalhos || '-'}</li>
+                    <li>Exame Espiritual: ${avaliacao.notaExameEspiritual || '-'}</li>
+                </ul>
+            `;
+        } else {
+             boletimHTML += `<p><strong>Frequência:</strong> ${participante.frequenciaPercentual || 'N/D'}%</p><p>Não há notas para este curso.</p>`;
+        }
+        boletimHTML += '</div>';
+        boletimContent.innerHTML = boletimHTML;
+        btnImprimirRelatorio.classList.remove('hidden');
+    });
+}
+
+async function gerarRelatorioAptosCertificado() {
+    areaRelatorioGerado.innerHTML = '<p>Gerando relatório final...</p>';
+    btnImprimirRelatorio.classList.add('hidden');
+    const { participantes } = await getDadosCompletosParaRelatorio();
+
+    if (participantes.length === 0) {
+        areaRelatorioGerado.innerHTML = '<p>Nenhum participante na turma.</p>';
+        return;
+    }
+
+    let tableHTML = '<div class="table-container"><table id="report-table"><thead><tr><th>Aluno</th><th>Status Final</th></tr></thead><tbody>';
+    const anoAtual = turmaData.anoAtual || 1;
+
+    participantes.forEach(p => {
+        let statusFinal = 'Em Andamento';
+        if (turmaData.isEAE) {
+            const avaliacao = p.avaliacoes ? p.avaliacoes[anoAtual] : null;
+            statusFinal = avaliacao ? avaliacao.statusAprovacao : 'Pendente';
+        } else {
+            // Lógica para cursos não-EAE (baseado em frequência, por exemplo)
+            const freq = p.frequenciaPercentual || 0;
+            statusFinal = freq >= 75 ? 'Aprovado' : 'Reprovado por Frequência';
+        }
+        tableHTML += `<tr><td>${p.nome}</td><td>${statusFinal}</td></tr>`;
+    });
+
+    tableHTML += '</tbody></table></div>';
+    areaRelatorioGerado.innerHTML = tableHTML;
+    btnImprimirRelatorio.classList.remove('hidden');
+}
+
 // --- EVENTOS ---
 tabs.forEach(tab => {
     tab.addEventListener('click', () => {
@@ -528,8 +695,13 @@ tabs.forEach(tab => {
         const targetTab = document.getElementById(tab.dataset.tab);
         tabContents.forEach(content => content.classList.remove('active'));
         targetTab.classList.add('active');
+
+        // Limpa a área de relatório ao trocar de aba
+        areaRelatorioGerado.innerHTML = '';
+        btnImprimirRelatorio.classList.add('hidden');
     });
 });
+
 if(btnInscreverParticipante) btnInscreverParticipante.addEventListener('click', abrirModalInscricao);
 if(closeModalInscricaoBtn) closeModalInscricaoBtn.addEventListener('click', () => modalInscricao.classList.remove('visible'));
 if(modalInscricao) modalInscricao.addEventListener('click', (event) => { if (event.target === modalInscricao) modalInscricao.classList.remove('visible'); });
@@ -596,3 +768,24 @@ frequenciaListContainer.addEventListener('click', (event) => {
 if(btnSalvarFrequencia) btnSalvarFrequencia.addEventListener('click', salvarFrequencia);
 if(closeModalFrequenciaBtn) closeModalFrequenciaBtn.addEventListener('click', () => modalFrequencia.classList.remove('visible'));
 if(modalFrequencia) modalFrequencia.addEventListener('click', (event) => { if(event.target === modalFrequencia) modalFrequencia.classList.remove('visible'); });
+
+// NOVO EVENTO PARA O MENU DE RELATÓRIOS
+if(reportMenuContainer) reportMenuContainer.addEventListener('click', (event) => {
+    event.preventDefault();
+    const target = event.target.closest('a');
+    if (!target || !target.dataset.report) return;
+
+    const reportType = target.dataset.report;
+    if (reportType === 'diario-classe') {
+        gerarDiarioDeClasse();
+    } else if (reportType === 'boletim-individual') {
+        gerarBoletimIndividual();
+    } else if (reportType === 'aptos-certificado') {
+        gerarRelatorioAptosCertificado();
+    }
+});
+
+// NOVO EVENTO PARA O BOTÃO DE IMPRIMIR
+if(btnImprimirRelatorio) btnImprimirRelatorio.addEventListener('click', () => {
+    window.print();
+});

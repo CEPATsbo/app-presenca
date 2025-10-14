@@ -1127,10 +1127,9 @@ exports.calcularFrequencia = onDocumentWritten({ ...OPCOES_FUNCAO, document: 'tu
     const dadosFrequencia = event.data.after.exists ? event.data.after.data() : event.data.before.data();
     const participanteId = dadosFrequencia.participanteId;
 
-    if (!participanteId) {
-        console.log("Documento de frequência sem ID do participante. Abortando.");
-        return null;
-    }
+    if (!participanteId) { return null; }
+
+    console.log(`Gatilho de frequência acionado para o participante ${participanteId} na turma ${turmaId}.`);
 
     try {
         const turmaRef = db.collection('turmas').doc(turmaId);
@@ -1139,26 +1138,34 @@ exports.calcularFrequencia = onDocumentWritten({ ...OPCOES_FUNCAO, document: 'tu
         const turmaData = turmaSnap.data();
         const anoAtual = turmaData.anoAtual || 1;
 
-        // 1. Contar o total de aulas dadas (não extras e não recessos)
+        // 1. Contar o total de aulas dadas até hoje
         const hoje = new Date();
         const cronogramaRef = turmaRef.collection('cronograma');
-        // CORREÇÃO DA CONSULTA: Busca por aulas realizadas OU agendadas no passado
-        const aulasDadasSnapshot = await cronogramaRef
-            .where('isExtra', '!=', true)
-            .where('status', '!=', 'recesso') 
+        
+        // CORREÇÃO DA CONSULTA: Busca simples por data
+        const aulasPassadasSnapshot = await cronogramaRef
             .where('dataAgendada', '<=', hoje)
             .get();
-        const totalAulasDadas = aulasDadasSnapshot.size;
+
+        // Filtragem manual no código para evitar a limitação do Firestore
+        let totalAulasDadas = 0;
+        const idsAulasDadas = [];
+        aulasPassadasSnapshot.forEach(doc => {
+            const aula = doc.data();
+            if (aula.isExtra !== true && aula.status !== 'recesso') {
+                totalAulasDadas++;
+                idsAulasDadas.push(doc.id);
+            }
+        });
 
         if (totalAulasDadas === 0) {
-            console.log(`Nenhuma aula dada ainda para a turma ${turmaId}, frequência será 0%.`);
-            // Se não há aulas, zera a nota de frequência
-             const participanteRef = turmaRef.collection('participantes').doc(participanteId);
-             await participanteRef.update({ [`avaliacoes.${anoAtual}.notaFrequencia`]: 0 });
+            console.log("Nenhuma aula dada ainda, frequência é 0%.");
+            const participanteRef = turmaRef.collection('participantes').doc(participanteId);
+            await participanteRef.update({ [`avaliacoes.${anoAtual}.notaFrequencia`]: 0 });
             return null;
         }
         
-        // 2. Contar o total de presenças do aluno para aulas dadas
+        // 2. Contar o total de presenças do aluno nas aulas que já aconteceram
         const frequenciasRef = turmaRef.collection('frequencias');
         const presencasSnapshot = await frequenciasRef
             .where('participanteId', '==', participanteId)
@@ -1166,8 +1173,6 @@ exports.calcularFrequencia = onDocumentWritten({ ...OPCOES_FUNCAO, document: 'tu
             .get();
             
         let presencasValidas = 0;
-        const idsAulasDadas = aulasDadasSnapshot.docs.map(doc => doc.id);
-        
         presencasSnapshot.forEach(doc => {
             if (idsAulasDadas.includes(doc.data().aulaId)) {
                 presencasValidas++;
@@ -1177,7 +1182,7 @@ exports.calcularFrequencia = onDocumentWritten({ ...OPCOES_FUNCAO, document: 'tu
         // 3. Calcular a porcentagem
         const porcentagemFrequencia = Math.round((presencasValidas / totalAulasDadas) * 100);
 
-        // 4. Atualizar a ficha do participante com a nova frequência e recalcular médias
+        // 4. Atualizar a ficha do participante
         const participanteRef = turmaRef.collection('participantes').doc(participanteId);
         const participanteSnap = await participanteRef.get();
         if(!participanteSnap.exists) return null;

@@ -57,7 +57,23 @@
         .attendance-controls .btn-status.active.ausente { background-color: #fee2e2; border-color: #f87171; color: #b91c1c; }
         .attendance-controls .btn-status.active.justificado { background-color: #fef9c3; border-color: #facc15; color: #713f12; }
 
+        .report-menu { list-style-type: none; padding: 0; }
+        .report-menu li { background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; margin-bottom: 10px; }
+        .report-menu a { display: block; padding: 15px; text-decoration: none; color: #0277BD; font-weight: bold; }
+        .report-menu a small { display: block; color: #64748b; font-weight: normal; margin-top: 4px; }
+        #area-relatorio-gerado { margin-top: 25px; border-top: 1px solid #ddd; padding-top: 20px; }
+        #area-relatorio-gerado .boletim-card { border: 1px solid #ccc; border-radius: 8px; padding: 20px; margin-top: 20px; }
+        .report-header { display: flex; justify-content: space-between; align-items: center; }
+
         .hidden { display: none !important; }
+
+        @media print {
+            body * { visibility: hidden; }
+            #area-relatorio-gerado, #area-relatorio-gerado * { visibility: visible; }
+            #area-relatorio-gerado { position: absolute; left: 0; top: 0; width: 100%; margin: 0; padding: 10px; border-top: none; }
+            table { font-size: 8pt; }
+            th, td { padding: 5px; }
+        }
     </style>
 </head>
 <body>
@@ -91,72 +107,36 @@
         </div>
 
         <div id="tab-relatorios" class="tab-content">
-            <h2>Relatórios</h2>
-            <p>Funcionalidade em desenvolvimento...</p>
+            <div class="report-header">
+                 <h3>Central de Relatórios</h3>
+                 <button id="btn-imprimir-relatorio" class="btn btn-secondary hidden"><i class="fas fa-print"></i> Imprimir</button>
+            </div>
+            <p style="color: #555;">Selecione um dos relatórios abaixo para gerar e visualizar.</p>
+
+            <ul class="report-menu" id="report-menu-container">
+                <li><a href="#" data-report="diario-classe">
+                    Diário de Classe (Frequência Geral)
+                    <small>Visão completa de todas as presenças e faltas da turma.</small>
+                </a></li>
+                <li><a href="#" data-report="boletim-individual">
+                    Boletim Individual do Aluno
+                    <small>Notas, frequência e status detalhado de um aluno.</small>
+                </a></li>
+                <li><a href="#" data-report="aptos-certificado">
+                    Relatório Final para Certificado
+                    <small>Lista de alunos aptos a receberem o certificado.</small>
+                </a></li>
+            </ul>
+
+            <div id="area-relatorio-gerado"></div>
         </div>
     </div>
 
-    <div class="modal-overlay" id="modal-inscricao">
-        <div class="modal-content">
-            <button class="modal-close-btn" id="close-modal-inscricao">&times;</button>
-            <h3>Inscrever Participante</h3>
-            <form id="form-inscricao">
-                <div class="form-group"><label for="participante-select">Buscar por nome (Voluntário ou Assistido)</label><select id="participante-select" required></select></div>
-                <div class="form-group hidden" id="form-group-grau"><label for="participante-grau">Grau Inicial (EAE)</label><select id="participante-grau"><option value="Aluno">Aluno</option><option value="Aprendiz">Aprendiz</option><option value="Servidor">Servidor</option></select></div>
-                <button type="submit" class="btn btn-primary" id="btn-salvar-inscricao">Confirmar Inscrição</button>
-            </form>
-        </div>
-    </div>
-    <div class="modal-overlay" id="modal-aula">
-        <div class="modal-content">
-            <button class="modal-close-btn" id="close-modal-aula">&times;</button>
-            <h3 id="modal-aula-titulo">Adicionar/Editar Aula</h3>
-            <form id="form-aula">
-                <input type="hidden" id="aula-id"><input type="hidden" id="aula-is-extra">
-                <div class="form-group"><label for="aula-titulo">Título da Aula</label><input type="text" id="aula-titulo" required></div>
-                <div class="form-group"><label for="aula-data">Data da Aula</label><input type="date" id="aula-data" required></div>
-                <div class="form-group hidden" id="form-group-numero-aula"><label for="aula-numero">Número da Aula</label><input type="number" id="aula-numero"></div>
-                <button type="submit" class="btn btn-primary" id="btn-salvar-aula">Salvar Aula</button>
-            </form>
-        </div>
-    </div>
-    <div class="modal-overlay" id="modal-recessos">
-        <div class="modal-content">
-            <button class="modal-close-btn" id="close-modal-recessos">&times;</button>
-            <h3>Gerenciar Períodos de Recesso</h3>
-            <form id="form-recesso">
-                <div class="form-group"><label>Adicionar Novo Período</label><div class="recesso-dates"><input type="date" id="recesso-data-inicio" required><input type="date" id="recesso-data-fim" required></div></div>
-                <button type="submit" class="btn btn-primary" id="btn-salvar-recesso">Adicionar Recesso</button>
-            </form>
-            <hr style="margin: 25px 0;">
-            <h4>Períodos Cadastrados</h4>
-            <ul class="recesso-list" id="recesso-list-container"></ul>
-        </div>
-    </div>
-    <div class="modal-overlay" id="modal-notas">
-        <div class="modal-content">
-            <button class="modal-close-btn" id="close-modal-notas">&times;</button>
-            <h3 id="modal-notas-titulo">Lançar Notas</h3>
-            <form id="form-notas">
-                <input type="hidden" id="notas-participante-id">
-                <div class="form-group"><label for="nota-caderno-temas">Nota do Caderno de Temas (0-10)</label><input type="number" id="nota-caderno-temas" min="0" max="10" step="0.5"></div>
-                <div class="form-group"><label for="nota-caderneta-pessoal">Nota da Caderneta Pessoal (0-10)</label><input type="number" id="nota-caderneta-pessoal" min="0" max="10" step="0.5"></div>
-                <div class="form-group"><label for="nota-trabalhos">Nota dos Trabalhos Prestados (0-10)</label><input type="number" id="nota-trabalhos" min="0" max="10" step="0.5"></div>
-                <div class="form-group"><label for="nota-exame-espiritual">Nota do Exame Espiritual (0-10)</label><input type="number" id="nota-exame-espiritual" min="0" max="10" step="0.5"></div>
-                <button type="submit" class="btn btn-primary" id="btn-salvar-notas">Salvar Notas e Recalcular Médias</button>
-            </form>
-        </div>
-    </div>
-    <div class="modal-overlay" id="modal-frequencia">
-        <div class="modal-content">
-            <button class="modal-close-btn" id="close-modal-frequencia">&times;</button>
-            <h3 id="modal-frequencia-titulo">Lançar Frequência</h3>
-            <ul class="attendance-list" id="frequencia-list-container">
-                <li>Carregando lista de chamada...</li>
-            </ul>
-            <button class="btn btn-primary" id="btn-salvar-frequencia" style="margin-top: 20px;">Salvar Frequência</button>
-        </div>
-    </div>
+    <div class="modal-overlay" id="modal-inscricao">...</div>
+    <div class="modal-overlay" id="modal-aula">...</div>
+    <div class="modal-overlay" id="modal-recessos">...</div>
+    <div class="modal-overlay" id="modal-notas">...</div>
+    <div class="modal-overlay" id="modal-frequencia">...</div>
     
     <script type="module" src="/js/detalhes-turma.js"></script>
 </body>
