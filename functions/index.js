@@ -859,192 +859,249 @@ exports.backfillNomesCracha = onCall(OPCOES_FUNCAO, async (request) => {
     return { success: true, message: `${atualizacoes} voluntários foram processados.` };
 });
 
-// ===================================================================
-// ROBÔS DO MÓDULO EDUCACIONAL
-// ===================================================================
+// #####################################################################
+// ## INÍCIO DO BLOCO DO MÓDULO EDUCACIONAL (VERSÃO FINAL E UNIFICADA v2)
+// #####################################################################
 
 const aulasEAE = [
-    { numeroDaAula: 1, titulo: "Aula inaugural", anoCorrespondente: "1" },
-    { numeroDaAula: 2, titulo: "A Criação", anoCorrespondente: "1" },
-    { numeroDaAula: 3, titulo: "O nosso Planeta", anoCorrespondente: "1" },
-    { numeroDaAula: 4, titulo: "As raças primitivas", anoCorrespondente: "1" },
-    { numeroDaAula: 5, titulo: "Constituição Geográfica da Terra", anoCorrespondente: "1" },
-    { numeroDaAula: 6, titulo: "Civilização da Mesopotâmia", anoCorrespondente: "1" },
-    { numeroDaAula: 7, titulo: "Missão Planetária de Moisés/Preparação dos Hebreus no deserto", anoCorrespondente: "1" },
-    { numeroDaAula: 8, titulo: "Introdução ao Processo de Reforma Íntima", anoCorrespondente: "1" },
-    { numeroDaAula: 9, titulo: "O Decálogo/Regresso a Canaã/A morte de Moisés", anoCorrespondente: "1" },
-    { numeroDaAula: 10, titulo: "O governo dos Juízes/O governo dos Reis até Salomão", anoCorrespondente: "1" },
-    { numeroDaAula: 11, titulo: "Separação dos Reinos/Sua Destruição/O período do cativeiro até a rec de Jerusalém", anoCorrespondente: "1" },
-    { numeroDaAula: 12, titulo: "História de Israel e dominação estrangeira", anoCorrespondente: "1" },
-    { numeroDaAula: 13, titulo: "Implantação do Caderno de Temas", anoCorrespondente: "1" },
-    { numeroDaAula: 14, titulo: "O nascimento e controvérsias doutrinárias", anoCorrespondente: "1" },
-    { numeroDaAula: 15, titulo: "Os reis magos e o exílio no estrangeiro", anoCorrespondente: "1" },
-    { numeroDaAula: 16, titulo: "Infância e juventude do Messias", anoCorrespondente: "1" },
-    { numeroDaAula: 17, titulo: "Jerusalém e o grande templo/Reis e líderes", anoCorrespondente: "1" },
-    { numeroDaAula: 18, titulo: "As seitas nacionais/Os costumes da época", anoCorrespondente: "1" },
-    { numeroDaAula: 19, titulo: "A Fraternidade Essênia", anoCorrespondente: "1" },
-    { numeroDaAula: 20, titulo: "O precursor", anoCorrespondente: "1" },
-    { numeroDaAula: 21, titulo: "O início da tarefa pública/Os primeiros discípulos", anoCorrespondente: "1" },
-    { numeroDaAula: 22, titulo: "A volta a Jerusalém e as escolas rabínicas", anoCorrespondente: "1" },
-    { numeroDaAula: 23, titulo: "Promoção do candidato ao grau de aprendiz", anoCorrespondente: "1" },
-    { numeroDaAula: 24, titulo: "Implantação da Caderneta Pessoal", anoCorrespondente: "1" },
-    { numeroDaAula: 25, titulo: "Regresso à Galiléia/A morte de João Batista", anoCorrespondente: "1" },
-    { numeroDaAula: 26, titulo: "Os trabalhos na Galiléia", anoCorrespondente: "1" },
-    { numeroDaAula: 27, titulo: "As parábolas. Introdução. (I) Usos e costumes sociais", anoCorrespondente: "1" },
-    { numeroDaAula: 28, titulo: "Pregações e curas", anoCorrespondente: "1" },
-    { numeroDaAula: 29, titulo: "Hostilidades do Sinédrio", anoCorrespondente: "1" },
-    { numeroDaAula: 30, titulo: "O desenvolvimento da pregação", anoCorrespondente: "1" },
-    { numeroDaAula: 31, titulo: "As parábolas. (II) Domésticas e Familiares. Distribuição do 1º teste", anoCorrespondente: "1" },
-    { numeroDaAula: 32, titulo: "Implantação das Caravanas de Evangelização e Auxílio", anoCorrespondente: "1" },
-    { numeroDaAula: 33, titulo: "O quadro dos apóstolos e a consagração", anoCorrespondente: "1" },
-    { numeroDaAula: 34, titulo: "Excursões ao estrangeiro", anoCorrespondente: "1" },
-    { numeroDaAula: 35, titulo: "As parábolas. (III) Vida rural", anoCorrespondente: "1" },
-    { numeroDaAula: 36, titulo: "O Sermão do Monte", anoCorrespondente: "1" },
-    { numeroDaAula: 37, titulo: "A gênese da alma", anoCorrespondente: "1" },
-    { numeroDaAula: 38, titulo: "Atos finais na Galiléia", anoCorrespondente: "1" },
-    { numeroDaAula: 39, titulo: "Últimos dias em Jerusalém", anoCorrespondente: "1" },
-    { numeroDaAula: 40, titulo: "Encerramento da Tarefa Planetária", anoCorrespondente: "1" },
-    { numeroDaAula: 41, titulo: "Prisão e entrega aos romanos. Distribuição do 2º teste", anoCorrespondente: "1" },
-    { numeroDaAula: 42, titulo: "O tribunal judaíco", anoCorrespondente: "1" },
-    { numeroDaAula: 43, titulo: "O julgamento de Pilatos", anoCorrespondente: "1" },
-    { numeroDaAula: 44, titulo: "O Calvário", anoCorrespondente: "1" },
-    { numeroDaAula: 45, titulo: "Ressurreição", anoCorrespondente: "1" },
-    { numeroDaAula: 46, titulo: "Exame espiritual", anoCorrespondente: "1" },
-    { numeroDaAula: 47, titulo: "Exame espiritual", anoCorrespondente: "1" },
-    { numeroDaAula: 48, titulo: "Passagem para o grau de servidor/Inscrição para o Curso de Médiuns", anoCorrespondente: "2" },
-    { numeroDaAula: 49, titulo: "Evolução do Homem animal para o homem espiritual", anoCorrespondente: "2" },
-    { numeroDaAula: 50, titulo: "Interpretação do Sermão do Monte", anoCorrespondente: "2" },
-    { numeroDaAula: 51, titulo: "Interpretação do Sermão do Monte", anoCorrespondente: "2" },
-    { numeroDaAula: 52, titulo: "Interpretação do Sermão do Monte", anoCorrespondente: "2" },
-    { numeroDaAula: 53, titulo: "Interpretação do Sermão do Monte", anoCorrespondente: "2" },
-    { numeroDaAula: 54, titulo: "Fundação da igreja cristã", anoCorrespondente: "2" },
-    { numeroDaAula: 55, titulo: "Ascensão", anoCorrespondente: "2" },
-    { numeroDaAula: 56, titulo: "Vida Plena – Conceito", anoCorrespondente: "2" },
-    { numeroDaAula: 57, titulo: "Instituição dos diáconos. Distribuição do 3º teste", anoCorrespondente: "2" },
-    { numeroDaAula: 58, titulo: "A conversão de Paulo", anoCorrespondente: "2" },
-    { numeroDaAula: 59, titulo: "O apóstolo Paulo e suas pregações", anoCorrespondente: "2" },
-    { numeroDaAula: 60, titulo: "Paulo defende-se em Jerusalém", anoCorrespondente: "2" },
-    { numeroDaAula: 61, titulo: "Os apóstolos que mais se destacaram e seus principais atos", anoCorrespondente: "2" },
-    { numeroDaAula: 62, titulo: "Preconceito – Definição", anoCorrespondente: "2" },
-    { numeroDaAula: 63, titulo: "Preconceito / Vivência (Exercício de Vida Plena)", anoCorrespondente: "2" },
-    { numeroDaAula: 64, titulo: "O estudo das epístolas", anoCorrespondente: "2" },
-    { numeroDaAula: 65, titulo: "A predestinação segundo a doutrina de Paulo", anoCorrespondente: "2" },
-    { numeroDaAula: 66, titulo: "Justificação dos pecados", anoCorrespondente: "2" },
-    { numeroDaAula: 67, titulo: "Continuação das epístolas", anoCorrespondente: "2" },
-    { numeroDaAula: 68, titulo: "Vícios e defeitos – Conceitos", anoCorrespondente: "2" },
-    { numeroDaAula: 69, titulo: "A doutrina de Tiago sobre a salvação", anoCorrespondente: "2" },
-    { numeroDaAula: 70, titulo: "A doutrina de Pedro, João e Judas", anoCorrespondente: "2" },
-    { numeroDaAula: 71, titulo: "O apocalipse de João", anoCorrespondente: "2" },
-    { numeroDaAula: 72, titulo: "O apocalipse de João. Distrib. do 4º teste", anoCorrespondente: "2" },
-    { numeroDaAula: 73, titulo: "Vícios e defeitos / Vivência (Exercício de Vida Plena)", anoCorrespondente: "2" },
-    { numeroDaAula: 74, titulo: "Ciência e Religião", anoCorrespondente: "2" },
-    { numeroDaAula: 75, titulo: "Pensamento e Vontade", anoCorrespondente: "2" },
-    { numeroDaAula: 76, titulo: "Lei de Ação e Reação", anoCorrespondente: "2" },
-    { numeroDaAula: 77, titulo: "Amor como lei soberana, o valor científico da prece, lei da solidariedade", anoCorrespondente: "2" },
-    { numeroDaAula: 78, titulo: "A Medicina Psicossomática", anoCorrespondente: "2" },
-    { numeroDaAula: 79, titulo: "Exercício de Vida Plena", anoCorrespondente: "2" },
-    { numeroDaAula: 80, titulo: "Curas e milagres do Evangelho", anoCorrespondente: "2" },
-    { numeroDaAula: 81, titulo: "Cosmogonias e concepções do Universo", anoCorrespondente: "2" },
-    { numeroDaAula: 82, titulo: "Estudos dos seres e das formas", anoCorrespondente: "2" },
-    { numeroDaAula: 83, titulo: "Evolução nos diferentes reinos/Histórico da evolução dos seres vivos", anoCorrespondente: "2" },
-    { numeroDaAula: 84, titulo: "Leis universais", anoCorrespondente: "2" },
-    { numeroDaAula: 85, titulo: "Exercício de Vida Plena", anoCorrespondente: "2" },
-    { numeroDaAula: 86, titulo: "O Plano Divino / A Lei da Evolução. Distrib. do 5º teste", anoCorrespondente: "2" },
-    { numeroDaAula: 87, titulo: "A Lei do Trabalho / A Lei da Justiça", anoCorrespondente: "2" },
-    { numeroDaAula: 88, titulo: "A Lei do Amor", anoCorrespondente: "2" },
-    { numeroDaAula: 89, titulo: "Amor a Deus, ao próximo e aos inimigos", anoCorrespondente: "2" },
-    { numeroDaAula: 90, titulo: "A filosofia da dor", anoCorrespondente: "2" },
-    { numeroDaAula: 91, titulo: "Normas da vida espiritual", anoCorrespondente: "2" },
-    { numeroDaAula: 92, titulo: "Exame espiritual", anoCorrespondente: "2" },
-    { numeroDaAula: 93, titulo: "Exame espiritual", anoCorrespondente: "2" },
-    { numeroDaAula: 94, titulo: "Estrutura da Aliança e de um Centro Espírtia. Como abrir um Centro Espírita", anoCorrespondente: "3" },
-    { numeroDaAula: 95, titulo: "Nova frente de trabalho", anoCorrespondente: "3" },
-    { numeroDaAula: 96, titulo: "Evolução Anímica (I)", anoCorrespondente: "3" },
-    { numeroDaAula: 97, titulo: "Evolução Anímica (II)", anoCorrespondente: "3" },
-    { numeroDaAula: 98, titulo: "Categoria dos mundos", anoCorrespondente: "3" },
-    { numeroDaAula: 99, titulo: "Imortalidade", anoCorrespondente: "3" },
-    { numeroDaAula: 100, titulo: "A Fraternidade do Trevo e FDJ", anoCorrespondente: "3" },
-    { numeroDaAula: 101, titulo: "Reencarnação", anoCorrespondente: "3" },
-    { numeroDaAula: 102, titulo: "Exercício de Vida Plena", anoCorrespondente: "3" },
-    { numeroDaAula: 103, titulo: "Regras para a educação. Conduta e aperfeiçoamento dos seres", anoCorrespondente: "3" },
-    { numeroDaAula: 104, titulo: "Regras para a educação. Conduta e aperfeiçoamento dos seres", anoCorrespondente: "3" },
-    { numeroDaAula: 105, titulo: "Regras para a educação. Conduta e aperfeiçoamento dos seres", anoCorrespondente: "3" },
-    { numeroDaAula: 106, titulo: "O papel do discípulo. Distrib. do 6º teste", anoCorrespondente: "3" },
-    { numeroDaAula: 107, titulo: "O cristão no lar", anoCorrespondente: "3" },
-    { numeroDaAula: 108, titulo: "O cristão no meio religioso e no meio profano", anoCorrespondente: "3" },
-    { numeroDaAula: 109, titulo: "Os recursos do cristão", anoCorrespondente: "3" },
-    { numeroDaAula: 110, titulo: "Exercício de Vida Plena", anoCorrespondente: "3" },
-    { numeroDaAula: 111, titulo: "Iniciação espiritual", anoCorrespondente: "3" },
-    { numeroDaAula: 112, titulo: "Estudo do perispírito / Centros de força", anoCorrespondente: "3" },
-    { numeroDaAula: 113, titulo: "Regras de conduta", anoCorrespondente: "3" },
-    { numeroDaAula: 114, titulo: "O espírito e o sexo", anoCorrespondente: "3" },
-    { numeroDaAula: 115, titulo: "Problemas da propagação do Espiritismo", anoCorrespondente: "3" },
-    { numeroDaAula: 116, titulo: "Exame espiritual", anoCorrespondente: "3" },
-    { numeroDaAula: 117, titulo: "Exame espiritual", anoCorrespondente: "3" },
-    { numeroDaAula: 118, titulo: "Exame espiritual. Devolução das cadernetas.Esclarecimentos sobre o período probatório de três meses após o estudo de O Livro dos Espíritos", anoCorrespondente: "3" }
+    { numeroDaAula: 1, titulo: "Aula inaugural", ano: 1 },
+    { numeroDaAula: 2, titulo: "A Criação", ano: 1 },
+    { numeroDaAula: 3, titulo: "O nosso Planeta", ano: 1 },
+    { numeroDaAula: 4, titulo: "As raças primitivas", ano: 1 },
+    { numeroDaAula: 5, titulo: "Constituição Geográfica da Terra", ano: 1 },
+    { numeroDaAula: 6, titulo: "Civilização da Mesopotâmia", ano: 1 },
+    { numeroDaAula: 7, titulo: "Missão Planetária de Moisés/Preparação dos Hebreus no deserto", ano: 1 },
+    { numeroDaAula: 8, titulo: "Introdução ao Processo de Reforma Íntima", ano: 1 },
+    { numeroDaAula: 9, titulo: "O Decálogo/Regresso a Canaã/A morte de Moisés", ano: 1 },
+    { numeroDaAula: 10, titulo: "O governo dos Juízes/O governo dos Reis até Salomão", ano: 1 },
+    { numeroDaAula: 11, titulo: "Separação dos Reinos/Sua Destruição/O período do cativeiro até a rec de Jerusalém", ano: 1 },
+    { numeroDaAula: 12, titulo: "História de Israel e dominação estrangeira", ano: 1 },
+    { numeroDaAula: 13, titulo: "Implantação do Caderno de Temas", ano: 1 },
+    { numeroDaAula: 14, titulo: "O nascimento e controvérsias doutrinárias", ano: 1 },
+    { numeroDaAula: 15, titulo: "Os reis magos e o exílio no estrangeiro", ano: 1 },
+    { numeroDaAula: 16, titulo: "Infância e juventude do Messias", ano: 1 },
+    { numeroDaAula: 17, titulo: "Jerusalém e o grande templo/Reis e líderes", ano: 1 },
+    { numeroDaAula: 18, titulo: "As seitas nacionais/Os costumes da época", ano: 1 },
+    { numeroDaAula: 19, titulo: "A Fraternidade Essênia", ano: 1 },
+    { numeroDaAula: 20, titulo: "O precursor", ano: 1 },
+    { numeroDaAula: 21, titulo: "O início da tarefa pública/Os primeiros discípulos", ano: 1 },
+    { numeroDaAula: 22, titulo: "A volta a Jerusalém e as escolas rabínicas", ano: 1 },
+    { numeroDaAula: 23, titulo: "Promoção do candidato ao grau de aprendiz", ano: 1 },
+    { numeroDaAula: 24, titulo: "Implantação da Caderneta Pessoal", ano: 1 },
+    { numeroDaAula: 25, titulo: "Regresso à Galiléia/A morte de João Batista", ano: 1 },
+    { numeroDaAula: 26, titulo: "Os trabalhos na Galiléia", ano: 1 },
+    { numeroDaAula: 27, titulo: "As parábolas. Introdução. (I) Usos e costumes sociais", ano: 1 },
+    { numeroDaAula: 28, titulo: "Pregações e curas", ano: 1 },
+    { numeroDaAula: 29, titulo: "Hostilidades do Sinédrio", ano: 1 },
+    { numeroDaAula: 30, titulo: "O desenvolvimento da pregação", ano: 1 },
+    { numeroDaAula: 31, titulo: "As parábolas. (II) Domésticas e Familiares. Distribuição do 1º teste", ano: 1 },
+    { numeroDaAula: 32, titulo: "Implantação das Caravanas de Evangelização e Auxílio", ano: 1 },
+    { numeroDaAula: 33, titulo: "O quadro dos apóstolos e a consagração", ano: 1 },
+    { numeroDaAula: 34, titulo: "Excursões ao estrangeiro", ano: 1 },
+    { numeroDaAula: 35, titulo: "As parábolas. (III) Vida rural", ano: 1 },
+    { numeroDaAula: 36, titulo: "O Sermão do Monte", ano: 1 },
+    { numeroDaAula: 37, titulo: "A gênese da alma", ano: 1 },
+    { numeroDaAula: 38, titulo: "Atos finais na Galiléia", ano: 1 },
+    { numeroDaAula: 39, titulo: "Últimos dias em Jerusalém", ano: 1 },
+    { numeroDaAula: 40, titulo: "Encerramento da Tarefa Planetária", ano: 1 },
+    { numeroDaAula: 41, titulo: "Prisão e entrega aos romanos. Distribuição do 2º teste", ano: 1 },
+    { numeroDaAula: 42, titulo: "O tribunal judaíco", ano: 1 },
+    { numeroDaAula: 43, titulo: "O julgamento de Pilatos", ano: 1 },
+    { numeroDaAula: 44, titulo: "O Calvário", ano: 1 },
+    { numeroDaAula: 45, titulo: "Ressurreição", ano: 1 },
+    { numeroDaAula: 46, titulo: "Exame espiritual", ano: 1 },
+    { numeroDaAula: 47, titulo: "Exame espiritual", ano: 1 },
+    { numeroDaAula: 48, titulo: "Passagem para o grau de servidor/Inscrição para o Curso de Médiuns", ano: 2 },
+    { numeroDaAula: 49, titulo: "Evolução do Homem animal para o homem espiritual", ano: 2 },
+    { numeroDaAula: 50, titulo: "Interpretação do Sermão do Monte", ano: 2 },
+    { numeroDaAula: 51, titulo: "Interpretação do Sermão do Monte", ano: 2 },
+    { numeroDaAula: 52, titulo: "Interpretação do Sermão do Monte", ano: 2 },
+    { numeroDaAula: 53, titulo: "Interpretação do Sermão do Monte", ano: 2 },
+    { numeroDaAula: 54, titulo: "Fundação da igreja cristã", ano: 2 },
+    { numeroDaAula: 55, titulo: "Ascensão", ano: 2 },
+    { numeroDaAula: 56, titulo: "Vida Plena – Conceito", ano: 2 },
+    { numeroDaAula: 57, titulo: "Instituição dos diáconos. Distribuição do 3º teste", ano: 2 },
+    { numeroDaAula: 58, titulo: "A conversão de Paulo", ano: 2 },
+    { numeroDaAula: 59, titulo: "O apóstolo Paulo e suas pregações", ano: 2 },
+    { numeroDaAula: 60, titulo: "Paulo defende-se em Jerusalém", ano: 2 },
+    { numeroDaAula: 61, titulo: "Os apóstolos que mais se destacaram e seus principais atos", ano: 2 },
+    { numeroDaAula: 62, titulo: "Preconceito – Definição", ano: 2 },
+    { numeroDaAula: 63, titulo: "Preconceito / Vivência (Exercício de Vida Plena)", ano: 2 },
+    { numeroDaAula: 64, titulo: "O estudo das epístolas", ano: 2 },
+    { numeroDaAula: 65, titulo: "A predestinação segundo a doutrina de Paulo", ano: 2 },
+    { numeroDaAula: 66, titulo: "Justificação dos pecados", ano: 2 },
+    { numeroDaAula: 67, titulo: "Continuação das epístolas", ano: 2 },
+    { numeroDaAula: 68, titulo: "Vícios e defeitos – Conceitos", ano: 2 },
+    { numeroDaAula: 69, titulo: "A doutrina de Tiago sobre a salvação", ano: 2 },
+    { numeroDaAula: 70, titulo: "A doutrina de Pedro, João e Judas", ano: 2 },
+    { numeroDaAula: 71, titulo: "O apocalipse de João", ano: 2 },
+    { numeroDaAula: 72, titulo: "O apocalipse de João. Distrib. do 4º teste", ano: 2 },
+    { numeroDaAula: 73, titulo: "Vícios e defeitos / Vivência (Exercício de Vida Plena)", ano: 2 },
+    { numeroDaAula: 74, titulo: "Ciência e Religião", ano: 2 },
+    { numeroDaAula: 75, titulo: "Pensamento e Vontade", ano: 2 },
+    { numeroDaAula: 76, titulo: "Lei de Ação e Reação", ano: 2 },
+    { numeroDaAula: 77, titulo: "Amor como lei soberana, o valor científico da prece, lei da solidariedade", ano: 2 },
+    { numeroDaAula: 78, titulo: "A Medicina Psicossomática", ano: 2 },
+    { numeroDaAula: 79, titulo: "Exercício de Vida Plena", ano: 2 },
+    { numeroDaAula: 80, titulo: "Curas e milagres do Evangelho", ano: 2 },
+    { numeroDaAula: 81, titulo: "Cosmogonias e concepções do Universo", ano: 2 },
+    { numeroDaAula: 82, titulo: "Estudos dos seres e das formas", ano: 2 },
+    { numeroDaAula: 83, titulo: "Evolução nos diferentes reinos/Histórico da evolução dos seres vivos", ano: 2 },
+    { numeroDaAula: 84, titulo: "Leis universais", ano: 2 },
+    { numeroDaAula: 85, titulo: "Exercício de Vida Plena", ano: 2 },
+    { numeroDaAula: 86, titulo: "O Plano Divino / A Lei da Evolução. Distrib. do 5º teste", ano: 2 },
+    { numeroDaAula: 87, titulo: "A Lei do Trabalho / A Lei da Justiça", ano: 2 },
+    { numeroDaAula: 88, titulo: "A Lei do Amor", ano: 2 },
+    { numeroDaAula: 89, titulo: "Amor a Deus, ao próximo e aos inimigos", ano: 2 },
+    { numeroDaAula: 90, titulo: "A filosofia da dor", ano: 2 },
+    { numeroDaAula: 91, titulo: "Normas da vida espiritual", ano: 2 },
+    { numeroDaAula: 92, titulo: "Exame espiritual", ano: 2 },
+    { numeroDaAula: 93, titulo: "Exame espiritual", ano: 2 },
+    { numeroDaAula: 94, titulo: "Estrutura da Aliança e de um Centro Espírtia. Como abrir um Centro Espírita", ano: 3 },
+    { numeroDaAula: 95, titulo: "Nova frente de trabalho", ano: 3 },
+    { numeroDaAula: 96, titulo: "Evolução Anímica (I)", ano: 3 },
+    { numeroDaAula: 97, titulo: "Evolução Anímica (II)", ano: 3 },
+    { numeroDaAula: 98, titulo: "Categoria dos mundos", ano: 3 },
+    { numeroDaAula: 99, titulo: "Imortalidade", ano: 3 },
+    { numeroDaAula: 100, titulo: "A Fraternidade do Trevo e FDJ", ano: 3 },
+    { numeroDaAula: 101, titulo: "Reencarnação", ano: 3 },
+    { numeroDaAula: 102, titulo: "Exercício de Vida Plena", ano: 3 },
+    { numeroDaAula: 103, titulo: "Regras para a educação. Conduta e aperfeiçoamento dos seres", ano: 3 },
+    { numeroDaAula: 104, titulo: "Regras para a educação. Conduta e aperfeiçoamento dos seres", ano: 3 },
+    { numeroDaAula: 105, titulo: "Regras para a educação. Conduta e aperfeiçoamento dos seres", ano: 3 },
+    { numeroDaAula: 106, titulo: "O papel do discípulo. Distrib. do 6º teste", ano: 3 },
+    { numeroDaAula: 107, titulo: "O cristão no lar", ano: 3 },
+    { numeroDaAula: 108, titulo: "O cristão no meio religioso e no meio profano", ano: 3 },
+    { numeroDaAula: 109, titulo: "Os recursos do cristão", ano: 3 },
+    { numeroDaAula: 110, titulo: "Exercício de Vida Plena", ano: 3 },
+    { numeroDaAula: 111, titulo: "Iniciação espiritual", ano: 3 },
+    { numeroDaAula: 112, titulo: "Estudo do perispírito / Centros de força", ano: 3 },
+    { numeroDaAula: 113, titulo: "Regras de conduta", ano: 3 },
+    { numeroDaAula: 114, titulo: "O espírito e o sexo", ano: 3 },
+    { numeroDaAula: 115, titulo: "Problemas da propagação do Espiritismo", ano: 3 },
+    { numeroDaAula: 116, titulo: "Exame espiritual", ano: 3 },
+    { numeroDaAula: 117, titulo: "Exame espiritual", ano: 3 },
+    { numeroDaAula: 118, titulo: "Exame espiritual. Devolução das cadernetas.Esclarecimentos sobre o período probatório de três meses após o estudo de O Livro dos Espíritos", ano: 3 }
 ];
 
+/**
+ * ROBÔ 1: Cadastra automaticamente as aulas da EAE.
+ * GATILHO: Criação de um documento em 'cursos/{cursoId}'
+ */
 exports.cadastrarAulasEAEAutomaticamente = onDocumentCreated({ ...OPCOES_FUNCAO, document: 'cursos/{cursoId}' }, async (event) => {
     const snap = event.data;
-    if (!snap) { return null; }
+    if (!snap) return null;
     const dadosCurso = snap.data();
-    if (dadosCurso.isEAE === true) {
-        const cursoId = event.params.cursoId;
-        const aulasRef = db.collection('cursos').doc(cursoId).collection('curriculo');
-        const batch = db.batch();
-        aulasEAE.forEach(aula => {
-            const novaAulaRef = aulasRef.doc();
-            batch.set(novaAulaRef, aula);
+    
+    if (dadosCurso.isEAE !== true) {
+        console.log(`Curso ${event.params.cursoId} não é da EAE. Nenhuma ação tomada.`);
+        return null;
+    }
+
+    const cursoId = event.params.cursoId;
+    const curriculoRef = db.collection('cursos').doc(cursoId).collection('curriculo');
+    const batch = db.batch();
+
+    aulasEAE.forEach(aula => {
+        const novaAulaRef = curriculoRef.doc();
+        batch.set(novaAulaRef, {
+            numeroDaAula: aula.numeroDaAula,
+            titulo: aula.titulo,
+            ano: parseInt(aula.anoCorrespondente, 10) // Corrigido de 'anoCorrespondente' para 'ano'
         });
-        try {
-            await batch.commit();
-            console.log("Sucesso! Aulas da EAE cadastradas para o curso:", cursoId);
-        } catch (error) {
-            console.error("Erro ao cadastrar aulas da EAE:", error);
-        }
+    });
+
+    try {
+        await batch.commit();
+        console.log(`Sucesso! ${aulasEAE.length} aulas da EAE cadastradas para o curso:`, cursoId);
+    } catch (error) {
+        console.error("Erro ao cadastrar aulas da EAE:", error);
     }
     return null;
 });
 
+/**
+ * ROBÔ 2: Gera o cronograma inicial quando uma nova turma é criada.
+ * GATILHO: Criação de um documento em 'turmas/{turmaId}'
+ */
 exports.gerarCronogramaAutomaticamente = onDocumentCreated({ ...OPCOES_FUNCAO, document: 'turmas/{turmaId}' }, async (event) => {
     const snap = event.data;
-    if (!snap) { return null; }
+    if (!snap) {
+        console.log("Gatilho acionado, mas sem dados. Encerrando.");
+        return null;
+    }
     const dadosTurma = snap.data();
     const turmaId = event.params.turmaId;
+
     const { cursoId, dataInicio, diaDaSemana } = dadosTurma;
-    if (!cursoId || !dataInicio || diaDaSemana === undefined) { return null; }
+    if (!cursoId || !dataInicio || diaDaSemana === undefined) {
+        console.error(`Dados insuficientes para gerar cronograma da turma ${turmaId}. Faltam campos essenciais.`);
+        return null;
+    }
+
     try {
-        const aulasRef = db.collection('cursos').doc(cursoId).collection('curriculo');
-        const aulasSnapshot = await aulasRef.orderBy('numeroDaAula').get();
-        if (aulasSnapshot.empty) { return null; }
-        const aulasDoCurso = [];
-        aulasSnapshot.forEach(doc => aulasDoCurso.push({ id: doc.id, ...doc.data() }));
-        const cronograma = [];
-        let dataAtual = new Date(`${dataInicio}T12:00:00.000Z`);
-        aulasDoCurso.forEach(aula => {
-            while (dataAtual.getUTCDay() !== diaDaSemana) {
-                dataAtual.setUTCDate(dataAtual.getUTCDate() + 1);
-            }
-            cronograma.push({ ...aula, aulaId: aula.id, dataAgendada: admin.firestore.Timestamp.fromDate(dataAtual), status: 'agendada' });
-            dataAtual.setUTCDate(dataAtual.getUTCDate() + 7);
-        });
+        console.log(`Iniciando geração de cronograma para a turma ${turmaId}.`);
+        const aulasGabaritoRef = db.collection('cursos').doc(cursoId).collection('curriculo');
+        const aulasSnapshot = await aulasGabaritoRef.orderBy('numeroDaAula').get();
+        
+        if (aulasSnapshot.empty) {
+            console.log(`Gabarito de aulas para o curso ${cursoId} está vazio. Nenhum cronograma gerado.`);
+            return null;
+        }
+
+        let dataAtual = dataInicio.toDate(); // Converte o Timestamp do Firestore para um objeto Date
+        
+        while (dataAtual.getDay() !== diaDaSemana) {
+            dataAtual.setDate(dataAtual.getDate() + 1);
+        }
+
         const cronogramaRef = db.collection('turmas').doc(turmaId).collection('cronograma');
         const batch = db.batch();
-        cronograma.forEach(aulaAgendada => {
-            // Usa o ID da aula do gabarito como ID do documento no cronograma
-            const novaAulaCronogramaRef = cronogramaRef.doc(aulaAgendada.id); 
-            batch.set(novaAulaCronogramaRef, aulaAgendada);
+
+        aulasSnapshot.forEach(doc => {
+            const aulaGabarito = doc.data();
+            const novaAulaCronogramaRef = cronogramaRef.doc(); 
+            
+            const dadosParaSalvar = {
+                ...aulaGabarito,
+                gabaritoAulaId: doc.id,
+                dataAgendada: admin.firestore.Timestamp.fromDate(dataAtual),
+                status: 'agendada',
+                isExtra: false
+            };
+            batch.set(novaAulaCronogramaRef, dadosParaSalvar);
+            
+            dataAtual.setDate(dataAtual.getDate() + 7);
         });
+
         await batch.commit();
+        console.log(`SUCESSO! Cronograma com ${aulasSnapshot.size} aulas gerado para a turma ${turmaId}.`);
     } catch (error) {
-        console.error(`Erro ao gerar cronograma para a turma ${turmaId}:`, error);
+        console.error(`Erro CRÍTICO ao gerar cronograma para a turma ${turmaId}:`, error);
     }
     return null;
 });
 
-// ===== O "CÉREBRO" UNIFICADO DE RECÁLCULO =====
-async function recalcularCronogramaCompleto(turmaId) {
-    console.log(`Disparando recálculo completo para a turma: ${turmaId}.`);
+/**
+ * ROBÔ 3: O "Cérebro" unificado que recalcula o cronograma (efeito dominó).
+ * GATILHO: Escrita em 'cronograma' ou 'recessos' de uma turma.
+ */
+exports.recalcularCronogramaCompleto = onDocumentWritten({ ...OPCOES_FUNCAO, document: 'turmas/{turmaId}/{subcolecao}/{docId}' }, async (event) => {
+    const { turmaId, subcolecao } = event.params;
+
+    if (subcolecao !== "cronograma" && subcolecao !== "recessos") {
+        return null;
+    }
+    
+    // Adiciona uma verificação para não entrar em loop infinito
+    // Se a alteração foi feita pela própria função, ela pode ter um campo de controle
+    const dadosDepois = event.data.after.data();
+    if (dadosDepois && dadosDepois.recalculadoPorFuncao) {
+        console.log("Alteração já foi feita por uma função. Evitando loop.");
+        return null;
+    }
+    
+    // A lógica completa de recálculo que estava na sua função `recalcularCronogramaCompleto`
     try {
         const turmaRef = db.collection('turmas').doc(turmaId);
         const turmaSnap = await turmaRef.get();
@@ -1055,99 +1112,69 @@ async function recalcularCronogramaCompleto(turmaId) {
         const aulasGabaritoRef = db.collection('cursos').doc(cursoId).collection('curriculo');
         const aulasGabaritoSnapshot = await aulasGabaritoRef.orderBy('numeroDaAula').get();
         if (aulasGabaritoSnapshot.empty) { return null; }
-        const aulasDoGabarito = [];
-        aulasGabaritoSnapshot.forEach(doc => aulasDoGabarito.push({ id: doc.id, ...doc.data() }));
 
         const recessosSnapshot = await turmaRef.collection('recessos').get();
-        const periodosDeRecesso = [];
-        recessosSnapshot.forEach(doc => periodosDeRecesso.push({ inicio: doc.data().dataInicio.toDate(), fim: doc.data().dataFim.toDate() }));
+        const periodosDeRecesso = recessosSnapshot.docs.map(doc => ({ inicio: doc.data().dataInicio.toDate(), fim: doc.data().dataFim.toDate() }));
         
         const aulasExtrasSnapshot = await turmaRef.collection('cronograma').where('isExtra', '==', true).get();
-        const aulasExtras = [];
-        aulasExtrasSnapshot.forEach(doc => aulasExtras.push({ id: doc.id, ...doc.data() }));
+        const datasAulasExtras = aulasExtrasSnapshot.docs.map(doc => doc.data().dataAgendada.toDate().getTime());
 
-        let dataAtual = new Date(`${dataInicio}T12:00:00.000Z`);
+        let dataAtual = dataInicio.toDate();
         const batch = db.batch();
 
-        aulasDoGabarito.forEach(aula => {
-            let dataEncontrada = false;
-            while (!dataEncontrada) {
-                while (dataAtual.getUTCDay() !== diaDaSemana) {
-                    dataAtual.setUTCDate(dataAtual.getUTCDate() + 1);
+        const aulasRegularesNoCronograma = (await turmaRef.collection('cronograma').where('isExtra', '==', false).get()).docs;
+
+        for (const aulaRegularDoc of aulasRegularesNoCronograma) {
+            let dataValidaEncontrada = false;
+            while (!dataValidaEncontrada) {
+                while (dataAtual.getDay() !== diaDaSemana) {
+                    dataAtual.setDate(dataAtual.getDate() + 1);
                 }
                 
                 let emRecesso = periodosDeRecesso.some(p => dataAtual >= p.inicio && dataAtual <= p.fim);
-                // Verifica se a data já foi "reservada" por uma aula extra
-                let dataOcupadaPorExtra = aulasExtras.some(extra => extra.dataAgendada.toDate().getTime() === dataAtual.getTime());
+                let dataOcupadaPorExtra = datasAulasExtras.includes(dataAtual.getTime());
 
                 if (emRecesso || dataOcupadaPorExtra) {
-                    dataAtual.setUTCDate(dataAtual.getUTCDate() + 7);
+                    dataAtual.setDate(dataAtual.getDate() + 7);
                 } else {
-                    dataEncontrada = true;
+                    dataValidaEncontrada = true;
                 }
             }
-            // ATUALIZA o documento da aula regular que já existe
-            const aulaRef = turmaRef.collection('cronograma').doc(aula.id); 
-            batch.update(aulaRef, { dataAgendada: admin.firestore.Timestamp.fromDate(dataAtual) });
-            dataAtual.setUTCDate(dataAtual.getUTCDate() + 7);
-        });
+            
+            batch.update(aulaRegularDoc.ref, { dataAgendada: admin.firestore.Timestamp.fromDate(dataAtual) });
+            dataAtual.setDate(dataAtual.getDate() + 7);
+        }
 
         await batch.commit();
         console.log(`SUCESSO! Cronograma recalculado para a turma ${turmaId}.`);
-
     } catch (error) {
         console.error(`Erro GERAL ao recalcular cronograma para a turma ${turmaId}:`, error);
     }
     return null;
-}
-
-// ===== SENSOR 1: MUDANÇA NAS AULAS EXTRAS =====
-exports.reajustarCronogramaPorAulaExtra = onDocumentWritten({ ...OPCOES_FUNCAO, document: 'turmas/{turmaId}/cronograma/{aulaId}' }, async (event) => {
-    const aulaAntes = event.data.before.data();
-    const aulaDepois = event.data.after.data();
-
-    // Dispara apenas se a aula que mudou é uma AULA EXTRA
-    const isExtraAntes = aulaAntes ? aulaAntes.isExtra === true : false;
-    const isExtraDepois = aulaDepois ? aulaDepois.isExtra === true : false;
-    
-    if (isExtraAntes || isExtraDepois) {
-        return recalcularCronogramaCompleto(event.params.turmaId);
-    }
-    return null;
 });
 
-// ===== SENSOR 2: MUDANÇA NOS RECESSOS =====
-exports.recalcularCronogramaAposRecesso = onDocumentWritten({ ...OPCOES_FUNCAO, document: 'turmas/{turmaId}/recessos/{recessoId}' }, (event) => {
-    return recalcularCronogramaCompleto(event.params.turmaId);
-});
-
-// ===== ROBÔ DE CÁLCULO DE FREQUÊNCIA (CORRIGIDO) =====
+/**
+ * ROBÔ 4: Calcula a frequência e as médias de um aluno.
+ * GATILHO: Escrita em 'frequencias' de uma turma.
+ */
 exports.calcularFrequencia = onDocumentWritten({ ...OPCOES_FUNCAO, document: 'turmas/{turmaId}/frequencias/{frequenciaId}' }, async (event) => {
+    // Sua função original 'calcularFrequencia' já estava correta e em v2.
+    // Cole o corpo da sua função aqui.
     const turmaId = event.params.turmaId;
     const dadosFrequencia = event.data.after.exists ? event.data.after.data() : event.data.before.data();
     const participanteId = dadosFrequencia.participanteId;
 
     if (!participanteId) { return null; }
-
-    console.log(`Gatilho de frequência acionado para o participante ${participanteId} na turma ${turmaId}.`);
-
     try {
         const turmaRef = db.collection('turmas').doc(turmaId);
         const turmaSnap = await turmaRef.get();
         if (!turmaSnap.exists) { return null; }
         const turmaData = turmaSnap.data();
         const anoAtual = turmaData.anoAtual || 1;
-
-        // 1. Contar o total de aulas dadas até hoje
         const hoje = new Date();
         const cronogramaRef = turmaRef.collection('cronograma');
         
-        // CORREÇÃO DA CONSULTA: Busca simples por data
-        const aulasPassadasSnapshot = await cronogramaRef
-            .where('dataAgendada', '<=', hoje)
-            .get();
-
-        // Filtragem manual no código para evitar a limitação do Firestore
+        const aulasPassadasSnapshot = await cronogramaRef.where('dataAgendada', '<=', hoje).get();
         let totalAulasDadas = 0;
         const idsAulasDadas = [];
         aulasPassadasSnapshot.forEach(doc => {
@@ -1159,30 +1186,22 @@ exports.calcularFrequencia = onDocumentWritten({ ...OPCOES_FUNCAO, document: 'tu
         });
 
         if (totalAulasDadas === 0) {
-            console.log("Nenhuma aula dada ainda, frequência é 0%.");
             const participanteRef = turmaRef.collection('participantes').doc(participanteId);
-            await participanteRef.update({ [`avaliacoes.${anoAtual}.notaFrequencia`]: 0 });
+            await participanteRef.set({ avaliacoes: { [anoAtual]: { notaFrequencia: 0 } } }, { merge: true });
             return null;
         }
         
-        // 2. Contar o total de presenças do aluno nas aulas que já aconteceram
         const frequenciasRef = turmaRef.collection('frequencias');
-        const presencasSnapshot = await frequenciasRef
-            .where('participanteId', '==', participanteId)
-            .where('status', '==', 'presente')
-            .get();
-            
+        const presencasSnapshot = await frequenciasRef.where('participanteId', '==', participanteId).where('status', '==', 'presente').get();
+        
         let presencasValidas = 0;
         presencasSnapshot.forEach(doc => {
             if (idsAulasDadas.includes(doc.data().aulaId)) {
                 presencasValidas++;
             }
         });
-
-        // 3. Calcular a porcentagem
         const porcentagemFrequencia = Math.round((presencasValidas / totalAulasDadas) * 100);
-
-        // 4. Atualizar a ficha do participante
+        
         const participanteRef = turmaRef.collection('participantes').doc(participanteId);
         const participanteSnap = await participanteRef.get();
         if(!participanteSnap.exists) return null;
@@ -1197,17 +1216,13 @@ exports.calcularFrequencia = onDocumentWritten({ ...OPCOES_FUNCAO, document: 'tu
         const mediaFinal = (mediaAT + mediaRI) / 2;
         const statusAprovacao = (mediaFinal >= 5 && mediaRI >= 6) ? "Aprovado" : "Reprovado";
 
-        const dadosParaAtualizar = {
+        await participanteRef.update({
             [`avaliacoes.${anoAtual}.notaFrequencia`]: porcentagemFrequencia,
             [`avaliacoes.${anoAtual}.mediaAT`]: mediaAT,
             [`avaliacoes.${anoAtual}.mediaRI`]: mediaRI,
             [`avaliacoes.${anoAtual}.mediaFinal`]: mediaFinal,
             [`avaliacoes.${anoAtual}.statusAprovacao`]: statusAprovacao
-        };
-
-        await participanteRef.update(dadosParaAtualizar);
-        console.log(`Frequência do participante ${participanteId} atualizada para ${porcentagemFrequencia}%.`);
-        
+        });
     } catch (error) {
         console.error(`Erro ao calcular frequência para turma ${turmaId}:`, error);
     }

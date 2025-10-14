@@ -177,7 +177,7 @@ function escutarParticipantes() {
 
 function escutarCronograma() {
     const cronogramaRef = collection(db, "turmas", turmaId, "cronograma");
-    const q = query(cronogramaRef, orderBy("dataAgendada", "asc"));
+    const q = query(cronogramaRef, orderBy("numeroDaAula", "asc"));
     onSnapshot(q, (snapshot) => {
         let rowsHTML = [];
         if (snapshot.empty) {
