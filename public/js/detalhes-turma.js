@@ -29,9 +29,11 @@ const btnAddAulaExtra = document.getElementById('btn-add-aula-extra');
 const btnGerenciarRecessos = document.getElementById('btn-gerenciar-recessos');
 const btnAvancarAno = document.getElementById('btn-avancar-ano');
 
+// NOVOS ELEMENTOS PARA RELATÓRIOS
 const reportMenuContainer = document.getElementById('report-menu-container');
 const areaRelatorioGerado = document.getElementById('area-relatorio-gerado');
 const btnImprimirRelatorio = document.getElementById('btn-imprimir-relatorio');
+
 
 const modalInscricao = document.getElementById('modal-inscricao');
 const closeModalInscricaoBtn = document.getElementById('close-modal-inscricao');
@@ -192,7 +194,13 @@ function escutarCronograma() {
                 if (aula.isExtra) {
                     actionsHTML += `<button class="icon-btn delete" title="Excluir Aula Extra" data-action="delete" data-id="${doc.id}"><i class="fas fa-trash-alt"></i></button>`;
                 } else {
-                    actionsHTML += `<button class="icon-btn recess" title="Marcar como Recesso" data-action="recess" data-id="${doc.id}"><i class="fas fa-coffee"></i></button>`;
+                    actionsHTML += `<button class="icon-btn recess" title="Marcar como Recesso" 
+                                    data-action="recess" 
+                                    data-id="${doc.id}"
+                                    data-date="${aula.dataAgendada.toDate().toISOString()}"
+                                    data-titulo="${aula.titulo}">
+                                    <i class="fas fa-coffee"></i>
+                                  </button>`;
                 }
                 rowsHTML.push(`<tr><td>${numeroAulaDisplay}</td><td>${dataFormatada}</td><td>${aula.titulo}</td><td>${aula.status}</td><td class="actions">${actionsHTML}</td></tr>`);
             });
@@ -445,6 +453,25 @@ async function deletarRecesso(recessoId) {
     }
 }
 
+async function marcarRecessoDeAulaUnica(aulaDataISO, aulaTitulo) {
+    const dataObj = new Date(aulaDataISO);
+    const dataFormatada = dataObj.toLocaleDateString('pt-BR', { timeZone: 'UTC' });
+    const confirmacao = confirm(`Tem certeza que deseja marcar o dia ${dataFormatada} como um recesso?\n\nA aula "${aulaTitulo}" e todas as aulas seguintes serão reagendadas automaticamente.`);
+    if (confirmacao) {
+        try {
+            const recessosRef = collection(db, "turmas", turmaId, "recessos");
+            await addDoc(recessosRef, {
+                dataInicio: Timestamp.fromDate(dataObj),
+                dataFim: Timestamp.fromDate(dataObj)
+            });
+            alert("Recesso de um dia adicionado com sucesso! O cronograma será reajustado.");
+        } catch (error) {
+            console.error("Erro ao marcar recesso de aula única:", error);
+            alert("Ocorreu um erro ao tentar marcar o recesso.");
+        }
+    }
+}
+
 // --- FUNÇÕES DE FREQUÊNCIA (COM CORREÇÃO) ---
 async function abrirModalFrequencia(aulaId, aulaTitulo) {
     currentAulaIdParaFrequencia = aulaId;
@@ -505,11 +532,10 @@ async function salvarFrequencia() {
             aulaId: currentAulaIdParaFrequencia,
             participanteId: participanteId,
             status: status,
-            turmaId: turmaId // Adiciona o turmaId para referência do robô
+            turmaId: turmaId
         });
     });
     
-    // ATUALIZA O STATUS DA AULA PARA 'REALIZADA'
     const aulaRef = doc(db, "turmas", turmaId, "cronograma", currentAulaIdParaFrequencia);
     batch.update(aulaRef, { status: 'realizada' });
 
@@ -525,8 +551,6 @@ async function salvarFrequencia() {
 }
 
 // --- NOVAS FUNÇÕES DE RELATÓRIO ---
-
-// Função auxiliar para obter todos os dados necessários
 async function getDadosCompletosParaRelatorio() {
     const participantesRef = collection(db, "turmas", turmaId, "participantes");
     const cronogramaRef = collection(db, "turmas", turmaId, "cronograma");
@@ -675,7 +699,6 @@ async function gerarRelatorioAptosCertificado() {
             const avaliacao = p.avaliacoes ? p.avaliacoes[anoAtual] : null;
             statusFinal = avaliacao ? avaliacao.statusAprovacao : 'Pendente';
         } else {
-            // Lógica para cursos não-EAE (baseado em frequência, por exemplo)
             const freq = p.frequenciaPercentual || 0;
             statusFinal = freq >= 75 ? 'Aprovado' : 'Reprovado por Frequência';
         }
@@ -687,6 +710,7 @@ async function gerarRelatorioAptosCertificado() {
     btnImprimirRelatorio.classList.remove('hidden');
 }
 
+
 // --- EVENTOS ---
 tabs.forEach(tab => {
     tab.addEventListener('click', () => {
@@ -695,13 +719,10 @@ tabs.forEach(tab => {
         const targetTab = document.getElementById(tab.dataset.tab);
         tabContents.forEach(content => content.classList.remove('active'));
         targetTab.classList.add('active');
-
-        // Limpa a área de relatório ao trocar de aba
         areaRelatorioGerado.innerHTML = '';
         btnImprimirRelatorio.classList.add('hidden');
     });
 });
-
 if(btnInscreverParticipante) btnInscreverParticipante.addEventListener('click', abrirModalInscricao);
 if(closeModalInscricaoBtn) closeModalInscricaoBtn.addEventListener('click', () => modalInscricao.classList.remove('visible'));
 if(modalInscricao) modalInscricao.addEventListener('click', (event) => { if (event.target === modalInscricao) modalInscricao.classList.remove('visible'); });
@@ -722,6 +743,11 @@ if(cronogramaTableBody) cronogramaTableBody.addEventListener('click', (event) =>
     else if (action === 'frequencia') {
         const titulo = target.dataset.titulo;
         abrirModalFrequencia(id, titulo);
+    }
+    else if (action === 'recess') {
+        const date = target.dataset.date;
+        const titulo = target.dataset.titulo;
+        marcarRecessoDeAulaUnica(date, titulo);
     }
 });
 
@@ -769,7 +795,6 @@ if(btnSalvarFrequencia) btnSalvarFrequencia.addEventListener('click', salvarFreq
 if(closeModalFrequenciaBtn) closeModalFrequenciaBtn.addEventListener('click', () => modalFrequencia.classList.remove('visible'));
 if(modalFrequencia) modalFrequencia.addEventListener('click', (event) => { if(event.target === modalFrequencia) modalFrequencia.classList.remove('visible'); });
 
-// NOVO EVENTO PARA O MENU DE RELATÓRIOS
 if(reportMenuContainer) reportMenuContainer.addEventListener('click', (event) => {
     event.preventDefault();
     const target = event.target.closest('a');
@@ -785,7 +810,6 @@ if(reportMenuContainer) reportMenuContainer.addEventListener('click', (event) =>
     }
 });
 
-// NOVO EVENTO PARA O BOTÃO DE IMPRIMIR
 if(btnImprimirRelatorio) btnImprimirRelatorio.addEventListener('click', () => {
     window.print();
 });
