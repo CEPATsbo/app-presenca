@@ -1,6 +1,6 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
 import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-auth.js";
-import { getFirestore, collection, query, where, getDocs, doc, getDoc, addDoc, onSnapshot, orderBy, limit, serverTimestamp, Timestamp, updateDoc, deleteDoc } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
+import { getFirestore, collection, query, where, getDocs, doc, getDoc, addDoc, onSnapshot, orderBy, limit, serverTimestamp, Timestamp, updateDoc, deleteDoc, writeBatch } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
 
 // --- CONFIGURAÇÕES ---
 const firebaseConfig = {
@@ -29,7 +29,6 @@ const btnAddAulaExtra = document.getElementById('btn-add-aula-extra');
 const btnGerenciarRecessos = document.getElementById('btn-gerenciar-recessos');
 const btnAvancarAno = document.getElementById('btn-avancar-ano');
 
-// Modais e seus componentes...
 const modalInscricao = document.getElementById('modal-inscricao');
 const closeModalInscricaoBtn = document.getElementById('close-modal-inscricao');
 const formInscricao = document.getElementById('form-inscricao');
@@ -37,6 +36,7 @@ const participanteSelect = document.getElementById('participante-select');
 const formGroupGrau = document.getElementById('form-group-grau');
 const participanteGrauSelect = document.getElementById('participante-grau');
 const btnSalvarInscricao = document.getElementById('btn-salvar-inscricao');
+
 const modalAula = document.getElementById('modal-aula');
 const closeModalAulaBtn = document.getElementById('close-modal-aula');
 const formAula = document.getElementById('form-aula');
@@ -48,12 +48,14 @@ const inputAulaData = document.getElementById('aula-data');
 const formGroupNumeroAula = document.getElementById('form-group-numero-aula');
 const inputAulaNumero = document.getElementById('aula-numero');
 const btnSalvarAula = document.getElementById('btn-salvar-aula');
+
 const modalRecessos = document.getElementById('modal-recessos');
 const closeModalRecessosBtn = document.getElementById('close-modal-recessos');
 const formRecesso = document.getElementById('form-recesso');
 const inputRecessoInicio = document.getElementById('recesso-data-inicio');
 const inputRecessoFim = document.getElementById('recesso-data-fim');
 const recessoListContainer = document.getElementById('recesso-list-container');
+
 const modalNotas = document.getElementById('modal-notas');
 const closeModalNotasBtn = document.getElementById('close-modal-notas');
 const formNotas = document.getElementById('form-notas');
@@ -65,8 +67,15 @@ const inputNotaTrabalhos = document.getElementById('nota-trabalhos');
 const inputNotaExameEspiritual = document.getElementById('nota-exame-espiritual');
 const btnSalvarNotas = document.getElementById('btn-salvar-notas');
 
+const modalFrequencia = document.getElementById('modal-frequencia');
+const closeModalFrequenciaBtn = document.getElementById('close-modal-frequencia');
+const modalFrequenciaTitulo = document.getElementById('modal-frequencia-titulo');
+const frequenciaListContainer = document.getElementById('frequencia-list-container');
+const btnSalvarFrequencia = document.getElementById('btn-salvar-frequencia');
+
 let turmaId = null;
 let turmaData = null;
+let currentAulaIdParaFrequencia = null;
 
 // --- VERIFICAÇÃO DE PERMISSÃO E CARREGAMENTO ---
 onAuthStateChanged(auth, async (user) => {
@@ -139,7 +148,6 @@ function escutarParticipantes() {
                 if (turmaData.isEAE) {
                     const anoAtual = turmaData.anoAtual || 1;
                     const avaliacaoDoAno = participante.avaliacoes ? participante.avaliacoes[anoAtual] : null;
-
                     row += `
                         <td>${participante.grau || 'Aluno'}</td>
                         <td>${(avaliacaoDoAno ? avaliacaoDoAno.notaFrequencia : 0) || 0}%</td>
@@ -173,7 +181,10 @@ function escutarCronograma() {
                 const aula = doc.data();
                 const dataFormatada = aula.dataAgendada.toDate().toLocaleDateString('pt-BR', { timeZone: 'UTC' });
                 const numeroAulaDisplay = aula.isExtra ? '<strong>Extra</strong>' : aula.numeroDaAula;
-                let actionsHTML = `<button class="icon-btn edit" title="Editar Aula" data-action="edit" data-id="${doc.id}"><i class="fas fa-pencil-alt"></i></button>`;
+                let actionsHTML = `
+                    <button class="icon-btn attendance" title="Lançar Frequência" data-action="frequencia" data-id="${doc.id}" data-titulo="${aula.titulo}"><i class="fas fa-clipboard-list"></i></button>
+                    <button class="icon-btn edit" title="Editar Aula" data-action="edit" data-id="${doc.id}"><i class="fas fa-pencil-alt"></i></button>
+                `;
                 if (aula.isExtra) {
                     actionsHTML += `<button class="icon-btn delete" title="Excluir Aula Extra" data-action="delete" data-id="${doc.id}"><i class="fas fa-trash-alt"></i></button>`;
                 } else {
@@ -261,7 +272,6 @@ async function salvarNotas(event) {
     const mediaRI = (notaCadernetaPessoal + notaTrabalhos + notaExameEspiritual) / 3;
     const mediaFinal = (mediaAT + mediaRI) / 2;
     const statusAprovacao = (mediaFinal >= 5 && mediaRI >= 6) ? "Aprovado" : "Reprovado";
-
     const dadosAtualizados = {
         [`avaliacoes.${anoAtual}`]: {
             notaCadernoTemas, notaCadernetaPessoal, notaTrabalhos, notaExameEspiritual,
@@ -280,25 +290,16 @@ async function salvarNotas(event) {
     }
 }
 
-// ***** NOVA FUNÇÃO PARA PROMOVER O GRAU *****
 async function promoverGrau(participanteId) {
     const participanteRef = doc(db, "turmas", turmaId, "participantes", participanteId);
     const docSnap = await getDoc(participanteRef);
-
     if (docSnap.exists()) {
         const participante = docSnap.data();
         const grauAtual = participante.grau || "Aluno";
         let proximoGrau = "";
-
-        if (grauAtual === "Aluno") {
-            proximoGrau = "Aprendiz";
-        } else if (grauAtual === "Aprendiz") {
-            proximoGrau = "Servidor";
-        } else {
-            alert(`${participante.nome} já está no grau máximo (Servidor).`);
-            return;
-        }
-
+        if (grauAtual === "Aluno") { proximoGrau = "Aprendiz"; } 
+        else if (grauAtual === "Aprendiz") { proximoGrau = "Servidor"; } 
+        else { alert(`${participante.nome} já está no grau máximo (Servidor).`); return; }
         if (confirm(`Tem certeza que deseja promover ${participante.nome} para o grau de ${proximoGrau}?`)) {
             try {
                 await updateDoc(participanteRef, { grau: proximoGrau });
@@ -311,12 +312,9 @@ async function promoverGrau(participanteId) {
     }
 }
 
-
 async function avancarAnoDaTurma() {
     const anoAtual = turmaData.anoAtual || 1;
-    if (anoAtual >= 3) {
-        return alert("Esta turma já concluiu o 3º ano e não pode mais avançar.");
-    }
+    if (anoAtual >= 3) { return alert("Esta turma já concluiu o 3º ano."); }
     if (!confirm(`Tem certeza que deseja avançar esta turma para o ${anoAtual + 1}º ano?`)) return;
     try {
         const turmaRef = doc(db, "turmas", turmaId);
@@ -324,7 +322,6 @@ async function avancarAnoDaTurma() {
         alert(`Turma avançou para o ${anoAtual + 1}º ano com sucesso!`);
     } catch (error) {
         console.error("Erro ao avançar o ano da turma:", error);
-        alert("Ocorreu um erro ao tentar avançar o ano.");
     }
 }
 
@@ -444,6 +441,75 @@ async function deletarRecesso(recessoId) {
     }
 }
 
+// ----- FUNÇÕES PARA LANÇAMENTO DE FREQUÊNCIA -----
+async function abrirModalFrequencia(aulaId, aulaTitulo) {
+    currentAulaIdParaFrequencia = aulaId;
+    modalFrequenciaTitulo.textContent = `Frequência da Aula: ${aulaTitulo}`;
+    frequenciaListContainer.innerHTML = '<li>Carregando lista de chamada...</li>';
+    modalFrequencia.classList.add('visible');
+    try {
+        const participantesRef = collection(db, "turmas", turmaId, "participantes");
+        const qParticipantes = query(participantesRef, orderBy("nome"));
+        const participantesSnapshot = await getDocs(qParticipantes);
+        const frequenciaRef = collection(db, "turmas", turmaId, "frequencias");
+        const qFrequencia = query(frequenciaRef, where("aulaId", "==", aulaId));
+        const frequenciaSnapshot = await getDocs(qFrequencia);
+        const frequenciasSalvas = {};
+        frequenciaSnapshot.forEach(doc => {
+            frequenciasSalvas[doc.data().participanteId] = doc.data().status;
+        });
+        let listHTML = '';
+        participantesSnapshot.forEach(doc => {
+            const participante = doc.data();
+            const participanteId = doc.id;
+            const statusAtual = frequenciasSalvas[participanteId] || 'presente';
+            listHTML += `
+                <li class="attendance-item" data-participante-id="${participanteId}" data-status="${statusAtual}">
+                    <span>${participante.nome}</span>
+                    <div class="attendance-controls">
+                        <button class="btn-status presente ${statusAtual === 'presente' ? 'active' : ''}" data-status="presente">P</button>
+                        <button class="btn-status ausente ${statusAtual === 'ausente' ? 'active' : ''}" data-status="ausente">F</button>
+                        <button class="btn-status justificado ${statusAtual === 'justificado' ? 'active' : ''}" data-status="justificado">J</button>
+                    </div>
+                </li>
+            `;
+        });
+        frequenciaListContainer.innerHTML = listHTML || '<li>Nenhum participante inscrito.</li>';
+    } catch(error) {
+        console.error("Erro ao carregar lista de chamada:", error);
+        frequenciaListContainer.innerHTML = '<li>Ocorreu um erro ao carregar a lista.</li>';
+    }
+}
+
+async function salvarFrequencia() {
+    if (!currentAulaIdParaFrequencia) return;
+    btnSalvarFrequencia.disabled = true;
+    const batch = writeBatch(db);
+    const items = frequenciaListContainer.querySelectorAll('.attendance-item');
+    items.forEach(item => {
+        const participanteId = item.dataset.participanteId;
+        const status = item.dataset.status;
+        const frequenciaDocId = `${currentAulaIdParaFrequencia}_${participanteId}`;
+        const frequenciaRef = doc(db, "turmas", turmaId, "frequencias", frequenciaDocId);
+        batch.set(frequenciaRef, {
+            aulaId: currentAulaIdParaFrequencia,
+            participanteId: participanteId,
+            status: status
+        });
+    });
+    try {
+        await batch.commit();
+        alert("Frequência salva com sucesso!");
+        modalFrequencia.classList.remove('visible');
+    } catch (error) {
+        console.error("Erro ao salvar frequência:", error);
+        alert("Ocorreu um erro ao salvar a frequência.");
+    } finally {
+        btnSalvarFrequencia.disabled = false;
+    }
+}
+
+
 // --- EVENTOS ---
 tabs.forEach(tab => {
     tab.addEventListener('click', () => {
@@ -471,6 +537,10 @@ if(cronogramaTableBody) cronogramaTableBody.addEventListener('click', (event) =>
     const id = target.dataset.id;
     if (action === 'edit') { abrirModalAula(id); } 
     else if (action === 'delete') { deletarAula(id); }
+    else if (action === 'frequencia') {
+        const titulo = target.dataset.titulo;
+        abrirModalFrequencia(id, titulo);
+    }
 });
 
 if(btnGerenciarRecessos) btnGerenciarRecessos.addEventListener('click', abrirModalRecessos);
@@ -493,7 +563,6 @@ participantesTableBody.addEventListener('click', (event) => {
     if (action === 'notas') {
         abrirModalNotas(id);
     } else if (action === 'promover') {
-        // ***** NOVA LÓGICA PARA O BOTÃO DE PROMOVER *****
         promoverGrau(id);
     }
 });
@@ -503,3 +572,17 @@ if(closeModalNotasBtn) closeModalNotasBtn.addEventListener('click', () => modalN
 if(modalNotas) modalNotas.addEventListener('click', (event) => { if (event.target === modalNotas) modalNotas.classList.remove('visible'); });
 
 if(btnAvancarAno) btnAvancarAno.addEventListener('click', avancarAnoDaTurma);
+
+frequenciaListContainer.addEventListener('click', (event) => {
+    if (event.target.classList.contains('btn-status')) {
+        const targetBtn = event.target;
+        const parentItem = targetBtn.closest('.attendance-item');
+        const status = targetBtn.dataset.status;
+        parentItem.dataset.status = status;
+        parentItem.querySelectorAll('.btn-status').forEach(btn => btn.classList.remove('active'));
+        targetBtn.classList.add('active');
+    }
+});
+if(btnSalvarFrequencia) btnSalvarFrequencia.addEventListener('click', salvarFrequencia);
+if(closeModalFrequenciaBtn) closeModalFrequenciaBtn.addEventListener('click', () => modalFrequencia.classList.remove('visible'));
+if(modalFrequencia) modalFrequencia.addEventListener('click', (event) => { if(event.target === modalFrequencia) modalFrequencia.classList.remove('visible'); });

@@ -34,10 +34,11 @@
         .icon-btn.recess { color: #f59e0b; }
         .icon-btn.notes { color: #16a34a; }
         .icon-btn.promote { color: #9333ea; }
+        .icon-btn.attendance { color: #4b5563; }
 
         .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0, 0, 0, 0.6); display: flex; justify-content: center; align-items: center; z-index: 1000; visibility: hidden; opacity: 0; transition: opacity 0.3s; }
         .modal-overlay.visible { visibility: visible; opacity: 1; }
-        .modal-content { background-color: white; padding: 25px; border-radius: 10px; width: 90%; max-width: 500px; position: relative; }
+        .modal-content { background-color: white; padding: 25px; border-radius: 10px; width: 90%; max-width: 500px; position: relative; max-height: 80vh; overflow-y: auto; }
         .modal-content h3 { margin-top: 0; }
         .modal-close-btn { position: absolute; top: 10px; right: 15px; font-size: 1.5em; cursor: pointer; color: #888; border: none; background: none; }
         .form-group { display: flex; flex-direction: column; gap: 8px; margin-bottom: 20px; }
@@ -46,6 +47,16 @@
         .recesso-dates { display: flex; gap: 15px; }
         .recesso-list { list-style-type: none; padding-left: 0; }
         .recesso-list li { background-color: #f1f5f9; padding: 10px; border-radius: 6px; margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center; }
+        
+        .attendance-list { list-style-type: none; padding: 0; }
+        .attendance-item { display: flex; justify-content: space-between; align-items: center; padding: 10px; border-bottom: 1px solid #eee; }
+        .attendance-item:last-child { border-bottom: none; }
+        .attendance-controls { display: flex; gap: 5px; }
+        .attendance-controls .btn-status { font-size: 0.8em; padding: 5px 8px; border: 1px solid #ccc; background-color: #f9f9f9; color: #333; border-radius: 4px; cursor: pointer; }
+        .attendance-controls .btn-status.active.presente { background-color: #dcfce7; border-color: #4ade80; color: #15803d; }
+        .attendance-controls .btn-status.active.ausente { background-color: #fee2e2; border-color: #f87171; color: #b91c1c; }
+        .attendance-controls .btn-status.active.justificado { background-color: #fef9c3; border-color: #facc15; color: #713f12; }
+
         .hidden { display: none !important; }
     </style>
 </head>
@@ -68,14 +79,7 @@
                 <button class="btn btn-primary" id="btn-inscrever-participante"><i class="fas fa-user-plus"></i> Inscrever Participante</button>
                 <button class="btn btn-secondary hidden" id="btn-avancar-ano"><i class="fas fa-arrow-right"></i> Avançar para o Próximo Ano</button>
             </div>
-            <div class="table-container">
-                <table id="participantes-table">
-                    <thead></thead>
-                    <tbody id="participantes-table-body">
-                        <tr><td colspan="7" style="text-align: center;">Carregando participantes...</td></tr>
-                    </tbody>
-                </table>
-            </div>
+            <div class="table-container"><table id="participantes-table"><thead></thead><tbody id="participantes-table-body"></tbody></table></div>
         </div>
 
         <div id="tab-aulas" class="tab-content">
@@ -141,6 +145,16 @@
                 <div class="form-group"><label for="nota-exame-espiritual">Nota do Exame Espiritual (0-10)</label><input type="number" id="nota-exame-espiritual" min="0" max="10" step="0.5"></div>
                 <button type="submit" class="btn btn-primary" id="btn-salvar-notas">Salvar Notas e Recalcular Médias</button>
             </form>
+        </div>
+    </div>
+    <div class="modal-overlay" id="modal-frequencia">
+        <div class="modal-content">
+            <button class="modal-close-btn" id="close-modal-frequencia">&times;</button>
+            <h3 id="modal-frequencia-titulo">Lançar Frequência</h3>
+            <ul class="attendance-list" id="frequencia-list-container">
+                <li>Carregando lista de chamada...</li>
+            </ul>
+            <button class="btn btn-primary" id="btn-salvar-frequencia" style="margin-top: 20px;">Salvar Frequência</button>
         </div>
     </div>
     
