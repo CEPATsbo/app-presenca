@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard Educacional - CEPAT</title>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background-color: #f4f6f9; margin: 0; padding: 20px; display: flex; flex-direction: column; align-items: center; }
+        .container { width: 100%; max-width: 1000px; display: none; } /* Começa invisível */
+        .header { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #e0e0e0; padding-bottom: 15px; margin-bottom: 30px; }
+        .header h1 { color: #2c3e50; margin: 0; }
+        .btn-voltar { background-color: #7f8c8d; color: white; padding: 10px 18px; border-radius: 8px; text-decoration: none; font-weight: bold; }
+        .card-container { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 25px; }
+        .card { background-color: white; border-radius: 12px; box-shadow: 0 4px 15px rgba(0, 0, 0, 0.08); padding: 25px; text-decoration: none; color: inherit; transition: transform 0.2s, box-shadow 0.2s; border-left: 5px solid #3498db; }
+        .card:hover { transform: translateY(-5px); box-shadow: 0 8px 25px rgba(0, 0, 0, 0.12); }
+        .card h2 { margin-top: 0; font-size: 1.4em; color: #34495e; }
+        .card p { color: #576574; font-size: 0.95em; line-height: 1.5; }
+    </style>
+</head>
+<body>
+    <div class="container" id="main-container">
+        <div class="header">
+            <h1>Dashboard Educacional</h1>
+            <a href="/dashboard.html" class="btn-voltar">&lt; Voltar ao Painel Principal</a>
+        </div>
+
+        <div class="card-container">
+            <a href="/gerenciar-cursos.html" class="card">
+                <h2>Gerenciar Cursos (Gabaritos)</h2>
+                <p>Criar e editar os modelos dos cursos, como a estrutura da EAE, Vivência Espírita, etc.</p>
+            </a>
+            <a href="/gerenciar-turmas.html" class="card">
+                <h2>Gerenciar Turmas</h2>
+                <p>Iniciar novas turmas a partir dos gabaritos, inscrever alunos e acompanhar o progresso das turmas ativas.</p>
+            </a>
+        </div>
+    </div>
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
+        import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-auth.js";
+
+        const firebaseConfig = {
+            apiKey: "AIzaSyBV7RPjk3cFTqL-aIpflJcUojKg1ZXMLuU",
+            authDomain: "voluntarios-ativos---cepat.firebaseapp.com",
+            projectId: "voluntarios-ativos---cepat",
+            storageBucket: "voluntarios-ativos---cepat.appspot.com",
+            messagingSenderId: "66122858261",
+            appId: "1:66122858261:web:7fa21f1805463b5c08331c"
+        };
+        
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+        const mainContainer = document.getElementById('main-container');
+
+        onAuthStateChanged(auth, (user) => {
+            if (user) {
+                user.getIdTokenResult().then((idTokenResult) => {
+                    const userRole = idTokenResult.claims.role;
+                    const rolesPermitidas = ['super-admin', 'diretor', 'tesoureiro'];
+
+                    if (rolesPermitidas.includes(userRole)) {
+                        // Se o usuário tem permissão, mostra o conteúdo
+                        mainContainer.style.display = 'block';
+                    } else {
+                        // Se não tem permissão, mostra mensagem de erro
+                        document.body.innerHTML = '<h1>Acesso Negado</h1><p>Você não tem permissão para acessar esta área.</p>';
+                    }
+                });
+            } else {
+                // Se não está logado, redireciona
+                window.location.href = '/login.html';
+            }
+        });
+    </script>
+
+</body>
+</html>
