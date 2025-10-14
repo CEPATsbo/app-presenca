@@ -96,7 +96,6 @@ async function carregarDadosParaModal() {
     selectFacilitadores.innerHTML = '';
     const voluntariosSnapshot = await getDocs(collection(db, "voluntarios"));
     
-    // ORDENA OS VOLUNTÁRIOS POR NOME
     const voluntariosOrdenados = voluntariosSnapshot.docs.sort((a, b) => {
         return a.data().nome.localeCompare(b.data().nome);
     });
@@ -119,18 +118,25 @@ async function salvarTurma(event) {
     event.preventDefault();
     const nomeDaTurma = inputTurmaNome.value.trim();
     const cursoGabaritoId = selectCursoGabarito.value;
-    const facilitadoresSelecionados = Array.from(selectFacilitadores.selectedOptions).map(option => ({ id: option.value, nome: option.textContent }));
+    const selectedOptionsFacilitadores = Array.from(selectFacilitadores.selectedOptions);
     
-    if (!nomeDaTurma || !cursoGabaritoId || facilitadoresSelecionados.length === 0) {
+    if (!nomeDaTurma || !cursoGabaritoId || selectedOptionsFacilitadores.length === 0) {
         return alert("Por favor, preencha todos os campos.");
     }
 
     btnSalvarTurma.disabled = true;
     btnSalvarTurma.textContent = 'Criando...';
 
-    const selectedOption = selectCursoGabarito.options[selectCursoGabarito.selectedIndex];
-    const cursoNome = selectedOption.textContent;
-    const isEAE = selectedOption.dataset.isEae === 'true';
+    const selectedOptionCurso = selectCursoGabarito.options[selectCursoGabarito.selectedIndex];
+    const cursoNome = selectedOptionCurso.textContent;
+    const isEAE = selectedOptionCurso.dataset.isEae === 'true';
+
+    // ===================================================================
+    // ## CORREÇÃO APLICADA AQUI ##
+    // Criamos as duas listas de facilitadores: uma com objetos e uma só com os IDs
+    // ===================================================================
+    const facilitadores = selectedOptionsFacilitadores.map(option => ({ id: option.value, nome: option.textContent }));
+    const facilitadoresIds = selectedOptionsFacilitadores.map(option => option.value);
 
     try {
         await addDoc(collection(db, "turmas"), {
@@ -138,12 +144,13 @@ async function salvarTurma(event) {
             cursoId: cursoGabaritoId,
             cursoNome: cursoNome,
             isEAE: isEAE,
-            facilitadores: facilitadoresSelecionados, // Salva o array de objetos {id, nome}
-            dataInicio: inputDataInicio.value,
+            facilitadores: facilitadores,         // Salva o array de objetos {id, nome}
+            facilitadoresIds: facilitadoresIds,   // SALVA O NOVO ARRAY apenas com os IDs
+            dataInicio: new Date(inputDataInicio.value + "T12:00:00Z"), // Salva como Data para o robô
             diaDaSemana: parseInt(selectDiaSemana.value, 10),
             status: "Ativa",
             anoAtual: 1,
-            criadaEm: serverTimestamp() // Agora esta função está definida
+            criadaEm: serverTimestamp()
         });
         
         modalTurma.classList.remove('visible');
