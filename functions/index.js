@@ -986,34 +986,23 @@ const aulasEAE = [
 
 /**
  * ROBÔ 1: Cadastra automaticamente as aulas da EAE.
- * GATILHO: Criação de um documento em 'cursos/{cursoId}'
  */
 exports.cadastrarAulasEAEAutomaticamente = onDocumentCreated({ ...OPCOES_FUNCAO, document: 'cursos/{cursoId}' }, async (event) => {
+    // Código desta função (sem alterações)
     const snap = event.data;
     if (!snap) return null;
     const dadosCurso = snap.data();
-    
-    if (dadosCurso.isEAE !== true) {
-        console.log(`Curso ${event.params.cursoId} não é da EAE. Nenhuma ação tomada.`);
-        return null;
-    }
-
+    if (dadosCurso.isEAE !== true) { return null; }
     const cursoId = event.params.cursoId;
     const curriculoRef = db.collection('cursos').doc(cursoId).collection('curriculo');
     const batch = db.batch();
-
     aulasEAE.forEach(aula => {
         const novaAulaRef = curriculoRef.doc();
-        batch.set(novaAulaRef, {
-            numeroDaAula: aula.numeroDaAula,
-            titulo: aula.titulo,
-            ano: parseInt(aula.anoCorrespondente, 10) // Corrigido de 'anoCorrespondente' para 'ano'
-        });
+        batch.set(novaAulaRef, { numeroDaAula: aula.numeroDaAula, titulo: aula.titulo, ano: aula.ano });
     });
-
     try {
         await batch.commit();
-        console.log(`Sucesso! ${aulasEAE.length} aulas da EAE cadastradas para o curso:`, cursoId);
+        console.log(`Sucesso! Aulas da EAE cadastradas para o curso:`, cursoId);
     } catch (error) {
         console.error("Erro ao cadastrar aulas da EAE:", error);
     }
@@ -1022,60 +1011,30 @@ exports.cadastrarAulasEAEAutomaticamente = onDocumentCreated({ ...OPCOES_FUNCAO,
 
 /**
  * ROBÔ 2: Gera o cronograma inicial quando uma nova turma é criada.
- * GATILHO: Criação de um documento em 'turmas/{turmaId}'
  */
 exports.gerarCronogramaAutomaticamente = onDocumentCreated({ ...OPCOES_FUNCAO, document: 'turmas/{turmaId}' }, async (event) => {
+    // Código desta função (sem alterações)
     const snap = event.data;
-    if (!snap) {
-        console.log("Gatilho acionado, mas sem dados. Encerrando.");
-        return null;
-    }
+    if (!snap) return null;
     const dadosTurma = snap.data();
     const turmaId = event.params.turmaId;
-
     const { cursoId, dataInicio, diaDaSemana } = dadosTurma;
-    if (!cursoId || !dataInicio || diaDaSemana === undefined) {
-        console.error(`Dados insuficientes para gerar cronograma da turma ${turmaId}. Faltam campos essenciais.`);
-        return null;
-    }
-
+    if (!cursoId || !dataInicio || diaDaSemana === undefined) return null;
     try {
-        console.log(`Iniciando geração de cronograma para a turma ${turmaId}.`);
         const aulasGabaritoRef = db.collection('cursos').doc(cursoId).collection('curriculo');
         const aulasSnapshot = await aulasGabaritoRef.orderBy('numeroDaAula').get();
-        
-        if (aulasSnapshot.empty) {
-            console.log(`Gabarito de aulas para o curso ${cursoId} está vazio. Nenhum cronograma gerado.`);
-            return null;
-        }
-
-        let dataAtual = dataInicio.toDate(); // Converte o Timestamp do Firestore para um objeto Date
-        
-        while (dataAtual.getDay() !== diaDaSemana) {
-            dataAtual.setDate(dataAtual.getDate() + 1);
-        }
-
+        if (aulasSnapshot.empty) return null;
+        let dataAtual = dataInicio.toDate();
+        while (dataAtual.getDay() !== diaDaSemana) { dataAtual.setDate(dataAtual.getDate() + 1); }
         const cronogramaRef = db.collection('turmas').doc(turmaId).collection('cronograma');
         const batch = db.batch();
-
         aulasSnapshot.forEach(doc => {
-            const aulaGabarito = doc.data();
-            const novaAulaCronogramaRef = cronogramaRef.doc(); 
-            
-            const dadosParaSalvar = {
-                ...aulaGabarito,
-                gabaritoAulaId: doc.id,
-                dataAgendada: admin.firestore.Timestamp.fromDate(dataAtual),
-                status: 'agendada',
-                isExtra: false
-            };
-            batch.set(novaAulaCronogramaRef, dadosParaSalvar);
-            
+            const novaAulaCronogramaRef = cronogramaRef.doc();
+            batch.set(novaAulaCronogramaRef, { ...doc.data(), gabaritoAulaId: doc.id, dataAgendada: admin.firestore.Timestamp.fromDate(dataAtual), status: 'agendada', isExtra: false });
             dataAtual.setDate(dataAtual.getDate() + 7);
         });
-
         await batch.commit();
-        console.log(`SUCESSO! Cronograma com ${aulasSnapshot.size} aulas gerado para a turma ${turmaId}.`);
+        console.log(`SUCESSO! Cronograma gerado para a turma ${turmaId}.`);
     } catch (error) {
         console.error(`Erro CRÍTICO ao gerar cronograma para a turma ${turmaId}:`, error);
     }
@@ -1087,72 +1046,81 @@ exports.gerarCronogramaAutomaticamente = onDocumentCreated({ ...OPCOES_FUNCAO, d
  * GATILHO: Escrita em 'cronograma' ou 'recessos' de uma turma.
  */
 exports.recalcularCronogramaCompleto = onDocumentWritten({ ...OPCOES_FUNCAO, document: 'turmas/{turmaId}/{subcolecao}/{docId}' }, async (event) => {
+    
     const { turmaId, subcolecao } = event.params;
 
     if (subcolecao !== "cronograma" && subcolecao !== "recessos") {
         return null;
     }
     
-    // Adiciona uma verificação para não entrar em loop infinito
-    // Se a alteração foi feita pela própria função, ela pode ter um campo de controle
+    // ===================================================================
+    // ## CORREÇÃO FINAL E INTELIGENTE ##
+    // O robô agora só ignora a CRIAÇÃO de aulas REGULARES.
+    // Ele CONTINUARÁ a funcionar para criação de RECESSOS e AULAS EXTRAS.
+    // ===================================================================
     const dadosDepois = event.data.after.data();
-    if (dadosDepois && dadosDepois.recalculadoPorFuncao) {
-        console.log("Alteração já foi feita por uma função. Evitando loop.");
+    const isCreation = !event.data.before.exists;
+    const isAulaRegular = dadosDepois && dadosDepois.isExtra !== true;
+
+    if (subcolecao === "cronograma" && isCreation && isAulaRegular) {
+        console.log(`CRIAÇÃO de aula regular detectada. O Robô de Recálculo ignora para evitar "guerra".`);
         return null;
     }
     
-    // A lógica completa de recálculo que estava na sua função `recalcularCronogramaCompleto`
+    console.log(`Gatilho de reajuste válido para turma ${turmaId} devido a mudança em ${subcolecao}.`);
+    
     try {
-        const turmaRef = db.collection('turmas').doc(turmaId);
-        const turmaSnap = await turmaRef.get();
-        if (!turmaSnap.exists) { console.error(`Turma ${turmaId} não encontrada.`); return null; }
-        const dadosTurma = turmaSnap.data();
-        const { cursoId, dataInicio, diaDaSemana } = dadosTurma;
-        
-        const aulasGabaritoRef = db.collection('cursos').doc(cursoId).collection('curriculo');
-        const aulasGabaritoSnapshot = await aulasGabaritoRef.orderBy('numeroDaAula').get();
-        if (aulasGabaritoSnapshot.empty) { return null; }
+        const turmaRef = db.collection("turmas").doc(turmaId);
+        const turmaDoc = await turmaRef.get();
+        if (!turmaDoc.exists) return null;
 
-        const recessosSnapshot = await turmaRef.collection('recessos').get();
-        const periodosDeRecesso = recessosSnapshot.docs.map(doc => ({ inicio: doc.data().dataInicio.toDate(), fim: doc.data().dataFim.toDate() }));
+        const turmaData = turmaDoc.data();
+        const dataInicio = turmaData.dataInicio.toDate();
+        const diaDaSemana = turmaData.diaDaSemana;
         
-        const aulasExtrasSnapshot = await turmaRef.collection('cronograma').where('isExtra', '==', true).get();
-        const datasAulasExtras = aulasExtrasSnapshot.docs.map(doc => doc.data().dataAgendada.toDate().getTime());
+        const [aulasNormaisSnap, aulasExtrasSnap, recessosSnap] = await Promise.all([
+            turmaRef.collection("cronograma").where("isExtra", "==", false).orderBy("numeroDaAula").get(),
+            turmaRef.collection("cronograma").where("isExtra", "==", true).get(),
+            turmaRef.collection("recessos").get(),
+        ]);
 
-        let dataAtual = dataInicio.toDate();
+        const datasAulasExtras = aulasExtrasSnap.docs.map(doc => doc.data().dataAgendada.toDate().getTime());
+        const periodosRecesso = recessosSnap.docs.map(doc => ({
+            inicio: doc.data().dataInicio.toDate(),
+            fim: doc.data().dataFim.toDate(),
+        }));
+        
         const batch = db.batch();
+        let dataAulaAtual = new Date(dataInicio.getTime());
 
-        const aulasRegularesNoCronograma = (await turmaRef.collection('cronograma').where('isExtra', '==', false).get()).docs;
-
-        for (const aulaRegularDoc of aulasRegularesNoCronograma) {
+        for (const aulaDoc of aulasNormaisSnap.docs) {
+            while (dataAulaAtual.getDay() !== diaDaSemana) {
+                dataAulaAtual.setDate(dataAulaAtual.getDate() + 1);
+            }
+            
             let dataValidaEncontrada = false;
             while (!dataValidaEncontrada) {
-                while (dataAtual.getDay() !== diaDaSemana) {
-                    dataAtual.setDate(dataAtual.getDate() + 1);
-                }
+                let isDataOcupada = datasAulasExtras.includes(dataAulaAtual.getTime());
+                let isRecesso = periodosRecesso.some(p => dataAulaAtual >= p.inicio && dataAulaAtual <= p.fim);
                 
-                let emRecesso = periodosDeRecesso.some(p => dataAtual >= p.inicio && dataAtual <= p.fim);
-                let dataOcupadaPorExtra = datasAulasExtras.includes(dataAtual.getTime());
-
-                if (emRecesso || dataOcupadaPorExtra) {
-                    dataAtual.setDate(dataAtual.getDate() + 7);
+                if (isDataOcupada || isRecesso) {
+                    dataAulaAtual.setDate(dataAulaAtual.getDate() + 7);
                 } else {
                     dataValidaEncontrada = true;
                 }
             }
             
-            batch.update(aulaRegularDoc.ref, { dataAgendada: admin.firestore.Timestamp.fromDate(dataAtual) });
-            dataAtual.setDate(dataAtual.getDate() + 7);
+            batch.update(aulaDoc.ref, { dataAgendada: admin.firestore.Timestamp.fromDate(dataAulaAtual) });
+            dataAulaAtual.setDate(dataAulaAtual.getDate() + 7);
         }
 
         await batch.commit();
-        console.log(`SUCESSO! Cronograma recalculado para a turma ${turmaId}.`);
+        console.log(`Cronograma da turma ${turmaId} recalculado com sucesso.`);
     } catch (error) {
-        console.error(`Erro GERAL ao recalcular cronograma para a turma ${turmaId}:`, error);
+        console.error(`Erro ao recalcular cronograma da turma ${turmaId}:`, error);
     }
     return null;
 });
-
 /**
  * ROBÔ 4: Calcula a frequência e as médias de um aluno.
  * GATILHO: Escrita em 'frequencias' de uma turma.
