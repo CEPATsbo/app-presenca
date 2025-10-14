@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Portal do Facilitador - CEPAT</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    <style>
+        body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; background-color: #f4f7f9; color: #333; }
+        .container { max-width: 800px; margin: 20px auto; padding: 20px; }
+        .header { display: flex; justify-content: space-between; align-items: center; padding-bottom: 15px; margin-bottom: 20px; border-bottom: 1px solid #e0e0e0; }
+        .header h1 { font-size: 1.8em; margin: 0; color: #333; }
+        .btn-logout { background-color: #d32f2f; color: white; padding: 8px 15px; border: none; border-radius: 6px; cursor: pointer; text-decoration: none; font-weight: bold; }
+        
+        #user-greeting { margin-bottom: 30px; }
+        #user-greeting h2 { margin-bottom: 5px; }
+        #user-greeting p { color: #555; margin-top: 0; }
+
+        #turmas-container .loading-message { text-align: center; color: #777; font-size: 1.1em; padding: 40px 0; }
+        
+        .turma-card { background-color: #ffffff; border: 1px solid #e2e8f0; border-radius: 10px; margin-bottom: 20px; box-shadow: 0 2px 8px rgba(0,0,0,0.05); }
+        .turma-card-content { padding: 20px; }
+        .turma-card-content h3 { margin: 0 0 15px 0; font-size: 1.4em; color: #0277BD; }
+        .turma-card-content .aula-info { background-color: #f1f5f9; padding: 15px; border-radius: 8px; }
+        .turma-card-content .aula-info strong { display: block; color: #333; }
+        .turma-card-content .aula-info p { margin: 5px 0 0 0; font-style: italic; color: #555; }
+        
+        .turma-card-footer { padding: 20px; text-align: center; border-top: 1px solid #e2e8f0; }
+        .btn-chamada { background-color: #16a34a; color: white; padding: 12px 25px; border: none; border-radius: 6px; cursor: pointer; font-weight: bold; font-size: 1.1em; width: 100%; }
+        .btn-chamada:disabled { background-color: #9ca3af; cursor: not-allowed; }
+
+        /* Estilos do Modal de Frequência (reaproveitados) */
+        .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0, 0, 0, 0.6); display: flex; justify-content: center; align-items: center; z-index: 1000; visibility: hidden; opacity: 0; transition: opacity 0.3s; }
+        .modal-overlay.visible { visibility: visible; opacity: 1; }
+        .modal-content { background-color: white; padding: 25px; border-radius: 10px; width: 90%; max-width: 500px; position: relative; max-height: 80vh; overflow-y: auto; }
+        .modal-content h3 { margin-top: 0; }
+        .modal-close-btn { position: absolute; top: 10px; right: 15px; font-size: 1.5em; cursor: pointer; color: #888; border: none; background: none; }
+        .attendance-list { list-style-type: none; padding: 0; }
+        .attendance-item { display: flex; justify-content: space-between; align-items: center; padding: 10px; border-bottom: 1px solid #eee; }
+        .attendance-controls { display: flex; gap: 5px; }
+        .attendance-controls .btn-status { font-size: 0.8em; padding: 5px 8px; border: 1px solid #ccc; background-color: #f9f9f9; color: #333; border-radius: 4px; cursor: pointer; }
+        .attendance-controls .btn-status.active.presente { background-color: #dcfce7; border-color: #4ade80; color: #15803d; }
+        .attendance-controls .btn-status.active.ausente { background-color: #fee2e2; border-color: #f87171; color: #b91c1c; }
+        .attendance-controls .btn-status.active.justificado { background-color: #fef9c3; border-color: #facc15; color: #713f12; }
+        .btn-primary { background-color: #0277BD; color: white; padding: 10px 18px; border: none; border-radius: 6px; font-weight: bold; cursor: pointer; }
+
+    </style>
+</head>
+<body>
+
+    <div class="container" id="main-container" style="display: none;">
+        <div class="header">
+            <h1>Portal do Facilitador</h1>
+            <a href="#" id="btn-logout" class="btn-logout">Sair</a>
+        </div>
+
+        <div id="user-greeting">
+            <h2 id="greeting-name">Olá!</h2>
+            <p>Aqui estão as turmas que você facilita.</p>
+        </div>
+
+        <div id="turmas-container">
+            <div class="loading-message">
+                <p>Buscando suas turmas...</p>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal-overlay" id="modal-frequencia">
+        <div class="modal-content">
+            <button class="modal-close-btn" id="close-modal-frequencia">&times;</button>
+            <h3 id="modal-frequencia-titulo">Lançar Frequência</h3>
+            <ul class="attendance-list" id="frequencia-list-container"></ul>
+            <button class="btn-primary" id="btn-salvar-frequencia" style="margin-top: 20px;">Salvar Frequência</button>
+        </div>
+    </div>
+
+    <script type="module" src="js/portal-facilitador.js"></script>
+
+</body>
+</html>
