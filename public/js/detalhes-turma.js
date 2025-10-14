@@ -269,34 +269,69 @@ async function abrirModalNotas(participanteId) {
     }
 }
 
+// ===================================================================
+// ## CORREÇÃO CRÍTICA AQUI ##
+// A função 'salvarNotas' foi reescrita para ler a frequência correta
+// antes de recalcular e salvar, evitando o bug do "100%".
+// ===================================================================
 async function salvarNotas(event) {
     event.preventDefault();
     const participanteId = inputNotasParticipanteId.value;
     if (!participanteId) return;
-    const anoAtual = turmaData.anoAtual || 1;
-    const notaFrequencia = 100; // Placeholder
-    const notaCadernoTemas = parseFloat(inputNotaCadernoTemas.value) || 0;
-    const notaCadernetaPessoal = parseFloat(inputNotaCadernetaPessoal.value) || 0;
-    const notaTrabalhos = parseFloat(inputNotaTrabalhos.value) || 0;
-    const notaExameEspiritual = parseFloat(inputNotaExameEspiritual.value) || 0;
-    const notaFreqConvertida = notaFrequencia >= 80 ? 10 : (notaFrequencia >= 60 ? 5 : 1);
-    const mediaAT = (notaFreqConvertida + notaCadernoTemas) / 2;
-    const mediaRI = (notaCadernetaPessoal + notaTrabalhos + notaExameEspiritual) / 3;
-    const mediaFinal = (mediaAT + mediaRI) / 2;
-    const statusAprovacao = (mediaFinal >= 5 && mediaRI >= 6) ? "Aprovado" : "Reprovado";
-    const dadosAtualizados = {
-        [`avaliacoes.${anoAtual}`]: {
-            notaCadernoTemas, notaCadernetaPessoal, notaTrabalhos, notaExameEspiritual,
-            notaFrequencia, mediaAT, mediaRI, mediaFinal, statusAprovacao
-        }
-    };
+
     btnSalvarNotas.disabled = true;
+
     try {
         const participanteRef = doc(db, "turmas", turmaId, "participantes", participanteId);
-        await updateDoc(participanteRef, dadosAtualizados);
+        const participanteSnap = await getDoc(participanteRef);
+
+        if (!participanteSnap.exists()) {
+            throw new Error("Participante não encontrado.");
+        }
+
+        const participanteData = participanteSnap.data();
+        const anoAtual = turmaData.anoAtual || 1;
+        
+        // 1. Pega a frequência REAL que já está salva no banco de dados
+        const avaliacoesAtuais = participanteData.avaliacoes || {};
+        const avaliacaoDoAnoAtual = avaliacoesAtuais[anoAtual] || {};
+        const notaFrequencia = avaliacaoDoAnoAtual.notaFrequencia || 0; // Usa a frequência real, ou 0 se não existir
+
+        // 2. Pega as notas digitadas no formulário
+        const notaCadernoTemas = parseFloat(inputNotaCadernoTemas.value) || 0;
+        const notaCadernetaPessoal = parseFloat(inputNotaCadernetaPessoal.value) || 0;
+        const notaTrabalhos = parseFloat(inputNotaTrabalhos.value) || 0;
+        const notaExameEspiritual = parseFloat(inputNotaExameEspiritual.value) || 0;
+
+        // 3. Recalcula as médias usando a frequência REAL
+        const notaFreqConvertida = notaFrequencia >= 80 ? 10 : (notaFrequencia >= 60 ? 5 : 1);
+        const mediaAT = (notaFreqConvertida + notaCadernoTemas) / 2;
+        const mediaRI = (notaCadernetaPessoal + notaTrabalhos + notaExameEspiritual) / 3;
+        const mediaFinal = (mediaAT + mediaRI) / 2;
+        const statusAprovacao = (mediaFinal >= 5 && mediaRI >= 6) ? "Aprovado" : "Reprovado";
+        
+        // 4. Prepara os dados para salvar, mantendo a frequência real
+        const dadosAtualizados = {
+            ...avaliacaoDoAnoAtual, // Mantém outros dados que possam existir (como as notas dos outros anos)
+            notaCadernoTemas,
+            notaCadernetaPessoal,
+            notaTrabalhos,
+            notaExameEspiritual,
+            notaFrequencia, // A frequência real lida no passo 1
+            mediaAT,
+            mediaRI,
+            mediaFinal,
+            statusAprovacao
+        };
+
+        await updateDoc(participanteRef, {
+            [`avaliacoes.${anoAtual}`]: dadosAtualizados
+        });
+        
         modalNotas.classList.remove('visible');
     } catch (error) {
         console.error("Erro ao salvar notas:", error);
+        alert("Ocorreu um erro ao salvar as notas.");
     } finally {
         btnSalvarNotas.disabled = false;
     }
