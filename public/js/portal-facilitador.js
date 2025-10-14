@@ -2,8 +2,6 @@ import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebas
 import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-auth.js";
 import { getFirestore, collection, query, where, getDocs, doc, getDoc, orderBy, limit, Timestamp, writeBatch, updateDoc } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
 
-console.log("DEBUG: Arquivo portal-facilitador.js iniciado.");
-
 // --- CONFIGURAÇÕES ---
 const firebaseConfig = {
     apiKey: "AIzaSyBV7RPjk3cFTqL-aIpflJcUojKg1ZXMLuU",
@@ -24,6 +22,8 @@ const mainContainer = document.getElementById('main-container');
 const greetingName = document.getElementById('greeting-name');
 const turmasContainer = document.getElementById('turmas-container');
 const btnLogout = document.getElementById('btn-logout');
+
+// Elementos do Modal de Frequência
 const modalFrequencia = document.getElementById('modal-frequencia');
 const closeModalFrequenciaBtn = document.getElementById('close-modal-frequencia');
 const modalFrequenciaTitulo = document.getElementById('modal-frequencia-titulo');
@@ -34,55 +34,48 @@ let currentTurmaId = null;
 let currentAulaId = null;
 
 // --- VERIFICAÇÃO DE AUTENTICAÇÃO ---
-console.log("DEBUG: Adicionando listener de autenticação...");
 onAuthStateChanged(auth, async (user) => {
-    console.log("DEBUG: Listener de autenticação acionado.");
     if (user) {
-        console.log("DEBUG: Usuário detectado. UID:", user.uid);
         mainContainer.style.display = 'block';
-        try {
-            await carregarDadosDoFacilitador(user);
-        } catch (error) {
-            console.error("ERRO CRÍTICO na função carregarDadosDoFacilitador:", error);
-            turmasContainer.innerHTML = `<p style="color: red; font-weight: bold;">Ocorreu um erro grave ao carregar seus dados. Verifique o console (F12).</p>`;
-        }
+        await carregarDadosDoFacilitador(user);
     } else {
-        console.log("DEBUG: Nenhum usuário detectado. Redirecionando para login...");
         window.location.href = 'login.html';
     }
 });
 
+// --- FUNÇÕES PRINCIPAIS ---
+
 async function carregarDadosDoFacilitador(user) {
-    console.log("DEBUG: Buscando perfil do facilitador...");
     const voluntariosRef = collection(db, "voluntarios");
     const qUser = query(voluntariosRef, where("authUid", "==", user.uid));
     const userSnapshot = await getDocs(qUser);
 
     if (userSnapshot.empty) {
         turmasContainer.innerHTML = '<p>Erro: Perfil de facilitador não encontrado.</p>';
-        console.error("DEBUG: Perfil não encontrado para UID:", user.uid);
         return;
     }
     const userData = userSnapshot.docs[0].data();
     const facilitatorId = userSnapshot.docs[0].id;
     greetingName.textContent = `Olá, ${userData.nome}!`;
-    console.log(`DEBUG: Facilitador encontrado: ${userData.nome}, ID: ${facilitatorId}`);
 
-    console.log("DEBUG: Buscando turmas para este facilitador...");
+    // Busca as turmas onde o usuário é facilitador
     const turmasRef = collection(db, "turmas");
-    const qTurmas = query(turmasRef, where("facilitadoresIds", "array-contains", facilitatorId));
+    
+    // ===================================================================
+    // ## CORREÇÃO APLICADA AQUI ##
+    // Trocamos 'facilitadoresIds' para 'facilitadores'
+    // ===================================================================
+    const qTurmas = query(turmasRef, where("facilitadores", "array-contains", facilitatorId));
     
     const turmasSnapshot = await getDocs(qTurmas);
-    console.log(`DEBUG: Query de turmas executada. Encontrados ${turmasSnapshot.size} documentos.`);
 
     if (turmasSnapshot.empty) {
         turmasContainer.innerHTML = '<p>Você não está designado como facilitador de nenhuma turma no momento.</p>';
         return;
     }
 
-    turmasContainer.innerHTML = '';
+    turmasContainer.innerHTML = ''; // Limpa a mensagem de "carregando"
     for (const turmaDoc of turmasSnapshot.docs) {
-        console.log(`DEBUG: Renderizando card para turma: ${turmaDoc.data().nomeDaTurma}`);
         await renderizarCardDaTurma({ id: turmaDoc.id, ...turmaDoc.data() });
     }
 }
@@ -91,6 +84,7 @@ async function renderizarCardDaTurma(turmaData) {
     const card = document.createElement('div');
     card.className = 'turma-card';
 
+    // Procura pela aula do dia
     const hojeInicio = new Date();
     hojeInicio.setHours(0, 0, 0, 0);
     const hojeFim = new Date();
@@ -116,27 +110,37 @@ async function renderizarCardDaTurma(turmaData) {
     let buttonDataAttributes = '';
 
     if (aulaDeHoje) {
-        aulaInfoHTML = `<strong>Aula de Hoje (${dataFormatada}):</strong><p>${aulaDeHoje.titulo}</p>`;
+        aulaInfoHTML = `
+            <strong>Aula de Hoje (${dataFormatada}):</strong>
+            <p>${aulaDeHoje.titulo}</p>
+        `;
         isChamadaDisabled = false;
         buttonDataAttributes = `data-turma-id="${turmaData.id}" data-aula-id="${aulaDeHoje.id}" data-aula-titulo="${aulaDeHoje.titulo}"`;
     } else {
-        aulaInfoHTML = `<strong>Aula de Hoje (${dataFormatada}):</strong><p>Nenhuma aula agendada para hoje.</p>`;
+        aulaInfoHTML = `
+            <strong>Aula de Hoje (${dataFormatada}):</strong>
+            <p>Nenhuma aula agendada para hoje.</p>
+        `;
     }
 
     card.innerHTML = `
         <div class="turma-card-content">
             <h3>${turmaData.nomeDaTurma}</h3>
-            <div class="aula-info">${aulaInfoHTML}</div>
+            <div class="aula-info">
+                ${aulaInfoHTML}
+            </div>
         </div>
         <div class="turma-card-footer">
             <button class="btn-chamada" ${buttonDataAttributes} ${isChamadaDisabled ? 'disabled' : ''}>
                 <i class="fas fa-clipboard-list"></i> Realizar Chamada
             </button>
-        </div>`;
+        </div>
+    `;
     turmasContainer.appendChild(card);
 }
 
-// O restante do código (lógica do modal e eventos) permanece o mesmo
+// --- LÓGICA DO MODAL DE FREQUÊNCIA ---
+
 async function abrirModalFrequencia(turmaId, aulaId, aulaTitulo) {
     currentTurmaId = turmaId;
     currentAulaId = aulaId;
@@ -207,7 +211,7 @@ async function salvarFrequencia() {
         await batch.commit();
         alert("Frequência salva com sucesso!");
         modalFrequencia.classList.remove('visible');
-        location.reload();
+        location.reload(); // Recarrega a página para atualizar o status
     } catch (error) {
         console.error("Erro ao salvar frequência:", error);
         alert("Ocorreu um erro ao salvar a frequência.");
@@ -232,6 +236,7 @@ turmasContainer.addEventListener('click', (e) => {
     }
 });
 
+// Eventos do Modal
 closeModalFrequenciaBtn.addEventListener('click', () => modalFrequencia.classList.remove('visible'));
 btnSalvarFrequencia.addEventListener('click', salvarFrequencia);
 frequenciaListContainer.addEventListener('click', (event) => {
@@ -243,5 +248,3 @@ frequenciaListContainer.addEventListener('click', (event) => {
         targetBtn.classList.add('active');
     }
 });
-
-console.log("DEBUG: Script totalmente carregado e eventos adicionados.");
