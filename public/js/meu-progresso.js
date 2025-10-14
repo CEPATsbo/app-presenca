@@ -1,8 +1,6 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
 import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-auth.js";
-import { getFirestore, collection, collectionGroup, query, where, getDocs, doc, getDoc } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
-
-console.log("DEBUG: Arquivo meu-progresso.js foi carregado e está sendo executado.");
+import { getFirestore, collection, collectionGroup, query, where, getDocs, doc, getDoc, orderBy } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
 
 // --- CONFIGURAÇÕES ---
 const firebaseConfig = {
@@ -26,66 +24,42 @@ const cursosContainer = document.getElementById('cursos-container');
 const btnLogout = document.getElementById('btn-logout');
 
 // --- VERIFICAÇÃO DE AUTENTICAÇÃO ---
-console.log("DEBUG: Adicionando o listener onAuthStateChanged...");
-
 onAuthStateChanged(auth, async (user) => {
-    console.log("DEBUG: onAuthStateChanged foi acionado.");
-
     if (user) {
-        console.log("DEBUG: Usuário ENCONTRADO. UID:", user.uid);
-        try {
-            console.log("DEBUG: Tornando o container principal visível.");
-            mainContainer.style.display = 'block';
-            console.log("DEBUG: Tentando carregar dados do aluno...");
-            await carregarDadosDoAluno(user);
-            console.log("DEBUG: Função carregarDadosDoAluno concluída.");
-        } catch (error) {
-            console.error("ERRO CRÍTICO AO CARREGAR DADOS:", error);
-            mainContainer.style.display = 'block'; // Garante que a mensagem de erro seja visível
-            cursosContainer.innerHTML = `<p style="color: red; font-weight: bold;">Ocorreu um erro grave ao carregar seus dados. Verifique o console (F12) para mais detalhes.</p>`;
-        }
+        mainContainer.style.display = 'block';
+        await carregarDadosDoAluno(user);
     } else {
-        console.log("DEBUG: Usuário NÃO encontrado. Redirecionando para a página de login...");
-        // Usando caminho relativo para garantir compatibilidade
-        window.location.href = 'login.html'; 
+        window.location.href = 'login.html';
     }
 });
 
 // --- FUNÇÕES PRINCIPAIS ---
-
 async function carregarDadosDoAluno(user) {
-    // 1. Buscar o perfil do voluntário para pegar o nome
     const voluntariosRef = collection(db, "voluntarios");
     const qUser = query(voluntariosRef, where("authUid", "==", user.uid));
     const userSnapshot = await getDocs(qUser);
 
     if (userSnapshot.empty) {
         cursosContainer.innerHTML = '<p>Erro: Perfil de voluntário não encontrado.</p>';
-        console.warn("DEBUG: Perfil não encontrado no Firestore para o UID:", user.uid);
         return;
     }
     const userData = userSnapshot.docs[0].data();
     const userId = userSnapshot.docs[0].id;
     greetingName.textContent = `Olá, ${userData.nome}!`;
-    console.log(`DEBUG: Olá, ${userData.nome}!`);
 
-    // 2. Buscar em quais turmas este aluno está inscrito
     const participantesQuery = query(collectionGroup(db, 'participantes'), where('participanteId', '==', userId));
     const participantesSnapshot = await getDocs(participantesQuery);
 
     if (participantesSnapshot.empty) {
         cursosContainer.innerHTML = '<p>Você não está inscrito em nenhum curso no momento.</p>';
-        console.log("DEBUG: Nenhuma inscrição encontrada para o participante ID:", userId);
         return;
     }
-    console.log(`DEBUG: Encontradas ${participantesSnapshot.size} inscrições.`);
 
-    cursosContainer.innerHTML = ''; // Limpa a mensagem de "carregando"
+    cursosContainer.innerHTML = '';
 
-    // 3. Para cada inscrição, buscar os detalhes da turma e do progresso do aluno
     for (const participanteDoc of participantesSnapshot.docs) {
         const participanteData = participanteDoc.data();
-        const turmaRef = participanteDoc.ref.parent.parent; 
+        const turmaRef = participanteDoc.ref.parent.parent;
         const turmaDoc = await getDoc(turmaRef);
 
         if (turmaDoc.exists()) {
@@ -97,7 +71,6 @@ async function carregarDadosDoAluno(user) {
 }
 
 function renderizarCardDoCurso(turmaData, participanteData) {
-    console.log(`DEBUG: Renderizando card para a turma ${turmaData.nomeDaTurma}`);
     const cursoCard = document.createElement('div');
     cursoCard.className = 'curso-card';
 
@@ -141,14 +114,126 @@ function renderizarCardDoCurso(turmaData, participanteData) {
     cursosContainer.appendChild(cursoCard);
 }
 
+// ===================================================================
+// ## NOVA FUNÇÃO PARA CARREGAR E RENDERIZAR OS DETALHES ##
+// ===================================================================
+async function carregarErenderizarDetalhes(turmaId, participanteId, detailsContainer) {
+    try {
+        // Buscar o cronograma e as frequências ao mesmo tempo
+        const cronogramaRef = collection(db, "turmas", turmaId, "cronograma");
+        const frequenciasRef = collection(db, "turmas", turmaId, "frequencias");
+
+        const [cronogramaSnap, frequenciasSnap] = await Promise.all([
+            getDocs(query(cronogramaRef, orderBy("dataAgendada", "asc"))),
+            getDocs(query(frequenciasRef, where("participanteId", "==", participanteId)))
+        ]);
+
+        // Mapear as frequências para busca rápida
+        const frequenciasMap = new Map();
+        frequenciasSnap.forEach(doc => {
+            const freqData = doc.data();
+            frequenciasMap.set(freqData.aulaId, freqData.status);
+        });
+
+        const hoje = new Date();
+        hoje.setHours(0, 0, 0, 0); // Zera a hora para comparar apenas a data
+
+        let proximasAulasHTML = '';
+        let historicoHTML = '';
+
+        cronogramaSnap.docs.forEach(doc => {
+            const aula = { id: doc.id, ...doc.data() };
+            const dataAula = aula.dataAgendada.toDate();
+            const dataFormatada = dataAula.toLocaleDateString('pt-BR', { timeZone: 'UTC' });
+            
+            if (dataAula >= hoje && aula.status !== 'realizada') {
+                proximasAulasHTML += `
+                    <tr>
+                        <td>${dataFormatada}</td>
+                        <td>${aula.isExtra ? 'Extra' : aula.numeroDaAula}</td>
+                        <td>${aula.titulo}</td>
+                    </tr>
+                `;
+            }
+
+            if (aula.status === 'realizada') {
+                const statusPresenca = frequenciasMap.get(aula.id);
+                let statusDisplay = '';
+                switch (statusPresenca) {
+                    case 'presente': statusDisplay = '<span class="status-presente">Presente ✅</span>'; break;
+                    case 'ausente': statusDisplay = '<span class="status-ausente">Falta ❌</span>'; break;
+                    case 'justificado': statusDisplay = '<span class="status-justificado">Justificado  excused</span>'; break;
+                    default: statusDisplay = '<span>Não lançado</span>';
+                }
+
+                historicoHTML = `
+                    <tr>
+                        <td>${dataFormatada}</td>
+                        <td>${aula.titulo}</td>
+                        <td>${statusDisplay}</td>
+                    </tr>
+                ` + historicoHTML; // Adiciona no início para ordem decrescente
+            }
+        });
+        
+        detailsContainer.innerHTML = `
+            <h4>Próximas Aulas:</h4>
+            <div class="table-container">
+                <table>
+                    <thead><tr><th>Data</th><th>Nº</th><th>Tema da Aula</th></tr></thead>
+                    <tbody>${proximasAulasHTML || '<tr><td colspan="3">Nenhuma aula futura agendada.</td></tr>'}</tbody>
+                </table>
+            </div>
+            <h4 style="margin-top: 20px;">Histórico de Frequência:</h4>
+            <div class="table-container">
+                <table>
+                    <thead><tr><th>Data</th><th>Tema da Aula</th><th>Sua Presença</th></tr></thead>
+                    <tbody>${historicoHTML || '<tr><td colspan="3">Nenhum histórico de frequência registrado.</td></tr>'}</tbody>
+                </table>
+            </div>
+        `;
+
+    } catch (error) {
+        console.error("Erro ao carregar detalhes do curso:", error);
+        detailsContainer.innerHTML = '<p style="color: red;">Não foi possível carregar os detalhes. Tente novamente.</p>';
+    }
+}
+
 
 // --- EVENTOS ---
 btnLogout.addEventListener('click', async (e) => {
     e.preventDefault();
     try {
         await signOut(auth);
-        window.location.href = 'login.html'; 
+        window.location.href = 'login.html';
     } catch (error) {
         console.error('Erro ao fazer logout:', error);
+    }
+});
+
+// ===================================================================
+// ## NOVO EVENTO PARA O BOTÃO "VER DETALHES" ##
+// ===================================================================
+cursosContainer.addEventListener('click', async (e) => {
+    const target = e.target.closest('.btn-details');
+    if (!target) return; // Se o clique não foi no botão ou em algo dentro dele, ignora.
+
+    const card = target.closest('.curso-card');
+    const detailsContent = card.querySelector('.curso-details-content');
+    const turmaId = target.dataset.turmaId;
+    const participanteId = target.dataset.participanteId;
+
+    // Lógica para abrir e fechar (toggle)
+    const isHidden = detailsContent.style.display !== 'block';
+
+    if (isHidden) {
+        detailsContent.style.display = 'block';
+        target.innerHTML = `<i class="fas fa-chevron-up"></i> Ocultar Detalhes`;
+        detailsContent.innerHTML = '<p>Carregando detalhes...</p>';
+        await carregarErenderizarDetalhes(turmaId, participanteId, detailsContent);
+    } else {
+        detailsContent.style.display = 'none';
+        target.innerHTML = `<i class="fas fa-chevron-down"></i> Ver Detalhes e Cronograma`;
+        detailsContent.innerHTML = ''; // Limpa para recarregar da próxima vez
     }
 });
