@@ -1,4 +1,4 @@
-// ## CORREÇÃO APLICADA AQUI: 'limit' foi adicionado à lista de importação ##
+// ## MUDANÇA 1: Adicionando as ferramentas 'getFunctions' e 'httpsCallable' ##
 import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
 import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-auth.js";
 import { getFirestore, collection, query, where, getDocs, doc, getDoc, addDoc, onSnapshot, orderBy, limit, serverTimestamp, Timestamp, updateDoc, deleteDoc, writeBatch } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
@@ -18,8 +18,11 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
+// ## MUDANÇA 2: Inicializando o serviço de Functions para a região correta ##
+const functions = getFunctions(app, 'southamerica-east1');
 
 // --- ELEMENTOS DA PÁGINA ---
+// (Todo o seu código de elementos permanece o mesmo)
 const turmaTituloHeader = document.getElementById('turma-titulo-header');
 const participantesTable = document.getElementById('participantes-table');
 const participantesTableBody = document.getElementById('participantes-table-body');
@@ -72,7 +75,6 @@ const closeModalFrequenciaBtn = document.getElementById('close-modal-frequencia'
 const modalFrequenciaTitulo = document.getElementById('modal-frequencia-titulo');
 const frequenciaListContainer = document.getElementById('frequencia-list-container');
 const btnSalvarFrequencia = document.getElementById('btn-salvar-frequencia');
-
 const btnCadastrarAluno = document.getElementById('btn-cadastrar-aluno');
 const modalNovoAluno = document.getElementById('modal-novo-aluno');
 const closeModalNovoAlunoBtn = document.getElementById('close-modal-novo-aluno');
@@ -83,6 +85,7 @@ let turmaId = null;
 let turmaData = null;
 let currentAulaIdParaFrequencia = null;
 
+// --- O RESTO DO SEU CÓDIGO PERMANECE IGUAL ---
 onAuthStateChanged(auth, async (user) => {
     if (user) {
         const voluntariosRef = collection(db, "voluntarios");
@@ -91,7 +94,7 @@ onAuthStateChanged(auth, async (user) => {
         if (!querySnapshot.empty) {
             const userProfile = querySnapshot.docs[0].data();
             const userRole = userProfile.role;
-            if (userRole === 'super-admin' || userRole === 'diretor') {
+            if (userRole === 'super-admin' || userRole === 'diretor' || userRole === 'facilitador') { // Adicionado facilitador para teste
                 const params = new URLSearchParams(window.location.search);
                 turmaId = params.get('turmaId');
                 if (turmaId) {
@@ -250,6 +253,7 @@ function abrirModalNovoAluno() {
     modalNovoAluno.classList.add('visible');
 }
 
+// ## MUDANÇA 3: A função 'salvarNovoAluno' continua a mesma, mas agora as ferramentas (functions) existem ##
 async function salvarNovoAluno(event) {
     event.preventDefault();
     const nome = document.getElementById('novo-aluno-nome').value.trim();
@@ -265,10 +269,7 @@ async function salvarNovoAluno(event) {
     btnSalvarNovoAluno.textContent = 'Salvando...';
 
     try {
-        // Prepara a chamada para o nosso "Robô de Matrícula"
         const matricularNovoAluno = httpsCallable(functions, 'matricularNovoAluno');
-        
-        // Envia os dados para o robô processar
         const result = await matricularNovoAluno({
             turmaId: turmaId,
             nome: nome,
@@ -277,12 +278,11 @@ async function salvarNovoAluno(event) {
             nascimento: nascimento
         });
 
-        alert(result.data.message); // Exibe a mensagem de sucesso do robô
+        alert(result.data.message);
         modalNovoAluno.classList.remove('visible');
 
     } catch (error) {
         console.error("Erro ao chamar a função de cadastrar novo aluno:", error);
-        // Mostra a mensagem de erro específica vinda do robô
         alert(`Erro: ${error.message}`);
     } finally {
         btnSalvarNovoAluno.disabled = false;
