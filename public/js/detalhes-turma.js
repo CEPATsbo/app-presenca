@@ -1,4 +1,3 @@
-// ## MUDANÇA 1: Adicionando as ferramentas 'getFunctions' e 'httpsCallable' ##
 import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
 import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-auth.js";
 import { getFirestore, collection, query, where, getDocs, doc, getDoc, addDoc, onSnapshot, orderBy, limit, serverTimestamp, Timestamp, updateDoc, deleteDoc, writeBatch } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
@@ -156,6 +155,13 @@ function escutarParticipantes() {
                 if (turmaData.isEAE) {
                     const anoAtual = turmaData.anoAtual || 1;
                     const avaliacaoDoAno = participante.avaliacoes ? participante.avaliacoes[anoAtual] : null;
+
+                    // ## MUDANÇA 1: Adicionando o novo botão de promoção ##
+                    let acoesExtras = '';
+                    if (participante.origem === 'aluno') {
+                        acoesExtras += `<button class="icon-btn" style="color: #27ae60;" title="Promover para Voluntário" data-action="promote-to-volunteer" data-participante-doc-id="${doc.id}"><i class="fas fa-user-plus"></i></button>`;
+                    }
+
                     row += `
                         <td>${participante.grau || 'Aluno'}</td>
                         <td>${origem}</td>
@@ -164,6 +170,7 @@ function escutarParticipantes() {
                         <td>${(avaliacaoDoAno ? avaliacaoDoAno.mediaFinal : 0).toFixed(1)}</td>
                         <td>${(avaliacaoDoAno ? avaliacaoDoAno.statusAprovacao : 'Em Andamento')}</td>
                         <td class="actions">
+                            ${acoesExtras}
                             <button class="icon-btn notes" title="Lançar Notas" data-action="notas" data-id="${doc.id}"><i class="fas fa-edit"></i></button>
                             <button class="icon-btn promote" title="Promover Grau" data-action="promover" data-id="${doc.id}"><i class="fas fa-user-graduate"></i></button>
                         </td>
@@ -786,6 +793,25 @@ async function gerarRelatorioAptosCertificado() {
     btnImprimirRelatorio.classList.remove('hidden');
 }
 
+// ## MUDANÇA 2: Nova função para chamar o Robô de Promoção ##
+async function promoverParaVoluntario(participanteDocId) {
+    if (!confirm("Tem certeza que deseja promover este aluno para a lista de voluntários? Esta ação criará um novo registro de voluntário com os dados do aluno.")) {
+        return;
+    }
+
+    try {
+        const promoverAluno = httpsCallable(functions, 'promoverAlunoParaVoluntario');
+        const result = await promoverAluno({
+            turmaId: turmaId,
+            participanteDocId: participanteDocId
+        });
+        alert(result.data.message);
+        // A tabela irá se atualizar automaticamente graças ao onSnapshot.
+    } catch (error) {
+        console.error("Erro ao promover aluno para voluntário:", error);
+        alert(`Erro: ${error.message}`);
+    }
+}
 
 // --- EVENTOS ---
 tabs.forEach(tab => {
@@ -849,10 +875,16 @@ participantesTableBody.addEventListener('click', (event) => {
     if (!target || !target.dataset.action) return;
     const action = target.dataset.action;
     const id = target.dataset.id;
+    
     if (action === 'notas') {
         abrirModalNotas(id);
     } else if (action === 'promover') {
         promoverGrau(id);
+    } 
+    // ## MUDANÇA 3: Adicionando o gatilho para o novo botão ##
+    else if (action === 'promote-to-volunteer') {
+        const participanteDocId = target.dataset.participanteDocId;
+        promoverParaVoluntario(participanteDocId);
     }
 });
 

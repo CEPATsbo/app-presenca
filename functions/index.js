@@ -1270,3 +1270,81 @@ exports.matricularNovoAluno = onCall(OPCOES_FUNCAO, async (request) => {
         throw new HttpsError('internal', 'Ocorreu um erro interno ao processar a matrícula.');
     }
 });
+
+// ===================================================================
+// ## NOVO ROBÔ DE PROMOÇÃO DE ALUNO PARA VOLUNTÁRIO ##
+// ===================================================================
+exports.promoverAlunoParaVoluntario = onCall(OPCOES_FUNCAO, async (request) => {
+    // 1. Verificações de segurança
+    if (!request.auth) {
+        throw new HttpsError('unauthenticated', 'A função deve ser chamada por um usuário autenticado.');
+    }
+
+    const { turmaId, participanteDocId } = request.data;
+    if (!turmaId || !participanteDocId) {
+        throw new HttpsError('invalid-argument', 'O ID da turma e do participante são obrigatórios.');
+    }
+
+    const userAuthUid = request.auth.uid;
+    const userRole = request.auth.token.role;
+
+    try {
+        const turmaRef = db.collection('turmas').doc(turmaId);
+        const turmaDoc = await turmaRef.get();
+        if (!turmaDoc.exists) {
+            throw new HttpsError('not-found', 'A turma não foi encontrada.');
+        }
+
+        const turmaData = turmaDoc.data();
+        const isAdmin = ['super-admin', 'diretor', 'tesoureiro'].includes(userRole);
+        
+        // Busca o ID do usuário (facilitador) a partir do authUid
+        const facilitadorQuery = await db.collection('voluntarios').where('authUid', '==', userAuthUid).limit(1).get();
+        const facilitadorId = !facilitadorQuery.empty ? facilitadorQuery.docs[0].id : null;
+
+        const isFacilitator = turmaData.facilitadoresIds && facilitadorId && turmaData.facilitadoresIds.includes(facilitadorId);
+
+        if (!isAdmin && !isFacilitator) {
+            throw new HttpsError('permission-denied', 'Você não tem permissão para promover alunos nesta turma.');
+        }
+
+        // 2. Lógica da Promoção
+        const participanteRef = turmaRef.collection('participantes').doc(participanteDocId);
+        const participanteDoc = await participanteRef.get();
+        if (!participanteDoc.exists || participanteDoc.data().origem !== 'aluno') {
+            throw new HttpsError('failed-precondition', 'Este participante não é um aluno ou não foi encontrado.');
+        }
+
+        const alunoId = participanteDoc.data().participanteId;
+        const alunoRef = db.collection('alunos').doc(alunoId);
+        const alunoDoc = await alunoRef.get();
+        if (!alunoDoc.exists) {
+            throw new HttpsError('not-found', 'O registro original do aluno não foi encontrado.');
+        }
+
+        // Copia os dados para um novo registro de voluntário
+        const alunoData = alunoDoc.data();
+        const novoVoluntarioRef = await db.collection('voluntarios').add({
+            nome: alunoData.nome,
+            endereco: alunoData.endereco || '',
+            telefone: alunoData.telefone || '',
+            nascimento: alunoData.nascimento || '',
+            statusVoluntario: 'ativo',
+            criadoEm: admin.firestore.FieldValue.serverTimestamp()
+            // O código de voluntário será atribuído por outra função que já existe
+        });
+
+        // 3. Atualiza o registro do participante na turma
+        await participanteRef.update({
+            origem: 'voluntario',
+            participanteId: novoVoluntarioRef.id // Agora aponta para o novo registro em 'voluntarios'
+        });
+        
+        return { success: true, message: `Aluno "${alunoData.nome}" promovido para voluntário com sucesso!` };
+
+    } catch (error) {
+        console.error("Erro na função promoverAlunoParaVoluntario:", error);
+        if (error instanceof HttpsError) { throw error; }
+        throw new HttpsError('internal', 'Ocorreu um erro interno ao processar a promoção.');
+    }
+});
