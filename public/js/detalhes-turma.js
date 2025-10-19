@@ -780,7 +780,11 @@ async function gerarRelatorioAptosCertificado() {
             const avaliacao = p.avaliacoes ? p.avaliacoes[anoAtual] : null;
             statusFinal = avaliacao ? avaliacao.statusAprovacao : 'Pendente';
         } else {
-            const freq = p.frequenciaPercentual || 0;
+            // ## CORREÇÃO 1 APLICADA AQUI ##
+            // Busca a frequência no local correto (dentro de 'avaliacoes')
+            const avaliacao = p.avaliacoes ? p.avaliacoes[anoAtual] : null;
+            const freq = avaliacao ? avaliacao.notaFrequencia : 0;
+            // Usando 75% como critério de aprovação para cursos comuns.
             statusFinal = freq >= 75 ? 'Aprovado' : 'Reprovado por Frequência';
         }
         tableHTML += `<tr><td>${p.nome}</td><td>${statusFinal}</td></tr>`;
@@ -797,32 +801,55 @@ async function gerarCertificados() {
     const participantesRef = collection(db, "turmas", turmaId, "participantes");
     const q = query(participantesRef, orderBy("nome"));
     const snapshot = await getDocs(q);
+
     const alunosAprovados = [];
     snapshot.forEach(doc => {
         const participante = doc.data();
         const anoAtual = turmaData.anoAtual || 1;
         const avaliacao = participante.avaliacoes ? participante.avaliacoes[anoAtual] : null;
-        if (turmaData.isEAE && avaliacao && avaliacao.statusAprovacao === 'Aprovado') {
-            alunosAprovados.push(participante);
+
+        if (turmaData.isEAE) {
+            if (avaliacao && avaliacao.statusAprovacao === 'Aprovado') {
+                alunosAprovados.push(participante);
+            }
+        } else {
+            // ## CORREÇÃO 2 APLICADA AQUI ##
+            // Adicionada a lógica para encontrar alunos aprovados em cursos não-EAE
+            const freq = avaliacao ? avaliacao.notaFrequencia : 0;
+            if (freq >= 75) {
+                alunosAprovados.push(participante);
+            }
         }
     });
+    
     if (alunosAprovados.length === 0) {
         return alert("Nenhum aluno aprovado encontrado para gerar certificados.");
     }
+
+    // O restante da função permanece igual...
     const nomeDirigente = "Nome do Dirigente";
     const assinaturaDirigenteUrl = "";
     const nomePresidente = "Nome do Presidente";
     const assinaturaPresidenteUrl = "";
+
     for (const aluno of alunosAprovados) {
         console.log(`Gerando certificado para: ${aluno.nome}`);
         document.getElementById('cert-aluno-nome').textContent = aluno.nome.toUpperCase();
-        // ... (outros campos)
+        
+        // Lógica do Título Dinâmico
+        if (turmaData.isEAE) {
+            document.getElementById('cert-curso-nome').textContent = `${turmaData.nomeDaTurma} da ${turmaData.cursoNome}`;
+        } else {
+            document.getElementById('cert-curso-nome').textContent = turmaData.cursoNome;
+        }
+
         const canvas = await html2canvas(document.getElementById('certificate-wrapper'));
         const imgData = canvas.toDataURL('image/png');
         const pdf = new jsPDF({ orientation: 'landscape', unit: 'px', format: [1024, 728] });
         pdf.addImage(imgData, 'PNG', 0, 0, 1024, 728);
         pdf.save(`Certificado - ${aluno.nome}.pdf`);
     }
+
     alert(`${alunosAprovados.length} certificados gerados com sucesso!`);
 }
 
