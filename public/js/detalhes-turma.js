@@ -1,6 +1,7 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
 import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-auth.js";
-import { getFirestore, collection, query, where, getDocs, doc, getDoc, addDoc, onSnapshot, orderBy, limit, serverTimestamp, Timestamp, updateDoc, deleteDoc, writeBatch } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
+import { getFirestore, collection, query, where, getDocs, doc, getDoc, addDoc, onSnapshot, orderBy, serverTimestamp, Timestamp, updateDoc, deleteDoc, writeBatch } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
+import { getFunctions, httpsCallable } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-functions.js";
 
 // --- CONFIGURAÇÕES ---
 const firebaseConfig = {
@@ -263,34 +264,25 @@ async function salvarNovoAluno(event) {
     btnSalvarNovoAluno.textContent = 'Salvando...';
 
     try {
-        const novoAlunoRef = await addDoc(collection(db, "alunos"), {
-            nome,
-            endereco,
-            telefone,
-            nascimento,
-            criadoEm: serverTimestamp()
-        });
-        const novoAlunoId = novoAlunoRef.id;
-
-        const novoParticipante = {
-            participanteId: novoAlunoId,
-            nome: nome,
-            inscritoEm: serverTimestamp(),
-            origem: 'aluno'
-        };
-
-        if (turmaData.isEAE) {
-            novoParticipante.grau = 'Aluno';
-        }
-
-        await addDoc(collection(db, "turmas", turmaId, "participantes"), novoParticipante);
+        // Prepara a chamada para o nosso "Robô de Matrícula"
+        const matricularNovoAluno = httpsCallable(functions, 'matricularNovoAluno');
         
-        alert(`Aluno "${nome}" cadastrado e inscrito na turma com sucesso!`);
+        // Envia os dados para o robô processar
+        const result = await matricularNovoAluno({
+            turmaId: turmaId,
+            nome: nome,
+            endereco: endereco,
+            telefone: telefone,
+            nascimento: nascimento
+        });
+
+        alert(result.data.message); // Exibe a mensagem de sucesso do robô
         modalNovoAluno.classList.remove('visible');
 
     } catch (error) {
-        console.error("Erro ao cadastrar novo aluno:", error);
-        alert("Ocorreu um erro ao tentar salvar o novo aluno.");
+        console.error("Erro ao chamar a função de cadastrar novo aluno:", error);
+        // Mostra a mensagem de erro específica vinda do robô
+        alert(`Erro: ${error.message}`);
     } finally {
         btnSalvarNovoAluno.disabled = false;
         btnSalvarNovoAluno.textContent = 'Salvar e Inscrever na Turma';

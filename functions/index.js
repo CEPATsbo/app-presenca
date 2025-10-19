@@ -1196,3 +1196,77 @@ exports.calcularFrequencia = onDocumentWritten({ ...OPCOES_FUNCAO, document: 'tu
     }
     return null;
 });
+
+// ===================================================================
+// ## NOVO ROBÔ DE MATRÍCULA ##
+// Função segura para que facilitadores possam cadastrar novos alunos
+// em suas próprias turmas.
+// ===================================================================
+exports.matricularNovoAluno = onCall(OPCOES_FUNCAO, async (request) => {
+    // 1. Verificação de autenticação básica
+    if (!request.auth) {
+        throw new HttpsError('unauthenticated', 'A função deve ser chamada por um usuário autenticado.');
+    }
+
+    const { turmaId, nome, endereco, telefone, nascimento } = request.data;
+    if (!turmaId || !nome) {
+        throw new HttpsError('invalid-argument', 'O ID da turma e o nome do aluno são obrigatórios.');
+    }
+
+    const facilitatorAuthUid = request.auth.uid;
+    const userRole = request.auth.token.role;
+
+    try {
+        // 2. Verificação de segurança: O usuário é facilitador desta turma OU um admin?
+        const turmaRef = db.collection('turmas').doc(turmaId);
+        const turmaDoc = await turmaRef.get();
+
+        if (!turmaDoc.exists) {
+            throw new HttpsError('not-found', 'A turma especificada não foi encontrada.');
+        }
+
+        const turmaData = turmaDoc.data();
+        const isFacilitator = turmaData.facilitadoresIds && turmaData.facilitadoresIds.includes(facilitatorAuthUid);
+        const isAdmin = ['super-admin', 'diretor', 'tesoureiro'].includes(userRole);
+
+        if (!isFacilitator && !isAdmin) {
+            throw new HttpsError('permission-denied', 'Você não tem permissão para inscrever alunos nesta turma.');
+        }
+
+        // 3. Se a segurança passou, executa a tarefa
+        console.log(`Permissão concedida. Cadastrando aluno "${nome}" na turma ${turmaId}.`);
+        
+        // Cria o registro na coleção 'alunos'
+        const novoAlunoRef = await db.collection("alunos").add({
+            nome,
+            endereco: endereco || '',
+            telefone: telefone || '',
+            nascimento: nascimento || '',
+            criadoEm: admin.firestore.FieldValue.serverTimestamp()
+        });
+
+        // Inscreve o aluno na subcoleção 'participantes' da turma
+        const novoParticipante = {
+            participanteId: novoAlunoRef.id,
+            nome: nome,
+            inscritoEm: admin.firestore.FieldValue.serverTimestamp(),
+            origem: 'aluno'
+        };
+
+        if (turmaData.isEAE) {
+            novoParticipante.grau = 'Aluno';
+        }
+
+        await turmaRef.collection("participantes").add(novoParticipante);
+        
+        return { success: true, message: `Aluno "${nome}" cadastrado e inscrito com sucesso!` };
+
+    } catch (error) {
+        console.error("Erro na função matricularNovoAluno:", error);
+        // Se o erro já for um HttpsError, repassa ele. Senão, cria um erro genérico.
+        if (error instanceof HttpsError) {
+            throw error;
+        }
+        throw new HttpsError('internal', 'Ocorreu um erro interno ao processar a matrícula.');
+    }
+});
