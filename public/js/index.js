@@ -32,9 +32,8 @@ const statusNome = document.getElementById('status-nome');
 const statusAtividades = document.getElementById('status-atividades');
 const btnSairRapido = document.getElementById('btn-sair-rapido');
 const feedbackGeoRapido = document.getElementById('feedback-geolocalizacao-rapido');
-
-let monitorIntervalRapido;
-let statusAtualVoluntarioRapido = 'ausente';
+const btnRegistrarPresenca = document.getElementById('btn-registrar-presenca');
+const btnAtivarNotificacoes = document.getElementById('btn-ativar-notificacoes');
 
 async function carregarMural() {
     if (!muralContainer) return;
@@ -64,45 +63,100 @@ function getDataDeHojeSP() {
     return formatador.format(new Date());
 }
 
-async function atualizarStatusPresenca(novoStatus, nome) {
-    const dataHoje = getDataDeHojeSP();
-    const presencaId = `${dataHoje}_${nome.replace(/\s+/g, '_')}`;
-    const docRef = doc(db, "presencas", presencaId);
-    try {
-        await setDoc(docRef, { status: novoStatus, ultimaAtualizacao: serverTimestamp() }, { merge: true });
-        statusAtualVoluntarioRapido = novoStatus;
-    } catch (e) { console.error("Erro ao atualizar status da presença:", e); }
-}
+async function registrarPresencaComGeolocalizacao(voluntarioParaRegistrar, atividadesSelecionadas) {
+    btnRegistrarPresenca.disabled = true;
+    btnRegistrarPresenca.textContent = 'Verificando localização...';
 
-function checarLocalizacaoRapida(nome) {
     if (!navigator.geolocation) {
-        if (feedbackGeoRapido) feedbackGeoRapido.textContent = "Geolocalização não suportada.";
+        alert("Geolocalização não é suportada pelo seu navegador.");
+        btnRegistrarPresenca.disabled = false;
+        btnRegistrarPresenca.textContent = 'Registrar Presença';
         return;
     }
+
     navigator.geolocation.getCurrentPosition(
-        (position) => {
+        async (position) => {
             const distancia = getDistance(position.coords.latitude, position.coords.longitude, CASA_ESPIRITA_LAT, CASA_ESPIRITA_LON);
+
             if (distancia <= RAIO_EM_METROS) {
-                if (statusAtualVoluntarioRapido !== 'presente') {
-                    feedbackGeoRapido.textContent = "✅ Presença confirmada na casa!";
-                    feedbackGeoRapido.style.color = "green";
-                    atualizarStatusPresenca('presente', nome);
+                try {
+                    btnRegistrarPresenca.textContent = 'Registrando...';
+                    
+                    const dataHoje = getDataDeHojeSP();
+                    const presencaId = `${dataHoje}_${voluntarioParaRegistrar.nome.replace(/\s+/g, '_')}`;
+                    const docRef = doc(db, "presencas", presencaId);
+
+                    await setDoc(docRef, { 
+                        nome: voluntarioParaRegistrar.nome, 
+                        atividade: atividadesSelecionadas.join(', '), 
+                        data: dataHoje, 
+                        primeiroCheckin: serverTimestamp(), 
+                        ultimaAtualizacao: serverTimestamp(), 
+                        status: 'presente',
+                        authUid: null,
+                        voluntarioId: voluntarioParaRegistrar.id
+                    }, { merge: true });
+
+                    statusNome.textContent = voluntarioParaRegistrar.nome;
+                    statusAtividades.textContent = atividadesSelecionadas.join(', ');
+                    feedbackGeoRapido.textContent = `Presença confirmada a ${distancia.toFixed(0)} metros.`;
+                    registroRapidoSection.classList.add('hidden');
+                    statusRapidoSection.classList.remove('hidden');
+
+                } catch (error) {
+                    console.error("Erro ao registrar presença:", error);
+                    alert("Ocorreu um erro ao salvar sua presença. Tente novamente.");
+                    btnRegistrarPresenca.disabled = false;
+                    btnRegistrarPresenca.textContent = 'Registrar Presença';
                 }
             } else {
-                if (statusAtualVoluntarioRapido === 'presente') {
-                    feedbackGeoRapido.textContent = "Saída da casa registrada.";
-                    feedbackGeoRapido.style.color = "#1565c0";
-                    atualizarStatusPresenca('ausente', nome);
-                } else {
-                    feedbackGeoRapido.textContent = `Você está a ${distancia.toFixed(0)} metros de distância.`;
-                    feedbackGeoRapido.style.color = "#333";
-                }
+                alert(`Você está a ${distancia.toFixed(0)} metros de distância. Por favor, aproxime-se da casa para registrar a presença.`);
+                btnRegistrarPresenca.disabled = false;
+                btnRegistrarPresenca.textContent = 'Registrar Presença';
             }
         },
-        () => { if (feedbackGeoRapido) feedbackGeoRapido.textContent = "Não foi possível obter localização."; },
-        { enableHighAccuracy: true }
+        (error) => {
+            console.error("Erro de geolocalização:", error);
+            alert("Não foi possível obter sua localização. Verifique as permissões do navegador e tente novamente.");
+            btnRegistrarPresenca.disabled = false;
+            btnRegistrarPresenca.textContent = 'Registrar Presença';
+        }
     );
 }
+
+async function habilitarNotificacoes() {
+    const VAPID_PUBLIC_KEY = 'BMpfTCErYrAMkosCBVdmAg3-gAfv82Q6TTIg2amEmIST0_SipaUpq7AxDZ1VhiGfxilUzugQxrK92Buu6d9FM2Y';
+
+    if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
+        return alert("Seu navegador não suporta notificações push.");
+    }
+
+    try {
+        const permissao = await Notification.requestPermission();
+        if (permissao !== 'granted') {
+            return alert("Permissão para notificações não concedida.");
+        }
+
+        const registration = await navigator.serviceWorker.ready;
+        const subscription = await registration.pushManager.subscribe({
+            userVisibleOnly: true,
+            applicationServerKey: VAPID_PUBLIC_KEY
+        });
+        
+        const subscriptionId = btoa(JSON.stringify(subscription)).substring(0, 50);
+        await setDoc(doc(db, "inscricoes", subscriptionId), subscription.toJSON());
+
+        alert("Notificações ativadas com sucesso!");
+        btnAtivarNotificacoes.style.display = 'none';
+
+    } catch (error) {
+        console.error("Erro ao se inscrever para notificações:", error);
+        alert("Ocorreu um erro ao ativar as notificações.");
+    }
+}
+
+
+// --- INICIALIZAÇÃO DA PÁGINA ---
 
 carregarMural();
 
@@ -113,7 +167,7 @@ if (formLogin) {
         const senha = document.getElementById('senha-login').value;
         if (!email || !senha) { return alert("Por favor, preencha email e senha."); }
         signInWithEmailAndPassword(auth, email, senha)
-            .then(() => { window.location.href = '/painel.html'; })
+            .then(() => { window.location.href = '/painel.html'; }) // ATENÇÃO: Verifique se este é o destino correto
             .catch((error) => {
                 console.error("Erro de login:", error.code);
                 alert("Email ou senha incorretos. Tente novamente.");
@@ -136,24 +190,27 @@ if (formPresencaRapida) {
             });
         } catch (e) { console.error("Erro ao buscar atividades:", e); }
     })();
+
     btnSelecionarAtividades.addEventListener('click', () => {
         atividadesWrapper.style.display = atividadesWrapper.style.display === 'block' ? 'none' : 'block';
     });
+
     formPresencaRapida.addEventListener('submit', async (event) => {
         event.preventDefault();
         const nomeDigitado = nomeInput.value.trim();
         const atividadesSelecionadasNode = document.querySelectorAll('#form-presenca-rapida input[name="atividade"]:checked');
         const atividadesSelecionadas = Array.from(atividadesSelecionadasNode).map(cb => cb.value);
+        
         if (!nomeDigitado || nomeDigitado.split(' ').length < 2) { return alert("Por favor, digite seu nome completo."); }
         if (atividadesSelecionadas.length === 0) { return alert("Por favor, selecione pelo menos uma atividade."); }
-        const btnSubmit = formPresencaRapida.querySelector('button[type="submit"]');
-        btnSubmit.disabled = true;
+
         try {
             const voluntariosSnapshot = await getDocs(query(collection(db, "voluntarios")));
             const listaDeVoluntarios = voluntariosSnapshot.docs.map(d => ({ id: d.id, ...d.data() }));
             const fuse = new Fuse(listaDeVoluntarios, { keys: ['nome'], includeScore: true, threshold: 0.45 });
             const resultados = fuse.search(nomeDigitado);
             let voluntarioParaRegistrar = { id: null, nome: nomeDigitado };
+            
             if (resultados.length > 0) {
                 const melhorResultado = resultados[0].item;
                 if (nomeDigitado.toLowerCase() !== melhorResultado.nome.toLowerCase()) {
@@ -164,6 +221,7 @@ if (formPresencaRapida) {
                     voluntarioParaRegistrar = melhorResultado;
                 }
             }
+
             if (!voluntarioParaRegistrar.id) {
                 const novoVoluntarioDoc = await addDoc(collection(db, "voluntarios"), {
                     nome: voluntarioParaRegistrar.nome,
@@ -172,43 +230,29 @@ if (formPresencaRapida) {
                 });
                 voluntarioParaRegistrar.id = novoVoluntarioDoc.id;
             }
-            const dataHoje = getDataDeHojeSP();
-            const presencaId = `${dataHoje}_${voluntarioParaRegistrar.nome.replace(/\s+/g, '_')}`;
-            const docRef = doc(db, "presencas", presencaId);
-            await setDoc(docRef, { 
-                nome: voluntarioParaRegistrar.nome, 
-                atividade: atividadesSelecionadas.join(', '), 
-                data: dataHoje, 
-                primeiroCheckin: serverTimestamp(), 
-                ultimaAtualizacao: serverTimestamp(), 
-                status: 'ausente', 
-                authUid: null,
-                voluntarioId: voluntarioParaRegistrar.id
-            }, { merge: true });
-            statusNome.textContent = voluntarioParaRegistrar.nome;
-            statusAtividades.textContent = atividadesSelecionadas.join(', ');
-            registroRapidoSection.classList.add('hidden');
-            statusRapidoSection.classList.remove('hidden');
-            if (monitorIntervalRapido) clearInterval(monitorIntervalRapido);
-            checarLocalizacaoRapida(voluntarioParaRegistrar.nome);
-            monitorIntervalRapido = setInterval(() => checarLocalizacaoRapida(voluntarioParaRegistrar.nome), 600000);
+
+            await registrarPresencaComGeolocalizacao(voluntarioParaRegistrar, atividadesSelecionadas);
+
         } catch (error) {
             console.error("ERRO CRÍTICO no registro rápido:", error);
-            alert("Ocorreu um erro crítico ao registrar a presença.");
-            btnSubmit.disabled = false;
+            alert("Ocorreu um erro crítico. Verifique o console para mais detalhes.");
+            btnRegistrarPresenca.disabled = false;
+            btnRegistrarPresenca.textContent = 'Registrar Presença';
         }
     });
 }
 
 if (btnSairRapido) {
     btnSairRapido.addEventListener('click', () => {
-        if (monitorIntervalRapido) clearInterval(monitorIntervalRapido);
         formPresencaRapida.reset();
         atividadesWrapper.style.display = 'none';
         statusRapidoSection.classList.add('hidden');
         registroRapidoSection.classList.remove('hidden');
-        const btnSubmit = formPresencaRapida.querySelector('button[type="submit"]');
-        btnSubmit.disabled = false;
-        statusAtualVoluntarioRapido = 'ausente';
+        btnRegistrarPresenca.disabled = false;
+        btnRegistrarPresenca.textContent = 'Registrar Presença';
     });
+}
+
+if (btnAtivarNotificacoes) {
+    btnAtivarNotificacoes.addEventListener('click', habilitarNotificacoes);
 }
