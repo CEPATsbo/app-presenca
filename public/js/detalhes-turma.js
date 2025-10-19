@@ -28,13 +28,9 @@ const tabContents = document.querySelectorAll('.tab-content');
 const btnAddAulaExtra = document.getElementById('btn-add-aula-extra');
 const btnGerenciarRecessos = document.getElementById('btn-gerenciar-recessos');
 const btnAvancarAno = document.getElementById('btn-avancar-ano');
-
-// NOVOS ELEMENTOS PARA RELATÓRIOS
 const reportMenuContainer = document.getElementById('report-menu-container');
 const areaRelatorioGerado = document.getElementById('area-relatorio-gerado');
 const btnImprimirRelatorio = document.getElementById('btn-imprimir-relatorio');
-
-
 const modalInscricao = document.getElementById('modal-inscricao');
 const closeModalInscricaoBtn = document.getElementById('close-modal-inscricao');
 const formInscricao = document.getElementById('form-inscricao');
@@ -42,7 +38,6 @@ const participanteSelect = document.getElementById('participante-select');
 const formGroupGrau = document.getElementById('form-group-grau');
 const participanteGrauSelect = document.getElementById('participante-grau');
 const btnSalvarInscricao = document.getElementById('btn-salvar-inscricao');
-
 const modalAula = document.getElementById('modal-aula');
 const closeModalAulaBtn = document.getElementById('close-modal-aula');
 const formAula = document.getElementById('form-aula');
@@ -54,14 +49,12 @@ const inputAulaData = document.getElementById('aula-data');
 const formGroupNumeroAula = document.getElementById('form-group-numero-aula');
 const inputAulaNumero = document.getElementById('aula-numero');
 const btnSalvarAula = document.getElementById('btn-salvar-aula');
-
 const modalRecessos = document.getElementById('modal-recessos');
 const closeModalRecessosBtn = document.getElementById('close-modal-recessos');
 const formRecesso = document.getElementById('form-recesso');
 const inputRecessoInicio = document.getElementById('recesso-data-inicio');
 const inputRecessoFim = document.getElementById('recesso-data-fim');
 const recessoListContainer = document.getElementById('recesso-list-container');
-
 const modalNotas = document.getElementById('modal-notas');
 const closeModalNotasBtn = document.getElementById('close-modal-notas');
 const formNotas = document.getElementById('form-notas');
@@ -72,18 +65,22 @@ const inputNotaCadernetaPessoal = document.getElementById('nota-caderneta-pessoa
 const inputNotaTrabalhos = document.getElementById('nota-trabalhos');
 const inputNotaExameEspiritual = document.getElementById('nota-exame-espiritual');
 const btnSalvarNotas = document.getElementById('btn-salvar-notas');
-
 const modalFrequencia = document.getElementById('modal-frequencia');
 const closeModalFrequenciaBtn = document.getElementById('close-modal-frequencia');
 const modalFrequenciaTitulo = document.getElementById('modal-frequencia-titulo');
 const frequenciaListContainer = document.getElementById('frequencia-list-container');
 const btnSalvarFrequencia = document.getElementById('btn-salvar-frequencia');
 
+const btnCadastrarAluno = document.getElementById('btn-cadastrar-aluno');
+const modalNovoAluno = document.getElementById('modal-novo-aluno');
+const closeModalNovoAlunoBtn = document.getElementById('close-modal-novo-aluno');
+const formNovoAluno = document.getElementById('form-novo-aluno');
+const btnSalvarNovoAluno = document.getElementById('btn-salvar-novo-aluno');
+
 let turmaId = null;
 let turmaData = null;
 let currentAulaIdParaFrequencia = null;
 
-// --- VERIFICAÇÃO DE PERMISSÃO E CARREGAMENTO ---
 onAuthStateChanged(auth, async (user) => {
     if (user) {
         const voluntariosRef = collection(db, "voluntarios");
@@ -111,7 +108,6 @@ onAuthStateChanged(auth, async (user) => {
     }
 });
 
-// --- FUNÇÕES ---
 async function carregarDadosDaTurma() {
     const turmaRef = doc(db, "turmas", turmaId);
     onSnapshot(turmaRef, (docSnap) => {
@@ -131,9 +127,9 @@ async function carregarDadosDaTurma() {
 function configurarTabelaParticipantes() {
     let tableHeaderHTML = '<tr><th>Nome</th>';
     if (turmaData.isEAE) {
-        tableHeaderHTML += '<th>Grau</th><th>Freq.</th><th>Média RI</th><th>Média Final</th><th>Status</th><th>Ações</th>';
+        tableHeaderHTML += '<th>Grau</th><th>Origem</th><th>Freq.</th><th>Média RI</th><th>Média Final</th><th>Status</th><th>Ações</th>';
     } else {
-        tableHeaderHTML += '<th>Freq.</th><th>Status</th><th>Ações</th>';
+        tableHeaderHTML += '<th>Origem</th><th>Freq.</th><th>Status</th><th>Ações</th>';
     }
     tableHeaderHTML += '</tr>';
     participantesTable.querySelector('thead').innerHTML = tableHeaderHTML;
@@ -145,17 +141,19 @@ function escutarParticipantes() {
     onSnapshot(q, (snapshot) => {
         let rowsHTML = [];
         if (snapshot.empty) {
-            const colspan = turmaData.isEAE ? 7 : 4;
+            const colspan = turmaData.isEAE ? 8 : 5;
             rowsHTML.push(`<tr><td colspan="${colspan}" style="text-align: center;">Nenhum participante inscrito.</td></tr>`);
         } else {
             snapshot.forEach(doc => {
                 const participante = doc.data();
+                const origem = participante.origem === 'aluno' ? 'Aluno' : 'Voluntário';
                 let row = `<td>${participante.nome}</td>`;
                 if (turmaData.isEAE) {
                     const anoAtual = turmaData.anoAtual || 1;
                     const avaliacaoDoAno = participante.avaliacoes ? participante.avaliacoes[anoAtual] : null;
                     row += `
                         <td>${participante.grau || 'Aluno'}</td>
+                        <td>${origem}</td>
                         <td>${(avaliacaoDoAno ? avaliacaoDoAno.notaFrequencia : 0) || 0}%</td>
                         <td>${(avaliacaoDoAno ? avaliacaoDoAno.mediaRI : 0).toFixed(1)}</td>
                         <td>${(avaliacaoDoAno ? avaliacaoDoAno.mediaFinal : 0).toFixed(1)}</td>
@@ -166,7 +164,7 @@ function escutarParticipantes() {
                         </td>
                     `;
                 } else {
-                    row += `<td>--%</td><td>Ativo</td><td class="actions">...</td>`;
+                    row += `<td>${origem}</td><td>--%</td><td>Ativo</td><td class="actions">...</td>`;
                 }
                 rowsHTML.push(`<tr>${row}</tr>`);
             });
@@ -187,20 +185,11 @@ function escutarCronograma() {
                 const aula = doc.data();
                 const dataFormatada = aula.dataAgendada.toDate().toLocaleDateString('pt-BR', { timeZone: 'UTC' });
                 const numeroAulaDisplay = aula.isExtra ? '<strong>Extra</strong>' : aula.numeroDaAula;
-                let actionsHTML = `
-                    <button class="icon-btn attendance" title="Lançar Frequência" data-action="frequencia" data-id="${doc.id}" data-titulo="${aula.titulo}"><i class="fas fa-clipboard-list"></i></button>
-                    <button class="icon-btn edit" title="Editar Aula" data-action="edit" data-id="${doc.id}"><i class="fas fa-pencil-alt"></i></button>
-                `;
+                let actionsHTML = `<button class="icon-btn attendance" title="Lançar Frequência" data-action="frequencia" data-id="${doc.id}" data-titulo="${aula.titulo}"><i class="fas fa-clipboard-list"></i></button> <button class="icon-btn edit" title="Editar Aula" data-action="edit" data-id="${doc.id}"><i class="fas fa-pencil-alt"></i></button>`;
                 if (aula.isExtra) {
                     actionsHTML += `<button class="icon-btn delete" title="Excluir Aula Extra" data-action="delete" data-id="${doc.id}"><i class="fas fa-trash-alt"></i></button>`;
                 } else {
-                    actionsHTML += `<button class="icon-btn recess" title="Marcar como Recesso" 
-                                    data-action="recess" 
-                                    data-id="${doc.id}"
-                                    data-date="${aula.dataAgendada.toDate().toISOString()}"
-                                    data-titulo="${aula.titulo}">
-                                    <i class="fas fa-coffee"></i>
-                                  </button>`;
+                    actionsHTML += `<button class="icon-btn recess" title="Marcar como Recesso" data-action="recess" data-id="${doc.id}" data-date="${aula.dataAgendada.toDate().toISOString()}" data-titulo="${aula.titulo}"><i class="fas fa-coffee"></i></button>`;
                 }
                 rowsHTML.push(`<tr><td>${numeroAulaDisplay}</td><td>${dataFormatada}</td><td>${aula.titulo}</td><td>${aula.status}</td><td class="actions">${actionsHTML}</td></tr>`);
             });
@@ -237,7 +226,12 @@ async function inscreverParticipante(event) {
     if (!participanteId) { return alert("Por favor, selecione um participante."); }
     btnSalvarInscricao.disabled = true;
     try {
-        const novoParticipante = { participanteId, nome: participanteNome, inscritoEm: serverTimestamp() };
+        const novoParticipante = { 
+            participanteId, 
+            nome: participanteNome, 
+            inscritoEm: serverTimestamp(),
+            origem: 'voluntario' 
+        };
         if (turmaData.isEAE) { novoParticipante.grau = participanteGrauSelect.value; }
         const participantesRef = collection(db, "turmas", turmaId, "participantes");
         await addDoc(participantesRef, novoParticipante);
@@ -246,6 +240,60 @@ async function inscreverParticipante(event) {
         console.error("Erro ao inscrever participante:", error);
     } finally {
         btnSalvarInscricao.disabled = false;
+    }
+}
+
+function abrirModalNovoAluno() {
+    formNovoAluno.reset();
+    modalNovoAluno.classList.add('visible');
+}
+
+async function salvarNovoAluno(event) {
+    event.preventDefault();
+    const nome = document.getElementById('novo-aluno-nome').value.trim();
+    const endereco = document.getElementById('novo-aluno-endereco').value.trim();
+    const telefone = document.getElementById('novo-aluno-telefone').value.trim();
+    const nascimento = document.getElementById('novo-aluno-nascimento').value.trim();
+
+    if (!nome) {
+        return alert("O nome completo do aluno é obrigatório.");
+    }
+    
+    btnSalvarNovoAluno.disabled = true;
+    btnSalvarNovoAluno.textContent = 'Salvando...';
+
+    try {
+        const novoAlunoRef = await addDoc(collection(db, "alunos"), {
+            nome,
+            endereco,
+            telefone,
+            nascimento,
+            criadoEm: serverTimestamp()
+        });
+        const novoAlunoId = novoAlunoRef.id;
+
+        const novoParticipante = {
+            participanteId: novoAlunoId,
+            nome: nome,
+            inscritoEm: serverTimestamp(),
+            origem: 'aluno'
+        };
+
+        if (turmaData.isEAE) {
+            novoParticipante.grau = 'Aluno';
+        }
+
+        await addDoc(collection(db, "turmas", turmaId, "participantes"), novoParticipante);
+        
+        alert(`Aluno "${nome}" cadastrado e inscrito na turma com sucesso!`);
+        modalNovoAluno.classList.remove('visible');
+
+    } catch (error) {
+        console.error("Erro ao cadastrar novo aluno:", error);
+        alert("Ocorreu um erro ao tentar salvar o novo aluno.");
+    } finally {
+        btnSalvarNovoAluno.disabled = false;
+        btnSalvarNovoAluno.textContent = 'Salvar e Inscrever na Turma';
     }
 }
 
@@ -762,6 +810,11 @@ if(btnInscreverParticipante) btnInscreverParticipante.addEventListener('click', 
 if(closeModalInscricaoBtn) closeModalInscricaoBtn.addEventListener('click', () => modalInscricao.classList.remove('visible'));
 if(modalInscricao) modalInscricao.addEventListener('click', (event) => { if (event.target === modalInscricao) modalInscricao.classList.remove('visible'); });
 if(formInscricao) formInscricao.addEventListener('submit', inscreverParticipante);
+
+if(btnCadastrarAluno) btnCadastrarAluno.addEventListener('click', abrirModalNovoAluno);
+if(closeModalNovoAlunoBtn) closeModalNovoAlunoBtn.addEventListener('click', () => modalNovoAluno.classList.remove('visible'));
+if(modalNovoAluno) modalNovoAluno.addEventListener('click', (event) => { if (event.target === modalNovoAluno) modalNovoAluno.classList.remove('visible'); });
+if(formNovoAluno) formNovoAluno.addEventListener('submit', salvarNovoAluno);
 
 if(btnAddAulaExtra) btnAddAulaExtra.addEventListener('click', () => abrirModalAula(null, true));
 if(closeModalAulaBtn) closeModalAulaBtn.addEventListener('click', () => modalAula.classList.remove('visible'));
