@@ -860,7 +860,10 @@ async function gerarCertificados() {
             document.getElementById('cert-assinatura-presidente').src = presidenteData.presidenteAssinaturaUrl || transparentPixel;
             
             // "Tira a foto" e cria o PDF
-            const canvas = await html2canvas(document.getElementById('certificate-wrapper'));
+           const canvas = await html2canvas(document.getElementById('certificate-wrapper'), {
+                useCORS: true 
+            });
+
             const imgData = canvas.toDataURL('image/png');
             const pdf = new jsPDF({ orientation: 'landscape', unit: 'px', format: [1024, 728] });
             pdf.addImage(imgData, 'PNG', 0, 0, 1024, 728);
