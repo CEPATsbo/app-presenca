@@ -149,31 +149,31 @@ function escutarParticipantes() {
             snapshot.forEach(doc => {
                 const participante = doc.data();
                 const origem = participante.origem === 'aluno' ? 'Aluno' : 'Voluntário';
-                let row = `<td>${participante.nome}</td>`;
-                if (turmaData.isEAE) {
-                    const anoAtual = turmaData.anoAtual || 1;
-                    const avaliacaoDoAno = participante.avaliacoes ? participante.avaliacoes[anoAtual] : null;
+                const anoAtual = turmaData.anoAtual || 1;
+                const avaliacaoDoAno = participante.avaliacoes ? participante.avaliacoes[anoAtual] : null;
+                const freq = (avaliacaoDoAno ? avaliacaoDoAno.notaFrequencia : 0) || 0;
 
+                let row = `<td>${participante.nome}</td>`;
+
+                if (turmaData.isEAE) {
                     let acoesExtras = '';
                     if (participante.origem === 'aluno') {
                         acoesExtras += `<button class="icon-btn" style="color: #27ae60;" title="Promover para Voluntário" data-action="promote-to-volunteer" data-participante-doc-id="${doc.id}"><i class="fas fa-user-plus"></i></button>`;
                     }
-
                     row += `
                         <td>${participante.grau || 'Aluno'}</td>
                         <td>${origem}</td>
-                        <td>${(avaliacaoDoAno ? avaliacaoDoAno.notaFrequencia : 0) || 0}%</td>
+                        <td>${freq}%</td>
                         <td>${(avaliacaoDoAno ? avaliacaoDoAno.mediaRI : 0).toFixed(1)}</td>
                         <td>${(avaliacaoDoAno ? avaliacaoDoAno.mediaFinal : 0).toFixed(1)}</td>
                         <td>${(avaliacaoDoAno ? avaliacaoDoAno.statusAprovacao : 'Em Andamento')}</td>
-                        <td class="actions">
-                            ${acoesExtras}
-                            <button class="icon-btn notes" title="Lançar Notas" data-action="notas" data-id="${doc.id}"><i class="fas fa-edit"></i></button>
-                            <button class="icon-btn promote" title="Promover Grau" data-action="promover" data-id="${doc.id}"><i class="fas fa-user-graduate"></i></button>
-                        </td>
+                        <td class="actions">${acoesExtras}<button class="icon-btn notes" title="Lançar Notas" data-action="notas" data-id="${doc.id}"><i class="fas fa-edit"></i></button><button class="icon-btn promote" title="Promover Grau" data-action="promover" data-id="${doc.id}"><i class="fas fa-user-graduate"></i></button></td>
                     `;
                 } else {
-                    row += `<td>${origem}</td><td>--%</td><td>Ativo</td><td class="actions">...</td>`;
+                    // ## CORREÇÃO 2 APLICADA AQUI ##
+                    // Lógica para cursos comuns agora lê a frequência real.
+                    const status = freq >= 75 ? 'Aprovado' : 'Cursando'; // Exemplo de status simples
+                    row += `<td>${origem}</td><td>${freq}%</td><td>${status}</td><td class="actions">...</td>`;
                 }
                 rowsHTML.push(`<tr>${row}</tr>`);
             });
@@ -181,7 +181,6 @@ function escutarParticipantes() {
         participantesTableBody.innerHTML = rowsHTML.join('');
     });
 }
-
 function escutarCronograma() {
     const cronogramaRef = collection(db, "turmas", turmaId, "cronograma");
     const q = query(cronogramaRef, orderBy("dataAgendada", "asc"));
@@ -553,7 +552,6 @@ async function marcarRecessoDeAulaUnica(aulaDataISO, aulaTitulo) {
     }
 }
 
-// --- FUNÇÕES DE FREQUÊNCIA (COM CORREÇÃO) ---
 async function abrirModalFrequencia(aulaId, aulaTitulo) {
     currentAulaIdParaFrequencia = aulaId;
     modalFrequenciaTitulo.textContent = `Frequência da Aula: ${aulaTitulo}`;
@@ -569,29 +567,31 @@ async function abrirModalFrequencia(aulaId, aulaTitulo) {
         const qFrequencia = query(frequenciaRef, where("aulaId", "==", aulaId));
         const frequenciaSnapshot = await getDocs(qFrequencia);
         
-        const frequenciasSalvas = {};
+        const frequenciasSalvas = new Map();
         frequenciaSnapshot.forEach(doc => {
-            frequenciasSalvas[doc.data().participanteId] = doc.data().status;
+            frequenciasSalvas.set(doc.data().participanteId, doc.data().status);
         });
 
         let listHTML = '';
         participantesSnapshot.forEach(doc => {
-            const participante = doc.data();
             const participanteId = doc.id;
-            const statusAtual = frequenciasSalvas[participanteId] || 'presente';
+            const participante = doc.data();
+            
+            // ## CORREÇÃO 3 APLICADA AQUI ##
+            // Se não houver registro, o status é 'null', não 'presente'.
+            const statusAtual = frequenciasSalvas.get(participanteId) || null;
+            
             listHTML += `
-                <li class="attendance-item" data-participante-id="${participanteId}" data-status="${statusAtual}">
+                <li class="attendance-item" data-participante-id="${participanteId}" data-status="${statusAtual || ''}">
                     <span>${participante.nome}</span>
                     <div class="attendance-controls">
                         <button class="btn-status presente ${statusAtual === 'presente' ? 'active' : ''}" data-status="presente">P</button>
                         <button class="btn-status ausente ${statusAtual === 'ausente' ? 'active' : ''}" data-status="ausente">F</button>
                         <button class="btn-status justificado ${statusAtual === 'justificado' ? 'active' : ''}" data-status="justificado">J</button>
                     </div>
-                </li>
-            `;
+                </li>`;
         });
         frequenciaListContainer.innerHTML = listHTML || '<li>Nenhum participante inscrito nesta turma.</li>';
-
     } catch(error) {
         console.error("Erro ao carregar lista de chamada:", error);
     }
@@ -606,7 +606,10 @@ async function salvarFrequencia() {
 
     items.forEach(item => {
         const participanteId = item.dataset.participanteId;
-        const status = item.dataset.status;
+        // ## CORREÇÃO 3 (continuação) ##
+        // Se o facilitador não marcou nada, o padrão de salvamento é 'ausente'.
+        const status = item.dataset.status || 'ausente'; 
+        
         const frequenciaDocId = `${currentAulaIdParaFrequencia}_${participanteId}`;
         const frequenciaRef = doc(db, "turmas", turmaId, "frequencias", frequenciaDocId);
         batch.set(frequenciaRef, {
@@ -776,15 +779,12 @@ async function gerarRelatorioAptosCertificado() {
 
     participantes.forEach(p => {
         let statusFinal = 'Em Andamento';
+        const avaliacao = p.avaliacoes ? p.avaliacoes[anoAtual] : null;
+
         if (turmaData.isEAE) {
-            const avaliacao = p.avaliacoes ? p.avaliacoes[anoAtual] : null;
             statusFinal = avaliacao ? avaliacao.statusAprovacao : 'Pendente';
         } else {
-            // ## CORREÇÃO 1 APLICADA AQUI ##
-            // Busca a frequência no local correto (dentro de 'avaliacoes')
-            const avaliacao = p.avaliacoes ? p.avaliacoes[anoAtual] : null;
             const freq = avaliacao ? avaliacao.notaFrequencia : 0;
-            // Usando 75% como critério de aprovação para cursos comuns.
             statusFinal = freq >= 75 ? 'Aprovado' : 'Reprovado por Frequência';
         }
         tableHTML += `<tr><td>${p.nome}</td><td>${statusFinal}</td></tr>`;
@@ -813,8 +813,6 @@ async function gerarCertificados() {
                 alunosAprovados.push(participante);
             }
         } else {
-            // ## CORREÇÃO 2 APLICADA AQUI ##
-            // Adicionada a lógica para encontrar alunos aprovados em cursos não-EAE
             const freq = avaliacao ? avaliacao.notaFrequencia : 0;
             if (freq >= 75) {
                 alunosAprovados.push(participante);
@@ -825,23 +823,22 @@ async function gerarCertificados() {
     if (alunosAprovados.length === 0) {
         return alert("Nenhum aluno aprovado encontrado para gerar certificados.");
     }
-
-    // O restante da função permanece igual...
+    
     const nomeDirigente = "Nome do Dirigente";
-    const assinaturaDirigenteUrl = "";
     const nomePresidente = "Nome do Presidente";
+    // ## CORREÇÃO 1 APLICADA AQUI ##
+    // Placeholder para as assinaturas, evitando o erro de imagem
+    const transparentPixel = "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7";
+    const assinaturaDirigenteUrl = "";
     const assinaturaPresidenteUrl = "";
 
     for (const aluno of alunosAprovados) {
-        console.log(`Gerando certificado para: ${aluno.nome}`);
         document.getElementById('cert-aluno-nome').textContent = aluno.nome.toUpperCase();
-        
-        // Lógica do Título Dinâmico
-        if (turmaData.isEAE) {
-            document.getElementById('cert-curso-nome').textContent = `${turmaData.nomeDaTurma} da ${turmaData.cursoNome}`;
-        } else {
-            document.getElementById('cert-curso-nome').textContent = turmaData.cursoNome;
-        }
+        document.getElementById('cert-curso-nome').textContent = turmaData.isEAE ? `${turmaData.nomeDaTurma} da ${turmaData.cursoNome}` : turmaData.cursoNome;
+        document.getElementById('cert-nome-dirigente').textContent = nomeDirigente;
+        document.getElementById('cert-nome-presidente').textContent = nomePresidente;
+        document.getElementById('cert-assinatura-dirigente').src = assinaturaDirigenteUrl || transparentPixel;
+        document.getElementById('cert-assinatura-presidente').src = assinaturaPresidenteUrl || transparentPixel;
 
         const canvas = await html2canvas(document.getElementById('certificate-wrapper'));
         const imgData = canvas.toDataURL('image/png');
