@@ -796,24 +796,24 @@ async function gerarRelatorioAptosCertificado() {
 }
 
 // ===================================================================
-// ## FUNÇÃO DE GERAR CERTIFICADOS RECONSTRUÍDA PARA AGUARDAR IMAGENS ##
+// ## FUNÇÃO DE GERAR CERTIFICADOS E PRÉ-CARREGAMENTO (VERSÃO FINAL) ##
 // ===================================================================
 
-// Função auxiliar para pré-carregar uma imagem. Essencial para o html2canvas.
 function precarregarImagem(url) {
-    return new Promise((resolve, reject) => {
+    return new Promise((resolve) => {
         if (!url) {
-            resolve(null);
-            return;
+            return resolve(null);
         }
         const img = new Image();
-        img.crossOrigin = "Anonymous"; // Permite que o canvas acesse a imagem de outro domínio.
+        img.crossOrigin = "Anonymous";
         img.onload = () => resolve(img);
         img.onerror = (err) => {
             console.error(`Falha ao carregar imagem: ${url}`, err);
             resolve(null);
         };
-        img.src = url;
+        // ## CORREÇÃO FINAL APLICADA AQUI (CACHE BUSTER) ##
+        // Adiciona um parâmetro único para forçar o navegador a buscar a imagem novamente.
+        img.src = url + '?t=' + new Date().getTime();
     });
 }
 
@@ -853,10 +853,16 @@ async function gerarCertificados() {
             dirigentesInfo = dirigentesDocs.map(d => d.exists() ? d.data() : {});
         }
         const dirigentePrincipal = dirigentesInfo.length > 0 ? dirigentesInfo[0] : {};
+        
+        const [dirigenteImg, presidenteImg] = await Promise.all([
+            precarregarImagem(dirigentePrincipal.assinaturaUrl),
+            precarregarImagem(presidenteData.presidenteAssinaturaUrl)
+        ]);
+        
+        document.getElementById('cert-assinatura-dirigente').src = dirigenteImg ? dirigenteImg.src : "";
+        document.getElementById('cert-assinatura-presidente').src = presidenteImg ? presidenteImg.src : "";
 
         for (const aluno of alunosAprovados) {
-            console.log(`Gerando certificado para: ${aluno.nome}`);
-
             document.getElementById('cert-aluno-nome').textContent = aluno.nome.toUpperCase();
             document.getElementById('cert-curso-nome').textContent = turmaData.isEAE ? `${turmaData.nomeDaTurma} da ${turmaData.cursoNome}` : turmaData.cursoNome;
             const dataInicio = turmaData.dataInicio.toDate();
@@ -865,20 +871,7 @@ async function gerarCertificados() {
             document.getElementById('cert-data-emissao').textContent = `Santa Bárbara d'Oeste, ${new Date().toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' })}`;
             document.getElementById('cert-nome-dirigente').textContent = dirigentePrincipal.nome || '';
             document.getElementById('cert-nome-presidente').textContent = presidenteData.presidenteNome || '';
-            
-            // Limpa as imagens anteriores antes de carregar as novas
-            document.getElementById('cert-assinatura-dirigente').src = "";
-            document.getElementById('cert-assinatura-presidente').src = "";
 
-            await Promise.all([
-                precarregarImagem(dirigentePrincipal.assinaturaUrl),
-                precarregarImagem(presidenteData.presidenteAssinaturaUrl)
-            ]).then(([dirigenteImg, presidenteImg]) => {
-                if(dirigenteImg) document.getElementById('cert-assinatura-dirigente').src = dirigenteImg.src;
-                if(presidenteImg) document.getElementById('cert-assinatura-presidente').src = presidenteImg.src;
-            });
-
-            // Pequeno delay para garantir que o navegador renderize as imagens no DOM
             await new Promise(resolve => setTimeout(resolve, 500));
 
             const canvas = await html2canvas(document.getElementById('certificate-wrapper'), {
@@ -899,7 +892,6 @@ async function gerarCertificados() {
         alert("Ocorreu um erro ao gerar os certificados. Verifique o console.");
     }
 }
-
 
 // --- EVENTOS ---
 tabs.forEach(tab => {
