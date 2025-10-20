@@ -796,58 +796,83 @@ async function gerarRelatorioAptosCertificado() {
 }
 
 async function gerarCertificados() {
-    alert("Iniciando a geração dos certificados em PDF. Isso pode levar um momento...");
+    alert("Iniciando a geração dos certificados. Isso pode levar um momento...");
     const { jsPDF } = window.jspdf;
-    const participantesRef = collection(db, "turmas", turmaId, "participantes");
-    const q = query(participantesRef, orderBy("nome"));
-    const snapshot = await getDocs(q);
-
-    const alunosAprovados = [];
-    snapshot.forEach(doc => {
-        const participante = doc.data();
-        const anoAtual = turmaData.anoAtual || 1;
-        const avaliacao = participante.avaliacoes ? participante.avaliacoes[anoAtual] : null;
-
-        if (turmaData.isEAE) {
-            if (avaliacao && avaliacao.statusAprovacao === 'Aprovado') {
-                alunosAprovados.push(participante);
-            }
-        } else {
-            const freq = avaliacao ? avaliacao.notaFrequencia : 0;
-            if (freq >= 75) {
-                alunosAprovados.push(participante);
-            }
-        }
-    });
-    
-    if (alunosAprovados.length === 0) {
-        return alert("Nenhum aluno aprovado encontrado para gerar certificados.");
-    }
-    
-    const nomeDirigente = "Nome do Dirigente";
-    const nomePresidente = "Nome do Presidente";
-    // ## CORREÇÃO 1 APLICADA AQUI ##
-    // Placeholder para as assinaturas, evitando o erro de imagem
     const transparentPixel = "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7";
-    const assinaturaDirigenteUrl = "";
-    const assinaturaPresidenteUrl = "";
 
-    for (const aluno of alunosAprovados) {
-        document.getElementById('cert-aluno-nome').textContent = aluno.nome.toUpperCase();
-        document.getElementById('cert-curso-nome').textContent = turmaData.isEAE ? `${turmaData.nomeDaTurma} da ${turmaData.cursoNome}` : turmaData.cursoNome;
-        document.getElementById('cert-nome-dirigente').textContent = nomeDirigente;
-        document.getElementById('cert-nome-presidente').textContent = nomePresidente;
-        document.getElementById('cert-assinatura-dirigente').src = assinaturaDirigenteUrl || transparentPixel;
-        document.getElementById('cert-assinatura-presidente').src = assinaturaPresidenteUrl || transparentPixel;
+    try {
+        // 1. Buscar dados globais (Presidente e informações da turma)
+        const presidenteRef = doc(db, "configuracoes", "gestaoAtual");
+        const [participantesSnap, presidenteSnap] = await Promise.all([
+            getDocs(query(collection(db, "turmas", turmaId, "participantes"), orderBy("nome"))),
+            getDoc(presidenteRef)
+        ]);
 
-        const canvas = await html2canvas(document.getElementById('certificate-wrapper'));
-        const imgData = canvas.toDataURL('image/png');
-        const pdf = new jsPDF({ orientation: 'landscape', unit: 'px', format: [1024, 728] });
-        pdf.addImage(imgData, 'PNG', 0, 0, 1024, 728);
-        pdf.save(`Certificado - ${aluno.nome}.pdf`);
+        const presidenteData = presidenteSnap.exists() ? presidenteSnap.data() : {};
+
+        // 2. Filtrar alunos aprovados
+        const alunosAprovados = [];
+        participantesSnap.forEach(doc => {
+            const participante = doc.data();
+            const anoAtual = turmaData.anoAtual || 1;
+            const avaliacao = participante.avaliacoes ? participante.avaliacoes[anoAtual] : null;
+
+            if (turmaData.isEAE) {
+                if (avaliacao && avaliacao.statusAprovacao === 'Aprovado') alunosAprovados.push(participante);
+            } else {
+                const freq = avaliacao ? avaliacao.notaFrequencia : 0;
+                if (freq >= 75) alunosAprovados.push(participante);
+            }
+        });
+
+        if (alunosAprovados.length === 0) {
+            return alert("Nenhum aluno aprovado encontrado para gerar certificados.");
+        }
+
+        // 3. Buscar dados do(s) dirigente(s) da turma
+        let dirigentesInfo = [];
+        if (turmaData.facilitadores && turmaData.facilitadores.length > 0) {
+            const dirigentePromises = turmaData.facilitadores.map(f => getDoc(doc(db, "voluntarios", f.id)));
+            const dirigentesDocs = await Promise.all(dirigentePromises);
+            dirigentesInfo = dirigentesDocs.map(d => d.exists() ? d.data() : { nome: "Dirigente não encontrado" });
+        }
+        
+        // Usaremos o primeiro dirigente da lista para o certificado
+        const dirigentePrincipal = dirigentesInfo.length > 0 ? dirigentesInfo[0] : {};
+
+        // 4. Loop para gerar um PDF para cada aluno
+        for (const aluno of alunosAprovados) {
+            console.log(`Gerando certificado para: ${aluno.nome}`);
+
+            // Preenche o modelo HTML com todos os dados dinâmicos
+            document.getElementById('cert-aluno-nome').textContent = aluno.nome.toUpperCase();
+            document.getElementById('cert-curso-nome').textContent = turmaData.isEAE ? `${turmaData.nomeDaTurma} da ${turmaData.cursoNome}` : turmaData.cursoNome;
+            
+            const dataInicio = turmaData.dataInicio.toDate();
+            const dataFim = new Date(); // Pode ser ajustado para a data da última aula
+            const periodo = `realizado no período de ${dataInicio.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })} a ${dataFim.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })}`;
+            document.getElementById('cert-periodo').textContent = periodo;
+            document.getElementById('cert-data-emissao').textContent = `Santa Bárbara d'Oeste, ${new Date().toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' })}`;
+
+            document.getElementById('cert-nome-dirigente').textContent = dirigentePrincipal.nome || '';
+            document.getElementById('cert-assinatura-dirigente').src = dirigentePrincipal.assinaturaUrl || transparentPixel;
+            document.getElementById('cert-nome-presidente').textContent = presidenteData.presidenteNome || '';
+            document.getElementById('cert-assinatura-presidente').src = presidenteData.presidenteAssinaturaUrl || transparentPixel;
+            
+            // "Tira a foto" e cria o PDF
+            const canvas = await html2canvas(document.getElementById('certificate-wrapper'));
+            const imgData = canvas.toDataURL('image/png');
+            const pdf = new jsPDF({ orientation: 'landscape', unit: 'px', format: [1024, 728] });
+            pdf.addImage(imgData, 'PNG', 0, 0, 1024, 728);
+            pdf.save(`Certificado - ${aluno.nome}.pdf`);
+        }
+
+        alert(`${alunosAprovados.length} certificados gerados com sucesso!`);
+
+    } catch (error) {
+        console.error("Erro ao gerar certificados:", error);
+        alert("Ocorreu um erro ao gerar os certificados. Verifique o console.");
     }
-
-    alert(`${alunosAprovados.length} certificados gerados com sucesso!`);
 }
 
 
