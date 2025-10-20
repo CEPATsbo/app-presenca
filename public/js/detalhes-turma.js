@@ -795,13 +795,14 @@ async function gerarRelatorioAptosCertificado() {
     btnImprimirRelatorio.classList.remove('hidden');
 }
 
+// ===================================================================
 // ## FUNÇÃO DE GERAR CERTIFICADOS RECONSTRUÍDA PARA AGUARDAR IMAGENS ##
 // ===================================================================
 
 // Função auxiliar para pré-carregar uma imagem. Essencial para o html2canvas.
 function precarregarImagem(url) {
     return new Promise((resolve, reject) => {
-        if (!url) { // Se a URL for vazia, resolve imediatamente com null.
+        if (!url) {
             resolve(null);
             return;
         }
@@ -810,7 +811,7 @@ function precarregarImagem(url) {
         img.onload = () => resolve(img);
         img.onerror = (err) => {
             console.error(`Falha ao carregar imagem: ${url}`, err);
-            resolve(null); // Resolve com null em caso de erro para não travar o processo.
+            resolve(null);
         };
         img.src = url;
     });
@@ -821,7 +822,6 @@ async function gerarCertificados() {
     const { jsPDF } = window.jspdf;
 
     try {
-        // 1. Buscar dados globais
         const presidenteRef = doc(db, "configuracoes", "gestaoAtual");
         const [participantesSnap, presidenteSnap] = await Promise.all([
             getDocs(query(collection(db, "turmas", turmaId, "participantes"), orderBy("nome"))),
@@ -829,13 +829,11 @@ async function gerarCertificados() {
         ]);
         const presidenteData = presidenteSnap.exists() ? presidenteSnap.data() : {};
 
-        // 2. Filtrar alunos aprovados
         const alunosAprovados = [];
         participantesSnap.forEach(doc => {
             const participante = doc.data();
             const anoAtual = turmaData.anoAtual || 1;
             const avaliacao = participante.avaliacoes ? participante.avaliacoes[anoAtual] : null;
-
             if (turmaData.isEAE) {
                 if (avaliacao && avaliacao.statusAprovacao === 'Aprovado') alunosAprovados.push(participante);
             } else {
@@ -848,7 +846,6 @@ async function gerarCertificados() {
             return alert("Nenhum aluno aprovado encontrado para gerar certificados.");
         }
 
-        // 3. Buscar dados do(s) dirigente(s)
         let dirigentesInfo = [];
         if (turmaData.facilitadores && turmaData.facilitadores.length > 0) {
             const dirigentePromises = turmaData.facilitadores.map(f => getDoc(doc(db, "voluntarios", f.id)));
@@ -857,35 +854,36 @@ async function gerarCertificados() {
         }
         const dirigentePrincipal = dirigentesInfo.length > 0 ? dirigentesInfo[0] : {};
 
-        // 4. Loop para gerar um PDF para cada aluno
         for (const aluno of alunosAprovados) {
             console.log(`Gerando certificado para: ${aluno.nome}`);
 
-            // Preenche os textos no modelo
             document.getElementById('cert-aluno-nome').textContent = aluno.nome.toUpperCase();
             document.getElementById('cert-curso-nome').textContent = turmaData.isEAE ? `${turmaData.nomeDaTurma} da ${turmaData.cursoNome}` : turmaData.cursoNome;
-            document.getElementById('cert-nome-dirigente').textContent = dirigentePrincipal.nome || '';
-            document.getElementById('cert-nome-presidente').textContent = presidenteData.presidenteNome || '';
             const dataInicio = turmaData.dataInicio.toDate();
             const dataFim = new Date();
             document.getElementById('cert-periodo').textContent = `realizado no período de ${dataInicio.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })} a ${dataFim.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })}`;
             document.getElementById('cert-data-emissao').textContent = `Santa Bárbara d'Oeste, ${new Date().toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' })}`;
+            document.getElementById('cert-nome-dirigente').textContent = dirigentePrincipal.nome || '';
+            document.getElementById('cert-nome-presidente').textContent = presidenteData.presidenteNome || '';
+            
+            // Limpa as imagens anteriores antes de carregar as novas
+            document.getElementById('cert-assinatura-dirigente').src = "";
+            document.getElementById('cert-assinatura-presidente').src = "";
 
-            // 5. PRÉ-CARREGA AS IMAGENS E AGUARDA A CONCLUSÃO
-            const [logoImg, dirigenteAssinaturaImg, presidenteAssinaturaImg] = await Promise.all([
-                precarregarImagem(document.getElementById('logo-cepat-cert').src),
+            await Promise.all([
                 precarregarImagem(dirigentePrincipal.assinaturaUrl),
                 precarregarImagem(presidenteData.presidenteAssinaturaUrl)
-            ]);
+            ]).then(([dirigenteImg, presidenteImg]) => {
+                if(dirigenteImg) document.getElementById('cert-assinatura-dirigente').src = dirigenteImg.src;
+                if(presidenteImg) document.getElementById('cert-assinatura-presidente').src = presidenteImg.src;
+            });
 
-            // 6. Insere as imagens CARREGADAS no modelo
-            if (dirigenteAssinaturaImg) document.getElementById('cert-assinatura-dirigente').src = dirigenteAssinaturaImg.src;
-            if (presidenteAssinaturaImg) document.getElementById('cert-assinatura-presidente').src = presidenteAssinaturaImg.src;
+            // Pequeno delay para garantir que o navegador renderize as imagens no DOM
+            await new Promise(resolve => setTimeout(resolve, 500));
 
-            // 7. "Tira a foto" AGORA que tudo está pronto
             const canvas = await html2canvas(document.getElementById('certificate-wrapper'), {
                 useCORS: true,
-                allowTaint: true // Ajuda com imagens de outras origens
+                allowTaint: true
             });
             
             const imgData = canvas.toDataURL('image/png');
