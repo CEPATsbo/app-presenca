@@ -167,7 +167,7 @@ if (formLogin) {
         const senha = document.getElementById('senha-login').value;
         if (!email || !senha) { return alert("Por favor, preencha email e senha."); }
         signInWithEmailAndPassword(auth, email, senha)
-            .then(() => { window.location.href = '/painel.html'; }) // ATENÇÃO: Verifique se este é o destino correto
+            .then(() => { window.location.href = '/meu-cepat.html'; }) // ATENÇÃO: Verifique se este é o destino correto
             .catch((error) => {
                 console.error("Erro de login:", error.code);
                 alert("Email ou senha incorretos. Tente novamente.");
