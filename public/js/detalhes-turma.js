@@ -795,19 +795,38 @@ async function gerarRelatorioAptosCertificado() {
     btnImprimirRelatorio.classList.remove('hidden');
 }
 
+// ## FUNÇÃO DE GERAR CERTIFICADOS RECONSTRUÍDA PARA AGUARDAR IMAGENS ##
+// ===================================================================
+
+// Função auxiliar para pré-carregar uma imagem. Essencial para o html2canvas.
+function precarregarImagem(url) {
+    return new Promise((resolve, reject) => {
+        if (!url) { // Se a URL for vazia, resolve imediatamente com null.
+            resolve(null);
+            return;
+        }
+        const img = new Image();
+        img.crossOrigin = "Anonymous"; // Permite que o canvas acesse a imagem de outro domínio.
+        img.onload = () => resolve(img);
+        img.onerror = (err) => {
+            console.error(`Falha ao carregar imagem: ${url}`, err);
+            resolve(null); // Resolve com null em caso de erro para não travar o processo.
+        };
+        img.src = url;
+    });
+}
+
 async function gerarCertificados() {
     alert("Iniciando a geração dos certificados. Isso pode levar um momento...");
     const { jsPDF } = window.jspdf;
-    const transparentPixel = "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7";
 
     try {
-        // 1. Buscar dados globais (Presidente e informações da turma)
+        // 1. Buscar dados globais
         const presidenteRef = doc(db, "configuracoes", "gestaoAtual");
         const [participantesSnap, presidenteSnap] = await Promise.all([
             getDocs(query(collection(db, "turmas", turmaId, "participantes"), orderBy("nome"))),
             getDoc(presidenteRef)
         ]);
-
         const presidenteData = presidenteSnap.exists() ? presidenteSnap.data() : {};
 
         // 2. Filtrar alunos aprovados
@@ -829,41 +848,46 @@ async function gerarCertificados() {
             return alert("Nenhum aluno aprovado encontrado para gerar certificados.");
         }
 
-        // 3. Buscar dados do(s) dirigente(s) da turma
+        // 3. Buscar dados do(s) dirigente(s)
         let dirigentesInfo = [];
         if (turmaData.facilitadores && turmaData.facilitadores.length > 0) {
             const dirigentePromises = turmaData.facilitadores.map(f => getDoc(doc(db, "voluntarios", f.id)));
             const dirigentesDocs = await Promise.all(dirigentePromises);
-            dirigentesInfo = dirigentesDocs.map(d => d.exists() ? d.data() : { nome: "Dirigente não encontrado" });
+            dirigentesInfo = dirigentesDocs.map(d => d.exists() ? d.data() : {});
         }
-        
-        // Usaremos o primeiro dirigente da lista para o certificado
         const dirigentePrincipal = dirigentesInfo.length > 0 ? dirigentesInfo[0] : {};
 
         // 4. Loop para gerar um PDF para cada aluno
         for (const aluno of alunosAprovados) {
             console.log(`Gerando certificado para: ${aluno.nome}`);
 
-            // Preenche o modelo HTML com todos os dados dinâmicos
+            // Preenche os textos no modelo
             document.getElementById('cert-aluno-nome').textContent = aluno.nome.toUpperCase();
             document.getElementById('cert-curso-nome').textContent = turmaData.isEAE ? `${turmaData.nomeDaTurma} da ${turmaData.cursoNome}` : turmaData.cursoNome;
-            
+            document.getElementById('cert-nome-dirigente').textContent = dirigentePrincipal.nome || '';
+            document.getElementById('cert-nome-presidente').textContent = presidenteData.presidenteNome || '';
             const dataInicio = turmaData.dataInicio.toDate();
-            const dataFim = new Date(); // Pode ser ajustado para a data da última aula
-            const periodo = `realizado no período de ${dataInicio.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })} a ${dataFim.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })}`;
-            document.getElementById('cert-periodo').textContent = periodo;
+            const dataFim = new Date();
+            document.getElementById('cert-periodo').textContent = `realizado no período de ${dataInicio.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })} a ${dataFim.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })}`;
             document.getElementById('cert-data-emissao').textContent = `Santa Bárbara d'Oeste, ${new Date().toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' })}`;
 
-            document.getElementById('cert-nome-dirigente').textContent = dirigentePrincipal.nome || '';
-            document.getElementById('cert-assinatura-dirigente').src = dirigentePrincipal.assinaturaUrl || transparentPixel;
-            document.getElementById('cert-nome-presidente').textContent = presidenteData.presidenteNome || '';
-            document.getElementById('cert-assinatura-presidente').src = presidenteData.presidenteAssinaturaUrl || transparentPixel;
-            
-            // "Tira a foto" e cria o PDF
-           const canvas = await html2canvas(document.getElementById('certificate-wrapper'), {
-                useCORS: true 
-            });
+            // 5. PRÉ-CARREGA AS IMAGENS E AGUARDA A CONCLUSÃO
+            const [logoImg, dirigenteAssinaturaImg, presidenteAssinaturaImg] = await Promise.all([
+                precarregarImagem(document.getElementById('logo-cepat-cert').src),
+                precarregarImagem(dirigentePrincipal.assinaturaUrl),
+                precarregarImagem(presidenteData.presidenteAssinaturaUrl)
+            ]);
 
+            // 6. Insere as imagens CARREGADAS no modelo
+            if (dirigenteAssinaturaImg) document.getElementById('cert-assinatura-dirigente').src = dirigenteAssinaturaImg.src;
+            if (presidenteAssinaturaImg) document.getElementById('cert-assinatura-presidente').src = presidenteAssinaturaImg.src;
+
+            // 7. "Tira a foto" AGORA que tudo está pronto
+            const canvas = await html2canvas(document.getElementById('certificate-wrapper'), {
+                useCORS: true,
+                allowTaint: true // Ajuda com imagens de outras origens
+            });
+            
             const imgData = canvas.toDataURL('image/png');
             const pdf = new jsPDF({ orientation: 'landscape', unit: 'px', format: [1024, 728] });
             pdf.addImage(imgData, 'PNG', 0, 0, 1024, 728);
@@ -877,7 +901,6 @@ async function gerarCertificados() {
         alert("Ocorreu um erro ao gerar os certificados. Verifique o console.");
     }
 }
-
 
 
 // --- EVENTOS ---
