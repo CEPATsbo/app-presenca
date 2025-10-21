@@ -1,6 +1,6 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
 import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-auth.js";
-import { getFirestore, collection, collectionGroup, query, where, getDocs, doc, getDoc, limit, orderBy } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js"; // Adicionado orderBy
+import { getFirestore, collection, collectionGroup, query, where, getDocs, doc, getDoc, limit, orderBy, Timestamp, writeBatch, updateDoc, setDoc } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js"; // Adicionado orderBy, Timestamp, writeBatch, updateDoc, setDoc
 
 // --- CONFIGURAÇÕES E INICIALIZAÇÃO ---
 const firebaseConfig = {
@@ -30,6 +30,17 @@ const alunoContent = document.getElementById('aluno-content');
 const facilitadorContent = document.getElementById('facilitador-content');
 const btnLogout = document.getElementById('btn-logout');
 
+// Elementos do Modal de Frequência (Reaproveitados)
+const modalFrequencia = document.getElementById('modal-frequencia');
+const closeModalFrequenciaBtn = document.getElementById('close-modal-frequencia');
+const modalFrequenciaTitulo = document.getElementById('modal-frequencia-titulo');
+const frequenciaListContainer = document.getElementById('frequencia-list-container');
+const btnSalvarFrequencia = document.getElementById('btn-salvar-frequencia');
+
+// Variáveis de estado para o modal de frequência
+let currentTurmaIdModal = null; // Renomeado para evitar conflito
+let currentAulaIdModal = null; // Renomeado para evitar conflito
+
 // --- LÓGICA PRINCIPAL ---
 onAuthStateChanged(auth, async (user) => {
     if (user) {
@@ -37,40 +48,31 @@ onAuthStateChanged(auth, async (user) => {
         try {
             const qUser = query(collection(db, "voluntarios"), where("authUid", "==", user.uid), limit(1));
             const userSnapshot = await getDocs(qUser);
+            let userData, userId, origemBusca;
+
             if (userSnapshot.empty) {
-                // ## TENTATIVA DE BUSCAR NA COLEÇÃO 'ALUNOS' SE NÃO FOR VOLUNTÁRIO ##
-                const qAluno = query(collection(db, "alunos"), where("authUid", "==", user.uid), limit(1)); // Supondo que alunos possam ter authUid
+                const qAluno = query(collection(db, "alunos"), where("authUid", "==", user.uid), limit(1));
                 const alunoSnapshot = await getDocs(qAluno);
-                if (alunoSnapshot.empty) {
-                     throw new Error("Perfil não encontrado no sistema. Contate a secretaria.");
-                }
-                const userData = alunoSnapshot.docs[0].data();
-                const userId = alunoSnapshot.docs[0].id; // ID do documento da coleção 'alunos'
-                greetingName.textContent = `Olá, ${userData.nome}!`;
-
-                 // Se for encontrado como aluno, verificamos os papéis a partir daqui
-                 const [isAluno, isFacilitador, isAdmin] = await Promise.all([
-                    verificarPapelAluno(userId, 'aluno'), // Indica que a busca principal foi em 'alunos'
-                    verificarPapelFacilitador(userId), // Facilitador sempre será voluntário
-                    verificarPapelAdmin(user)
-                 ]);
-                 await processarPapeisEExibirModulos(userId, userData, isAluno, isFacilitador, isAdmin);
-
+                if (alunoSnapshot.empty) throw new Error("Perfil não encontrado. Contate a secretaria.");
+                userData = alunoSnapshot.docs[0].data();
+                userId = alunoSnapshot.docs[0].id;
+                origemBusca = 'aluno';
             } else {
-                 const userData = userSnapshot.docs[0].data();
-                 const userId = userSnapshot.docs[0].id; // ID do documento da coleção 'voluntarios'
-                 greetingName.textContent = `Olá, ${userData.nome}!`;
-
-                 const [isAluno, isFacilitador, isAdmin] = await Promise.all([
-                    verificarPapelAluno(userId, 'voluntario'), // Indica que a busca principal foi em 'voluntarios'
-                    verificarPapelFacilitador(userId), // Usa o ID do voluntário encontrado
-                    verificarPapelAdmin(user)
-                 ]);
-                 await processarPapeisEExibirModulos(userId, userData, isAluno, isFacilitador, isAdmin);
+                userData = userSnapshot.docs[0].data();
+                userId = userSnapshot.docs[0].id;
+                origemBusca = 'voluntario';
             }
+            greetingName.textContent = `Olá, ${userData.nome}!`;
+
+            const [isAluno, isFacilitador, isAdmin] = await Promise.all([
+                verificarPapelAluno(userId, origemBusca),
+                verificarPapelFacilitador(userId),
+                verificarPapelAdmin(user)
+            ]);
+            await processarPapeisEExibirModulos(userId, userData, isAluno, isFacilitador, isAdmin);
 
         } catch (error) {
-            console.error("Erro ao carregar dados do usuário:", error);
+            console.error("Erro ao carregar dados:", error);
             loadingMessage.classList.remove('hidden');
             loadingMessage.innerHTML = `<p style="color: red;">${error.message}</p>`;
         }
@@ -79,7 +81,6 @@ onAuthStateChanged(auth, async (user) => {
     }
 });
 
-// ## NOVA FUNÇÃO PARA PROCESSAR PAPÉIS E EXIBIR MÓDULOS ##
 async function processarPapeisEExibirModulos(userId, userData, isAluno, isFacilitador, isAdmin) {
     loadingMessage.classList.add('hidden');
     
@@ -89,19 +90,21 @@ async function processarPapeisEExibirModulos(userId, userData, isAluno, isFacili
     document.getElementById('dia-content').innerHTML = "<p>Carregando status de presença...</p>";
     document.getElementById('pessoal-content').innerHTML = "<p>Carregando seu perfil...</p>";
 
+    // Executa o carregamento dos módulos em paralelo
+    const promises = [];
     if (isAluno) {
         moduleAluno.classList.remove('hidden');
-        await carregarModuloAluno(userId); // Chama a função para preencher
+        promises.push(carregarModuloAluno(userId));
     }
     if (isFacilitador) {
         moduleFacilitador.classList.remove('hidden');
-        facilitadorContent.innerHTML = "<p>Carregando suas turmas...</p>";
+        promises.push(carregarModuloFacilitador(userId)); // Chama a função para preencher
     }
     if (isAdmin) {
         moduleGestao.classList.remove('hidden');
     }
+    await Promise.all(promises);
 }
-
 
 // --- FUNÇÕES DE VERIFICAÇÃO DE PAPÉIS ---
 async function verificarPapelAluno(userId, origemBusca) {
@@ -269,6 +272,164 @@ async function carregarErenderizarDetalhesAluno(turmaId, participanteDocId, deta
 // ## FIM DO BLOCO DO MÓDULO ALUNO ##
 // ===================================================================
 
+
+// ===================================================================
+// ## NOVO BLOCO: LÓGICA DO MÓDULO FACILITADOR (TRANSPLANTADO DE portal-facilitador.js) ##
+// ===================================================================
+async function carregarModuloFacilitador(userId) {
+    facilitadorContent.innerHTML = "<p>Buscando suas turmas...</p>";
+    try {
+        const turmasRef = collection(db, "turmas");
+        const qTurmas = query(turmasRef, where("facilitadoresIds", "array-contains", userId));
+        const turmasSnapshot = await getDocs(qTurmas);
+
+        if (turmasSnapshot.empty) {
+            facilitadorContent.innerHTML = '<p>Você não está designado como facilitador de nenhuma turma no momento.</p>';
+            return;
+        }
+
+        facilitadorContent.innerHTML = ''; // Limpa "carregando"
+        for (const turmaDoc of turmasSnapshot.docs) {
+            await renderizarCardDaTurmaFacilitador({ id: turmaDoc.id, ...turmaDoc.data() });
+        }
+    } catch (error) {
+        console.error("Erro ao carregar módulo do facilitador:", error);
+        facilitadorContent.innerHTML = '<p style="color: red;">Erro ao carregar suas turmas.</p>';
+    }
+}
+
+async function renderizarCardDaTurmaFacilitador(turmaData) {
+    const card = document.createElement('div');
+    card.className = 'card'; // Usando classe 'card'
+
+    const hojeInicio = new Date();
+    hojeInicio.setHours(0, 0, 0, 0);
+    const hojeFim = new Date();
+    hojeFim.setHours(23, 59, 59, 999);
+
+    const cronogramaRef = collection(db, "turmas", turmaData.id, "cronograma");
+    const qAula = query(cronogramaRef, 
+        where("dataAgendada", ">=", Timestamp.fromDate(hojeInicio)),
+        where("dataAgendada", "<=", Timestamp.fromDate(hojeFim)),
+        limit(1)
+    );
+    const aulaSnapshot = await getDocs(qAula);
+    
+    let aulaDeHoje = null;
+    if (!aulaSnapshot.empty) {
+        aulaDeHoje = { id: aulaSnapshot.docs[0].id, ...aulaSnapshot.docs[0].data() };
+    }
+    
+    const dataFormatada = hojeInicio.toLocaleDateString('pt-BR');
+    let aulaInfoHTML = '';
+    let isChamadaDisabled = true;
+    let buttonDataAttributes = '';
+
+    if (aulaDeHoje) {
+        aulaInfoHTML = `<strong>Aula de Hoje (${dataFormatada}):</strong><p>${aulaDeHoje.titulo}</p>`;
+        isChamadaDisabled = false;
+        buttonDataAttributes = `data-turma-id="${turmaData.id}" data-aula-id="${aulaDeHoje.id}" data-aula-titulo="${aulaDeHoje.titulo}"`;
+    } else {
+        aulaInfoHTML = `<strong>Aula de Hoje (${dataFormatada}):</strong><p>Nenhuma aula agendada.</p>`;
+    }
+
+    // Adaptando para o estilo de card do dashboard
+    card.innerHTML = `
+        <h4>${turmaData.nomeDaTurma}</h4>
+        <div style="background-color: #f1f5f9; padding: 10px; border-radius: 6px; margin-bottom: 15px;">
+            ${aulaInfoHTML}
+        </div>
+        <button class="btn-chamada-facilitador" ${buttonDataAttributes} ${isChamadaDisabled ? 'disabled' : ''} style="width: 100%; padding: 10px; background-color: ${isChamadaDisabled ? '#ccc' : '#16a34a'}; color: white; border: none; border-radius: 4px; cursor: ${isChamadaDisabled ? 'not-allowed' : 'pointer'}; font-weight: bold;">
+            <i class="fas fa-clipboard-list"></i> Realizar Chamada
+        </button>
+    `;
+    facilitadorContent.appendChild(card);
+}
+
+// ===================================================================
+// ## FUNÇÕES DO MODAL DE FREQUÊNCIA (REAPROVEITADAS) ##
+// ===================================================================
+async function abrirModalFrequencia(turmaId, aulaId, aulaTitulo) {
+    currentTurmaIdModal = turmaId;
+    currentAulaIdModal = aulaId;
+    modalFrequenciaTitulo.textContent = `Frequência: ${aulaTitulo}`;
+    frequenciaListContainer.innerHTML = '<li>Carregando lista...</li>';
+    modalFrequencia.classList.add('visible'); // Assume que o modal já existe no HTML
+
+    try {
+        const participantesRef = collection(db, "turmas", turmaId, "participantes");
+        const qParticipantes = query(participantesRef, orderBy("nome"));
+        const participantesSnapshot = await getDocs(qParticipantes);
+
+        const frequenciaRef = collection(db, "turmas", turmaId, "frequencias");
+        const qFrequencia = query(frequenciaRef, where("aulaId", "==", aulaId));
+        const frequenciaSnapshot = await getDocs(qFrequencia);
+        
+        const frequenciasSalvas = new Map();
+        frequenciaSnapshot.forEach(doc => frequenciasSalvas.set(doc.data().participanteId, doc.data().status));
+
+        let listHTML = '';
+        participantesSnapshot.forEach(doc => {
+            const participanteId = doc.id; // ID do documento na subcoleção 'participantes'
+            const participante = doc.data();
+            const participanteIdOriginal = participante.participanteId; // ID do aluno/voluntário
+            const statusAtual = frequenciasSalvas.get(participanteIdOriginal) || null; // Busca pelo ID original
+            
+            listHTML += `
+                <li class="attendance-item" data-participante-id="${participanteIdOriginal}" data-status="${statusAtual || ''}">
+                    <span>${participante.nome}</span>
+                    <div class="attendance-controls">
+                        <button class="btn-status presente ${statusAtual === 'presente' ? 'active' : ''}" data-status="presente">P</button>
+                        <button class="btn-status ausente ${statusAtual === 'ausente' ? 'active' : ''}" data-status="ausente">F</button>
+                        <button class="btn-status justificado ${statusAtual === 'justificado' ? 'active' : ''}" data-status="justificado">J</button>
+                    </div>
+                </li>`;
+        });
+        frequenciaListContainer.innerHTML = listHTML || '<li>Nenhum participante.</li>';
+    } catch(error) {
+        console.error("Erro ao carregar chamada:", error);
+        frequenciaListContainer.innerHTML = '<li>Erro ao carregar.</li>';
+    }
+}
+
+async function salvarFrequencia() {
+    if (!currentTurmaIdModal || !currentAulaIdModal) return;
+    btnSalvarFrequencia.disabled = true;
+    
+    try {
+        const batch = writeBatch(db);
+        const items = frequenciaListContainer.querySelectorAll('.attendance-item');
+
+        items.forEach(item => {
+            const participanteIdOriginal = item.dataset.participanteId; // ID do aluno/voluntário
+            const status = item.dataset.status || 'ausente';
+            const frequenciaDocId = `${currentAulaIdModal}_${participanteIdOriginal}`; // ID único usando ID original
+            const frequenciaRef = doc(db, "turmas", currentTurmaIdModal, "frequencias", frequenciaDocId);
+            batch.set(frequenciaRef, {
+                aulaId: currentAulaIdModal,
+                participanteId: participanteIdOriginal,
+                status: status,
+                turmaId: currentTurmaIdModal
+            });
+        });
+        
+        const aulaRef = doc(db, "turmas", currentTurmaIdModal, "cronograma", currentAulaIdModal);
+        batch.update(aulaRef, { status: 'realizada' });
+
+        await batch.commit();
+        alert("Frequência salva!");
+        modalFrequencia.classList.remove('visible');
+        // Opcional: Recarregar apenas o módulo do facilitador ou a página inteira
+        // location.reload(); 
+    } catch (error) {
+        console.error("Erro ao salvar frequência:", error);
+        alert("Erro ao salvar.");
+    } finally {
+        btnSalvarFrequencia.disabled = false;
+    }
+}
+
+
 // --- EVENTOS ---
 btnLogout.addEventListener('click', async (e) => {
     e.preventDefault();
@@ -276,18 +437,14 @@ btnLogout.addEventListener('click', async (e) => {
     window.location.href = 'login.html';
 });
 
-// ## NOVO EVENTO PARA OS BOTÕES DE DETALHES DO ALUNO ##
 alunoContent.addEventListener('click', async (e) => {
     const target = e.target.closest('.btn-details-aluno');
     if (!target) return;
-
     const card = target.closest('.card');
     const detailsContent = card.querySelector('.curso-details-content');
     const turmaId = target.dataset.turmaId;
-    const participanteDocId = target.dataset.participanteDocId; // ID do documento na subcoleção participantes
-
+    const participanteDocId = target.dataset.participanteDocId;
     const isHidden = detailsContent.classList.contains('hidden');
-
     if (isHidden) {
         detailsContent.classList.remove('hidden');
         target.innerHTML = `Ocultar Detalhes ▲`;
@@ -296,5 +453,27 @@ alunoContent.addEventListener('click', async (e) => {
         detailsContent.classList.add('hidden');
         target.innerHTML = `Ver Detalhes ▼`;
         detailsContent.innerHTML = '';
+    }
+});
+
+// ## NOVO EVENTO PARA OS BOTÕES DE CHAMADA DO FACILITADOR ##
+facilitadorContent.addEventListener('click', (e) => {
+    const target = e.target.closest('.btn-chamada-facilitador');
+    if (target && !target.disabled) {
+        const { turmaId, aulaId, aulaTitulo } = target.dataset;
+        abrirModalFrequencia(turmaId, aulaId, aulaTitulo);
+    }
+});
+
+// ## EVENTOS DO MODAL DE FREQUÊNCIA (REAPROVEITADOS) ##
+if(closeModalFrequenciaBtn) closeModalFrequenciaBtn.addEventListener('click', () => modalFrequencia.classList.remove('visible'));
+if(btnSalvarFrequencia) btnSalvarFrequencia.addEventListener('click', salvarFrequencia);
+if(frequenciaListContainer) frequenciaListContainer.addEventListener('click', (event) => {
+    if (event.target.classList.contains('btn-status')) {
+        const targetBtn = event.target;
+        const parentItem = targetBtn.closest('.attendance-item');
+        parentItem.dataset.status = targetBtn.dataset.status;
+        parentItem.querySelectorAll('.btn-status').forEach(btn => btn.classList.remove('active'));
+        targetBtn.classList.add('active');
     }
 });
