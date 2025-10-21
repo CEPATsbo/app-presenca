@@ -27,6 +27,21 @@
         .card p { color: #576574; }
         
         .hidden { display: none !important; }
+
+        /* Estilos do Modal de Frequência */
+        .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0, 0, 0, 0.6); display: flex; justify-content: center; align-items: center; z-index: 1000; visibility: hidden; opacity: 0; transition: opacity 0.3s; }
+        .modal-overlay.visible { visibility: visible; opacity: 1; }
+        .modal-content { background-color: white; padding: 25px; border-radius: 10px; width: 90%; max-width: 500px; position: relative; max-height: 80vh; overflow-y: auto; }
+        .modal-content h3 { margin-top: 0; }
+        .modal-close-btn { position: absolute; top: 10px; right: 15px; font-size: 1.5em; cursor: pointer; color: #888; border: none; background: none; }
+        .attendance-list { list-style-type: none; padding: 0; }
+        .attendance-item { display: flex; justify-content: space-between; align-items: center; padding: 10px; border-bottom: 1px solid #eee; }
+        .attendance-controls { display: flex; gap: 5px; }
+        .attendance-controls .btn-status { font-size: 0.8em; padding: 5px 8px; border: 1px solid #ccc; background-color: #f9f9f9; color: #333; border-radius: 4px; cursor: pointer; }
+        .attendance-controls .btn-status.active.presente { background-color: #dcfce7; border-color: #4ade80; color: #15803d; }
+        .attendance-controls .btn-status.active.ausente { background-color: #fee2e2; border-color: #f87171; color: #b91c1c; }
+        .attendance-controls .btn-status.active.justificado { background-color: #fef9c3; border-color: #facc15; color: #713f12; }
+        .btn-primary { background-color: #0277BD; color: white; padding: 10px 18px; border: none; border-radius: 6px; font-weight: bold; cursor: pointer; }
     </style>
 </head>
 <body>
@@ -43,26 +58,20 @@
 
         <section id="module-dia" class="module-section hidden">
             <h3><i class="fas fa-check-circle"></i> Ações do Dia</h3>
-            <div id="dia-content" class="card-container">
-                </div>
+            <div id="dia-content" class="card-container"></div>
         </section>
-
         <section id="module-pessoal" class="module-section hidden">
             <h3><i class="fas fa-user"></i> Pessoal</h3>
-            <div id="pessoal-content" class="card-container">
-                 </div>
+            <div id="pessoal-content" class="card-container"></div>
         </section>
-
         <section id="module-aluno" class="module-section hidden">
             <h3><i class="fas fa-graduation-cap"></i> Meu Progresso como Aluno</h3>
             <div id="aluno-content" class="card-container"></div>
         </section>
-
         <section id="module-facilitador" class="module-section hidden">
             <h3><i class="fas fa-chalkboard-teacher"></i> Minhas Turmas como Facilitador</h3>
             <div id="facilitador-content" class="card-container"></div>
         </section>
-
         <section id="module-gestao" class="module-section hidden">
             <h3><i class="fas fa-cogs"></i> Acesso Administrativo</h3>
             <div class="card-container">
@@ -72,7 +81,6 @@
                 </a>
             </div>
         </section>
-
         <section id="module-servicos" class="module-section hidden">
             <h3><i class="fas fa-house-user"></i> Serviços da Casa</h3>
             <div id="servicos-content" class="card-container">
@@ -89,6 +97,17 @@
 
         <div id="loading-message" class="loading-message">
             <p>Carregando suas informações...</p>
+        </div>
+    </div>
+
+    <div class="modal-overlay" id="modal-frequencia">
+        <div class="modal-content">
+            <button class="modal-close-btn" id="close-modal-frequencia">&times;</button>
+            <h3 id="modal-frequencia-titulo">Lançar Frequência</h3>
+            <ul class="attendance-list" id="frequencia-list-container">
+                <li>Carregando...</li>
+            </ul>
+            <button class="btn-primary" id="btn-salvar-frequencia" style="margin-top: 20px;">Salvar Frequência</button>
         </div>
     </div>
 
