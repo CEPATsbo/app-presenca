@@ -7,11 +7,11 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
     <style>
         body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background-color: #f4f6f9; margin: 0; padding: 20px; display: flex; flex-direction: column; align-items: center; }
-        .container { width: 100%; max-width: 900px; display: none; } /* Começa invisível */
+        .container { width: 100%; max-width: 900px; display: none; }
         .header { display: flex; justify-content: space-between; align-items: center; padding-bottom: 15px; margin-bottom: 20px; border-bottom: 1px solid #e0e0e0; }
         .header h1 { font-size: 1.8em; margin: 0; color: #2c3e50; }
         .btn-logout { background-color: #c0392b; color: white; padding: 8px 15px; border-radius: 6px; text-decoration: none; font-weight: bold; }
-
+        
         #user-greeting { margin-bottom: 30px; }
         #user-greeting h2 { margin-bottom: 5px; }
         #user-greeting p { color: #555; margin-top: 0; }
@@ -25,6 +25,7 @@
         .card:hover { transform: translateY(-5px); }
         .card h4 { margin-top: 0; font-size: 1.3em; color: #0277BD; }
         .card p { color: #576574; }
+        .card .card-link { color: #0277BD; text-decoration: none; font-weight: bold; cursor: pointer; margin-top: 10px; display: inline-block; }
 
         .hidden { display: none !important; }
 
@@ -52,11 +53,20 @@
         .presenca-registrada-info { font-size: 0.9em; color: #555; margin-top: 15px; }
         .btn-tertiary { background-color: transparent; color: #555; border: 1px solid #ccc; padding: 8px 15px; border-radius: 6px; cursor: pointer; }
 
-
         /* Estilos para o Modal de Atividades */
         #atividades-modal-lista { max-height: 200px; overflow-y: auto; margin-bottom: 15px; text-align: left; }
         #atividades-modal-lista div { margin-bottom: 8px; }
 
+        /* Estilos dos cards "Meu Perfil" e "Minhas Pendências" */
+        .profile-card p, .pendencias-card p { margin: 8px 0; color: #333; font-size: 1em; }
+        .profile-card p strong, .pendencias-card p strong { color: #576574; }
+        .item-details-list { margin: 5px 0 0 20px; padding: 0; }
+        .item-details-list li { font-size: 0.9em; color: #333; }
+
+        /* Estilo do histórico de presença */
+        #history-list-container { max-height: 300px; overflow-y: auto; }
+        #history-list-container ul { list-style-type: none; padding: 0; }
+        #history-list-container li { background-color: #f9f9f9; padding: 10px; border-radius: 4px; margin-bottom: 8px; }
     </style>
 </head>
 <body>
@@ -83,19 +93,17 @@
         <section id="module-pessoal" class="module-section hidden">
             <h3><i class="fas fa-user"></i> Pessoal</h3>
             <div id="pessoal-content" class="card-container">
-                </div>
+                <p class="loading-message">Carregando informações pessoais...</p>
+            </div>
         </section>
 
         <section id="module-aluno" class="module-section hidden">
             <h3><i class="fas fa-graduation-cap"></i> Meu Progresso como Aluno</h3>
-            <div id="aluno-content" class="card-container">
-                </div>
+            <div id="aluno-content" class="card-container"></div>
         </section>
-
         <section id="module-facilitador" class="module-section hidden">
             <h3><i class="fas fa-chalkboard-teacher"></i> Minhas Turmas como Facilitador</h3>
-            <div id="facilitador-content" class="card-container">
-                </div>
+            <div id="facilitador-content" class="card-container"></div>
         </section>
 
         <section id="module-gestao" class="module-section hidden">
@@ -127,25 +135,52 @@
         </div>
     </div>
 
-    <div class="modal-overlay" id="modal-frequencia">
+    <div class="modal-overlay" id="modal-frequencia">...</div>
+    <div class="modal-overlay" id="modal-atividades-presenca">...</div>
+
+    <div class="modal-overlay" id="modal-detalhes">
         <div class="modal-content">
-            <button class="modal-close-btn" id="close-modal-frequencia">&times;</button>
-            <h3 id="modal-frequencia-titulo">Lançar Frequência</h3>
-            <ul class="attendance-list" id="frequencia-list-container">
-                <li>Carregando...</li>
-            </ul>
-            <button class="btn-primary" id="btn-salvar-frequencia" style="margin-top: 20px;">Salvar Frequência</button>
+            <button class="modal-close-btn" id="close-modal-detalhes">&times;</button>
+            <h3>Detalhes das Pendências</h3>
+            <div id="detalhes-cantina-container"></div>
+            <hr>
+            <div id="detalhes-biblioteca-container"></div>
+            <hr>
+            <div id="detalhes-emprestimos-container"></div>
+        </div>
+    </div>
+    
+    <div class="modal-overlay" id="modal-editar-perfil">
+        <div class="modal-content">
+            <button class="modal-close-btn" id="close-modal-editar-perfil">&times;</button>
+            <h3>Editar Meus Dados</h3>
+            <form id="form-editar-perfil">
+                <div class="form-group">
+                    <label for="edit-nome">Nome Completo</label>
+                    <input type="text" id="edit-nome" required>
+                </div>
+                <div class="form-group">
+                    <label for="edit-telefone">Telefone</label>
+                    <input type="tel" id="edit-telefone" placeholder="(XX) XXXXX-XXXX">
+                </div>
+                <div class="form-group">
+                    <label for="edit-endereco">Endereço Completo</label>
+                    <input type="text" id="edit-endereco" placeholder="Rua, Número, Bairro...">
+                </div>
+                <div class="form-group">
+                    <label for="edit-aniversario">Aniversário (Dia/Mês)</label>
+                    <input type="text" id="edit-aniversario" placeholder="dd/mm">
+                </div>
+                <button type="submit" class="btn-primary" id="btn-salvar-perfil" style="width: 100%;">Salvar Alterações</button>
+            </form>
         </div>
     </div>
 
-    <div class="modal-overlay" id="modal-atividades-presenca">
+    <div class="modal-overlay" id="modal-historico">
         <div class="modal-content">
-            <button class="modal-close-btn" id="close-modal-atividades">&times;</button>
-            <h3>Selecione suas Atividades de Hoje</h3>
-            <form id="form-atividades-presenca">
-                <div id="atividades-modal-lista">Carregando atividades...</div>
-                <button type="submit" class="btn-primary" id="btn-confirmar-presenca" style="width: 100%;">Confirmar Presença</button>
-            </form>
+            <button class="modal-close-btn" id="close-modal-historico">&times;</button>
+            <h3>Meu Histórico de Presença</h3>
+            <div id="history-list-container"></div>
         </div>
     </div>
 
