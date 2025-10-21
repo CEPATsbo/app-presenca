@@ -11,7 +11,7 @@
         .header { display: flex; justify-content: space-between; align-items: center; padding-bottom: 15px; margin-bottom: 20px; border-bottom: 1px solid #e0e0e0; }
         .header h1 { font-size: 1.8em; margin: 0; color: #2c3e50; }
         .btn-logout { background-color: #c0392b; color: white; padding: 8px 15px; border-radius: 6px; text-decoration: none; font-weight: bold; }
-        
+
         #user-greeting { margin-bottom: 30px; }
         #user-greeting h2 { margin-bottom: 5px; }
         #user-greeting p { color: #555; margin-top: 0; }
@@ -25,7 +25,7 @@
         .card:hover { transform: translateY(-5px); }
         .card h4 { margin-top: 0; font-size: 1.3em; color: #0277BD; }
         .card p { color: #576574; }
-        
+
         .hidden { display: none !important; }
 
         /* Estilos do Modal de Frequência */
@@ -42,6 +42,21 @@
         .attendance-controls .btn-status.active.ausente { background-color: #fee2e2; border-color: #f87171; color: #b91c1c; }
         .attendance-controls .btn-status.active.justificado { background-color: #fef9c3; border-color: #facc15; color: #713f12; }
         .btn-primary { background-color: #0277BD; color: white; padding: 10px 18px; border: none; border-radius: 6px; font-weight: bold; cursor: pointer; }
+
+         /* Estilos específicos para o Card de Presença */
+        .presenca-card { background-color: white; border-radius: 12px; box-shadow: 0 4px 15px rgba(0, 0, 0, 0.08); padding: 25px; text-align: center; }
+        .presenca-card h4 { margin-top: 0; font-size: 1.3em; color: #34495e; display: flex; align-items: center; justify-content: center; gap: 8px; }
+        .presenca-card p { color: #576574; font-size: 1em; margin-bottom: 20px; }
+        .btn-presenca { background-color: #16a34a; color: white; padding: 12px 25px; border: none; border-radius: 6px; cursor: pointer; font-weight: bold; font-size: 1.1em; width: 100%; }
+        .btn-presenca:disabled { background-color: #9ca3af; cursor: not-allowed; }
+        .presenca-registrada-info { font-size: 0.9em; color: #555; margin-top: 15px; }
+        .btn-tertiary { background-color: transparent; color: #555; border: 1px solid #ccc; padding: 8px 15px; border-radius: 6px; cursor: pointer; }
+
+
+        /* Estilos para o Modal de Atividades */
+        #atividades-modal-lista { max-height: 200px; overflow-y: auto; margin-bottom: 15px; text-align: left; }
+        #atividades-modal-lista div { margin-bottom: 8px; }
+
     </style>
 </head>
 <body>
@@ -58,20 +73,31 @@
 
         <section id="module-dia" class="module-section hidden">
             <h3><i class="fas fa-check-circle"></i> Ações do Dia</h3>
-            <div id="dia-content" class="card-container"></div>
+            <div id="dia-content" class="card-container">
+                 <div id="presenca-card-content">
+                     <p class="loading-message">Verificando status de presença...</p>
+                 </div>
+            </div>
         </section>
+
         <section id="module-pessoal" class="module-section hidden">
             <h3><i class="fas fa-user"></i> Pessoal</h3>
-            <div id="pessoal-content" class="card-container"></div>
+            <div id="pessoal-content" class="card-container">
+                </div>
         </section>
+
         <section id="module-aluno" class="module-section hidden">
             <h3><i class="fas fa-graduation-cap"></i> Meu Progresso como Aluno</h3>
-            <div id="aluno-content" class="card-container"></div>
+            <div id="aluno-content" class="card-container">
+                </div>
         </section>
+
         <section id="module-facilitador" class="module-section hidden">
             <h3><i class="fas fa-chalkboard-teacher"></i> Minhas Turmas como Facilitador</h3>
-            <div id="facilitador-content" class="card-container"></div>
+            <div id="facilitador-content" class="card-container">
+                </div>
         </section>
+
         <section id="module-gestao" class="module-section hidden">
             <h3><i class="fas fa-cogs"></i> Acesso Administrativo</h3>
             <div class="card-container">
@@ -81,6 +107,7 @@
                 </a>
             </div>
         </section>
+
         <section id="module-servicos" class="module-section hidden">
             <h3><i class="fas fa-house-user"></i> Serviços da Casa</h3>
             <div id="servicos-content" class="card-container">
@@ -108,6 +135,17 @@
                 <li>Carregando...</li>
             </ul>
             <button class="btn-primary" id="btn-salvar-frequencia" style="margin-top: 20px;">Salvar Frequência</button>
+        </div>
+    </div>
+
+    <div class="modal-overlay" id="modal-atividades-presenca">
+        <div class="modal-content">
+            <button class="modal-close-btn" id="close-modal-atividades">&times;</button>
+            <h3>Selecione suas Atividades de Hoje</h3>
+            <form id="form-atividades-presenca">
+                <div id="atividades-modal-lista">Carregando atividades...</div>
+                <button type="submit" class="btn-primary" id="btn-confirmar-presenca" style="width: 100%;">Confirmar Presença</button>
+            </form>
         </div>
     </div>
 
