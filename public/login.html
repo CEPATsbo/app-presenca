@@ -46,6 +46,36 @@
         const app = initializeApp(firebaseConfig);
         const auth = getAuth(app);
 
+        // ===================================================================
+        // INÍCIO - FUNÇÕES DE CONTROLE DE SESSÃO DIÁRIA (FIX DO CACHE MÓVEL)
+        // ===================================================================
+        /**
+         * Retorna a data de hoje no formato 'AAAA-MM-DD'.
+         * @returns {string} A data de hoje formatada.
+         */
+        function getHojeString() {
+            const hoje = new Date();
+            const ano = hoje.getFullYear();
+            const mes = String(hoje.getMonth() + 1).padStart(2, '0');
+            const dia = String(hoje.getDate()).padStart(2, '0');
+            return `${ano}-${mes}-${dia}`;
+        }
+
+        /**
+         * Salva a data de hoje no armazenamento local do navegador para registrar a atividade.
+         */
+        function atualizarTimestampAtividade() {
+            try {
+                localStorage.setItem('ultimaAtividade', getHojeString());
+                console.log('Timestamp de atividade atualizado pelo login.html.');
+            } catch (e) {
+                console.warn("Não foi possível acessar o localStorage.");
+            }
+        }
+        // ===================================================================
+        // FIM - FUNÇÕES DE CONTROLE DE SESSÃO
+        // ===================================================================
+
         const emailInput = document.getElementById('email');
         const passwordInput = document.getElementById('password');
         const loginButton = document.getElementById('btn-login');
@@ -84,6 +114,11 @@
         };
 
         async function handleRedirect(user) {
+            
+            // !!! LINHA ADICIONADA: FIX DO CACHE MÓVEL !!!
+            // Atualiza o timestamp de atividade ANTES de fazer qualquer redirecionamento.
+            atualizarTimestampAtividade();
+
             // 1. Verifica se o usuário estava tentando acessar uma página específica
             const urlParams = new URLSearchParams(window.location.search);
             const redirectUrl = urlParams.get('redirectUrl');
@@ -102,7 +137,7 @@
                 window.location.href = '/dashboard.html';
             } else {
                 // Se for um voluntário comum, vai para a página de presença
-                window.location.href = '/index.html';
+                window.location.href = '/meu-cepat.html';
             }
         }
         
