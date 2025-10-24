@@ -1,5 +1,6 @@
 // /js/cadastro.js
 // VERSÃO COM LÓGICA DE VINCULAÇÃO POR NOME (SUGESTÃO)
+// INCLUI CORREÇÃO PARA CASE-SENSITIVE NA BUSCA
 
 import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
 import { getAuth, createUserWithEmailAndPassword, updateProfile } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-auth.js";
@@ -9,7 +10,7 @@ const firebaseConfig = {
     apiKey: "AIzaSyBV7RPjk3cFTqL-aIpflJcUojKg1ZXMLuU",
     authDomain: "voluntarios-ativos---cepat.firebaseapp.com",
     projectId: "voluntarios-ativos---cepat",
-    storageBucket: "voluntarios-ativos---cepat.firebasestorage.app", // Corrigido
+    storageBucket: "voluntarios-ativos---cepat.firebasestorage.app",
     messagingSenderId: "66122858261",
     appId: "1:66122858261:web:7fa21f1805463b5c08331c"
 };
@@ -50,18 +51,25 @@ inputNome.addEventListener('input', () => {
         modal.classList.remove('modal-visible');
         return; // Só busca com 4+ caracteres
     }
+    
+    // --- CORREÇÃO DE CASE-SENSITIVE ---
+    // Capitaliza a primeira letra da busca (Ex: "maria" -> "Maria")
+    // Isso assume que os nomes no banco estão capitalizados.
+    const nomeCapitalizado = nomeDigitado.charAt(0).toUpperCase() + nomeDigitado.slice(1);
+    // --- FIM DA CORREÇÃO ---
 
     // Espera 500ms após a última tecla antes de consultar o banco
     debounceTimer = setTimeout(async () => {
-        console.log(`Buscando por nomes começando com: ${nomeDigitado}`);
+        // Log usa o nome capitalizado
+        console.log(`Buscando por nomes começando com: ${nomeCapitalizado}`); 
         
         const voluntariosRef = collection(db, "voluntarios");
         // Consulta:
-        // 1. Nome começa com o digitado (case-sensitive, infelizmente é uma limitação)
+        // 1. Nome começa com o digitado (case-sensitive)
         // 2. E que AINDA NÃO TEM login (authUid == null)
         const q = query(voluntariosRef, 
-            where("nome", ">=", nomeDigitado), 
-            where("nome", "<=", nomeDigitado + '\uf8ff'),
+            where("nome", ">=", nomeCapitalizado), // Usa a variável capitalizada
+            where("nome", "<=", nomeCapitalizado + '\uf8ff'), // Usa a variável capitalizada
             where("authUid", "==", null), // A MÁGICA: SÓ PEGA ÓRFÃOS
             limit(5)
         );
@@ -77,6 +85,7 @@ inputNome.addEventListener('input', () => {
         }
 
         // Se encontrou, preenche o pop-up
+        console.log("Voluntários 'órfãos' encontrados!"); // Novo log
         querySnapshot.forEach(doc => {
             const voluntario = doc.data();
             const li = document.createElement('li');
@@ -129,13 +138,13 @@ btnNovoUsuario.addEventListener('click', () => {
     console.log("Usuário selecionou 'Novo Cadastro'.");
     voluntarioSelecionadoId = null; // Garante que vamos criar um novo
     modal.classList.remove('modal-visible');
-    // Opcional: Travar o inputNome para ele não mudar e reabrir o modal
+    // Trava o inputNome para ele não mudar e reabrir o modal
     inputNome.disabled = true; 
     msgVinculado.textContent = `Ok! Prosseguindo com um novo cadastro para ${inputNome.value}.`;
     msgVinculado.style.display = 'block';
 });
 
-// ===================================================================
+// =isto==================================================================
 // SUBMISSÃO DO FORMULÁRIO (A LÓGICA FINAL)
 // ===================================================================
 formCadastro.addEventListener('submit', async (event) => {
@@ -145,7 +154,13 @@ formCadastro.addEventListener('submit', async (event) => {
     // Re-habilita o nome só para pegar o valor, caso esteja travado
     inputNome.disabled = false; 
     const nome = inputNome.value.trim();
-    inputNome.disabled = (voluntarioSelecionadoId != null); // Trava de novo se for o caso
+    inputNome.disabled = (voluntarioSelecionadoId != null || (modal.classList.contains('modal-visible') && !voluntarioSelecionadoId) ); // Trava de novo se for o caso
+    
+    // Se o modal estiver visível e o usuário não selecionou ninguém, ele não pode submeter
+    if (modal.classList.contains('modal-visible') && !voluntarioSelecionadoId) {
+        alert("Por favor, selecione se você é um dos voluntários da lista ou clique em 'Não sou nenhum desses'.");
+        return;
+    }
 
     const email = inputEmail.value.trim().toLowerCase();
     const senha = inputSenha.value;
@@ -206,6 +221,7 @@ formCadastro.addEventListener('submit', async (event) => {
                 cargos: { // Define cargos padrão
                     voluntario: true 
                 }
+                // Adicione aqui outros campos padrão, como data de cadastro
             });
             console.log("SUCESSO: Novo documento de voluntário criado no Firestore.");
         }
