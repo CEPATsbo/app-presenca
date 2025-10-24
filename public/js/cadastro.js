@@ -1,6 +1,5 @@
 // /js/cadastro.js
-// VERSÃO COM LÓGICA DE VINCULAÇÃO POR NOME (SUGESTÃO)
-// INCLUI CORREÇÃO PARA CASE-SENSITIVE NA BUSCA
+// VERSÃO CORRIGIDA (Lógica de filtro local)
 
 import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
 import { getAuth, createUserWithEmailAndPassword, updateProfile } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-auth.js";
@@ -34,14 +33,13 @@ const btnNovoUsuario = document.getElementById('btn-novo-usuario');
 const msgVinculado = document.getElementById('msg-vinculado');
 
 // --- Variáveis de Estado ---
-let debounceTimer; // Para o "buscar enquanto digita"
-let voluntarioSelecionadoId = null; // Chave-mestra: decide se vamos ATUALIZAR ou CRIAR
+let debounceTimer; 
+let voluntarioSelecionadoId = null; 
 
 // ===================================================================
-// FUNÇÃO DEBUSCA (Buscar-enquanto-digita)
+// FUNÇÃO DE BUSCA (Buscar-enquanto-digita)
 // ===================================================================
 inputNome.addEventListener('input', () => {
-    // Se o usuário já selecionou um nome, não faz mais buscas
     if (voluntarioSelecionadoId) return;
 
     clearTimeout(debounceTimer);
@@ -49,44 +47,43 @@ inputNome.addEventListener('input', () => {
 
     if (nomeDigitado.length < 4) {
         modal.classList.remove('modal-visible');
-        return; // Só busca com 4+ caracteres
+        return; 
     }
     
-    // --- CORREÇÃO DE CASE-SENSITIVE ---
-    // Capitaliza a primeira letra da busca (Ex: "maria" -> "Maria")
-    // Isso assume que os nomes no banco estão capitalizados.
     const nomeCapitalizado = nomeDigitado.charAt(0).toUpperCase() + nomeDigitado.slice(1);
-    // --- FIM DA CORREÇÃO ---
 
-    // Espera 500ms após a última tecla antes de consultar o banco
     debounceTimer = setTimeout(async () => {
-        // Log usa o nome capitalizado
         console.log(`Buscando por nomes começando com: ${nomeCapitalizado}`); 
         
         const voluntariosRef = collection(db, "voluntarios");
-        // Consulta:
-        // 1. Nome começa com o digitado (case-sensitive)
-        // 2. E que AINDA NÃO TEM login (authUid == null)
+
+        // --- MUDANÇA DE LÓGICA AQUI ---
+        // 1. Buscamos APENAS pelo nome.
         const q = query(voluntariosRef, 
-            where("nome", ">=", nomeCapitalizado), // Usa a variável capitalizada
-            where("nome", "<=", nomeCapitalizado + '\uf8ff'), // Usa a variável capitalizada
-            where("authUid", "==", null), // A MÁGICA: SÓ PEGA ÓRFÃOS
-            limit(5)
+            where("nome", ">=", nomeCapitalizado), 
+            where("nome", "<=", nomeCapitalizado + '\uf8ff'),
+            limit(10) // Pegamos 10 para poder filtrar
         );
 
         const querySnapshot = await getDocs(q);
 
-        listaSugestoes.innerHTML = ''; // Limpa sugestões antigas
+        // 2. Filtramos a lista AQUI no JavaScript
+        //    Buscamos por voluntários que não tenham o 'authUid' (seja nulo ou indefinido)
+        const orfaos = querySnapshot.docs.filter(doc => !doc.data().authUid);
+        // --- FIM DA MUDANÇA ---
 
-        if (querySnapshot.empty) {
+
+        listaSugestoes.innerHTML = ''; 
+
+        if (orfaos.length === 0) {
             console.log("Nenhum voluntário 'órfão' encontrado.");
             modal.classList.remove('modal-visible');
             return;
         }
 
         // Se encontrou, preenche o pop-up
-        console.log("Voluntários 'órfãos' encontrados!"); // Novo log
-        querySnapshot.forEach(doc => {
+        console.log("Voluntários 'órfãos' encontrados!"); 
+        orfaos.forEach(doc => {
             const voluntario = doc.data();
             const li = document.createElement('li');
             li.textContent = voluntario.nome;
@@ -94,15 +91,15 @@ inputNome.addEventListener('input', () => {
             const btnSouEu = document.createElement('button');
             btnSouEu.textContent = 'Sou eu';
             btnSouEu.className = 'btn-sou-eu';
-            btnSouEu.type = 'button'; // Previne submit do formulário
-            btnSouEu.dataset.id = doc.id; // Guarda o ID do documento
-            btnSouEu.dataset.nome = voluntario.nome; // Guarda o nome completo
+            btnSouEu.type = 'button'; 
+            btnSouEu.dataset.id = doc.id; 
+            btnSouEu.dataset.nome = voluntario.nome; 
             
             li.appendChild(btnSouEu);
             listaSugestoes.appendChild(li);
         });
 
-        modal.classList.add('modal-visible'); // Mostra o pop-up
+        modal.classList.add('modal-visible'); 
 
     }, 500);
 });
@@ -119,16 +116,11 @@ listaSugestoes.addEventListener('click', (e) => {
         
         console.log(`Voluntário selecionado! ID: ${docId}`);
         
-        // 1. Guarda o ID para o submit
         voluntarioSelecionadoId = docId;
-        
-        // 2. Atualiza o formulário
-        inputNome.value = nomeCompleto; // Preenche o nome correto
-        inputNome.disabled = true; // Trava o campo nome
+        inputNome.value = nomeCompleto; 
+        inputNome.disabled = true; 
         msgVinculado.textContent = `Ótimo! Vamos vincular sua conta, ${nomeCompleto.split(' ')[0]}.`;
         msgVinculado.style.display = 'block';
-
-        // 3. Fecha o modal
         modal.classList.remove('modal-visible');
     }
 });
@@ -136,27 +128,24 @@ listaSugestoes.addEventListener('click', (e) => {
 // Ação: Usuário clica em "Não sou nenhum desses"
 btnNovoUsuario.addEventListener('click', () => {
     console.log("Usuário selecionou 'Novo Cadastro'.");
-    voluntarioSelecionadoId = null; // Garante que vamos criar um novo
+    voluntarioSelecionadoId = null; 
     modal.classList.remove('modal-visible');
-    // Trava o inputNome para ele não mudar e reabrir o modal
     inputNome.disabled = true; 
     msgVinculado.textContent = `Ok! Prosseguindo com um novo cadastro para ${inputNome.value}.`;
     msgVinculado.style.display = 'block';
 });
 
-// =isto==================================================================
+// ===================================================================
 // SUBMISSÃO DO FORMULÁRIO (A LÓGICA FINAL)
 // ===================================================================
 formCadastro.addEventListener('submit', async (event) => {
     event.preventDefault();
     console.log("--- INICIANDO PROCESSO DE CADASTRO ---");
 
-    // Re-habilita o nome só para pegar o valor, caso esteja travado
     inputNome.disabled = false; 
     const nome = inputNome.value.trim();
-    inputNome.disabled = (voluntarioSelecionadoId != null || (modal.classList.contains('modal-visible') && !voluntarioSelecionadoId) ); // Trava de novo se for o caso
+    inputNome.disabled = (voluntarioSelecionadoId != null || (modal.classList.contains('modal-visible') && !voluntarioSelecionadoId) ); 
     
-    // Se o modal estiver visível e o usuário não selecionou ninguém, ele não pode submeter
     if (modal.classList.contains('modal-visible') && !voluntarioSelecionadoId) {
         alert("Por favor, selecione se você é um dos voluntários da lista ou clique em 'Não sou nenhum desses'.");
         return;
@@ -183,51 +172,42 @@ formCadastro.addEventListener('submit', async (event) => {
     btnCadastrar.textContent = 'Aguarde...';
 
     try {
-        // 1. Criar o usuário no Firebase Authentication (isso sempre acontece)
         console.log("Tentando criar usuário no Firebase Auth...");
         const userCredential = await createUserWithEmailAndPassword(auth, email, senha);
         const user = userCredential.user;
         console.log("SUCESSO: Usuário criado no Auth:", user.uid);
 
-        // 2. Atualizar o perfil do usuário no Auth com o nome
         await updateProfile(user, { displayName: nome });
 
-        // 3. DECISÃO: Vincular (Update) ou Criar Novo (Set)?
         if (voluntarioSelecionadoId) {
-            // ========================================
             // CASO A: VINCULAR CONTA (UPDATE)
-            // ========================================
             console.log(`Vinculando Auth UID ${user.uid} ao documento ${voluntarioSelecionadoId}`);
             const userDocRef = doc(db, "voluntarios", voluntarioSelecionadoId);
             await updateDoc(userDocRef, {
                 authUid: user.uid,
-                email: email, // Atualiza o email no registro antigo
-                nome: nome    // Atualiza o nome, caso ele tenha corrigido
+                email: email, 
+                nome: nome    
             });
             console.log("SUCESSO: Conta antiga vinculada ao novo login.");
 
         } else {
-            // ========================================
             // CASO B: CRIAR NOVO REGISTRO (SET)
-            // ========================================
             console.log("Nenhum voluntário selecionado. Criando novo registro...");
-            // Usamos o Auth UID como ID do documento no Firestore (excelente prática!)
             const userDocRef = doc(db, "voluntarios", user.uid);
             await setDoc(userDocRef, {
                 authUid: user.uid,
                 nome: nome,
                 email: email,
                 statusVoluntario: 'ativo',
-                cargos: { // Define cargos padrão
+                cargos: { 
                     voluntario: true 
                 }
-                // Adicione aqui outros campos padrão, como data de cadastro
             });
             console.log("SUCESSO: Novo documento de voluntário criado no Firestore.");
         }
 
         alert(`Bem-vindo, ${nome}! Conta criada/vinculada com sucesso.`);
-        window.location.href = '/meu-cepat.html'; // Redireciona para o portal do voluntário
+        window.location.href = '/meu-cepat.html'; 
 
     } catch (error) {
         console.error("ERRO DETALHADO NO CADASTRO:", error);
@@ -240,6 +220,6 @@ formCadastro.addEventListener('submit', async (event) => {
     } finally {
         btnCadastrar.disabled = false;
         btnCadastrar.textContent = 'FINALIZAR CADASTRO';
-        inputNome.disabled = false; // Libera o campo nome em caso de erro
+        inputNome.disabled = false; 
     }
 });
