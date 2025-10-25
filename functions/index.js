@@ -191,6 +191,24 @@ exports.promoverParaEntrevistador = onCall(OPCOES_FUNCAO, async (request) => {
     return { success: true, message: 'Usuário promovido a Entrevistador(a) com sucesso.' };
 });
 
+// ### AJUSTE 1 DE 2: NOVAS FUNÇÕES DE PROMOÇÃO ADICIONADAS ###
+exports.promoverParaDirigenteEscola = onCall(OPCOES_FUNCAO, async (request) => {
+    if (request.auth.token.role !== 'super-admin') { throw new HttpsError('permission-denied', 'Apenas o Super Admin pode promover usuários.'); }
+    const uidParaPromover = request.data.uid;
+    if (!uidParaPromover) { throw new HttpsError('invalid-argument', 'O UID do usuário é necessário.'); }
+    await promoverUsuario(uidParaPromover, 'dirigente-escola');
+    return { success: true, message: 'Usuário promovido a Dirigente de Escola com sucesso.' };
+});
+
+exports.promoverParaSecretarioEscola = onCall(OPCOES_FUNCAO, async (request) => {
+    if (request.auth.token.role !== 'super-admin') { throw new HttpsError('permission-denied', 'Apenas o Super Admin pode promover usuários.'); }
+    const uidParaPromover = request.data.uid;
+    if (!uidParaPromover) { throw new HttpsError('invalid-argument', 'O UID do usuário é necessário.'); }
+    await promoverUsuario(uidParaPromover, 'secretario-escola');
+    return { success: true, message: 'Usuário promovido a Secretário(a) de Escola com sucesso.' };
+});
+// ### FIM DO AJUSTE 1 ###
+
 exports.revogarAcessoDiretor = onCall(OPCOES_FUNCAO, async (request) => {
     if (request.auth.token.role !== 'super-admin') { throw new HttpsError('permission-denied', 'Apenas o Super Admin pode revogar acesso.'); }
     const uidParaRevogar = request.data.uid;
@@ -246,6 +264,24 @@ exports.revogarAcessoEntrevistador = onCall(OPCOES_FUNCAO, async (request) => {
     await promoverUsuario(uidParaRevogar, 'voluntario');
     return { success: true, message: 'Acesso de Entrevistador(a) revogado com sucesso.' };
 });
+
+// ### AJUSTE 2 DE 2: NOVAS FUNÇÕES DE REVOGAÇÃO ADICIONADAS ###
+exports.revogarAcessoDirigenteEscola = onCall(OPCOES_FUNCAO, async (request) => {
+    if (request.auth.token.role !== 'super-admin') { throw new HttpsError('permission-denied', 'Apenas o Super Admin pode revogar acesso.'); }
+    const uidParaRevogar = request.data.uid;
+    if (!uidParaRevogar) { throw new HttpsError('invalid-argument', 'O UID do usuário é necessário.'); }
+    await promoverUsuario(uidParaRevogar, 'voluntario');
+    return { success: true, message: 'Acesso de Dirigente de Escola revogado com sucesso.' };
+});
+
+exports.revogarAcessoSecretarioEscola = onCall(OPCOES_FUNCAO, async (request) => {
+    if (request.auth.token.role !== 'super-admin') { throw new HttpsError('permission-denied', 'Apenas o Super Admin pode revogar acesso.'); }
+    const uidParaRevogar = request.data.uid;
+    if (!uidParaRevogar) { throw new HttpsError('invalid-argument', 'O UID do usuário é necessário.'); }
+    await promoverUsuario(uidParaRevogar, 'voluntario');
+    return { success: true, message: 'Acesso de Secretário(a) de Escola revogado com sucesso.' };
+});
+// ### FIM DO AJUSTE 2 ###
 
 exports.registrarVotoConselho = onCall(OPCOES_FUNCAO, async (request) => {
     if (!request.auth) { throw new HttpsError('unauthenticated', 'A função deve ser chamada por um usuário autenticado.'); }

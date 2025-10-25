@@ -33,6 +33,10 @@
         .btn-edit { background-color: #1976d2; color: white; border-color: #1976d2;}
         .btn-toggle { background-color: #ffb300; }
         .btn-delete { background-color: #c62828; color: white; border-color: #c62828; }
+        /* ### AJUSTE NOS BOTÕES DE PROMOÇÃO/REVOGAÇÃO ### */
+        .btn-promover { background-color: #4caf50; color: white; border-color: #4caf50; }
+        .btn-revogar { background-color: #e57373; color: white; border-color: #e57373; }
+        /* --- Fim do Ajuste --- */
         .btn-gerar-cracha { background-color: #007bff; color: white; border-color: #007bff; }
         .tasv-container { text-align: center; }
         .tasv-container label { font-size: 0.8em; font-weight: bold; }
@@ -136,6 +140,26 @@
             const gerarCracha = httpsCallable(functions, 'gerarCracha');
             const backfillNomesCracha = httpsCallable(functions, 'backfillNomesCracha');
 
+            // Mapeamento de todas as funções de cargo
+            const funcoesCargos = {
+                'promoverParaConselheiro': httpsCallable(functions, 'promoverParaConselheiro'),
+                'revogarAcessoConselheiro': httpsCallable(functions, 'revogarAcessoConselheiro'),
+                'promoverParaProdutorEvento': httpsCallable(functions, 'promoverParaProdutorEvento'),
+                'revogarAcessoProdutorEvento': httpsCallable(functions, 'revogarAcessoProdutorEvento'),
+                'promoverParaIrradiador': httpsCallable(functions, 'promoverParaIrradiador'),
+                'revogarAcessoIrradiador': httpsCallable(functions, 'revogarAcessoIrradiador'),
+                'promoverParaBibliotecario': httpsCallable(functions, 'promoverParaBibliotecario'),
+                'revogarAcessoBibliotecario': httpsCallable(functions, 'revogarAcessoBibliotecario'),
+                'promoverParaRecepcionista': httpsCallable(functions, 'promoverParaRecepcionista'),
+                'revogarAcessoRecepcionista': httpsCallable(functions, 'revogarAcessoRecepcionista'),
+                'promoverParaEntrevistador': httpsCallable(functions, 'promoverParaEntrevistador'),
+                'revogarAcessoEntrevistador': httpsCallable(functions, 'revogarAcessoEntrevistador'),
+                'promoverParaDirigenteEscola': httpsCallable(functions, 'promoverParaDirigenteEscola'),
+                'revogarAcessoDirigenteEscola': httpsCallable(functions, 'revogarAcessoDirigenteEscola'),
+                'promoverParaSecretarioEscola': httpsCallable(functions, 'promoverParaSecretarioEscola'),
+                'revogarAcessoSecretarioEscola': httpsCallable(functions, 'revogarAcessoSecretarioEscola')
+            };
+
             const voluntariosCollection = collection(db, 'voluntarios');
             const logAuditoriaCollection = collection(db, 'log_auditoria');
             
@@ -208,27 +232,70 @@
                         const li = document.createElement('li');
                         li.className = `item-voluntario ${statusClasse}`;
                         
+                        // ### AJUSTE 1 DE 2: Lógica de botões de promoção/revogação ###
                         let botoesPromocao = '';
-                         if (userRole === 'super-admin' && v.authUid) {
-                            if (v.role !== 'conselheiro' && totalConselheiros < 5) {
-                                botoesPromocao += `<button data-auth-uid="${v.authUid}" data-nome="${v.nome}" class="btn-promover-conselheiro">Promover a Conselheiro</button>`;
+                        if (userRole === 'super-admin' && v.authUid) {
+                            const cargoAtual = v.role || 'voluntario';
+                            const authUid = v.authUid;
+                            const nome = v.nome;
+
+                            // Conselheiro
+                            if (cargoAtual === 'conselheiro') {
+                                botoesPromocao += `<button data-auth-uid="${authUid}" data-nome="${nome}" class="btn-revogar btn-revogar-conselheiro">Revogar Conselheiro</button>`;
+                            } else if (totalConselheiros < 5) {
+                                botoesPromocao += `<button data-auth-uid="${authUid}" data-nome="${nome}" class="btn-promover btn-promover-conselheiro">Promover a Conselheiro</button>`;
                             }
-                            if (v.role !== 'produtor-evento') {
-                                botoesPromocao += `<button data-auth-uid="${v.authUid}" data-nome="${v.nome}" class="btn-promover-produtor">Promover a Produtor</button>`;
+
+                            // Produtor de Evento
+                            if (cargoAtual === 'produtor-evento') {
+                                botoesPromocao += `<button data-auth-uid="${authUid}" data-nome="${nome}" class="btn-revogar btn-revogar-produtor">Revogar Produtor</button>`;
+                            } else {
+                                botoesPromocao += `<button data-auth-uid="${authUid}" data-nome="${nome}" class="btn-promover btn-promover-produtor">Promover a Produtor</button>`;
                             }
-                            if (v.role !== 'irradiador') {
-                                botoesPromocao += `<button data-auth-uid="${v.authUid}" data-nome="${v.nome}" class="btn-promover-irradiador">Promover a Irradiador</button>`;
+
+                            // Irradiador
+                            if (cargoAtual === 'irradiador') {
+                                botoesPromocao += `<button data-auth-uid="${authUid}" data-nome="${nome}" class="btn-revogar btn-revogar-irradiador">Revogar Irradiador</button>`;
+                            } else {
+                                botoesPromocao += `<button data-auth-uid="${authUid}" data-nome="${nome}" class="btn-promover btn-promover-irradiador">Promover a Irradiador</button>`;
                             }
-                            if (v.role !== 'bibliotecario') {
-                                botoesPromocao += `<button data-auth-uid="${v.authUid}" data-nome="${v.nome}" class="btn-promover-bibliotecario">Promover a Bibliotecário</button>`;
+
+                            // Bibliotecário
+                            if (cargoAtual === 'bibliotecario') {
+                                botoesPromocao += `<button data-auth-uid="${authUid}" data-nome="${nome}" class="btn-revogar btn-revogar-bibliotecario">Revogar Bibliotecário</button>`;
+                            } else {
+                                botoesPromocao += `<button data-auth-uid="${authUid}" data-nome="${nome}" class="btn-promover btn-promover-bibliotecario">Promover a Bibliotecário</button>`;
                             }
-                            if (v.role !== 'recepcionista') {
-                                botoesPromocao += `<button data-auth-uid="${v.authUid}" data-nome="${v.nome}" class="btn-promover-recepcionista">Promover a Recepcionista</button>`;
+
+                            // Recepcionista
+                            if (cargoAtual === 'recepcionista') {
+                                botoesPromocao += `<button data-auth-uid="${authUid}" data-nome="${nome}" class="btn-revogar btn-revogar-recepcionista">Revogar Recepcionista</button>`;
+                            } else {
+                                botoesPromocao += `<button data-auth-uid="${authUid}" data-nome="${nome}" class="btn-promover btn-promover-recepcionista">Promover a Recepcionista</button>`;
                             }
-                            if (v.role !== 'entrevistador') {
-                                botoesPromocao += `<button data-auth-uid="${v.authUid}" data-nome="${v.nome}" class="btn-promover-entrevistador">Promover a Entrevistador(a)</button>`;
+
+                            // Entrevistador
+                            if (cargoAtual === 'entrevistador') {
+                                botoesPromocao += `<button data-auth-uid="${authUid}" data-nome="${nome}" class="btn-revogar btn-revogar-entrevistador">Revogar Entrevistador(a)</button>`;
+                            } else {
+                                botoesPromocao += `<button data-auth-uid="${authUid}" data-nome="${nome}" class="btn-promover btn-promover-entrevistador">Promover a Entrevistador(a)</button>`;
+                            }
+                            
+                            // Dirigente de Escola (NOVO)
+                            if (cargoAtual === 'dirigente-escola') {
+                                botoesPromocao += `<button data-auth-uid="${authUid}" data-nome="${nome}" class="btn-revogar btn-revogar-dirigente-escola">Revogar Dirigente</button>`;
+                            } else {
+                                botoesPromocao += `<button data-auth-uid="${authUid}" data-nome="${nome}" class="btn-promover btn-promover-dirigente-escola">Promover a Dirigente</button>`;
+                            }
+                            
+                            // Secretário de Escola (NOVO)
+                            if (cargoAtual === 'secretario-escola') {
+                                botoesPromocao += `<button data-auth-uid="${authUid}" data-nome="${nome}" class="btn-revogar btn-revogar-secretario-escola">Revogar Secretário(a)</button>`;
+                            } else {
+                                botoesPromocao += `<button data-auth-uid="${authUid}" data-nome="${nome}" class="btn-promover btn-promover-secretario-escola">Promover a Secretário(a)</button>`;
                             }
                         }
+                        // ### FIM DO AJUSTE 1 ###
                         
                         let botaoCracha = '';
                         if (v.codigoVoluntario && v.nomeParaCracha) {
@@ -295,12 +362,9 @@
                     }
                 });
 
-                // ===================================================================
-                // ===== CORREÇÃO APLICADA AQUI ======================================
-                // ===================================================================
+                // ### AJUSTE 2 DE 2: Lógica de clique unificada para PROMOVER e REVOGAR ###
                 ui.listaUl.addEventListener('click', async (e) => {
                     const target = e.target;
-                    // Movemos a declaração de 'docId' e 'authUid' para o topo da função
                     const docId = target.dataset.docId;
                     const authUid = target.dataset.authUid;
 
@@ -369,43 +433,71 @@
                         }
                     }
 
+                    // Nova lógica unificada para chamar Cloud Functions de cargos
                     if (authUid) {
                         const nome = target.dataset.nome;
                         let functionName = '';
                         let roleName = '';
                         let logAction = '';
+                        let isRevoke = false;
 
+                        // Mapeamento de todos os botões para suas respectivas funções
                         if (target.classList.contains('btn-promover-conselheiro')) {
                             functionName = 'promoverParaConselheiro'; roleName = 'Conselheiro'; logAction = 'PROMOVEU_CONSELHEIRO';
+                        } else if (target.classList.contains('btn-revogar-conselheiro')) {
+                            functionName = 'revogarAcessoConselheiro'; roleName = 'Conselheiro'; logAction = 'REVOGOU_CONSELHEIRO'; isRevoke = true;
                         } else if (target.classList.contains('btn-promover-produtor')) {
                             functionName = 'promoverParaProdutorEvento'; roleName = 'Produtor de Evento'; logAction = 'PROMOVEU_PRODUTOR_EVENTO';
+                        } else if (target.classList.contains('btn-revogar-produtor')) {
+                            functionName = 'revogarAcessoProdutorEvento'; roleName = 'Produtor de Evento'; logAction = 'REVOGOU_PRODUTOR_EVENTO'; isRevoke = true;
                         } else if (target.classList.contains('btn-promover-irradiador')) {
                             functionName = 'promoverParaIrradiador'; roleName = 'Irradiador(a)'; logAction = 'PROMOVEU_IRRADIADOR';
+                        } else if (target.classList.contains('btn-revogar-irradiador')) {
+                            functionName = 'revogarAcessoIrradiador'; roleName = 'Irradiador(a)'; logAction = 'REVOGOU_IRRADIADOR'; isRevoke = true;
                         } else if (target.classList.contains('btn-promover-bibliotecario')) {
                             functionName = 'promoverParaBibliotecario'; roleName = 'Bibliotecário(a)'; logAction = 'PROMOVEU_BIBLIOTECARIO';
+                        } else if (target.classList.contains('btn-revogar-bibliotecario')) {
+                            functionName = 'revogarAcessoBibliotecario'; roleName = 'Bibliotecário(a)'; logAction = 'REVOGOU_BIBLIOTECARIO'; isRevoke = true;
                         } else if (target.classList.contains('btn-promover-recepcionista')) {
                             functionName = 'promoverParaRecepcionista'; roleName = 'Recepcionista'; logAction = 'PROMOVEU_RECEPCIONISTA';
+                        } else if (target.classList.contains('btn-revogar-recepcionista')) {
+                            functionName = 'revogarAcessoRecepcionista'; roleName = 'Recepcionista'; logAction = 'REVOGOU_RECEPCIONISTA'; isRevoke = true;
                         } else if (target.classList.contains('btn-promover-entrevistador')) {
                             functionName = 'promoverParaEntrevistador'; roleName = 'Entrevistador(a)'; logAction = 'PROMOVEU_ENTREVISTADOR';
+                        } else if (target.classList.contains('btn-revogar-entrevistador')) {
+                            functionName = 'revogarAcessoEntrevistador'; roleName = 'Entrevistador(a)'; logAction = 'REVOGOU_ENTREVISTADOR'; isRevoke = true;
+                        } else if (target.classList.contains('btn-promover-dirigente-escola')) {
+                            functionName = 'promoverParaDirigenteEscola'; roleName = 'Dirigente de Escola'; logAction = 'PROMOVEU_DIRIGENTE_ESCOLA';
+D
+                        } else if (target.classList.contains('btn-revogar-dirigente-escola')) {
+                            functionName = 'revogarAcessoDirigenteEscola'; roleName = 'Dirigente de Escola'; logAction = 'REVOGOU_DIRIGENTE_ESCOLA'; isRevoke = true;
+                        } else if (target.classList.contains('btn-promover-secretario-escola')) {
+                            functionName = 'promoverParaSecretarioEscola'; roleName = 'Secretário(a) de Escola'; logAction = 'PROMOVEU_SECRETARIO_ESCOLA';
+                        } else if (target.classList.contains('btn-revogar-secretario-escola')) {
+                            functionName = 'revogarAcessoSecretarioEscola'; roleName = 'Secretário(a) de Escola'; logAction = 'REVOGOU_SECRETARIO_ESCOLA'; isRevoke = true;
                         }
 
-                        if (functionName && confirm(`Tem certeza que deseja promover ${nome} a ${roleName}?`)) {
-                            target.disabled = true;
-                            target.textContent = "Promovendo...";
-                            try {
-                                const promoteFunction = httpsCallable(functions, functionName);
-                                const resultado = await promoteFunction({ uid: authUid });
-                                alert(resultado.data.message);
-                                await registrarLog(logAction, { alvo: { nome, uid: authUid } });
-                            } catch (error) {
-                                console.error(`Erro ao promover:`, error);
-                                alert(`Erro: ${error.message}`);
-                            } finally {
-                                target.disabled = false;
+                        // Se um botão de cargo foi clicado, executa a ação
+                        if (functionName) {
+                            const acaoTexto = isRevoke ? 'revogar o cargo' : 'promover';
+                            if (confirm(`Tem certeza que deseja ${acaoTexto} ${nome} ${isRevoke ? 'de' : 'para'} ${roleName}?`)) {
+                                target.disabled = true;
+                                target.textContent = "Processando...";
+                                try {
+                                    const acaoFuncao = funcoesCargos[functionName];
+                                    const resultado = await acaoFuncao({ uid: authUid });
+                                    alert(resultado.data.message);
+                                    await registrarLog(logAction, { alvo: { nome, uid: authUid } });
+                                } catch (error) {
+                                    console.error(`Erro ao ${acaoTexto}:`, error);
+                                    alert(`Erro: ${error.message}`);
+                                }
+                                // O onSnapshot irá recarregar a lista, então não precisamos reverter o botão
                             }
                         }
                     }
                 });
+                // ### FIM DO AJUSTE 2 ###
                 
                 ui.btnSalvar.addEventListener('click', async () => {
                     if (!currentEditingId) return;

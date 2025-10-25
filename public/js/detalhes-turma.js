@@ -20,6 +20,7 @@ const db = getFirestore(app);
 const functions = getFunctions(app, 'southamerica-east1');
 
 // --- ELEMENTOS DA PÁGINA ---
+// (Todos os seus 'getElementById' aqui, sem alterações)
 const turmaTituloHeader = document.getElementById('turma-titulo-header');
 const participantesTable = document.getElementById('participantes-table');
 const participantesTableBody = document.getElementById('participantes-table-body');
@@ -78,53 +79,118 @@ const closeModalNovoAlunoBtn = document.getElementById('close-modal-novo-aluno')
 const formNovoAluno = document.getElementById('form-novo-aluno');
 const btnSalvarNovoAluno = document.getElementById('btn-salvar-novo-aluno');
 const btnGerarCertificados = document.getElementById('btn-gerar-certificados');
+const certAlunoNome = document.getElementById('cert-aluno-nome');
+const certCursoNome = document.getElementById('cert-curso-nome');
+const certPeriodo = document.getElementById('cert-periodo');
+const certDataEmissao = document.getElementById('cert-data-emissao');
+const certAssinaturaDirigenteImg = document.getElementById('cert-assinatura-dirigente');
+const certNomeDirigente = document.getElementById('cert-nome-dirigente');
+const certAssinaturaPresidenteImg = document.getElementById('cert-assinatura-presidente');
+const certNomePresidente = document.getElementById('cert-nome-presidente');
 
 let turmaId = null;
-let turmaData = null;
+let turmaData = null; // Guarda os dados da turma carregada
 let currentAulaIdParaFrequencia = null;
+let currentUser = null; // Guarda o objeto 'user' do Auth
+let currentUserProfile = null; // Guarda os dados do Firestore ('voluntarios')
+let currentUserClaims = null; // Guarda os claims (cargos)
+let userIsAdminGlobal = false; // Flag para admin global
+let userIsAdminEducacional = false; // Flag para dirigente/secretário
+let userIsFacilitatorDaTurma = false; // Flag para facilitador desta turma
 
+// ### AJUSTE: Refatoração da verificação de permissão ###
 onAuthStateChanged(auth, async (user) => {
     if (user) {
-        const voluntariosRef = collection(db, "voluntarios");
-        const q = query(voluntariosRef, where("authUid", "==", user.uid), limit(1));
-        const querySnapshot = await getDocs(q);
-        if (!querySnapshot.empty) {
-            const userProfile = querySnapshot.docs[0].data();
-            const userRole = userProfile.role;
-            if (userRole === 'super-admin' || userRole === 'diretor' || userRole === 'facilitador') {
-                const params = new URLSearchParams(window.location.search);
-                turmaId = params.get('turmaId');
-                if (turmaId) {
-                    carregarDadosDaTurma();
-                } else {
-                    document.body.innerHTML = '<h1>Erro: ID da turma não encontrado.</h1>';
-                }
-            } else {
-                document.body.innerHTML = '<h1>Acesso Negado</h1>';
+        currentUser = user; // Guarda o usuário autenticado
+        try {
+            // 1. Pega o perfil do voluntário no Firestore
+            const voluntariosRef = collection(db, "voluntarios");
+            const q = query(voluntariosRef, where("authUid", "==", user.uid), limit(1));
+            const querySnapshot = await getDocs(q);
+
+            if (querySnapshot.empty) {
+                console.warn("Usuário autenticado não encontrado na coleção 'voluntarios'.");
+                throw new Error("Perfil de voluntário não encontrado.");
             }
-        } else {
-            document.body.innerHTML = '<h1>Acesso Negado</h1>';
+            currentUserProfile = { id: querySnapshot.docs[0].id, ...querySnapshot.docs[0].data() }; // Guarda ID e dados
+
+            // 2. Pega os claims (cargos)
+            const idTokenResult = await user.getIdTokenResult(true);
+            currentUserClaims = idTokenResult.claims || {};
+
+            // 3. Define as flags de permissão globais
+            userIsAdminGlobal = ['super-admin', 'diretor', 'tesoureiro'].some(role => currentUserClaims[role] === true || currentUserClaims.role === role);
+            userIsAdminEducacional = currentUserClaims['dirigente-escola'] === true || currentUserClaims['secretario-escola'] === true;
+
+            // 4. Pega o ID da turma da URL
+            const params = new URLSearchParams(window.location.search);
+            turmaId = params.get('turmaId');
+            if (!turmaId) {
+                throw new Error("ID da turma não encontrado na URL.");
+            }
+
+            // 5. Carrega os dados da turma E verifica a permissão específica para esta turma
+            await carregarDadosDaTurmaEVerificarPermissao();
+
+        } catch (error) {
+            console.error("Erro na verificação de acesso:", error);
+            document.body.innerHTML = `<h1>Erro</h1><p>${error.message}</p>`;
         }
+
     } else {
         window.location.href = '/index.html';
     }
 });
 
-async function carregarDadosDaTurma() {
+// ### AJUSTE: Nova função para carregar turma e checar permissão ###
+async function carregarDadosDaTurmaEVerificarPermissao() {
     const turmaRef = doc(db, "turmas", turmaId);
-    onSnapshot(turmaRef, (docSnap) => {
-        if (docSnap.exists()) {
-            turmaData = docSnap.data();
-            turmaTituloHeader.innerHTML = `<small>Gerenciando a Turma:</small>${turmaData.nomeDaTurma} (${turmaData.anoAtual || 1}º Ano)`;
-            if(turmaData.isEAE) { btnAvancarAno.classList.remove('hidden'); }
-            configurarTabelaParticipantes();
-            escutarParticipantes();
-            escutarCronograma();
-        } else {
-            document.body.innerHTML = '<h1>Erro: Turma não encontrada.</h1>';
-        }
-    });
+    const docSnap = await getDoc(turmaRef); // Usa getDoc para carregar uma vez antes de decidir
+
+    if (!docSnap.exists()) {
+        throw new Error("Turma não encontrada.");
+    }
+
+    turmaData = docSnap.data(); // Guarda os dados da turma
+
+    // Verifica se o usuário é facilitador DESTA turma
+    userIsFacilitatorDaTurma = (turmaData.facilitadoresIds || []).includes(currentUserProfile.id);
+
+    // Verifica a permissão de ACESSO à página
+    const podeAcessarPagina = userIsAdminGlobal || // Admins globais podem ver tudo
+                             (userIsFacilitatorDaTurma && (userIsAdminEducacional || currentUserProfile.role === 'facilitador')); // Ou: É facilitador E tem cargo educacional
+
+    if (!podeAcessarPagina) {
+        throw new Error("Você não tem permissão para gerenciar esta turma específica.");
+    }
+
+    // Se passou, configura a página e habilita os botões corretos
+    turmaTituloHeader.innerHTML = `<small>Gerenciando a Turma:</small>${turmaData.nomeDaTurma} (${turmaData.anoAtual || 1}º Ano)`;
+    if(turmaData.isEAE) { btnAvancarAno.classList.remove('hidden'); }
+
+    configurarTabelaParticipantes();
+    escutarParticipantes(); // Mantém onSnapshot para atualizações em tempo real
+    escutarCronograma();   // Mantém onSnapshot para atualizações em tempo real
+
+    // Habilita/Desabilita botões de admin com base nos cargos E se é facilitador da turma
+    habilitarOuDesabilitarBotoesAdmin();
 }
+
+// ### AJUSTE: Nova função para controlar visibilidade dos botões ###
+function habilitarOuDesabilitarBotoesAdmin() {
+    // Quem pode gerenciar (adicionar aluno, aula extra, recesso, notas, promover grau)?
+    const podeGerenciar = userIsAdminGlobal || (userIsFacilitatorDaTurma && userIsAdminEducacional);
+
+    // Botões principais de adição
+    btnInscreverParticipante.style.display = podeGerenciar ? 'inline-block' : 'none';
+    btnCadastrarAluno.style.display = podeGerenciar ? 'inline-block' : 'none';
+    btnAddAulaExtra.style.display = podeGerenciar ? 'inline-block' : 'none';
+    btnGerenciarRecessos.style.display = podeGerenciar ? 'inline-block' : 'none';
+    btnAvancarAno.style.display = (podeGerenciar && turmaData.isEAE) ? 'inline-block' : 'none'; // Avançar ano só EAE e se puder gerenciar
+
+    // A visibilidade dos botões DENTRO das tabelas será controlada na renderização (escutarParticipantes/escutarCronograma)
+}
+
 
 function configurarTabelaParticipantes() {
     let tableHeaderHTML = '<tr><th>Nome</th>';
@@ -142,6 +208,8 @@ function escutarParticipantes() {
     const q = query(participantesRef, orderBy("nome"));
     onSnapshot(q, (snapshot) => {
         let rowsHTML = [];
+        const podeGerenciar = userIsAdminGlobal || (userIsFacilitatorDaTurma && userIsAdminEducacional); // Re-verifica aqui
+
         if (snapshot.empty) {
             const colspan = turmaData.isEAE ? 8 : 5;
             rowsHTML.push(`<tr><td colspan="${colspan}" style="text-align: center;">Nenhum participante inscrito.</td></tr>`);
@@ -154,26 +222,41 @@ function escutarParticipantes() {
                 const freq = (avaliacaoDoAno ? avaliacaoDoAno.notaFrequencia : 0) || 0;
 
                 let row = `<td>${participante.nome}</td>`;
+                let actionsHTML = ''; // Inicia vazio
+
+                // Monta os botões de ação apenas se o usuário puder gerenciar
+                if (podeGerenciar) {
+                     if (participante.origem === 'aluno') {
+                         actionsHTML += `<button class="icon-btn" style="color: #27ae60;" title="Promover para Voluntário" data-action="promote-to-volunteer" data-participante-doc-id="${doc.id}"><i class="fas fa-user-plus"></i></button>`;
+                     }
+                     if (turmaData.isEAE) {
+                         actionsHTML += `<button class="icon-btn notes" title="Lançar Notas" data-action="notas" data-id="${doc.id}"><i class="fas fa-edit"></i></button>`;
+                         actionsHTML += `<button class="icon-btn promote" title="Promover Grau" data-action="promover" data-id="${doc.id}"><i class="fas fa-user-graduate"></i></button>`;
+                     }
+                     actionsHTML += `<button class="icon-btn delete" title="Remover da Turma" data-action="remover" data-id="${doc.id}"><i class="fas fa-user-minus"></i></button>`;
+                } else {
+                    actionsHTML = '---'; // Ou pode deixar vazio, ou colocar um ícone de "ver detalhes" se aplicável
+                }
+
 
                 if (turmaData.isEAE) {
-                    let acoesExtras = '';
-                    if (participante.origem === 'aluno') {
-                        acoesExtras += `<button class="icon-btn" style="color: #27ae60;" title="Promover para Voluntário" data-action="promote-to-volunteer" data-participante-doc-id="${doc.id}"><i class="fas fa-user-plus"></i></button>`;
-                    }
                     row += `
                         <td>${participante.grau || 'Aluno'}</td>
                         <td>${origem}</td>
                         <td>${freq}%</td>
-                        <td>${(avaliacaoDoAno ? avaliacaoDoAno.mediaRI : 0).toFixed(1)}</td>
-                        <td>${(avaliacaoDoAno ? avaliacaoDoAno.mediaFinal : 0).toFixed(1)}</td>
+                        <td>${((avaliacaoDoAno ? avaliacaoDoAno.mediaRI : 0) || 0).toFixed(1)}</td>
+                        <td>${((avaliacaoDoAno ? avaliacaoDoAno.mediaFinal : 0) || 0).toFixed(1)}</td>
                         <td>${(avaliacaoDoAno ? avaliacaoDoAno.statusAprovacao : 'Em Andamento')}</td>
-                        <td class="actions">${acoesExtras}<button class="icon-btn notes" title="Lançar Notas" data-action="notas" data-id="${doc.id}"><i class="fas fa-edit"></i></button><button class="icon-btn promote" title="Promover Grau" data-action="promover" data-id="${doc.id}"><i class="fas fa-user-graduate"></i></button></td>
+                        <td class="actions">${actionsHTML}</td>
                     `;
                 } else {
-                    // ## CORREÇÃO 2 APLICADA AQUI ##
-                    // Lógica para cursos comuns agora lê a frequência real.
-                    const status = freq >= 75 ? 'Aprovado' : 'Cursando'; // Exemplo de status simples
-                    row += `<td>${origem}</td><td>${freq}%</td><td>${status}</td><td class="actions">...</td>`;
+                    const status = freq >= 75 ? 'Aprovado' : 'Cursando';
+                    row += `
+                        <td>${origem}</td>
+                        <td>${freq}%</td>
+                        <td>${status}</td>
+                        <td class="actions">${actionsHTML}</td>
+                    `;
                 }
                 rowsHTML.push(`<tr>${row}</tr>`);
             });
@@ -181,6 +264,29 @@ function escutarParticipantes() {
         participantesTableBody.innerHTML = rowsHTML.join('');
     });
 }
+
+async function removerParticipante(participanteDocId) {
+    // ### AJUSTE: Verifica permissão antes de executar ###
+    const podeGerenciar = userIsAdminGlobal || (userIsFacilitatorDaTurma && userIsAdminEducacional);
+    if (!podeGerenciar) {
+        return alert("Você não tem permissão para remover participantes.");
+    }
+    // --- Fim do Ajuste ---
+
+    if (!confirm("Tem certeza que deseja remover este participante da turma? Esta ação não pode ser desfeita.")) {
+        return;
+    }
+    try {
+        const participanteRef = doc(db, "turmas", turmaId, "participantes", participanteDocId);
+        await deleteDoc(participanteRef);
+        alert("Participante removido com sucesso.");
+    } catch (error) {
+        console.error("Erro ao remover participante:", error);
+        alert("Ocorreu um erro ao remover o participante.");
+    }
+}
+
+
 function escutarCronograma() {
     const cronogramaRef = collection(db, "turmas", turmaId, "cronograma");
     const q = query(cronogramaRef, orderBy("dataAgendada", "asc"));
@@ -188,29 +294,43 @@ function escutarCronograma() {
     onSnapshot(q, (snapshot) => {
         let rowsHTML = [];
         let todasAulasRealizadas = true;
+        const podeGerenciar = userIsAdminGlobal || (userIsFacilitatorDaTurma && userIsAdminEducacional); // Re-verifica aqui
 
         if (snapshot.empty) {
             todasAulasRealizadas = false;
+            rowsHTML.push(`<tr><td colspan="5" style="text-align: center;">Nenhuma aula no cronograma.</td></tr>`);
         } else {
             snapshot.forEach(doc => {
                 const aula = doc.data();
                 if (aula.status !== 'realizada' && !aula.isExtra) {
                     todasAulasRealizadas = false;
                 }
-                
+
                 const dataFormatada = aula.dataAgendada.toDate().toLocaleDateString('pt-BR', { timeZone: 'UTC' });
                 const numeroAulaDisplay = aula.isExtra ? '<strong>Extra</strong>' : aula.numeroDaAula;
-                let actionsHTML = `<button class="icon-btn attendance" title="Lançar Frequência" data-action="frequencia" data-id="${doc.id}" data-titulo="${aula.titulo}"><i class="fas fa-clipboard-list"></i></button> <button class="icon-btn edit" title="Editar Aula" data-action="edit" data-id="${doc.id}"><i class="fas fa-pencil-alt"></i></button>`;
-                if (aula.isExtra) {
-                    actionsHTML += `<button class="icon-btn delete" title="Excluir Aula Extra" data-action="delete" data-id="${doc.id}"><i class="fas fa-trash-alt"></i></button>`;
+                let actionsHTML = ''; // Inicia vazio
+
+                // Monta botões de ação se puder gerenciar
+                if (podeGerenciar) {
+                    actionsHTML += `<button class="icon-btn attendance" title="Lançar Frequência" data-action="frequencia" data-id="${doc.id}" data-titulo="${aula.titulo}"><i class="fas fa-clipboard-list"></i></button>`;
+                    actionsHTML += ` <button class="icon-btn edit" title="Editar Aula" data-action="edit" data-id="${doc.id}"><i class="fas fa-pencil-alt"></i></button>`;
+                    if (aula.isExtra) {
+                        actionsHTML += ` <button class="icon-btn delete" title="Excluir Aula Extra" data-action="delete" data-id="${doc.id}"><i class="fas fa-trash-alt"></i></button>`;
+                    } else {
+                        actionsHTML += ` <button class="icon-btn recess" title="Marcar como Recesso" data-action="recess" data-id="${doc.id}" data-date="${aula.dataAgendada.toDate().toISOString()}" data-titulo="${aula.titulo}"><i class="fas fa-coffee"></i></button>`;
+                    }
                 } else {
-                    actionsHTML += `<button class="icon-btn recess" title="Marcar como Recesso" data-action="recess" data-id="${doc.id}" data-date="${aula.dataAgendada.toDate().toISOString()}" data-titulo="${aula.titulo}"><i class="fas fa-coffee"></i></button>`;
+                    // Se não pode gerenciar, talvez mostrar só o de frequência (se for facilitador?)
+                    // Ou deixar vazio/mostrar "---"
+                    actionsHTML = '---';
                 }
+
                 rowsHTML.push(`<tr><td>${numeroAulaDisplay}</td><td>${dataFormatada}</td><td>${aula.titulo}</td><td>${aula.status}</td><td class="actions">${actionsHTML}</td></tr>`);
             });
         }
         cronogramaTableBody.innerHTML = rowsHTML.join('');
 
+        // Habilita botão de gerar certificado (a lógica de quem pode clicar está no listener)
         if (todasAulasRealizadas && !snapshot.empty) {
             btnGerarCertificados.classList.remove('disabled');
             btnGerarCertificados.title = "Gerar certificados em PDF para alunos aprovados.";
@@ -569,20 +689,19 @@ async function abrirModalFrequencia(aulaId, aulaTitulo) {
         
         const frequenciasSalvas = new Map();
         frequenciaSnapshot.forEach(doc => {
-            frequenciasSalvas.set(doc.data().participanteId, doc.data().status);
+            frequenciasSalvas.set(doc.data().participanteId, doc.data().status); // Usa ID original como chave
         });
 
         let listHTML = '';
         participantesSnapshot.forEach(doc => {
-            const participanteId = doc.id;
+            const participanteDocId = doc.id; 
             const participante = doc.data();
+            const participanteIdOriginal = participante.participanteId; // Pega o ID original (de 'voluntarios' ou 'alunos')
             
-            // ## CORREÇÃO 3 APLICADA AQUI ##
-            // Se não houver registro, o status é 'null', não 'presente'.
-            const statusAtual = frequenciasSalvas.get(participanteId) || null;
+            const statusAtual = frequenciasSalvas.get(participanteIdOriginal) || null; // Busca frequência pelo ID original
             
             listHTML += `
-                <li class="attendance-item" data-participante-id="${participanteId}" data-status="${statusAtual || ''}">
+                <li class="attendance-item" data-participante-id="${participanteIdOriginal}" data-participante-doc-id="${participanteDocId}" data-status="${statusAtual || ''}">
                     <span>${participante.nome}</span>
                     <div class="attendance-controls">
                         <button class="btn-status presente ${statusAtual === 'presente' ? 'active' : ''}" data-status="presente">P</button>
@@ -597,6 +716,7 @@ async function abrirModalFrequencia(aulaId, aulaTitulo) {
     }
 }
 
+
 async function salvarFrequencia() {
     if (!currentAulaIdParaFrequencia) return;
     btnSalvarFrequencia.disabled = true;
@@ -605,16 +725,19 @@ async function salvarFrequencia() {
     const items = frequenciaListContainer.querySelectorAll('.attendance-item');
 
     items.forEach(item => {
-        const participanteId = item.dataset.participanteId;
-        // ## CORREÇÃO 3 (continuação) ##
-        // Se o facilitador não marcou nada, o padrão de salvamento é 'ausente'.
+        const participanteIdOriginal = item.dataset.participanteId; // ID de 'voluntarios' ou 'alunos'
+        const participanteDocId = item.dataset.participanteDocId; // ID do doc em 'participantes'
+        
         const status = item.dataset.status || 'ausente'; 
         
-        const frequenciaDocId = `${currentAulaIdParaFrequencia}_${participanteId}`;
+        // Usa o ID original para criar o ID único da frequência
+        const frequenciaDocId = `${currentAulaIdParaFrequencia}_${participanteIdOriginal}`; 
         const frequenciaRef = doc(db, "turmas", turmaId, "frequencias", frequenciaDocId);
+        
         batch.set(frequenciaRef, {
             aulaId: currentAulaIdParaFrequencia,
-            participanteId: participanteId,
+            participanteId: participanteIdOriginal, // Salva o ID original
+            participanteDocId: participanteDocId, // Salva o ID do doc em participantes (referência)
             status: status,
             turmaId: turmaId
         });
@@ -634,6 +757,7 @@ async function salvarFrequencia() {
     }
 }
 
+
 // --- NOVAS FUNÇÕES DE RELATÓRIO ---
 async function getDadosCompletosParaRelatorio() {
     const participantesRef = collection(db, "turmas", turmaId, "participantes");
@@ -652,12 +776,13 @@ async function getDadosCompletosParaRelatorio() {
     const frequenciasMap = new Map();
     frequenciasSnap.forEach(doc => {
         const data = doc.data();
-        const key = `${data.aulaId}_${data.participanteId}`;
+        const key = `${data.aulaId}_${data.participanteId}`; // Usa ID original na chave
         frequenciasMap.set(key, data.status);
     });
 
     return { participantes, cronograma, frequenciasMap };
 }
+
 
 async function gerarDiarioDeClasse() {
     areaRelatorioGerado.innerHTML = '<p>Gerando diário de classe...</p>';
@@ -684,7 +809,7 @@ async function gerarDiarioDeClasse() {
         cronograma.forEach(aula => {
             if (aula.status === 'realizada') {
                 aulasContabilizadas++;
-                const key = `${aula.id}_${p.id}`;
+                const key = `${aula.id}_${p.participanteId}`; // Usa ID original para buscar
                 const status = frequenciasMap.get(key);
                 let statusChar = '-';
                 if (status === 'presente') {
@@ -705,7 +830,7 @@ async function gerarDiarioDeClasse() {
     });
 
     tableHTML += '</tbody></table></div>';
-    areaRelatorioGerado.innerHTML = tableHTML;
+    areaRelatorioGerado.innerHTML = `<h2>Diário de Classe - ${turmaData.nomeDaTurma}</h2>` + tableHTML;
     btnImprimirRelatorio.classList.remove('hidden');
 }
 
@@ -721,42 +846,44 @@ async function gerarBoletimIndividual() {
 
     let selectHTML = '<div class="form-group"><label>Selecione um participante para ver o boletim:</label><select id="select-boletim-participante"><option value="">Selecione...</option>';
     participantes.forEach(p => {
-        selectHTML += `<option value="${p.id}">${p.nome}</option>`;
+        selectHTML += `<option value="${p.id}">${p.nome}</option>`; // Usa o ID do doc em 'participantes'
     });
     selectHTML += '</select></div><div id="boletim-content"></div>';
-    areaRelatorioGerado.innerHTML = selectHTML;
+    areaRelatorioGerado.innerHTML = `<h2>Boletim Individual - ${turmaData.nomeDaTurma}</h2>` + selectHTML;
 
     document.getElementById('select-boletim-participante').addEventListener('change', (e) => {
-        const participanteId = e.target.value;
+        const participanteDocId = e.target.value; // ID do doc em 'participantes'
         const boletimContent = document.getElementById('boletim-content');
-        if (!participanteId) {
+        if (!participanteDocId) {
             boletimContent.innerHTML = '';
             btnImprimirRelatorio.classList.add('hidden');
             return;
         }
 
-        const participante = participantes.find(p => p.id === participanteId);
+        const participante = participantes.find(p => p.id === participanteDocId);
         const anoAtual = turmaData.anoAtual || 1;
         const avaliacao = participante.avaliacoes ? participante.avaliacoes[anoAtual] : null;
 
-        let boletimHTML = `<div class="boletim-card"><h4>Boletim de ${participante.nome}</h4>`;
+        let boletimHTML = `<div class="boletim-card" style="border: 1px solid #ccc; padding: 15px; border-radius: 8px; margin-top: 10px;"><h4>Boletim de ${participante.nome}</h4>`;
         if (turmaData.isEAE && avaliacao) {
             boletimHTML += `
                 <p><strong>Frequência:</strong> ${avaliacao.notaFrequencia || 0}%</p>
-                <p><strong>Média Reforma Íntima (RI):</strong> ${avaliacao.mediaRI.toFixed(1)}</p>
-                <p><strong>Média Final:</strong> ${avaliacao.mediaFinal.toFixed(1)}</p>
-                <p><strong>Status:</strong> ${avaliacao.statusAprovacao}</p>
+                <p><strong>Média Reforma Íntima (RI):</strong> ${(avaliacao.mediaRI || 0).toFixed(1)}</p>
+                <p><strong>Média Final:</strong> ${(avaliacao.mediaFinal || 0).toFixed(1)}</p>
+                <p><strong>Status:</strong> ${avaliacao.statusAprovacao || 'Em Andamento'}</p>
                 <hr>
                 <h5>Notas Detalhadas (${anoAtual}º Ano):</h5>
                 <ul>
-                    <li>Caderno de Temas: ${avaliacao.notaCadernoTemas || '-'}</li>
-                    <li>Caderneta Pessoal: ${avaliacao.notaCadernetaPessoal || '-'}</li>
-                    <li>Trabalhos Prestados: ${avaliacao.notaTrabalhos || '-'}</li>
-                    <li>Exame Espiritual: ${avaliacao.notaExameEspiritual || '-'}</li>
+                    <li>Caderno de Temas: ${avaliacao.notaCadernoTemas ?? '-'}</li>
+                    <li>Caderneta Pessoal: ${avaliacao.notaCadernetaPessoal ?? '-'}</li>
+                    <li>Trabalhos Prestados: ${avaliacao.notaTrabalhos ?? '-'}</li>
+                    <li>Exame Espiritual: ${avaliacao.notaExameEspiritual ?? '-'}</li>
                 </ul>
             `;
+        } else if (avaliacao) {
+             boletimHTML += `<p><strong>Frequência:</strong> ${avaliacao.notaFrequencia || 0}%</p><p>Não há notas para este curso.</p>`;
         } else {
-             boletimHTML += `<p><strong>Frequência:</strong> ${participante.frequenciaPercentual || 'N/D'}%</p><p>Não há notas para este curso.</p>`;
+             boletimHTML += `<p><strong>Frequência:</strong> 0%</p><p>Não há notas para este curso.</p>`;
         }
         boletimHTML += '</div>';
         boletimContent.innerHTML = boletimHTML;
@@ -791,17 +918,19 @@ async function gerarRelatorioAptosCertificado() {
     });
 
     tableHTML += '</tbody></table></div>';
-    areaRelatorioGerado.innerHTML = tableHTML;
+    areaRelatorioGerado.innerHTML = `<h2>Relatório Final para Certificado - ${turmaData.nomeDaTurma}</h2>` + tableHTML;
     btnImprimirRelatorio.classList.remove('hidden');
 }
 
+
 // ===================================================================
-// ## FUNÇÃO DE GERAR CERTIFICADOS E PRÉ-CARREGAMENTO (VERSÃO FINAL) ##
+// ## FUNÇÃO DE GERAR CERTIFICADOS E PRÉ-CARREGAMENTO (VERSÃO FINAL COM BUSCA DE DIRIGENTE) ##
 // ===================================================================
 
 function precarregarImagem(url) {
     return new Promise((resolve) => {
         if (!url) {
+            console.warn("URL da imagem não fornecida para pré-carregamento.");
             return resolve(null);
         }
         const img = new Image();
@@ -809,11 +938,9 @@ function precarregarImagem(url) {
         img.onload = () => resolve(img);
         img.onerror = (err) => {
             console.error(`Falha ao carregar imagem: ${url}`, err);
-            resolve(null);
+            resolve(null); // Retorna null se falhar
         };
-        // ## CORREÇÃO FINAL APLICADA AQUI (CACHE BUSTER) ##
-        // Adiciona um parâmetro único para forçar o navegador a buscar a imagem novamente.
-        img.src = url + '?t=' + new Date().getTime();
+        img.src = url + '?t=' + new Date().getTime(); // Cache buster
     });
 }
 
@@ -827,61 +954,107 @@ async function gerarCertificados() {
             getDocs(query(collection(db, "turmas", turmaId, "participantes"), orderBy("nome"))),
             getDoc(presidenteRef)
         ]);
-        const presidenteData = presidenteSnap.exists() ? presidenteSnap.data() : {};
+        const presidenteData = presidenteSnap.exists() ? presidenteSnap.data() : { presidenteNome: "Presidente Não Definido", presidenteAssinaturaUrl: null };
 
         const alunosAprovados = [];
         participantesSnap.forEach(doc => {
             const participante = doc.data();
             const anoAtual = turmaData.anoAtual || 1;
             const avaliacao = participante.avaliacoes ? participante.avaliacoes[anoAtual] : null;
+            let aprovado = false;
             if (turmaData.isEAE) {
-                if (avaliacao && avaliacao.statusAprovacao === 'Aprovado') alunosAprovados.push(participante);
+                if (avaliacao && avaliacao.statusAprovacao === 'Aprovado') aprovado = true;
             } else {
                 const freq = avaliacao ? avaliacao.notaFrequencia : 0;
-                if (freq >= 75) alunosAprovados.push(participante);
+                if (freq >= 75) aprovado = true;
             }
+            if(aprovado) alunosAprovados.push(participante);
         });
 
         if (alunosAprovados.length === 0) {
             return alert("Nenhum aluno aprovado encontrado para gerar certificados.");
         }
 
-        let dirigentesInfo = [];
-        if (turmaData.facilitadores && turmaData.facilitadores.length > 0) {
-            const dirigentePromises = turmaData.facilitadores.map(f => getDoc(doc(db, "voluntarios", f.id)));
-            const dirigentesDocs = await Promise.all(dirigentePromises);
-            dirigentesInfo = dirigentesDocs.map(d => d.exists() ? d.data() : {});
+        // ### AJUSTE: Lógica para encontrar o Dirigente de Escola ###
+        let dirigenteEncontrado = null;
+        // Usa 'facilitadoresIds' que contém os IDs da coleção 'voluntarios'
+        const facilitadoresIds = turmaData.facilitadoresIds || [];
+
+        for (const facilitadorId of facilitadoresIds) {
+            const voluntarioRef = doc(db, "voluntarios", facilitadorId); // Busca na coleção 'voluntarios'
+            const voluntarioDoc = await voluntarioRef.get();
+
+            if (voluntarioDoc.exists()) {
+                const voluntarioData = voluntarioDoc.data();
+                // Verifica se o campo 'role' existe e é o correto
+                if (voluntarioData.role === 'dirigente-escola') {
+                    // Verifica se a assinaturaUrl existe ANTES de atribuir
+                    if (voluntarioData.assinaturaUrl) {
+                        dirigenteEncontrado = voluntarioData; // Guarda os dados do dirigente
+                        console.log(`Dirigente encontrado: ${voluntarioData.nome}, Assinatura: ${voluntarioData.assinaturaUrl}`);
+                        break; // Encontrou um com assinatura, pode parar de procurar
+                    } else {
+                        console.warn(`Voluntário ${voluntarioData.nome} (ID: ${facilitadorId}) é Dirigente, mas não tem assinaturaUrl cadastrada.`);
+                        // Guarda o primeiro dirigente encontrado, mesmo sem assinatura, como fallback
+                        if (!dirigenteEncontrado) {
+                           dirigenteEncontrado = voluntarioData;
+                        }
+                    }
+                }
+            } else {
+                console.warn("Documento do voluntário (facilitador) não encontrado para o ID:", facilitadorId);
+            }
         }
-        const dirigentePrincipal = dirigentesInfo.length > 0 ? dirigentesInfo[0] : {};
-        
-        const [dirigenteImg, presidenteImg] = await Promise.all([
-            precarregarImagem(dirigentePrincipal.assinaturaUrl),
-            precarregarImagem(presidenteData.presidenteAssinaturaUrl)
+
+        if (!dirigenteEncontrado) {
+            console.warn(`Nenhum 'dirigente-escola' encontrado entre os facilitadores da turma ${turmaId}. Verifique os cargos.`);
+            // Define um fallback se nenhum dirigente for encontrado
+            dirigenteEncontrado = { nome: "Dirigente Não Definido", assinaturaUrl: null };
+        } else if (!dirigenteEncontrado.assinaturaUrl) {
+            // Se encontrou um dirigente mas ele não tem assinatura
+             console.warn(`O dirigente ${dirigenteEncontrado.nome} não possui URL de assinatura. A assinatura ficará em branco.`);
+        }
+        // ### FIM DO AJUSTE ###
+
+        // Pré-carrega as assinaturas (agora usando o dirigente encontrado) e o logo
+        const [dirigenteImg, presidenteImg, logoImg] = await Promise.all([
+            precarregarImagem(dirigenteEncontrado.assinaturaUrl), // Pode ser null se não tiver URL
+            precarregarImagem(presidenteData.presidenteAssinaturaUrl),
+            precarregarImagem('/logo-cepat.png') // Pré-carrega o logo também
         ]);
-        
-        document.getElementById('cert-assinatura-dirigente').src = dirigenteImg ? dirigenteImg.src : "";
-        document.getElementById('cert-assinatura-presidente').src = presidenteImg ? presidenteImg.src : "";
+
+        // Define as URLs no HTML *antes* do loop (importante para html2canvas)
+        certAssinaturaDirigenteImg.src = dirigenteImg ? dirigenteImg.src : ""; // Usa src vazia se não houver imagem
+        certAssinaturaPresidenteImg.src = presidenteImg ? presidenteImg.src : "";
+        document.getElementById('logo-cepat-cert').src = logoImg ? logoImg.src : ""; // Garante que o logo esteja carregado
 
         for (const aluno of alunosAprovados) {
-            document.getElementById('cert-aluno-nome').textContent = aluno.nome.toUpperCase();
-            document.getElementById('cert-curso-nome').textContent = turmaData.isEAE ? `${turmaData.nomeDaTurma} da ${turmaData.cursoNome}` : turmaData.cursoNome;
+            // Preenche os dados variáveis do certificado no HTML
+            certAlunoNome.textContent = aluno.nome.toUpperCase();
+            certCursoNome.textContent = turmaData.isEAE ? `${turmaData.nomeDaTurma} da ${turmaData.cursoNome}` : turmaData.cursoNome;
             const dataInicio = turmaData.dataInicio.toDate();
-            const dataFim = new Date();
-            document.getElementById('cert-periodo').textContent = `realizado no período de ${dataInicio.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })} a ${dataFim.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })}`;
-            document.getElementById('cert-data-emissao').textContent = `Santa Bárbara d'Oeste, ${new Date().toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' })}`;
-            document.getElementById('cert-nome-dirigente').textContent = dirigentePrincipal.nome || '';
-            document.getElementById('cert-nome-presidente').textContent = presidenteData.presidenteNome || '';
+            const dataFim = new Date(); // Usa a data atual como data de fim/emissão
+            certPeriodo.textContent = `realizado no período de ${dataInicio.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })} a ${dataFim.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })}`;
+            certDataEmissao.textContent = `Santa Bárbara d'Oeste, ${new Date().toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' })}`;
+            certNomeDirigente.textContent = dirigenteEncontrado.nome; // Usa o nome do dirigente encontrado
+            certNomePresidente.textContent = presidenteData.presidenteNome;
 
-            await new Promise(resolve => setTimeout(resolve, 500));
+            // Pequeno delay para garantir que o DOM atualizou antes do html2canvas
+            await new Promise(resolve => setTimeout(resolve, 100));
 
+            // Gera o canvas a partir do HTML
             const canvas = await html2canvas(document.getElementById('certificate-wrapper'), {
                 useCORS: true,
-                allowTaint: true
+                allowTaint: true,
+                scale: 2 // Aumenta a resolução para melhor qualidade de impressão
             });
             
+            // Cria o PDF e adiciona a imagem do canvas
             const imgData = canvas.toDataURL('image/png');
             const pdf = new jsPDF({ orientation: 'landscape', unit: 'px', format: [1024, 728] });
             pdf.addImage(imgData, 'PNG', 0, 0, 1024, 728);
+            
+            // Salva o PDF
             pdf.save(`Certificado - ${aluno.nome}.pdf`);
         }
 
@@ -892,6 +1065,7 @@ async function gerarCertificados() {
         alert("Ocorreu um erro ao gerar os certificados. Verifique o console.");
     }
 }
+
 
 // --- EVENTOS ---
 tabs.forEach(tab => {
@@ -948,16 +1122,17 @@ participantesTableBody.addEventListener('click', (event) => {
     const target = event.target.closest('button');
     if (!target || !target.dataset.action) return;
     const action = target.dataset.action;
+    const id = target.dataset.id; // ID do documento na subcoleção 'participantes'
     
     if (action === 'notas') {
-        const id = target.dataset.id;
         abrirModalNotas(id);
     } else if (action === 'promover') {
-        const id = target.dataset.id;
         promoverGrau(id);
     } else if (action === 'promote-to-volunteer') {
-        const participanteDocId = target.dataset.participanteDocId;
+        const participanteDocId = target.dataset.participanteDocId; // Pega o ID correto
         promoverParaVoluntario(participanteDocId);
+    } else if (action === 'remover') {
+        removerParticipante(id); // Chama a nova função de remover
     }
 });
 if(formNotas) formNotas.addEventListener('submit', salvarNotas);
@@ -983,6 +1158,8 @@ if(reportMenuContainer) reportMenuContainer.addEventListener('click', (event) =>
     if (!target || !target.dataset.report) return;
     if (target.classList.contains('disabled')) return;
     const reportType = target.dataset.report;
+    areaRelatorioGerado.innerHTML = ''; // Limpa área antes de gerar novo relatório
+    btnImprimirRelatorio.classList.add('hidden'); // Esconde botão de imprimir
     if (reportType === 'diario-classe') {
         gerarDiarioDeClasse();
     } else if (reportType === 'boletim-individual') {
