@@ -163,7 +163,7 @@ async function verificarPapelFacilitador(userId) {
 async function verificarPapelAdmin(user) {
     const idTokenResult = await user.getIdTokenResult(true);
     const userRole = idTokenResult.claims.role;
-    const adminRoles = ['super-admin', 'diretor', 'tesoureiro'];
+    const adminRoles = ['super-admin', 'diretor', 'entrevistador', 'bibliotecario', 'produtor-evento', 'conselheiro', 'irradiador', 'dirigente-escola', 'secretario-escola', 'recepcionista', 'tesoureiro'];
     return adminRoles.includes(userRole);
 }
 
