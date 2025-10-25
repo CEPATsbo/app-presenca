@@ -3,12 +3,12 @@ import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/
 import { getFirestore, collection, query, where, getDocs, doc, getDoc, addDoc, onSnapshot, orderBy, limit, serverTimestamp, Timestamp, updateDoc, deleteDoc, writeBatch } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
 import { getFunctions, httpsCallable } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-functions.js";
 
-// --- CONFIGURAÇÕE ---
+// --- CONFIGURAÇÕES ---
 const firebaseConfig = {
     apiKey: "AIzaSyBV7RPjk3cFTqL-aIpflJcUojKg1ZXMLuU",
     authDomain: "voluntarios-ativos---cepat.firebaseapp.com",
     projectId: "voluntarios-ativos---cepat",
-    storageBucket: "voluntarios-ativos---cepat.appspot.com",
+    storageBucket: "voluntarios-ativos---cepat.appspot.com", // Manteve .appspot.com como no seu original
     messagingSenderId: "66122858261",
     appId: "1:66122858261:web:7fa21f1805463b5c08331c"
 };
@@ -79,6 +79,8 @@ const closeModalNovoAlunoBtn = document.getElementById('close-modal-novo-aluno')
 const formNovoAluno = document.getElementById('form-novo-aluno');
 const btnSalvarNovoAluno = document.getElementById('btn-salvar-novo-aluno');
 const btnGerarCertificados = document.getElementById('btn-gerar-certificados');
+
+// --- Elementos do Certificado (para preenchimento) ---
 const certAlunoNome = document.getElementById('cert-aluno-nome');
 const certCursoNome = document.getElementById('cert-curso-nome');
 const certPeriodo = document.getElementById('cert-periodo');
@@ -92,16 +94,16 @@ let turmaId = null;
 let turmaData = null; // Guarda os dados da turma carregada
 let currentAulaIdParaFrequencia = null;
 let currentUser = null; // Guarda o objeto 'user' do Auth
-let currentUserProfile = null; // Guarda os dados do Firestore ('voluntarios')
+let currentUserProfile = null; // Guarda os dados do Firestore ('voluntarios') ID e Data
 let currentUserClaims = null; // Guarda os claims (cargos)
 let userIsAdminGlobal = false; // Flag para admin global
 let userIsAdminEducacional = false; // Flag para dirigente/secretário
-let userIsFacilitatorDaTurma = false; // Flag para facilitador desta turma
+let userIsFacilitatorDaTurma = false; // Flag para facilitador DESTA turma
 
-// ### AJUSTE: Refatoração da verificação de permissão ###
 onAuthStateChanged(auth, async (user) => {
+    console.log("AUTH STATE CHANGED:", user ? user.uid : 'No user'); // Log inicial
     if (user) {
-        currentUser = user; // Guarda o usuário autenticado
+        currentUser = user;
         try {
             // 1. Pega o perfil do voluntário no Firestore
             const voluntariosRef = collection(db, "voluntarios");
@@ -109,18 +111,21 @@ onAuthStateChanged(auth, async (user) => {
             const querySnapshot = await getDocs(q);
 
             if (querySnapshot.empty) {
-                console.warn("Usuário autenticado não encontrado na coleção 'voluntarios'.");
+                console.error("PERFIL NÃO ENCONTRADO para authUid:", user.uid);
                 throw new Error("Perfil de voluntário não encontrado.");
             }
-            currentUserProfile = { id: querySnapshot.docs[0].id, ...querySnapshot.docs[0].data() }; // Guarda ID e dados
+            currentUserProfile = { id: querySnapshot.docs[0].id, ...querySnapshot.docs[0].data() };
+            console.log("Perfil do Usuário Carregado:", currentUserProfile); // Log Perfil
 
             // 2. Pega os claims (cargos)
-            const idTokenResult = await user.getIdTokenResult(true);
+            const idTokenResult = await user.getIdTokenResult(true); // Força refresh
             currentUserClaims = idTokenResult.claims || {};
+            console.log("Claims do Usuário Carregados:", currentUserClaims); // Log Claims
 
             // 3. Define as flags de permissão globais
             userIsAdminGlobal = ['super-admin', 'diretor', 'tesoureiro'].some(role => currentUserClaims[role] === true || currentUserClaims.role === role);
-            userIsAdminEducacional = currentUserClaims['dirigente-escola'] === true || currentUserClaims['secretario-escola'] === true;
+            userIsAdminEducacional = currentUserClaims['dirigente-escola'] === true || currentUserClaims['secretario-escola'] === true || currentUserClaims.role === 'dirigente-escola' || currentUserClaims.role === 'secretario-escola'; // Checa claim booleano ou role principal
+            console.log(`Flags Globais: isAdminGlobal=${userIsAdminGlobal}, isAdminEducacional=${userIsAdminEducacional}`); // Log Flags
 
             // 4. Pega o ID da turma da URL
             const params = new URLSearchParams(window.location.search);
@@ -128,69 +133,97 @@ onAuthStateChanged(auth, async (user) => {
             if (!turmaId) {
                 throw new Error("ID da turma não encontrado na URL.");
             }
+            console.log("ID da Turma:", turmaId); // Log Turma ID
 
             // 5. Carrega os dados da turma E verifica a permissão específica para esta turma
             await carregarDadosDaTurmaEVerificarPermissao();
 
         } catch (error) {
-            console.error("Erro na verificação de acesso:", error);
-            document.body.innerHTML = `<h1>Erro</h1><p>${error.message}</p>`;
+            console.error("Erro na verificação de acesso inicial:", error); // Log Erro Inicial
+            // Mostra a mensagem de erro na tela
+            document.body.innerHTML = `<div style="text-align: center; margin-top: 50px;"><h1>Erro</h1><p>${error.message}</p><a href="/dashboard.html">Voltar</a></div>`;
         }
 
     } else {
-        window.location.href = '/index.html';
+        window.location.href = '/login.html';
     }
 });
 
-// ### AJUSTE: Nova função para carregar turma e checar permissão ###
+
 async function carregarDadosDaTurmaEVerificarPermissao() {
+    console.log("Iniciando carregamento da turma e verificação de permissão...");
     const turmaRef = doc(db, "turmas", turmaId);
     const docSnap = await getDoc(turmaRef); // Usa getDoc para carregar uma vez antes de decidir
 
     if (!docSnap.exists()) {
+        console.error("TURMA NÃO ENCONTRADA no Firestore:", turmaId);
         throw new Error("Turma não encontrada.");
     }
 
-    turmaData = docSnap.data(); // Guarda os dados da turma
+    turmaData = docSnap.data();
+    console.log("Dados da Turma Carregados:", turmaData); // Log Dados Turma
+    console.log("Facilitadores IDs da Turma:", turmaData.facilitadoresIds); // Log Facilitadores IDs
 
     // Verifica se o usuário é facilitador DESTA turma
     userIsFacilitatorDaTurma = (turmaData.facilitadoresIds || []).includes(currentUserProfile.id);
+    console.log(`Usuário (ID: ${currentUserProfile.id}) é facilitador desta turma? ${userIsFacilitatorDaTurma}`); // Log Verificação Facilitador
 
     // Verifica a permissão de ACESSO à página
     const podeAcessarPagina = userIsAdminGlobal || // Admins globais podem ver tudo
-                             (userIsFacilitatorDaTurma && (userIsAdminEducacional || currentUserProfile.role === 'facilitador')); // Ou: É facilitador E tem cargo educacional
+                             (userIsFacilitatorDaTurma && (userIsAdminEducacional || currentUserProfile.role === 'facilitador' || currentUserClaims.facilitador === true)); // Ou: É facilitador DA TURMA E (tem cargo educacional OU o role principal é facilitador OU tem claim facilitador)
+    console.log(`Pode acessar a página? ${podeAcessarPagina} (isAdminGlobal=${userIsAdminGlobal}, isFacilitator=${userIsFacilitatorDaTurma}, isAdminEdu=${userIsAdminEducacional}, profileRole=${currentUserProfile.role}, claimFacilitador=${currentUserClaims.facilitador})`); // Log Decisão Final
 
     if (!podeAcessarPagina) {
+        // ### ERRO ACONTECE AQUI ###
         throw new Error("Você não tem permissão para gerenciar esta turma específica.");
     }
 
     // Se passou, configura a página e habilita os botões corretos
     turmaTituloHeader.innerHTML = `<small>Gerenciando a Turma:</small>${turmaData.nomeDaTurma} (${turmaData.anoAtual || 1}º Ano)`;
-    if(turmaData.isEAE) { btnAvancarAno.classList.remove('hidden'); }
+    if(turmaData.isEAE && btnAvancarAno) { // Verifica se botão existe
+        btnAvancarAno.classList.remove('hidden');
+    }
 
     configurarTabelaParticipantes();
     escutarParticipantes(); // Mantém onSnapshot para atualizações em tempo real
     escutarCronograma();   // Mantém onSnapshot para atualizações em tempo real
 
-    // Habilita/Desabilita botões de admin com base nos cargos E se é facilitador da turma
     habilitarOuDesabilitarBotoesAdmin();
+    console.log("Página configurada e listeners iniciados."); // Log Sucesso
 }
 
-// ### AJUSTE: Nova função para controlar visibilidade dos botões ###
+
 function habilitarOuDesabilitarBotoesAdmin() {
+    console.log("Verificando quais botões habilitar..."); // Log Botões
     // Quem pode gerenciar (adicionar aluno, aula extra, recesso, notas, promover grau)?
     const podeGerenciar = userIsAdminGlobal || (userIsFacilitatorDaTurma && userIsAdminEducacional);
+    console.log(`Pode gerenciar (geral)? ${podeGerenciar}`); // Log Pode Gerenciar
+
+    // Funcao auxiliar para mostrar/esconder
+    const setDisplay = (element, condition) => {
+        if (element) { // Verifica se o elemento existe antes de tentar mudar o estilo
+           element.style.display = condition ? 'inline-block' : 'none';
+        } else {
+           // Comenta o warn para não poluir o console se o botão não existir no HTML
+           // console.warn(`Elemento não encontrado no DOM ao tentar setar display.`);
+        }
+    };
 
     // Botões principais de adição
-    btnInscreverParticipante.style.display = podeGerenciar ? 'inline-block' : 'none';
-    btnCadastrarAluno.style.display = podeGerenciar ? 'inline-block' : 'none';
-    btnAddAulaExtra.style.display = podeGerenciar ? 'inline-block' : 'none';
-    btnGerenciarRecessos.style.display = podeGerenciar ? 'inline-block' : 'none';
-    btnAvancarAno.style.display = (podeGerenciar && turmaData.isEAE) ? 'inline-block' : 'none'; // Avançar ano só EAE e se puder gerenciar
+    setDisplay(btnInscreverParticipante, podeGerenciar);
+    setDisplay(btnCadastrarAluno, podeGerenciar);
+    setDisplay(btnAddAulaExtra, podeGerenciar);
+    setDisplay(btnGerenciarRecessos, podeGerenciar);
+    setDisplay(btnAvancarAno, podeGerenciar && turmaData.isEAE);
 
-    // A visibilidade dos botões DENTRO das tabelas será controlada na renderização (escutarParticipantes/escutarCronograma)
+    // A visibilidade dos botões DENTRO das tabelas será controlada na renderização
+    console.log("Visibilidade dos botões principais definida.");
 }
 
+
+// ==========================================================
+// RESTANTE DO CÓDIGO (sem alterações)
+// ==========================================================
 
 function configurarTabelaParticipantes() {
     let tableHeaderHTML = '<tr><th>Nome</th>';
@@ -200,15 +233,16 @@ function configurarTabelaParticipantes() {
         tableHeaderHTML += '<th>Origem</th><th>Freq.</th><th>Status</th><th>Ações</th>';
     }
     tableHeaderHTML += '</tr>';
-    participantesTable.querySelector('thead').innerHTML = tableHeaderHTML;
+    if(participantesTable) participantesTable.querySelector('thead').innerHTML = tableHeaderHTML;
 }
 
 function escutarParticipantes() {
+    if (!participantesTableBody) return; // Sai se a tabela não existe
     const participantesRef = collection(db, "turmas", turmaId, "participantes");
     const q = query(participantesRef, orderBy("nome"));
     onSnapshot(q, (snapshot) => {
         let rowsHTML = [];
-        const podeGerenciar = userIsAdminGlobal || (userIsFacilitatorDaTurma && userIsAdminEducacional); // Re-verifica aqui
+        const podeGerenciar = userIsAdminGlobal || (userIsFacilitatorDaTurma && userIsAdminEducacional);
 
         if (snapshot.empty) {
             const colspan = turmaData.isEAE ? 8 : 5;
@@ -222,9 +256,8 @@ function escutarParticipantes() {
                 const freq = (avaliacaoDoAno ? avaliacaoDoAno.notaFrequencia : 0) || 0;
 
                 let row = `<td>${participante.nome}</td>`;
-                let actionsHTML = ''; // Inicia vazio
+                let actionsHTML = '';
 
-                // Monta os botões de ação apenas se o usuário puder gerenciar
                 if (podeGerenciar) {
                      if (participante.origem === 'aluno') {
                          actionsHTML += `<button class="icon-btn" style="color: #27ae60;" title="Promover para Voluntário" data-action="promote-to-volunteer" data-participante-doc-id="${doc.id}"><i class="fas fa-user-plus"></i></button>`;
@@ -235,7 +268,7 @@ function escutarParticipantes() {
                      }
                      actionsHTML += `<button class="icon-btn delete" title="Remover da Turma" data-action="remover" data-id="${doc.id}"><i class="fas fa-user-minus"></i></button>`;
                 } else {
-                    actionsHTML = '---'; // Ou pode deixar vazio, ou colocar um ícone de "ver detalhes" se aplicável
+                    actionsHTML = '---';
                 }
 
 
@@ -266,12 +299,10 @@ function escutarParticipantes() {
 }
 
 async function removerParticipante(participanteDocId) {
-    // ### AJUSTE: Verifica permissão antes de executar ###
     const podeGerenciar = userIsAdminGlobal || (userIsFacilitatorDaTurma && userIsAdminEducacional);
     if (!podeGerenciar) {
         return alert("Você não tem permissão para remover participantes.");
     }
-    // --- Fim do Ajuste ---
 
     if (!confirm("Tem certeza que deseja remover este participante da turma? Esta ação não pode ser desfeita.")) {
         return;
@@ -288,13 +319,14 @@ async function removerParticipante(participanteDocId) {
 
 
 function escutarCronograma() {
+    if (!cronogramaTableBody) return; // Sai se a tabela não existe
     const cronogramaRef = collection(db, "turmas", turmaId, "cronograma");
     const q = query(cronogramaRef, orderBy("dataAgendada", "asc"));
 
     onSnapshot(q, (snapshot) => {
         let rowsHTML = [];
         let todasAulasRealizadas = true;
-        const podeGerenciar = userIsAdminGlobal || (userIsFacilitatorDaTurma && userIsAdminEducacional); // Re-verifica aqui
+        const podeGerenciar = userIsAdminGlobal || (userIsFacilitatorDaTurma && userIsAdminEducacional);
 
         if (snapshot.empty) {
             todasAulasRealizadas = false;
@@ -308,20 +340,24 @@ function escutarCronograma() {
 
                 const dataFormatada = aula.dataAgendada.toDate().toLocaleDateString('pt-BR', { timeZone: 'UTC' });
                 const numeroAulaDisplay = aula.isExtra ? '<strong>Extra</strong>' : aula.numeroDaAula;
-                let actionsHTML = ''; // Inicia vazio
+                let actionsHTML = '';
 
-                // Monta botões de ação se puder gerenciar
+                // Facilitador comum TAMBÉM pode lançar frequência
+                const podeLancarFrequencia = podeGerenciar || userIsFacilitatorDaTurma;
+
+                if (podeLancarFrequencia) {
+                     actionsHTML += `<button class="icon-btn attendance" title="Lançar Frequência" data-action="frequencia" data-id="${doc.id}" data-titulo="${aula.titulo}"><i class="fas fa-clipboard-list"></i></button>`;
+                }
+
                 if (podeGerenciar) {
-                    actionsHTML += `<button class="icon-btn attendance" title="Lançar Frequência" data-action="frequencia" data-id="${doc.id}" data-titulo="${aula.titulo}"><i class="fas fa-clipboard-list"></i></button>`;
                     actionsHTML += ` <button class="icon-btn edit" title="Editar Aula" data-action="edit" data-id="${doc.id}"><i class="fas fa-pencil-alt"></i></button>`;
                     if (aula.isExtra) {
                         actionsHTML += ` <button class="icon-btn delete" title="Excluir Aula Extra" data-action="delete" data-id="${doc.id}"><i class="fas fa-trash-alt"></i></button>`;
                     } else {
                         actionsHTML += ` <button class="icon-btn recess" title="Marcar como Recesso" data-action="recess" data-id="${doc.id}" data-date="${aula.dataAgendada.toDate().toISOString()}" data-titulo="${aula.titulo}"><i class="fas fa-coffee"></i></button>`;
                     }
-                } else {
-                    // Se não pode gerenciar, talvez mostrar só o de frequência (se for facilitador?)
-                    // Ou deixar vazio/mostrar "---"
+                } else if (!podeLancarFrequencia) {
+                    // Se não pode gerenciar nem lançar frequência
                     actionsHTML = '---';
                 }
 
@@ -330,13 +366,14 @@ function escutarCronograma() {
         }
         cronogramaTableBody.innerHTML = rowsHTML.join('');
 
-        // Habilita botão de gerar certificado (a lógica de quem pode clicar está no listener)
-        if (todasAulasRealizadas && !snapshot.empty) {
-            btnGerarCertificados.classList.remove('disabled');
-            btnGerarCertificados.title = "Gerar certificados em PDF para alunos aprovados.";
-        } else {
-            btnGerarCertificados.classList.add('disabled');
-            btnGerarCertificados.title = "Disponível após a conclusão de todas as aulas.";
+        if (btnGerarCertificados) { // Verifica se o botão existe
+            if (todasAulasRealizadas && !snapshot.empty) {
+                btnGerarCertificados.classList.remove('disabled');
+                btnGerarCertificados.title = "Gerar certificados em PDF para alunos aprovados.";
+            } else {
+                btnGerarCertificados.classList.add('disabled');
+                btnGerarCertificados.title = "Disponível após a conclusão de todas as aulas.";
+            }
         }
     }, (error) => {
         console.error("Erro ao buscar cronograma:", error);
@@ -345,66 +382,102 @@ function escutarCronograma() {
 }
 
 async function carregarVoluntariosParaInscricao() {
-    participanteSelect.innerHTML = '<option value="">Selecione...</option>';
-    const voluntariosRef = collection(db, "voluntarios");
-    const q = query(voluntariosRef, orderBy("nome"));
-    const snapshot = await getDocs(q);
-    snapshot.forEach(doc => {
-        const option = document.createElement('option');
-        option.value = doc.id;
-        option.textContent = doc.data().nome;
-        participanteSelect.appendChild(option);
-    });
+    if (!participanteSelect) return;
+    participanteSelect.innerHTML = '<option value="">Carregando...</option>'; // Feedback visual
+    try {
+        const voluntariosRef = collection(db, "voluntarios");
+        const q = query(voluntariosRef, where("statusVoluntario", "==", "ativo"), orderBy("nome")); // Filtra apenas ativos
+        const snapshot = await getDocs(q);
+        participanteSelect.innerHTML = '<option value="">Selecione...</option>'; // Limpa e adiciona padrão
+        snapshot.forEach(doc => {
+            const option = document.createElement('option');
+            option.value = doc.id;
+            option.textContent = doc.data().nome;
+            participanteSelect.appendChild(option);
+        });
+    } catch (error) {
+        console.error("Erro ao carregar voluntários:", error);
+        participanteSelect.innerHTML = '<option value="">Erro ao carregar</option>';
+    }
 }
 
+
 function abrirModalInscricao() {
+    if (!modalInscricao) return;
     formInscricao.reset();
     carregarVoluntariosParaInscricao();
-    if (turmaData.isEAE) { formGroupGrau.classList.remove('hidden'); }
-    else { formGroupGrau.classList.add('hidden'); }
+    if (turmaData.isEAE && formGroupGrau) { formGroupGrau.classList.remove('hidden'); }
+    else if (formGroupGrau) { formGroupGrau.classList.add('hidden'); }
     modalInscricao.classList.add('visible');
 }
 
 async function inscreverParticipante(event) {
-    event.preventDefault();
+     event.preventDefault();
+     if (!participanteSelect) return;
     const participanteId = participanteSelect.value;
     const participanteNome = participanteSelect.options[participanteSelect.selectedIndex].text;
     if (!participanteId) { return alert("Por favor, selecione um participante."); }
-    btnSalvarInscricao.disabled = true;
+    if(btnSalvarInscricao) btnSalvarInscricao.disabled = true;
     try {
-        const novoParticipante = { 
-            participanteId, 
-            nome: participanteNome, 
-            inscritoEm: serverTimestamp(),
-            origem: 'voluntario' 
-        };
-        if (turmaData.isEAE) { novoParticipante.grau = participanteGrauSelect.value; }
+        // Verifica se já está inscrito para evitar duplicatas
         const participantesRef = collection(db, "turmas", turmaId, "participantes");
+        const q = query(participantesRef, where("participanteId", "==", participanteId));
+        const existingSnap = await getDocs(q);
+        if (!existingSnap.empty) {
+            throw new Error(`${participanteNome} já está inscrito nesta turma.`);
+        }
+
+        const novoParticipante = {
+            participanteId,
+            nome: participanteNome,
+            inscritoEm: serverTimestamp(),
+            origem: 'voluntario',
+            avaliacoes: {} // Inicializa avaliações
+        };
+        if (turmaData.isEAE && participanteGrauSelect) {
+             novoParticipante.grau = participanteGrauSelect.value;
+             const anoAtual = turmaData.anoAtual || 1;
+             novoParticipante.avaliacoes[anoAtual] = {
+                notaFrequencia: 0, mediaRI: 0, mediaFinal: 0, statusAprovacao: 'Em Andamento'
+             };
+        }
+
         await addDoc(participantesRef, novoParticipante);
-        modalInscricao.classList.remove('visible');
+        if(modalInscricao) modalInscricao.classList.remove('visible');
+        alert(`${participanteNome} inscrito com sucesso!`);
     } catch (error) {
         console.error("Erro ao inscrever participante:", error);
+        alert(`Erro ao inscrever: ${error.message}`); // Mostra erro específico
     } finally {
-        btnSalvarInscricao.disabled = false;
+        if(btnSalvarInscricao) btnSalvarInscricao.disabled = false;
     }
 }
 
+
 function abrirModalNovoAluno() {
+    if (!modalNovoAluno) return;
     formNovoAluno.reset();
     modalNovoAluno.classList.add('visible');
 }
 
 async function salvarNovoAluno(event) {
     event.preventDefault();
-    const nome = document.getElementById('novo-aluno-nome').value.trim();
-    const endereco = document.getElementById('novo-aluno-endereco').value.trim();
-    const telefone = document.getElementById('novo-aluno-telefone').value.trim();
-    const nascimento = document.getElementById('novo-aluno-nascimento').value.trim();
+    if (!formNovoAluno || !btnSalvarNovoAluno) return;
+    const nomeInput = formNovoAluno.querySelector('#novo-aluno-nome');
+    const enderecoInput = formNovoAluno.querySelector('#novo-aluno-endereco');
+    const telefoneInput = formNovoAluno.querySelector('#novo-aluno-telefone');
+    const nascimentoInput = formNovoAluno.querySelector('#novo-aluno-nascimento');
+
+    const nome = nomeInput ? nomeInput.value.trim() : '';
+    const endereco = enderecoInput ? enderecoInput.value.trim() : '';
+    const telefone = telefoneInput ? telefoneInput.value.trim() : '';
+    const nascimento = nascimentoInput ? nascimentoInput.value.trim() : '';
+
 
     if (!nome) {
         return alert("O nome completo do aluno é obrigatório.");
     }
-    
+
     btnSalvarNovoAluno.disabled = true;
     btnSalvarNovoAluno.textContent = 'Salvando...';
 
@@ -419,7 +492,7 @@ async function salvarNovoAluno(event) {
         });
 
         alert(result.data.message);
-        modalNovoAluno.classList.remove('visible');
+        if(modalNovoAluno) modalNovoAluno.classList.remove('visible');
 
     } catch (error) {
         console.error("Erro ao chamar a função de cadastrar novo aluno:", error);
@@ -429,6 +502,7 @@ async function salvarNovoAluno(event) {
         btnSalvarNovoAluno.textContent = 'Salvar e Inscrever na Turma';
     }
 }
+
 
 async function promoverParaVoluntario(participanteDocId) {
     if (!confirm("Tem certeza que deseja promover este aluno para a lista de voluntários? Esta ação criará um novo registro de voluntário com os dados do aluno.")) {
@@ -448,99 +522,154 @@ async function promoverParaVoluntario(participanteDocId) {
     }
 }
 
+
 async function abrirModalNotas(participanteId) {
+    if (!modalNotas || !formNotas || !inputNotasParticipanteId || !modalNotasTitulo || !inputNotaCadernoTemas || !inputNotaCadernetaPessoal || !inputNotaTrabalhos || !inputNotaExameEspiritual) return;
     formNotas.reset();
     inputNotasParticipanteId.value = participanteId;
-    const participanteRef = doc(db, "turmas", turmaId, "participantes", participanteId);
-    const docSnap = await getDoc(participanteRef);
-    if (docSnap.exists()) {
-        const data = docSnap.data();
-        const anoAtual = turmaData.anoAtual || 1;
-        modalNotasTitulo.textContent = `Lançar Notas do ${anoAtual}º Ano para ${data.nome}`;
-        const avaliacaoDoAno = data.avaliacoes ? data.avaliacoes[anoAtual] : null;
-        if (avaliacaoDoAno) {
-            inputNotaCadernoTemas.value = avaliacaoDoAno.notaCadernoTemas || '';
-            inputNotaCadernetaPessoal.value = avaliacaoDoAno.notaCadernetaPessoal || '';
-            inputNotaTrabalhos.value = avaliacaoDoAno.notaTrabalhos || '';
-            inputNotaExameEspiritual.value = avaliacaoDoAno.notaExameEspiritual || '';
+    try {
+        const participanteRef = doc(db, "turmas", turmaId, "participantes", participanteId);
+        const docSnap = await getDoc(participanteRef);
+        if (docSnap.exists()) {
+            const data = docSnap.data();
+            const anoAtual = turmaData.anoAtual || 1;
+            modalNotasTitulo.textContent = `Lançar Notas do ${anoAtual}º Ano para ${data.nome}`;
+            const avaliacaoDoAno = data.avaliacoes ? data.avaliacoes[anoAtual] : null;
+            if (avaliacaoDoAno) {
+                inputNotaCadernoTemas.value = avaliacaoDoAno.notaCadernoTemas ?? '';
+                inputNotaCadernetaPessoal.value = avaliacaoDoAno.notaCadernetaPessoal ?? '';
+                inputNotaTrabalhos.value = avaliacaoDoAno.notaTrabalhos ?? '';
+                inputNotaExameEspiritual.value = avaliacaoDoAno.notaExameEspiritual ?? '';
+            }
+            modalNotas.classList.add('visible');
+        } else {
+             alert("Erro: Participante não encontrado para lançar notas.");
         }
-        modalNotas.classList.add('visible');
+    } catch (error) {
+         console.error("Erro ao buscar dados do participante para notas:", error);
+         alert("Erro ao carregar dados do participante.");
     }
 }
 
+
 async function salvarNotas(event) {
     event.preventDefault();
+     if (!inputNotasParticipanteId || !btnSalvarNotas) return;
     const participanteId = inputNotasParticipanteId.value;
     if (!participanteId) return;
     btnSalvarNotas.disabled = true;
     try {
         const participanteRef = doc(db, "turmas", turmaId, "participantes", participanteId);
-        const participanteSnap = await getDoc(participanteRef);
-        if (!participanteSnap.exists()) { throw new Error("Participante não encontrado."); }
-        const participanteData = participanteSnap.data();
-        const anoAtual = turmaData.anoAtual || 1;
-        const avaliacoesAtuais = participanteData.avaliacoes || {};
-        const avaliacaoDoAnoAtual = avaliacoesAtuais[anoAtual] || {};
-        const notaFrequencia = avaliacaoDoAnoAtual.notaFrequencia || 0;
-        const notaCadernoTemas = parseFloat(inputNotaCadernoTemas.value) || 0;
-        const notaCadernetaPessoal = parseFloat(inputNotaCadernetaPessoal.value) || 0;
-        const notaTrabalhos = parseFloat(inputNotaTrabalhos.value) || 0;
-        const notaExameEspiritual = parseFloat(inputNotaExameEspiritual.value) || 0;
-        const notaFreqConvertida = notaFrequencia >= 80 ? 10 : (notaFrequencia >= 60 ? 5 : 1);
-        const mediaAT = (notaFreqConvertida + notaCadernoTemas) / 2;
-        const mediaRI = (notaCadernetaPessoal + notaTrabalhos + notaExameEspiritual) / 3;
-        const mediaFinal = (mediaAT + mediaRI) / 2;
-        const statusAprovacao = (mediaFinal >= 5 && mediaRI >= 6) ? "Aprovado" : "Reprovado";
-        const dadosAtualizados = { ...avaliacaoDoAnoAtual, notaCadernoTemas, notaCadernetaPessoal, notaTrabalhos, notaExameEspiritual, notaFrequencia, mediaAT, mediaRI, mediaFinal, statusAprovacao };
-        await updateDoc(participanteRef, { [`avaliacoes.${anoAtual}`]: dadosAtualizados });
-        modalNotas.classList.remove('visible');
+        await db.runTransaction(async (transaction) => {
+            const participanteSnap = await transaction.get(participanteRef);
+            if (!participanteSnap.exists()) { throw new Error("Participante não encontrado."); }
+
+            const participanteData = participanteSnap.data();
+            const anoAtual = turmaData.anoAtual || 1;
+            const avaliacoesAtuais = participanteData.avaliacoes || {};
+            const avaliacaoDoAnoAtual = avaliacoesAtuais[anoAtual] || {};
+            const notaFrequencia = avaliacaoDoAnoAtual.notaFrequencia || 0;
+
+            const notaCadernoTemas = Number(inputNotaCadernoTemas.value) || 0;
+            const notaCadernetaPessoal = Number(inputNotaCadernetaPessoal.value) || 0;
+            const notaTrabalhos = Number(inputNotaTrabalhos.value) || 0;
+            const notaExameEspiritual = Number(inputNotaExameEspiritual.value) || 0;
+
+            if ([notaCadernoTemas, notaCadernetaPessoal, notaTrabalhos, notaExameEspiritual].some(n => n < 0 || n > 10)) {
+                 throw new Error("As notas devem estar entre 0 e 10.");
+            }
+
+            const notaFreqConvertida = notaFrequencia >= 80 ? 10 : (notaFrequencia >= 60 ? 5 : 1);
+            const mediaAT = (notaFreqConvertida + notaCadernoTemas) / 2;
+            const mediaRI = (notaCadernetaPessoal + notaTrabalhos + notaExameEspiritual) / 3;
+            const mediaFinal = (mediaAT + mediaRI) / 2;
+            const statusAprovacao = (mediaFinal >= 5 && mediaRI >= 6) ? "Aprovado" : "Reprovado";
+
+            const dadosAtualizados = {
+                ...avaliacaoDoAnoAtual,
+                notaCadernoTemas, notaCadernetaPessoal, notaTrabalhos, notaExameEspiritual,
+                notaFrequencia,
+                mediaAT: parseFloat(mediaAT.toFixed(1)),
+                mediaRI: parseFloat(mediaRI.toFixed(1)),
+                mediaFinal: parseFloat(mediaFinal.toFixed(1)),
+                statusAprovacao
+             };
+
+             transaction.update(participanteRef, { [`avaliacoes.${anoAtual}`]: dadosAtualizados });
+        });
+
+        if (modalNotas) modalNotas.classList.remove('visible');
+        alert("Notas salvas e médias recalculadas!");
+
     } catch (error) {
         console.error("Erro ao salvar notas:", error);
-        alert("Ocorreu um erro ao salvar as notas.");
+        alert(`Ocorreu um erro ao salvar as notas: ${error.message}`);
     } finally {
-        btnSalvarNotas.disabled = false;
+        if (btnSalvarNotas) btnSalvarNotas.disabled = false;
     }
 }
 
+
 async function promoverGrau(participanteId) {
-    const participanteRef = doc(db, "turmas", turmaId, "participantes", participanteId);
-    const docSnap = await getDoc(participanteRef);
-    if (docSnap.exists()) {
-        const participante = docSnap.data();
-        const grauAtual = participante.grau || "Aluno";
-        let proximoGrau = "";
-        if (grauAtual === "Aluno") { proximoGrau = "Aprendiz"; } 
-        else if (grauAtual === "Aprendiz") { proximoGrau = "Servidor"; } 
-        else { alert(`${participante.nome} já está no grau máximo (Servidor).`); return; }
-        if (confirm(`Tem certeza que deseja promover ${participante.nome} para o grau de ${proximoGrau}?`)) {
-            try {
+     if (!participanteId) return;
+     try {
+        const participanteRef = doc(db, "turmas", turmaId, "participantes", participanteId);
+        const docSnap = await getDoc(participanteRef);
+        if (docSnap.exists()) {
+            const participante = docSnap.data();
+            const grauAtual = participante.grau || "Aluno";
+            let proximoGrau = "";
+            if (grauAtual === "Aluno") { proximoGrau = "Aprendiz"; }
+            else if (grauAtual === "Aprendiz") { proximoGrau = "Servidor"; }
+            else { alert(`${participante.nome} já está no grau máximo (Servidor).`); return; }
+            if (confirm(`Tem certeza que deseja promover ${participante.nome} para o grau de ${proximoGrau}?`)) {
                 await updateDoc(participanteRef, { grau: proximoGrau });
                 alert("Participante promovido com sucesso!");
-            } catch (error) {
-                console.error("Erro ao promover grau:", error);
-                alert("Ocorreu um erro ao tentar promover o participante.");
             }
+        } else {
+             alert("Erro: Participante não encontrado para promover grau.");
         }
+    } catch (error) {
+         console.error("Erro ao promover grau:", error);
+         alert("Ocorreu um erro ao tentar promover o participante.");
     }
 }
+
 
 async function avancarAnoDaTurma() {
     const anoAtual = turmaData.anoAtual || 1;
     if (anoAtual >= 3) { return alert("Esta turma já concluiu o 3º ano."); }
-    if (!confirm(`Tem certeza que deseja avançar esta turma para o ${anoAtual + 1}º ano?`)) return;
+    if (!confirm(`Tem certeza que deseja avançar esta turma para o ${anoAtual + 1}º ano? Esta ação não pode ser desfeita.`)) return;
+
+    if (btnAvancarAno) {
+        btnAvancarAno.disabled = true;
+        btnAvancarAno.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Avançando...';
+    }
+
     try {
         const turmaRef = doc(db, "turmas", turmaId);
         await updateDoc(turmaRef, { anoAtual: anoAtual + 1 });
         alert(`Turma avançou para o ${anoAtual + 1}º ano com sucesso!`);
     } catch (error) {
         console.error("Erro ao avançar o ano da turma:", error);
+         alert("Ocorreu um erro ao avançar o ano da turma.");
+    } finally {
+         if (btnAvancarAno) {
+            btnAvancarAno.disabled = false;
+            btnAvancarAno.innerHTML = '<i class="fas fa-arrow-right"></i> Avançar para o Próximo Ano';
+        }
     }
 }
 
+
 function abrirModalAula(aulaId = null, isExtra = false) {
+    if (!modalAula || !formAula || !inputAulaId || !inputAulaIsExtra || !modalAulaTitulo || !inputAulaTitulo || !inputAulaData || !formGroupNumeroAula || !inputAulaNumero) return;
     formAula.reset();
     inputAulaId.value = '';
-    inputAulaIsExtra.value = isExtra;
+    inputAulaIsExtra.value = String(isExtra);
+    formGroupNumeroAula.classList.add('hidden');
+    inputAulaNumero.readOnly = false;
+
     if (aulaId) {
         modalAulaTitulo.textContent = 'Editar Aula';
         const aulaRef = doc(db, "turmas", turmaId, "cronograma", aulaId);
@@ -550,67 +679,109 @@ function abrirModalAula(aulaId = null, isExtra = false) {
                 inputAulaId.value = docSnap.id;
                 inputAulaTitulo.value = data.titulo;
                 inputAulaData.value = data.dataAgendada.toDate().toISOString().split('T')[0];
-                inputAulaIsExtra.value = data.isExtra || false;
+                inputAulaIsExtra.value = String(data.isExtra || false);
+
                 if (!data.isExtra) {
                     formGroupNumeroAula.classList.remove('hidden');
                     inputAulaNumero.value = data.numeroDaAula;
                     inputAulaNumero.readOnly = true;
-                } else {
-                    formGroupNumeroAula.classList.add('hidden');
                 }
+            } else {
+                 alert("Erro: Aula não encontrada para edição.");
+                 modalAula.classList.remove('visible');
             }
+        }).catch(error => {
+            console.error("Erro ao buscar aula para editar:", error);
+            alert("Erro ao carregar dados da aula.");
+             modalAula.classList.remove('visible');
         });
     } else {
         modalAulaTitulo.textContent = 'Adicionar Aula Extra';
-        formGroupNumeroAula.classList.add('hidden');
-        inputAulaIsExtra.value = true;
+        inputAulaIsExtra.value = 'true';
     }
     modalAula.classList.add('visible');
 }
 
 async function salvarAula(event) {
     event.preventDefault();
+     if (!inputAulaId || !inputAulaIsExtra || !inputAulaTitulo || !inputAulaData || !inputAulaNumero || !btnSalvarAula) return;
     const id = inputAulaId.value;
     const isExtra = inputAulaIsExtra.value === 'true';
-    const dadosAula = { titulo: inputAulaTitulo.value.trim(), dataAgendada: Timestamp.fromDate(new Date(`${inputAulaData.value}T12:00:00.000Z`)) };
-    if (!isExtra) { dadosAula.numeroDaAula = Number(inputAulaNumero.value); } 
-    else { dadosAula.isExtra = true; dadosAula.numeroDaAula = 999; dadosAula.status = 'agendada'; }
+    const dadosAula = {
+        titulo: inputAulaTitulo.value.trim(),
+        dataAgendada: Timestamp.fromDate(new Date(inputAulaData.value + 'T00:00:00Z')),
+        isExtra: isExtra
+    };
+
+    if (!dadosAula.titulo || !inputAulaData.value) {
+        return alert("Título e Data são obrigatórios.");
+    }
+
+    if (!isExtra) {
+        if (!id) { return alert("Não é possível adicionar aulas regulares manualmente."); }
+         delete dadosAula.isExtra;
+         const aulaRef = doc(db, "turmas", turmaId, "cronograma", id);
+         const docSnap = await getDoc(aulaRef);
+         if (docSnap.exists()) dadosAula.numeroDaAula = docSnap.data().numeroDaAula;
+
+    } else {
+        dadosAula.numeroDaAula = 999;
+        dadosAula.status = 'agendada';
+    }
+
     btnSalvarAula.disabled = true;
     try {
         const cronogramaRef = collection(db, "turmas", turmaId, "cronograma");
         if (id) {
             const aulaRef = doc(cronogramaRef, id);
             await updateDoc(aulaRef, dadosAula);
-        } else {
+            alert("Aula atualizada. O cronograma pode ser reajustado.");
+        } else if (isExtra) {
             await addDoc(cronogramaRef, dadosAula);
+             alert("Aula extra adicionada. O cronograma pode ser reajustado.");
         }
-        modalAula.classList.remove('visible');
+        if (modalAula) modalAula.classList.remove('visible');
     } catch (error) {
         console.error("Erro ao salvar aula:", error);
+        alert("Erro ao salvar aula. Verifique os dados e tente novamente.");
     } finally {
         btnSalvarAula.disabled = false;
     }
 }
 
+
 async function deletarAula(aulaId) {
-    if (!confirm("Tem certeza que deseja excluir esta aula extra?")) return;
+    if (!aulaId) return;
+    const aulaRef = doc(db, "turmas", turmaId, "cronograma", aulaId);
     try {
-        const aulaRef = doc(db, "turmas", turmaId, "cronograma", aulaId);
-        await deleteDoc(aulaRef);
+        const aulaSnap = await getDoc(aulaRef);
+        if (aulaSnap.exists() && aulaSnap.data().isExtra === true) {
+            if (!confirm("Tem certeza que deseja excluir esta aula extra? O cronograma será recalculado.")) return;
+            await deleteDoc(aulaRef);
+            alert("Aula extra excluída com sucesso. O cronograma será reajustado.");
+        } else {
+            alert("Apenas aulas extras podem ser excluídas.");
+        }
     } catch (error) {
         console.error("Erro ao deletar aula:", error);
+        alert("Ocorreu um erro ao tentar excluir a aula.");
     }
 }
 
+
 function abrirModalRecessos() {
+    if (!modalRecessos || !formRecesso || !recessoListContainer) return;
     formRecesso.reset();
-    escutarRecessos();
+    escutarRecessos(); // Atualiza a lista ao abrir
     modalRecessos.classList.add('visible');
 }
 
+
 function escutarRecessos() {
+    if (!recessoListContainer) return;
     const recessosRef = collection(db, "turmas", turmaId, "recessos");
-    onSnapshot(recessosRef, (snapshot) => {
+    const q = query(recessosRef, orderBy("dataInicio")); // Ordena por data de início
+    onSnapshot(q, (snapshot) => {
         let listItems = [];
         if (snapshot.empty) {
             listItems.push('<li>Nenhum recesso cadastrado.</li>');
@@ -619,50 +790,67 @@ function escutarRecessos() {
                 const recesso = doc.data();
                 const inicio = recesso.dataInicio.toDate().toLocaleDateString('pt-BR', { timeZone: 'UTC' });
                 const fim = recesso.dataFim.toDate().toLocaleDateString('pt-BR', { timeZone: 'UTC' });
-                listItems.push(`<li><span>De ${inicio} até ${fim}</span><button class="icon-btn delete" data-id="${doc.id}"><i class="fas fa-trash-alt"></i></button></li>`);
+                listItems.push(`<li><span>De ${inicio} até ${fim}</span><button class="icon-btn delete" data-id="${doc.id}" title="Excluir Recesso"><i class="fas fa-trash-alt"></i></button></li>`);
             });
         }
         recessoListContainer.innerHTML = listItems.join('');
     });
 }
 
+
 async function salvarRecesso(event) {
     event.preventDefault();
+     if (!inputRecessoInicio || !inputRecessoFim || !formRecesso) return;
     const dataInicio = inputRecessoInicio.value;
     const dataFim = inputRecessoFim.value;
-    if (!dataInicio || !dataFim || dataFim < dataInicio) { return alert("Por favor, selecione uma data de início e fim válidas."); }
+    if (!dataInicio || !dataFim || new Date(dataFim) < new Date(dataInicio)) {
+         return alert("Por favor, selecione uma data de início e fim válidas (a data fim não pode ser anterior à data início).");
+    }
+    const btnSubmit = formRecesso.querySelector('button[type="submit"]');
+    if(btnSubmit) btnSubmit.disabled = true; // Desabilita o botão ao enviar
+
     try {
         const recessosRef = collection(db, "turmas", turmaId, "recessos");
         await addDoc(recessosRef, {
-            dataInicio: Timestamp.fromDate(new Date(`${dataInicio}T12:00:00.000Z`)),
-            dataFim: Timestamp.fromDate(new Date(`${dataFim}T12:00:00.000Z`))
+            dataInicio: Timestamp.fromDate(new Date(dataInicio + 'T00:00:00Z')),
+            dataFim: Timestamp.fromDate(new Date(dataFim + 'T00:00:00Z'))
         });
         formRecesso.reset();
+        alert("Recesso adicionado. O cronograma será reajustado.");
     } catch (error) {
         console.error("Erro ao salvar recesso:", error);
+        alert("Erro ao adicionar recesso.");
+    } finally {
+         if(btnSubmit) btnSubmit.disabled = false; // Reabilita o botão
     }
 }
 
+
 async function deletarRecesso(recessoId) {
+    if (!recessoId) return;
     if (!confirm("Tem certeza que deseja remover este período de recesso? O cronograma será recalculado.")) return;
     try {
         const recessoRef = doc(db, "turmas", turmaId, "recessos", recessoId);
         await deleteDoc(recessoRef);
+        alert("Recesso removido. O cronograma será reajustado.");
     } catch (error) {
         console.error("Erro ao deletar recesso:", error);
+        alert("Erro ao remover recesso.");
     }
 }
 
+
 async function marcarRecessoDeAulaUnica(aulaDataISO, aulaTitulo) {
     const dataObj = new Date(aulaDataISO);
-    const dataFormatada = dataObj.toLocaleDateString('pt-BR', { timeZone: 'UTC' });
+    const dataUTC = new Date(Date.UTC(dataObj.getUTCFullYear(), dataObj.getUTCMonth(), dataObj.getUTCDate()));
+    const dataFormatada = dataUTC.toLocaleDateString('pt-BR', { timeZone: 'UTC' });
     const confirmacao = confirm(`Tem certeza que deseja marcar o dia ${dataFormatada} como um recesso?\n\nA aula "${aulaTitulo}" e todas as aulas seguintes serão reagendadas automaticamente.`);
     if (confirmacao) {
         try {
             const recessosRef = collection(db, "turmas", turmaId, "recessos");
             await addDoc(recessosRef, {
-                dataInicio: Timestamp.fromDate(dataObj),
-                dataFim: Timestamp.fromDate(dataObj)
+                dataInicio: Timestamp.fromDate(dataUTC),
+                dataFim: Timestamp.fromDate(dataUTC)
             });
             alert("Recesso de um dia adicionado com sucesso! O cronograma será reajustado.");
         } catch (error) {
@@ -672,7 +860,9 @@ async function marcarRecessoDeAulaUnica(aulaDataISO, aulaTitulo) {
     }
 }
 
+
 async function abrirModalFrequencia(aulaId, aulaTitulo) {
+    if (!modalFrequencia || !modalFrequenciaTitulo || !frequenciaListContainer) return;
     currentAulaIdParaFrequencia = aulaId;
     modalFrequenciaTitulo.textContent = `Frequência da Aula: ${aulaTitulo}`;
     frequenciaListContainer.innerHTML = '<li>Carregando lista de chamada...</li>';
@@ -686,72 +876,91 @@ async function abrirModalFrequencia(aulaId, aulaTitulo) {
         const frequenciaRef = collection(db, "turmas", turmaId, "frequencias");
         const qFrequencia = query(frequenciaRef, where("aulaId", "==", aulaId));
         const frequenciaSnapshot = await getDocs(qFrequencia);
-        
+
         const frequenciasSalvas = new Map();
         frequenciaSnapshot.forEach(doc => {
-            frequenciasSalvas.set(doc.data().participanteId, doc.data().status); // Usa ID original como chave
+            frequenciasSalvas.set(doc.data().participanteId, doc.data().status);
         });
 
         let listHTML = '';
-        participantesSnapshot.forEach(doc => {
-            const participanteDocId = doc.id; 
-            const participante = doc.data();
-            const participanteIdOriginal = participante.participanteId; // Pega o ID original (de 'voluntarios' ou 'alunos')
-            
-            const statusAtual = frequenciasSalvas.get(participanteIdOriginal) || null; // Busca frequência pelo ID original
-            
-            listHTML += `
-                <li class="attendance-item" data-participante-id="${participanteIdOriginal}" data-participante-doc-id="${participanteDocId}" data-status="${statusAtual || ''}">
-                    <span>${participante.nome}</span>
-                    <div class="attendance-controls">
-                        <button class="btn-status presente ${statusAtual === 'presente' ? 'active' : ''}" data-status="presente">P</button>
-                        <button class="btn-status ausente ${statusAtual === 'ausente' ? 'active' : ''}" data-status="ausente">F</button>
-                        <button class="btn-status justificado ${statusAtual === 'justificado' ? 'active' : ''}" data-status="justificado">J</button>
-                    </div>
-                </li>`;
-        });
-        frequenciaListContainer.innerHTML = listHTML || '<li>Nenhum participante inscrito nesta turma.</li>';
+        if (participantesSnapshot.empty) {
+             listHTML = '<li>Nenhum participante inscrito nesta turma.</li>';
+        } else {
+            participantesSnapshot.forEach(doc => {
+                const participanteDocId = doc.id;
+                const participante = doc.data();
+                const participanteIdOriginal = participante.participanteId;
+
+                const statusAtual = frequenciasSalvas.get(participanteIdOriginal) || null;
+
+                listHTML += `
+                    <li class="attendance-item" data-participante-id="${participanteIdOriginal}" data-participante-doc-id="${participanteDocId}" data-status="${statusAtual || ''}">
+                        <span>${participante.nome}</span>
+                        <div class="attendance-controls">
+                            <button class="btn-status presente ${statusAtual === 'presente' ? 'active' : ''}" data-status="presente">P</button>
+                            <button class="btn-status ausente ${statusAtual === 'ausente' ? 'active' : ''}" data-status="ausente">F</button>
+                            <button class="btn-status justificado ${statusAtual === 'justificado' ? 'active' : ''}" data-status="justificado">J</button>
+                        </div>
+                    </li>`;
+            });
+        }
+        frequenciaListContainer.innerHTML = listHTML;
     } catch(error) {
         console.error("Erro ao carregar lista de chamada:", error);
+         frequenciaListContainer.innerHTML = '<li>Erro ao carregar participantes.</li>';
     }
 }
 
 
 async function salvarFrequencia() {
-    if (!currentAulaIdParaFrequencia) return;
+    if (!currentAulaIdParaFrequencia || !btnSalvarFrequencia || !frequenciaListContainer) return;
     btnSalvarFrequencia.disabled = true;
-    
+
     const batch = writeBatch(db);
     const items = frequenciaListContainer.querySelectorAll('.attendance-item');
 
+    let algumaFrequenciaAlterada = false;
+
     items.forEach(item => {
-        const participanteIdOriginal = item.dataset.participanteId; // ID de 'voluntarios' ou 'alunos'
-        const participanteDocId = item.dataset.participanteDocId; // ID do doc em 'participantes'
-        
-        const status = item.dataset.status || 'ausente'; 
-        
-        // Usa o ID original para criar o ID único da frequência
-        const frequenciaDocId = `${currentAulaIdParaFrequencia}_${participanteIdOriginal}`; 
+        const participanteIdOriginal = item.dataset.participanteId;
+        const participanteDocId = item.dataset.participanteDocId;
+
+        if (!participanteIdOriginal || !participanteDocId) {
+            console.error("Item da lista de frequência com IDs faltando:", item);
+            return;
+        }
+
+        const status = item.dataset.status || 'ausente';
+
+        const frequenciaDocId = `${currentAulaIdParaFrequencia}_${participanteIdOriginal}`;
         const frequenciaRef = doc(db, "turmas", turmaId, "frequencias", frequenciaDocId);
-        
+
         batch.set(frequenciaRef, {
             aulaId: currentAulaIdParaFrequencia,
-            participanteId: participanteIdOriginal, // Salva o ID original
-            participanteDocId: participanteDocId, // Salva o ID do doc em participantes (referência)
+            participanteId: participanteIdOriginal,
+            participanteDocId: participanteDocId,
             status: status,
-            turmaId: turmaId
+            turmaId: turmaId,
+            registradoEm: serverTimestamp()
         });
+        algumaFrequenciaAlterada = true;
     });
-    
-    const aulaRef = doc(db, "turmas", turmaId, "cronograma", currentAulaIdParaFrequencia);
-    batch.update(aulaRef, { status: 'realizada' });
+
+    if (algumaFrequenciaAlterada || items.length === 0) {
+       const aulaRef = doc(db, "turmas", turmaId, "cronograma", currentAulaIdParaFrequencia);
+       batch.update(aulaRef, { status: 'realizada' });
+    } else {
+        console.log("Nenhuma frequência alterada, aula não marcada como realizada.");
+    }
+
 
     try {
         await batch.commit();
         alert("Frequência salva com sucesso!");
-        modalFrequencia.classList.remove('visible');
+        if(modalFrequencia) modalFrequencia.classList.remove('visible');
     } catch (error) {
         console.error("Erro ao salvar frequência:", error);
+        alert("Ocorreu um erro ao salvar a frequência. Verifique o console.");
     } finally {
         btnSalvarFrequencia.disabled = false;
     }
@@ -760,33 +969,39 @@ async function salvarFrequencia() {
 
 // --- NOVAS FUNÇÕES DE RELATÓRIO ---
 async function getDadosCompletosParaRelatorio() {
-    const participantesRef = collection(db, "turmas", turmaId, "participantes");
+     const participantesRef = collection(db, "turmas", turmaId, "participantes");
     const cronogramaRef = collection(db, "turmas", turmaId, "cronograma");
     const frequenciasRef = collection(db, "turmas", turmaId, "frequencias");
 
-    const [participantesSnap, cronogramaSnap, frequenciasSnap] = await Promise.all([
-        getDocs(query(participantesRef, orderBy("nome"))),
-        getDocs(query(cronogramaRef, orderBy("dataAgendada"))),
-        getDocs(frequenciasRef)
-    ]);
+    try {
+        const [participantesSnap, cronogramaSnap, frequenciasSnap] = await Promise.all([
+            getDocs(query(participantesRef, orderBy("nome"))),
+            getDocs(query(cronogramaRef, orderBy("dataAgendada"))),
+            getDocs(frequenciasRef)
+        ]);
 
-    const participantes = participantesSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-    const cronograma = cronogramaSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        const participantes = participantesSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        const cronograma = cronogramaSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
 
-    const frequenciasMap = new Map();
-    frequenciasSnap.forEach(doc => {
-        const data = doc.data();
-        const key = `${data.aulaId}_${data.participanteId}`; // Usa ID original na chave
-        frequenciasMap.set(key, data.status);
-    });
+        const frequenciasMap = new Map();
+        frequenciasSnap.forEach(doc => {
+            const data = doc.data();
+            const key = `${data.aulaId}_${data.participanteId}`;
+            frequenciasMap.set(key, data.status);
+        });
 
-    return { participantes, cronograma, frequenciasMap };
+        return { participantes, cronograma, frequenciasMap };
+    } catch (error) {
+        console.error("Erro ao buscar dados completos para relatório:", error);
+        return { participantes: [], cronograma: [], frequenciasMap: new Map() };
+    }
 }
 
 
 async function gerarDiarioDeClasse() {
+    if(!areaRelatorioGerado) return;
     areaRelatorioGerado.innerHTML = '<p>Gerando diário de classe...</p>';
-    btnImprimirRelatorio.classList.add('hidden');
+    if (btnImprimirRelatorio) btnImprimirRelatorio.classList.add('hidden');
 
     const { participantes, cronograma, frequenciasMap } = await getDadosCompletosParaRelatorio();
 
@@ -795,10 +1010,10 @@ async function gerarDiarioDeClasse() {
         return;
     }
 
-    let tableHTML = '<div class="table-container"><table id="report-table"><thead><tr><th>Aluno</th>';
+    let tableHTML = `<div class="table-container"><table id="report-table"><thead><tr><th>Aluno (${participantes.length})</th>`;
     cronograma.forEach(aula => {
         const dataFormatada = aula.dataAgendada.toDate().toLocaleDateString('pt-BR', { month: '2-digit', day: '2-digit' });
-        tableHTML += `<th>${dataFormatada}</th>`;
+        tableHTML += `<th title="${aula.titulo}">${dataFormatada}</th>`;
     });
     tableHTML += '<th>Freq.%</th></tr></thead><tbody>';
 
@@ -807,9 +1022,9 @@ async function gerarDiarioDeClasse() {
         let presencas = 0;
         let aulasContabilizadas = 0;
         cronograma.forEach(aula => {
-            if (aula.status === 'realizada') {
+            if (aula.status === 'realizada' && !aula.isExtra) {
                 aulasContabilizadas++;
-                const key = `${aula.id}_${p.participanteId}`; // Usa ID original para buscar
+                const key = `${aula.id}_${p.participanteId}`;
                 const status = frequenciasMap.get(key);
                 let statusChar = '-';
                 if (status === 'presente') {
@@ -821,22 +1036,26 @@ async function gerarDiarioDeClasse() {
                     statusChar = 'J';
                 }
                 tableHTML += `<td>${statusChar}</td>`;
+            } else if (!aula.isExtra) {
+                 tableHTML += `<td>-</td>`;
             } else {
-                tableHTML += `<td>-</td>`;
+                 tableHTML += `<td style="color: #999;" title="Aula Extra">E</td>`;
             }
         });
-        const freqPercent = aulasContabilizadas > 0 ? ((presencas / aulasContabilizadas) * 100).toFixed(0) : 0;
+        const freqPercent = aulasContabilizadas > 0 ? Math.round((presencas / aulasContabilizadas) * 100) : 0;
         tableHTML += `<td>${freqPercent}%</td></tr>`;
     });
 
     tableHTML += '</tbody></table></div>';
     areaRelatorioGerado.innerHTML = `<h2>Diário de Classe - ${turmaData.nomeDaTurma}</h2>` + tableHTML;
-    btnImprimirRelatorio.classList.remove('hidden');
+    if (btnImprimirRelatorio) btnImprimirRelatorio.classList.remove('hidden');
 }
 
+
 async function gerarBoletimIndividual() {
+    if(!areaRelatorioGerado) return;
     areaRelatorioGerado.innerHTML = '<p>Carregando lista de participantes...</p>';
-    btnImprimirRelatorio.classList.add('hidden');
+     if (btnImprimirRelatorio) btnImprimirRelatorio.classList.add('hidden');
     const { participantes } = await getDadosCompletosParaRelatorio();
 
     if (participantes.length === 0) {
@@ -846,54 +1065,67 @@ async function gerarBoletimIndividual() {
 
     let selectHTML = '<div class="form-group"><label>Selecione um participante para ver o boletim:</label><select id="select-boletim-participante"><option value="">Selecione...</option>';
     participantes.forEach(p => {
-        selectHTML += `<option value="${p.id}">${p.nome}</option>`; // Usa o ID do doc em 'participantes'
+        selectHTML += `<option value="${p.id}">${p.nome}</option>`;
     });
     selectHTML += '</select></div><div id="boletim-content"></div>';
     areaRelatorioGerado.innerHTML = `<h2>Boletim Individual - ${turmaData.nomeDaTurma}</h2>` + selectHTML;
 
-    document.getElementById('select-boletim-participante').addEventListener('change', (e) => {
-        const participanteDocId = e.target.value; // ID do doc em 'participantes'
-        const boletimContent = document.getElementById('boletim-content');
-        if (!participanteDocId) {
-            boletimContent.innerHTML = '';
-            btnImprimirRelatorio.classList.add('hidden');
-            return;
-        }
+    const selectElement = document.getElementById('select-boletim-participante');
+    if (selectElement) {
+        selectElement.addEventListener('change', (e) => {
+            const participanteDocId = e.target.value;
+            const boletimContent = document.getElementById('boletim-content');
+            if (!boletimContent) return;
 
-        const participante = participantes.find(p => p.id === participanteDocId);
-        const anoAtual = turmaData.anoAtual || 1;
-        const avaliacao = participante.avaliacoes ? participante.avaliacoes[anoAtual] : null;
+            if (!participanteDocId) {
+                boletimContent.innerHTML = '';
+                 if (btnImprimirRelatorio) btnImprimirRelatorio.classList.add('hidden');
+                return;
+            }
 
-        let boletimHTML = `<div class="boletim-card" style="border: 1px solid #ccc; padding: 15px; border-radius: 8px; margin-top: 10px;"><h4>Boletim de ${participante.nome}</h4>`;
-        if (turmaData.isEAE && avaliacao) {
-            boletimHTML += `
-                <p><strong>Frequência:</strong> ${avaliacao.notaFrequencia || 0}%</p>
-                <p><strong>Média Reforma Íntima (RI):</strong> ${(avaliacao.mediaRI || 0).toFixed(1)}</p>
-                <p><strong>Média Final:</strong> ${(avaliacao.mediaFinal || 0).toFixed(1)}</p>
-                <p><strong>Status:</strong> ${avaliacao.statusAprovacao || 'Em Andamento'}</p>
-                <hr>
-                <h5>Notas Detalhadas (${anoAtual}º Ano):</h5>
-                <ul>
-                    <li>Caderno de Temas: ${avaliacao.notaCadernoTemas ?? '-'}</li>
-                    <li>Caderneta Pessoal: ${avaliacao.notaCadernetaPessoal ?? '-'}</li>
-                    <li>Trabalhos Prestados: ${avaliacao.notaTrabalhos ?? '-'}</li>
-                    <li>Exame Espiritual: ${avaliacao.notaExameEspiritual ?? '-'}</li>
-                </ul>
-            `;
-        } else if (avaliacao) {
-             boletimHTML += `<p><strong>Frequência:</strong> ${avaliacao.notaFrequencia || 0}%</p><p>Não há notas para este curso.</p>`;
-        } else {
-             boletimHTML += `<p><strong>Frequência:</strong> 0%</p><p>Não há notas para este curso.</p>`;
-        }
-        boletimHTML += '</div>';
-        boletimContent.innerHTML = boletimHTML;
-        btnImprimirRelatorio.classList.remove('hidden');
-    });
+            const participante = participantes.find(p => p.id === participanteDocId);
+            if (!participante) {
+                boletimContent.innerHTML = '<p style="color:red;">Erro: Participante não encontrado na lista.</p>';
+                 if (btnImprimirRelatorio) btnImprimirRelatorio.classList.add('hidden');
+                return;
+            }
+
+            const anoAtual = turmaData.anoAtual || 1;
+            const avaliacao = participante.avaliacoes ? participante.avaliacoes[anoAtual] : null;
+
+            let boletimHTML = `<div class="boletim-card" style="border: 1px solid #ccc; padding: 15px; border-radius: 8px; margin-top: 10px;"><h4>Boletim de ${participante.nome}</h4>`;
+            if (turmaData.isEAE && avaliacao) {
+                boletimHTML += `
+                    <p><strong>Frequência:</strong> ${avaliacao.notaFrequencia ?? 0}%</p>
+                    <p><strong>Média Reforma Íntima (RI):</strong> ${(avaliacao.mediaRI || 0).toFixed(1)}</p>
+                    <p><strong>Média Final:</strong> ${(avaliacao.mediaFinal || 0).toFixed(1)}</p>
+                    <p><strong>Status:</strong> ${avaliacao.statusAprovacao || 'Em Andamento'}</p>
+                    <hr>
+                    <h5>Notas Detalhadas (${anoAtual}º Ano):</h5>
+                    <ul>
+                        <li>Caderno de Temas: ${avaliacao.notaCadernoTemas ?? '-'}</li>
+                        <li>Caderneta Pessoal: ${avaliacao.notaCadernetaPessoal ?? '-'}</li>
+                        <li>Trabalhos Prestados: ${avaliacao.notaTrabalhos ?? '-'}</li>
+                        <li>Exame Espiritual: ${avaliacao.notaExameEspiritual ?? '-'}</li>
+                    </ul>
+                `;
+            } else if (avaliacao) {
+                 boletimHTML += `<p><strong>Frequência:</strong> ${avaliacao.notaFrequencia || 0}%</p><p>Não há outras notas para este curso.</p>`;
+            } else {
+                 boletimHTML += `<p><strong>Frequência:</strong> 0%</p><p>Não há notas lançadas para este curso.</p>`;
+            }
+            boletimHTML += '</div>';
+            boletimContent.innerHTML = boletimHTML;
+            if (btnImprimirRelatorio) btnImprimirRelatorio.classList.remove('hidden');
+        });
+    }
 }
 
+
 async function gerarRelatorioAptosCertificado() {
-    areaRelatorioGerado.innerHTML = '<p>Gerando relatório final...</p>';
-    btnImprimirRelatorio.classList.add('hidden');
+    if(!areaRelatorioGerado) return;
+     areaRelatorioGerado.innerHTML = '<p>Gerando relatório final...</p>';
+     if (btnImprimirRelatorio) btnImprimirRelatorio.classList.add('hidden');
     const { participantes } = await getDadosCompletosParaRelatorio();
 
     if (participantes.length === 0) {
@@ -903,48 +1135,41 @@ async function gerarRelatorioAptosCertificado() {
 
     let tableHTML = '<div class="table-container"><table id="report-table"><thead><tr><th>Aluno</th><th>Status Final</th></tr></thead><tbody>';
     const anoAtual = turmaData.anoAtual || 1;
+    let aptosCount = 0;
 
     participantes.forEach(p => {
         let statusFinal = 'Em Andamento';
+        let isApto = false;
         const avaliacao = p.avaliacoes ? p.avaliacoes[anoAtual] : null;
 
         if (turmaData.isEAE) {
             statusFinal = avaliacao ? avaliacao.statusAprovacao : 'Pendente';
+            if (statusFinal === 'Aprovado') isApto = true;
         } else {
             const freq = avaliacao ? avaliacao.notaFrequencia : 0;
-            statusFinal = freq >= 75 ? 'Aprovado' : 'Reprovado por Frequência';
+            if (freq >= 75) {
+                statusFinal = 'Aprovado';
+                isApto = true;
+            } else {
+                 statusFinal = 'Reprovado por Frequência';
+            }
         }
+        if (isApto) aptosCount++;
         tableHTML += `<tr><td>${p.nome}</td><td>${statusFinal}</td></tr>`;
     });
 
     tableHTML += '</tbody></table></div>';
-    areaRelatorioGerado.innerHTML = `<h2>Relatório Final para Certificado - ${turmaData.nomeDaTurma}</h2>` + tableHTML;
-    btnImprimirRelatorio.classList.remove('hidden');
+    areaRelatorioGerado.innerHTML = `<h2>Relatório Final para Certificado - ${turmaData.nomeDaTurma} (${aptosCount} aptos)</h2>` + tableHTML;
+    if (btnImprimirRelatorio) btnImprimirRelatorio.classList.remove('hidden');
 }
 
-
-// ===================================================================
-// ## FUNÇÃO DE GERAR CERTIFICADOS E PRÉ-CARREGAMENTO (VERSÃO FINAL COM BUSCA DE DIRIGENTE) ##
-// ===================================================================
-
-function precarregarImagem(url) {
-    return new Promise((resolve) => {
-        if (!url) {
-            console.warn("URL da imagem não fornecida para pré-carregamento.");
-            return resolve(null);
-        }
-        const img = new Image();
-        img.crossOrigin = "Anonymous";
-        img.onload = () => resolve(img);
-        img.onerror = (err) => {
-            console.error(`Falha ao carregar imagem: ${url}`, err);
-            resolve(null); // Retorna null se falhar
-        };
-        img.src = url + '?t=' + new Date().getTime(); // Cache buster
-    });
-}
 
 async function gerarCertificados() {
+     const podeGerenciar = userIsAdminGlobal || (userIsFacilitatorDaTurma && userIsAdminEducacional);
+    if (!podeGerenciar) {
+        return alert("Você não tem permissão para gerar certificados para esta turma.");
+    }
+
     alert("Iniciando a geração dos certificados. Isso pode levar um momento...");
     const { jsPDF } = window.jspdf;
 
@@ -975,27 +1200,22 @@ async function gerarCertificados() {
             return alert("Nenhum aluno aprovado encontrado para gerar certificados.");
         }
 
-        // ### AJUSTE: Lógica para encontrar o Dirigente de Escola ###
         let dirigenteEncontrado = null;
-        // Usa 'facilitadoresIds' que contém os IDs da coleção 'voluntarios'
         const facilitadoresIds = turmaData.facilitadoresIds || [];
 
         for (const facilitadorId of facilitadoresIds) {
-            const voluntarioRef = doc(db, "voluntarios", facilitadorId); // Busca na coleção 'voluntarios'
+            const voluntarioRef = doc(db, "voluntarios", facilitadorId);
             const voluntarioDoc = await voluntarioRef.get();
 
             if (voluntarioDoc.exists()) {
                 const voluntarioData = voluntarioDoc.data();
-                // Verifica se o campo 'role' existe e é o correto
                 if (voluntarioData.role === 'dirigente-escola') {
-                    // Verifica se a assinaturaUrl existe ANTES de atribuir
-                    if (voluntarioData.assinaturaUrl) {
-                        dirigenteEncontrado = voluntarioData; // Guarda os dados do dirigente
+                     if (voluntarioData.assinaturaUrl) {
+                        dirigenteEncontrado = voluntarioData;
                         console.log(`Dirigente encontrado: ${voluntarioData.nome}, Assinatura: ${voluntarioData.assinaturaUrl}`);
-                        break; // Encontrou um com assinatura, pode parar de procurar
+                        break;
                     } else {
                         console.warn(`Voluntário ${voluntarioData.nome} (ID: ${facilitadorId}) é Dirigente, mas não tem assinaturaUrl cadastrada.`);
-                        // Guarda o primeiro dirigente encontrado, mesmo sem assinatura, como fallback
                         if (!dirigenteEncontrado) {
                            dirigenteEncontrado = voluntarioData;
                         }
@@ -1007,54 +1227,49 @@ async function gerarCertificados() {
         }
 
         if (!dirigenteEncontrado) {
-            console.warn(`Nenhum 'dirigente-escola' encontrado entre os facilitadores da turma ${turmaId}. Verifique os cargos.`);
-            // Define um fallback se nenhum dirigente for encontrado
+            console.warn(`Nenhum 'dirigente-escola' encontrado entre os facilitadores da turma ${turmaId}.`);
             dirigenteEncontrado = { nome: "Dirigente Não Definido", assinaturaUrl: null };
         } else if (!dirigenteEncontrado.assinaturaUrl) {
-            // Se encontrou um dirigente mas ele não tem assinatura
-             console.warn(`O dirigente ${dirigenteEncontrado.nome} não possui URL de assinatura. A assinatura ficará em branco.`);
+             console.warn(`O dirigente ${dirigenteEncontrado.nome} não possui URL de assinatura.`);
         }
-        // ### FIM DO AJUSTE ###
 
-        // Pré-carrega as assinaturas (agora usando o dirigente encontrado) e o logo
         const [dirigenteImg, presidenteImg, logoImg] = await Promise.all([
-            precarregarImagem(dirigenteEncontrado.assinaturaUrl), // Pode ser null se não tiver URL
+            precarregarImagem(dirigenteEncontrado.assinaturaUrl),
             precarregarImagem(presidenteData.presidenteAssinaturaUrl),
-            precarregarImagem('/logo-cepat.png') // Pré-carrega o logo também
+            precarregarImagem('/logo-cepat.png')
         ]);
 
-        // Define as URLs no HTML *antes* do loop (importante para html2canvas)
-        certAssinaturaDirigenteImg.src = dirigenteImg ? dirigenteImg.src : ""; // Usa src vazia se não houver imagem
-        certAssinaturaPresidenteImg.src = presidenteImg ? presidenteImg.src : "";
-        document.getElementById('logo-cepat-cert').src = logoImg ? logoImg.src : ""; // Garante que o logo esteja carregado
+        if (certAssinaturaDirigenteImg) certAssinaturaDirigenteImg.src = dirigenteImg ? dirigenteImg.src : "";
+        if (certAssinaturaPresidenteImg) certAssinaturaPresidenteImg.src = presidenteImg ? presidenteImg.src : "";
+        const logoElement = document.getElementById('logo-cepat-cert');
+        if (logoElement) logoElement.src = logoImg ? logoImg.src : "";
+
+        const certificateWrapper = document.getElementById('certificate-wrapper');
+        if (!certificateWrapper) throw new Error("Elemento do certificado não encontrado no DOM.");
+
 
         for (const aluno of alunosAprovados) {
-            // Preenche os dados variáveis do certificado no HTML
-            certAlunoNome.textContent = aluno.nome.toUpperCase();
-            certCursoNome.textContent = turmaData.isEAE ? `${turmaData.nomeDaTurma} da ${turmaData.cursoNome}` : turmaData.cursoNome;
+            if (certAlunoNome) certAlunoNome.textContent = aluno.nome.toUpperCase();
+            if (certCursoNome) certCursoNome.textContent = turmaData.isEAE ? `${turmaData.nomeDaTurma} da ${turmaData.cursoNome}` : turmaData.cursoNome;
             const dataInicio = turmaData.dataInicio.toDate();
-            const dataFim = new Date(); // Usa a data atual como data de fim/emissão
-            certPeriodo.textContent = `realizado no período de ${dataInicio.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })} a ${dataFim.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })}`;
-            certDataEmissao.textContent = `Santa Bárbara d'Oeste, ${new Date().toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' })}`;
-            certNomeDirigente.textContent = dirigenteEncontrado.nome; // Usa o nome do dirigente encontrado
-            certNomePresidente.textContent = presidenteData.presidenteNome;
+            const dataFim = new Date();
+            if (certPeriodo) certPeriodo.textContent = `realizado no período de ${dataInicio.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })} a ${dataFim.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })}`;
+            if (certDataEmissao) certDataEmissao.textContent = `Santa Bárbara d'Oeste, ${new Date().toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' })}`;
+            if (certNomeDirigente) certNomeDirigente.textContent = dirigenteEncontrado.nome;
+            if (certNomePresidente) certNomePresidente.textContent = presidenteData.presidenteNome;
 
-            // Pequeno delay para garantir que o DOM atualizou antes do html2canvas
             await new Promise(resolve => setTimeout(resolve, 100));
 
-            // Gera o canvas a partir do HTML
-            const canvas = await html2canvas(document.getElementById('certificate-wrapper'), {
+            const canvas = await html2canvas(certificateWrapper, {
                 useCORS: true,
                 allowTaint: true,
-                scale: 2 // Aumenta a resolução para melhor qualidade de impressão
+                scale: 2
             });
-            
-            // Cria o PDF e adiciona a imagem do canvas
+
             const imgData = canvas.toDataURL('image/png');
             const pdf = new jsPDF({ orientation: 'landscape', unit: 'px', format: [1024, 728] });
             pdf.addImage(imgData, 'PNG', 0, 0, 1024, 728);
-            
-            // Salva o PDF
+
             pdf.save(`Certificado - ${aluno.nome}.pdf`);
         }
 
@@ -1062,7 +1277,7 @@ async function gerarCertificados() {
 
     } catch (error) {
         console.error("Erro ao gerar certificados:", error);
-        alert("Ocorreu um erro ao gerar os certificados. Verifique o console.");
+        alert(`Ocorreu um erro ao gerar os certificados: ${error.message}. Verifique o console.`);
     }
 }
 
@@ -1074,21 +1289,21 @@ tabs.forEach(tab => {
         tab.classList.add('active');
         const targetTab = document.getElementById(tab.dataset.tab);
         tabContents.forEach(content => content.classList.remove('active'));
-        targetTab.classList.add('active');
-        areaRelatorioGerado.innerHTML = '';
-        btnImprimirRelatorio.classList.add('hidden');
+        if(targetTab) targetTab.classList.add('active'); // Verifica se targetTab existe
+        if(areaRelatorioGerado) areaRelatorioGerado.innerHTML = '';
+        if(btnImprimirRelatorio) btnImprimirRelatorio.classList.add('hidden');
     });
 });
 if(btnInscreverParticipante) btnInscreverParticipante.addEventListener('click', abrirModalInscricao);
-if(closeModalInscricaoBtn) closeModalInscricaoBtn.addEventListener('click', () => modalInscricao.classList.remove('visible'));
+if(closeModalInscricaoBtn) closeModalInscricaoBtn.addEventListener('click', () => modalInscricao?.classList.remove('visible')); // Optional chaining
 if(modalInscricao) modalInscricao.addEventListener('click', (event) => { if (event.target === modalInscricao) modalInscricao.classList.remove('visible'); });
 if(formInscricao) formInscricao.addEventListener('submit', inscreverParticipante);
 if(btnCadastrarAluno) btnCadastrarAluno.addEventListener('click', abrirModalNovoAluno);
-if(closeModalNovoAlunoBtn) closeModalNovoAlunoBtn.addEventListener('click', () => modalNovoAluno.classList.remove('visible'));
+if(closeModalNovoAlunoBtn) closeModalNovoAlunoBtn.addEventListener('click', () => modalNovoAluno?.classList.remove('visible'));
 if(modalNovoAluno) modalNovoAluno.addEventListener('click', (event) => { if (event.target === modalNovoAluno) modalNovoAluno.classList.remove('visible'); });
 if(formNovoAluno) formNovoAluno.addEventListener('submit', salvarNovoAluno);
 if(btnAddAulaExtra) btnAddAulaExtra.addEventListener('click', () => abrirModalAula(null, true));
-if(closeModalAulaBtn) closeModalAulaBtn.addEventListener('click', () => modalAula.classList.remove('visible'));
+if(closeModalAulaBtn) closeModalAulaBtn.addEventListener('click', () => modalAula?.classList.remove('visible'));
 if(modalAula) modalAula.addEventListener('click', (event) => { if (event.target === modalAula) modalAula.classList.remove('visible'); });
 if(formAula) formAula.addEventListener('submit', salvarAula);
 if(cronogramaTableBody) cronogramaTableBody.addEventListener('click', (event) => {
@@ -1096,7 +1311,7 @@ if(cronogramaTableBody) cronogramaTableBody.addEventListener('click', (event) =>
     if (!target || !target.dataset.action) return;
     const action = target.dataset.action;
     const id = target.dataset.id;
-    if (action === 'edit') { abrirModalAula(id); } 
+    if (action === 'edit') { abrirModalAula(id); }
     else if (action === 'delete') { deletarAula(id); }
     else if (action === 'frequencia') {
         const titulo = target.dataset.titulo;
@@ -1109,7 +1324,7 @@ if(cronogramaTableBody) cronogramaTableBody.addEventListener('click', (event) =>
     }
 });
 if(btnGerenciarRecessos) btnGerenciarRecessos.addEventListener('click', abrirModalRecessos);
-if(closeModalRecessosBtn) closeModalRecessosBtn.addEventListener('click', () => modalRecessos.classList.remove('visible'));
+if(closeModalRecessosBtn) closeModalRecessosBtn.addEventListener('click', () => modalRecessos?.classList.remove('visible'));
 if(modalRecessos) modalRecessos.addEventListener('click', (event) => { if (event.target === modalRecessos) modalRecessos.classList.remove('visible'); });
 if(formRecesso) formRecesso.addEventListener('submit', salvarRecesso);
 if(recessoListContainer) recessoListContainer.addEventListener('click', (event) => {
@@ -1118,12 +1333,12 @@ if(recessoListContainer) recessoListContainer.addEventListener('click', (event) 
         deletarRecesso(target.dataset.id);
     }
 });
-participantesTableBody.addEventListener('click', (event) => {
+if(participantesTableBody) participantesTableBody.addEventListener('click', (event) => {
     const target = event.target.closest('button');
     if (!target || !target.dataset.action) return;
     const action = target.dataset.action;
     const id = target.dataset.id; // ID do documento na subcoleção 'participantes'
-    
+
     if (action === 'notas') {
         abrirModalNotas(id);
     } else if (action === 'promover') {
@@ -1136,13 +1351,14 @@ participantesTableBody.addEventListener('click', (event) => {
     }
 });
 if(formNotas) formNotas.addEventListener('submit', salvarNotas);
-if(closeModalNotasBtn) closeModalNotasBtn.addEventListener('click', () => modalNotas.classList.remove('visible'));
+if(closeModalNotasBtn) closeModalNotasBtn.addEventListener('click', () => modalNotas?.classList.remove('visible'));
 if(modalNotas) modalNotas.addEventListener('click', (event) => { if (event.target === modalNotas) modalNotas.classList.remove('visible'); });
 if(btnAvancarAno) btnAvancarAno.addEventListener('click', avancarAnoDaTurma);
-frequenciaListContainer.addEventListener('click', (event) => {
+if(frequenciaListContainer) frequenciaListContainer.addEventListener('click', (event) => {
     if (event.target.classList.contains('btn-status')) {
         const targetBtn = event.target;
         const parentItem = targetBtn.closest('.attendance-item');
+        if (!parentItem) return; // Adiciona verificação
         const status = targetBtn.dataset.status;
         parentItem.dataset.status = status;
         parentItem.querySelectorAll('.btn-status').forEach(btn => btn.classList.remove('active'));
@@ -1150,7 +1366,7 @@ frequenciaListContainer.addEventListener('click', (event) => {
     }
 });
 if(btnSalvarFrequencia) btnSalvarFrequencia.addEventListener('click', salvarFrequencia);
-if(closeModalFrequenciaBtn) closeModalFrequenciaBtn.addEventListener('click', () => modalFrequencia.classList.remove('visible'));
+if(closeModalFrequenciaBtn) closeModalFrequenciaBtn.addEventListener('click', () => modalFrequencia?.classList.remove('visible'));
 if(modalFrequencia) modalFrequencia.addEventListener('click', (event) => { if(event.target === modalFrequencia) modalFrequencia.classList.remove('visible'); });
 if(reportMenuContainer) reportMenuContainer.addEventListener('click', (event) => {
     event.preventDefault();
@@ -1158,8 +1374,8 @@ if(reportMenuContainer) reportMenuContainer.addEventListener('click', (event) =>
     if (!target || !target.dataset.report) return;
     if (target.classList.contains('disabled')) return;
     const reportType = target.dataset.report;
-    areaRelatorioGerado.innerHTML = ''; // Limpa área antes de gerar novo relatório
-    btnImprimirRelatorio.classList.add('hidden'); // Esconde botão de imprimir
+    if(areaRelatorioGerado) areaRelatorioGerado.innerHTML = ''; // Limpa área antes de gerar novo relatório
+    if(btnImprimirRelatorio) btnImprimirRelatorio.classList.add('hidden'); // Esconde botão de imprimir
     if (reportType === 'diario-classe') {
         gerarDiarioDeClasse();
     } else if (reportType === 'boletim-individual') {
