@@ -19,6 +19,23 @@ const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
 
+// ===================================================================
+// --- ADICIONADO: FUNÇÃO DE NORMALIZAÇÃO ---
+// ===================================================================
+/**
+ * FUNÇÃO DE NORMALIZAÇÃO (Remove acentos e põe em minúsculas)
+ * @param {string} str A string para normalizar
+ * @returns {string} A string normalizada
+ */
+function normalizarString(str) {
+    if (!str) return ""; // Proteção contra valores nulos ou indefinidos
+    return str
+        .toLowerCase() // 1. Converte para minúsculas
+        .normalize("NFD") // 2. Separa acentos das letras
+        .replace(/[\u0300-\u036f]/g, ""); // 3. Remove os acentos
+}
+// ===================================================================
+
 const muralContainer = document.getElementById('mural-container');
 const formLogin = document.getElementById('form-login-portal');
 const formPresencaRapida = document.getElementById('form-presenca-rapida');
@@ -223,11 +240,21 @@ if (formPresencaRapida) {
             }
 
             if (!voluntarioParaRegistrar.id) {
+                // --- MODIFICAÇÃO AQUI ---
+                // 1. Normaliza o nome antes de salvar
+                const nomeNormalizado = normalizarString(voluntarioParaRegistrar.nome);
+
+                console.log(`Criando novo voluntário órfão: ${voluntarioParaRegistrar.nome} (Normalizado: ${nomeNormalizado})`);
+
                 const novoVoluntarioDoc = await addDoc(collection(db, "voluntarios"), {
                     nome: voluntarioParaRegistrar.nome,
+                    nome_normalizado: nomeNormalizado, // 2. Adiciona o campo normalizado
                     statusVoluntario: 'ativo',
                     criadoEm: serverTimestamp()
+                    // O authUid fica ausente por padrão, que é o que queremos (órfão)
                 });
+                // --- FIM DA MODIFICAÇÃO ---
+                
                 voluntarioParaRegistrar.id = novoVoluntarioDoc.id;
             }
 
