@@ -161,12 +161,35 @@ async function verificarPapelFacilitador(userId) {
 }
 
 async function verificarPapelAdmin(user) {
-    const idTokenResult = await user.getIdTokenResult(true);
-    const userRole = idTokenResult.claims.role;
-    const adminRoles = ['super-admin', 'diretor', 'entrevistador', 'bibliotecario', 'produtor-evento', 'conselheiro', 'irradiador', 'dirigente-escola', 'secretario-escola', 'recepcionista', 'tesoureiro'];
-    return adminRoles.includes(userRole);
-}
+    try {
+        const idTokenResult = await user.getIdTokenResult(true); // Força refresh do token
+        const claims = idTokenResult.claims || {}; // Pega o objeto claims inteiro
 
+        // ### AJUSTE AQUI: Lista de todos os cargos que devem ver o card "Acesso Administrativo" ###
+        const rolesComAcessoAdmin = ['super-admin', 'diretor', 'entrevistador', 'bibliotecario', 'produtor-evento', 'conselheiro', 'irradiador', 'dirigente-escola', 'secretario-escola', 'recepcionista', 'tesoureiro']];
+
+        // Verifica se o 'role' principal está na lista OU se algum claim booleano relevante é true
+        let temAcessoAdmin = false;
+        if (rolesComAcessoAdmin.includes(claims.role)) {
+            temAcessoAdmin = true;
+        } else {
+            for (const role of rolesComAcessoAdmin) {
+                // Verifica se existe um claim com o nome do cargo e se ele é true
+                if (claims[role] === true) {
+                    temAcessoAdmin = true;
+                    break; // Encontrou um, pode parar
+                }
+            }
+        }
+
+        console.log("Verificando acesso admin para Meu CEPAT:", claims, "Resultado:", temAcessoAdmin); // Log para depuração
+        return temAcessoAdmin;
+
+    } catch (error) {
+        console.error("Erro ao verificar papel de admin no Meu CEPAT:", error);
+        return false; // Retorna false em caso de erro ao ler claims
+    }
+}
 // --- LÓGICA DO MÓDULO ALUNO ---
 async function carregarModuloAluno(userId) {
     alunoContent.innerHTML = "<p>Buscando seus cursos...</p>";
