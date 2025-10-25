@@ -1,6 +1,6 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
 import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-auth.js";
-import { getFirestore, collection, query, where, getDocs, doc, addDoc, onSnapshot, orderBy, limit, serverTimestamp, Timestamp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js"; // Adicionado Timestamp
+import { getFirestore, collection, query, where, getDocs, doc, addDoc, onSnapshot, orderBy, limit, serverTimestamp, Timestamp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
 
 // --- CONFIGURAÇÕES ---
 const firebaseConfig = {
@@ -29,24 +29,36 @@ const selectFacilitadores = document.getElementById('turma-facilitadores');
 const inputDataInicio = document.getElementById('turma-data-inicio');
 const selectDiaSemana = document.getElementById('turma-dia-semana');
 const btnSalvarTurma = document.getElementById('btn-salvar-turma');
-// Adiciona referência ao container principal e à mensagem de acesso negado
 const mainContent = document.getElementById('main-content');
 const acessoNegadoContainer = document.getElementById('acesso-negado');
 
+// ### AJUSTE: Guarda o ID do perfil do usuário logado ###
+let currentUserProfileId = null;
 
 // --- VERIFICAÇÃO DE PERMISSÃO ---
 onAuthStateChanged(auth, async (user) => {
     if (user) {
         try {
-            // ### AJUSTE: Pega claims e verifica permissão de forma mais completa ###
+            // Pega perfil e claims
+            const voluntariosRef = collection(db, "voluntarios");
+            const userQuery = query(voluntariosRef, where("authUid", "==", user.uid), limit(1));
+            const userSnapshot = await getDocs(userQuery);
+
+            if (userSnapshot.empty) {
+                throw new Error("Perfil de voluntário não encontrado.");
+            }
+            const userProfile = { id: userSnapshot.docs[0].id, ...userSnapshot.docs[0].data() };
+            currentUserProfileId = userProfile.id; // <-- Guarda o ID do Firestore
+
             const idTokenResult = await user.getIdTokenResult(true);
             const claims = idTokenResult.claims || {};
 
-            const rolesPermitidasPagina = [ // Quem pode VER esta página
+            const rolesPermitidasPagina = [
                 'super-admin', 'diretor', 'tesoureiro',
                 'dirigente-escola', 'secretario-escola'
+                // Facilitador comum NÃO entra aqui, pois ele acessa via Meu CEPAT
             ];
-            const rolesAdminGlobal = [ // Quem pode CRIAR turmas
+            const rolesAdminGlobal = [
                 'super-admin', 'diretor', 'tesoureiro'
             ];
 
@@ -65,7 +77,7 @@ onAuthStateChanged(auth, async (user) => {
                 }
             }
 
-            // Verifica se é admin global (para mostrar botão "Iniciar Nova Turma")
+            // Verifica se é admin global
              if (rolesAdminGlobal.includes(claims.role)) {
                 isAdminGlobal = true;
             } else {
@@ -76,45 +88,63 @@ onAuthStateChanged(auth, async (user) => {
                     }
                 }
             }
-            // ### FIM DO AJUSTE ###
 
             if (temPermissaoPagina) {
-                 mainContent.style.display = 'block'; // Mostra conteúdo principal
-                 acessoNegadoContainer.style.display = 'none'; // Esconde msg de erro
+                 mainContent.style.display = 'block';
+                 acessoNegadoContainer.style.display = 'none';
 
-                // ### AJUSTE: Mostra/Esconde botão "Iniciar Nova Turma" ###
                 if (isAdminGlobal) {
-                    btnIniciarTurma.style.display = 'block'; // Só admins globais podem iniciar
+                    btnIniciarTurma.style.display = 'inline-flex'; // Usa inline-flex por causa do ícone
                 } else {
                     btnIniciarTurma.style.display = 'none';
                 }
-                // ### FIM DO AJUSTE ###
 
-                carregarTurmas(); // Carrega a lista de turmas
+                // ### AJUSTE: Passa isAdminGlobal e ID do usuário para carregarTurmas ###
+                carregarTurmas(isAdminGlobal, currentUserProfileId);
             } else {
-                mainContent.style.display = 'none'; // Esconde conteúdo principal
-                acessoNegadoContainer.style.display = 'block'; // Mostra msg de erro
+                mainContent.style.display = 'none';
+                acessoNegadoContainer.style.display = 'block';
             }
         } catch (error) {
              console.error("Erro ao verificar permissões em gerenciar-turmas:", error);
              mainContent.style.display = 'none';
              acessoNegadoContainer.style.display = 'block';
+             // Mostra o erro no container de acesso negado para depuração
+             acessoNegadoContainer.innerHTML = `<h1>Erro</h1><p>${error.message}</p><a href="/dashboard.html">Voltar</a>`;
         }
     } else {
-        window.location.href = '/login.html'; // Redireciona se não logado
+        window.location.href = '/login.html';
     }
 });
 
 // --- FUNÇÕES ---
-function carregarTurmas() {
-    const turmasRef = collection(db, "turmas");
-    // Ordena por nome da turma para melhor visualização
-    const q = query(turmasRef, orderBy("nomeDaTurma"));
 
-    onSnapshot(q, (snapshot) => { // Usa a query ordenada
+// ### AJUSTE: Função agora recebe parâmetros para a query condicional ###
+function carregarTurmas(isUserAdminGlobal, userFirestoreId) {
+    const turmasRef = collection(db, "turmas");
+    let q; // Declara a query
+
+    if (isUserAdminGlobal) {
+        // Admins globais veem todas as turmas
+        console.log("Carregando TODAS as turmas (Admin Global)");
+        q = query(turmasRef, orderBy("nomeDaTurma"));
+    } else {
+        // Dirigentes/Secretários veem apenas as turmas onde são facilitadores
+        console.log(`Carregando turmas onde o usuário ${userFirestoreId} é facilitador.`);
+        q = query(turmasRef,
+                  where("facilitadoresIds", "array-contains", userFirestoreId),
+                  orderBy("nomeDaTurma"));
+    }
+    // ### FIM DO AJUSTE ###
+
+    onSnapshot(q, (snapshot) => {
         turmasGridContainer.innerHTML = '';
         if (snapshot.empty) {
-            turmasGridContainer.innerHTML = '<p>Nenhuma turma cadastrada. Clique em "Iniciar Nova Turma" para começar (se tiver permissão).</p>';
+            if (isUserAdminGlobal) {
+                turmasGridContainer.innerHTML = '<p>Nenhuma turma cadastrada. Clique em "Iniciar Nova Turma" para começar.</p>';
+            } else {
+                 turmasGridContainer.innerHTML = '<p>Você não está listado como facilitador em nenhuma turma ativa.</p>';
+            }
             return;
         }
         snapshot.forEach(doc => {
@@ -122,7 +152,6 @@ function carregarTurmas() {
             const turmaId = doc.id;
             const card = document.createElement('div');
             card.className = 'turma-card';
-            // Formata a data de início para exibição
             const dataInicioFormatada = turma.dataInicio ? turma.dataInicio.toDate().toLocaleDateString('pt-BR') : 'N/A';
             card.innerHTML = `
                 <h3>${turma.nomeDaTurma}</h3>
@@ -136,6 +165,13 @@ function carregarTurmas() {
             `;
             turmasGridContainer.appendChild(card);
         });
+    }, (error) => { // Adiciona tratamento de erro para o onSnapshot
+        console.error("Erro ao carregar turmas:", error);
+        turmasGridContainer.innerHTML = '<p style="color: red;">Erro ao carregar a lista de turmas. Verifique o console.</p>';
+        // Se o erro for de índice, pode adicionar a mensagem específica
+        if (error.code === 'failed-precondition') {
+             turmasGridContainer.innerHTML += '<p style="color: orange;">Pode ser necessário criar um índice no Firestore. Verifique o link no console de erro.</p>';
+        }
     });
 }
 
@@ -168,7 +204,6 @@ async function carregarDadosParaModal() {
     } catch (error) {
         console.error("Erro ao carregar dados para o modal:", error);
         alert("Erro ao carregar opções. Tente recarregar a página.");
-        // Pode desabilitar o botão de salvar ou fechar o modal se preferir
     }
 }
 
@@ -198,7 +233,6 @@ async function salvarTurma(event) {
     const cursoNome = selectedOption.textContent;
     const isEAE = selectedOption.dataset.isEae === 'true';
 
-    // Cria os dois arrays de facilitadores (ID e Nome / Apenas ID)
     const facilitadores = facilitadoresSelecionados.map(option => ({ id: option.value, nome: option.textContent }));
     const facilitadoresIds = facilitadoresSelecionados.map(option => option.value);
 
@@ -211,12 +245,12 @@ async function salvarTurma(event) {
             cursoId: cursoGabaritoId,
             cursoNome: cursoNome,
             isEAE: isEAE,
-            facilitadores: facilitadores, // Array de {id, nome}
-            facilitadoresIds: facilitadoresIds, // Array de IDs (para queries)
+            facilitadores: facilitadores,
+            facilitadoresIds: facilitadoresIds,
             dataInicio: dataInicioTimestamp,
             diaDaSemana: parseInt(diaSemanaValue, 10),
             status: "Ativa",
-            anoAtual: isEAE ? 1 : null, // Só define anoAtual se for EAE
+            anoAtual: isEAE ? 1 : null,
             criadaEm: serverTimestamp()
         });
 
@@ -243,7 +277,7 @@ if(modalTurma) modalTurma.addEventListener('click', (event) => {
 });
 if(formTurma) formTurma.addEventListener('submit', salvarTurma);
 
-// Adiciona a div de acesso negado ao HTML se não existir
+// Adiciona a div de acesso negado ao HTML se não existir (Mantido como segurança)
 if (!document.getElementById('acesso-negado')) {
     const divAcessoNegado = document.createElement('div');
     divAcessoNegado.id = 'acesso-negado';
