@@ -1,5 +1,5 @@
 // /js/cadastro.js
-// VERSÃO CORRIGIDA (Lógica de filtro local)
+// VERSÃO FINAL: Corrige permissões, acentos e normalização
 
 import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
 import { getAuth, createUserWithEmailAndPassword, updateProfile } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-auth.js";
@@ -37,6 +37,16 @@ let debounceTimer;
 let voluntarioSelecionadoId = null; 
 
 // ===================================================================
+// FUNÇÃO DE NORMALIZAÇÃO (Remove acentos e põe em minúsculas)
+// ===================================================================
+function normalizarString(str) {
+    return str
+        .toLowerCase() // 1. Converte para minúsculas
+        .normalize("NFD") // 2. Separa acentos das letras
+        .replace(/[\u0300-\u036f]/g, ""); // 3. Remove os acentos
+}
+
+// ===================================================================
 // FUNÇÃO DE BUSCA (Buscar-enquanto-digita)
 // ===================================================================
 inputNome.addEventListener('input', () => {
@@ -50,28 +60,27 @@ inputNome.addEventListener('input', () => {
         return; 
     }
     
-    const nomeCapitalizado = nomeDigitado.charAt(0).toUpperCase() + nomeDigitado.slice(1);
+    // Agora normalizamos o que o usuário digitou
+    const nomeNormal = normalizarString(nomeDigitado);
 
     debounceTimer = setTimeout(async () => {
-        console.log(`Buscando por nomes começando com: ${nomeCapitalizado}`); 
+        console.log(`Buscando por nomes normalizados começando com: ${nomeNormal}`); 
         
         const voluntariosRef = collection(db, "voluntarios");
 
         // --- MUDANÇA DE LÓGICA AQUI ---
-        // 1. Buscamos APENAS pelo nome.
+        // 1. Buscamos pelo campo 'nome_normalizado'
         const q = query(voluntariosRef, 
-            where("nome", ">=", nomeCapitalizado), 
-            where("nome", "<=", nomeCapitalizado + '\uf8ff'),
-            limit(10) // Pegamos 10 para poder filtrar
+            where("nome_normalizado", ">=", nomeNormal), 
+            where("nome_normalizado", "<=", nomeNormal + '\uf8ff'),
+            limit(10)
         );
 
         const querySnapshot = await getDocs(q);
 
-        // 2. Filtramos a lista AQUI no JavaScript
-        //    Buscamos por voluntários que não tenham o 'authUid' (seja nulo ou indefinido)
+        // 2. Filtramos por 'órfãos' (sem authUid)
         const orfaos = querySnapshot.docs.filter(doc => !doc.data().authUid);
         // --- FIM DA MUDANÇA ---
-
 
         listaSugestoes.innerHTML = ''; 
 
@@ -81,19 +90,18 @@ inputNome.addEventListener('input', () => {
             return;
         }
 
-        // Se encontrou, preenche o pop-up
         console.log("Voluntários 'órfãos' encontrados!"); 
         orfaos.forEach(doc => {
             const voluntario = doc.data();
             const li = document.createElement('li');
-            li.textContent = voluntario.nome;
+            li.textContent = voluntario.nome; // Mostra o nome bonito (com acento)
             
             const btnSouEu = document.createElement('button');
             btnSouEu.textContent = 'Sou eu';
             btnSouEu.className = 'btn-sou-eu';
             btnSouEu.type = 'button'; 
             btnSouEu.dataset.id = doc.id; 
-            btnSouEu.dataset.nome = voluntario.nome; 
+            btnSouEu.dataset.nome = voluntario.nome; // Guarda o nome bonito
             
             li.appendChild(btnSouEu);
             listaSugestoes.appendChild(li);
@@ -136,7 +144,7 @@ btnNovoUsuario.addEventListener('click', () => {
 });
 
 // ===================================================================
-// SUBMISSÃO DO FORMULÁRIO (A LÓGICA FINAL)
+// SUBMISSÃO DO FORMULÁRI (A LÓGICA FINAL)
 // ===================================================================
 formCadastro.addEventListener('submit', async (event) => {
     event.preventDefault();
@@ -155,18 +163,9 @@ formCadastro.addEventListener('submit', async (event) => {
     const senha = inputSenha.value;
     const confirmaSenha = inputConfirmaSenha.value;
 
-    if (!nome) {
-        alert("O campo nome está vazio.");
-        return;
-    }
-    if (senha !== confirmaSenha) {
-        alert("As senhas não coincidem.");
-        return;
-    }
-    if (senha.length < 6) {
-        alert("Sua senha deve ter no mínimo 6 caracteres.");
-        return;
-    }
+    if (!nome) { alert("O campo nome está vazio."); return; }
+    if (senha !== confirmaSenha) { alert("As senhas não coincidem."); return; }
+    if (senha.length < 6) { alert("Sua senha deve ter no mínimo 6 caracteres."); return; }
 
     btnCadastrar.disabled = true;
     btnCadastrar.textContent = 'Aguarde...';
@@ -179,6 +178,9 @@ formCadastro.addEventListener('submit', async (event) => {
 
         await updateProfile(user, { displayName: nome });
 
+        // Normaliza o nome para salvar no banco
+        const nomeNormal = normalizarString(nome);
+
         if (voluntarioSelecionadoId) {
             // CASO A: VINCULAR CONTA (UPDATE)
             console.log(`Vinculando Auth UID ${user.uid} ao documento ${voluntarioSelecionadoId}`);
@@ -186,7 +188,8 @@ formCadastro.addEventListener('submit', async (event) => {
             await updateDoc(userDocRef, {
                 authUid: user.uid,
                 email: email, 
-                nome: nome    
+                nome: nome,
+                nome_normalizado: nomeNormal // Salva o nome normalizado
             });
             console.log("SUCESSO: Conta antiga vinculada ao novo login.");
 
@@ -198,6 +201,7 @@ formCadastro.addEventListener('submit', async (event) => {
                 authUid: user.uid,
                 nome: nome,
                 email: email,
+                nome_normalizado: nomeNormal, // Salva o nome normalizado
                 statusVoluntario: 'ativo',
                 cargos: { 
                     voluntario: true 
@@ -214,6 +218,10 @@ formCadastro.addEventListener('submit', async (event) => {
         let friendlyMessage = "Ocorreu uma falha no cadastro. Tente novamente.";
         if (error.code === 'auth/email-already-in-use') {
             friendlyMessage = "Este email já foi usado para criar uma conta no portal. Tente fazer o login ou use 'Esqueci minha senha'.";
+        }
+        // A nova regra de segurança deve corrigir o 'missing or insufficient permissions'
+        if (error.code === 'permission-denied' || error.message.includes('permissions')) {
+            friendlyMessage = "Falha de permissão. Verifique as Regras de Segurança do Firestore.";
         }
         alert(friendlyMessage);
 
