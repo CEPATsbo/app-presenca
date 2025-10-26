@@ -561,7 +561,7 @@ async function salvarNotas(event) {
     btnSalvarNotas.disabled = true;
     try {
         const participanteRef = doc(db, "turmas", turmaId, "participantes", participanteId);
-        await db.runTransaction(async (transaction) => {
+        await runTransaction(db, async (transaction) => {
             const participanteSnap = await transaction.get(participanteRef);
             if (!participanteSnap.exists()) { throw new Error("Participante não encontrado."); }
 
