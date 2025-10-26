@@ -60,11 +60,41 @@ async function enviarNotificacoesParaTodos(titulo, corpo) {
     return { successCount, failureCount, totalCount: inscricoesSnapshot.size };
 }
 
+// ### AJUSTE NA promoverUsuario PARA SUPORTAR claims BOOLEANOS (opcional mas bom) ###
+// Esta versão tenta setar claims booleanos também, além do 'role' principal.
+// Se você só usa o 'role' principal, a versão anterior funciona.
 const promoverUsuario = async (uid, novoPapel) => {
     if (!uid) return;
-    await admin.auth().setCustomUserClaims(uid, { role: novoPapel });
-    const userQuery = await db.collection('voluntarios').where('authUid', '==', uid).limit(1).get();
-    if (!userQuery.empty) await userQuery.docs[0].ref.update({ role: novoPapel });
+    try {
+        // Define o 'role' principal
+        let claims = { role: novoPapel };
+        // Adiciona claims booleanos para cargos específicos (se aplicável)
+        if (['dirigente-escola', 'secretario-escola', 'facilitador' /* adicione outros se precisar */].includes(novoPapel)) {
+             claims[novoPapel.replace('-', '_')] = true; // Ex: secretario_escola = true (Firebase não aceita '-' em nomes de claims)
+             // Considerar se facilitador deve ser sempre true para quem tem cargos educacionais
+             if (['dirigente-escola', 'secretario-escola'].includes(novoPapel)) {
+                 claims['facilitador'] = true; // Garante que dirigente/secretário também tenham claim 'facilitador'
+             }
+        } else if (novoPapel === 'voluntario') {
+             // Ao revogar, remove todos os claims booleanos relacionados a cargos (exceto 'role')
+             // Você pode precisar listar explicitamente os claims a remover se tiver muitos
+             // claims = { role: 'voluntario', dirigente_escola: null, secretario_escola: null, facilitador: null, ... }; // Define como null para remover
+        }
+
+        await admin.auth().setCustomUserClaims(uid, claims);
+        console.log(`Claims definidos para ${uid}:`, claims);
+
+        // Atualiza o campo 'role' no Firestore (mantém simples por enquanto)
+        const userQuery = await db.collection('voluntarios').where('authUid', '==', uid).limit(1).get();
+        if (!userQuery.empty) {
+            await userQuery.docs[0].ref.update({ role: novoPapel });
+             console.log(`Campo 'role' no Firestore atualizado para ${uid} como ${novoPapel}`);
+        }
+    } catch (error) {
+        console.error(`Erro ao promover/definir claims para ${uid} como ${novoPapel}:`, error);
+        // Lançar o erro ou tratar conforme necessário
+        throw new HttpsError('internal', `Falha ao definir cargo/claims para ${novoPapel}.`);
+    }
 };
 
 function calcularCicloVibracoes(dataBase) {
@@ -1233,11 +1263,9 @@ exports.calcularFrequencia = onDocumentWritten({ ...OPCOES_FUNCAO, document: 'tu
     return null;
 });
 
-// ===================================================================
-// ## NOVO ROBÔ DE MATRÍCULA ##
-// Função segura para que facilitadores possam cadastrar novos alunos
-// em suas próprias turmas.
-// ===================================================================
+// ==========================================================
+// ## FUNÇÃO matricularNovoAluno CORRIGIDA ##
+// ==========================================================
 exports.matricularNovoAluno = onCall(OPCOES_FUNCAO, async (request) => {
     // 1. Verificação de autenticação básica
     if (!request.auth) {
@@ -1249,30 +1277,45 @@ exports.matricularNovoAluno = onCall(OPCOES_FUNCAO, async (request) => {
         throw new HttpsError('invalid-argument', 'O ID da turma e o nome do aluno são obrigatórios.');
     }
 
-    const facilitatorAuthUid = request.auth.uid;
-    const userRole = request.auth.token.role;
+    const callerAuthUid = request.auth.uid; // UID do Auth de quem está chamando
+    const callerClaims = request.auth.token || {}; // Claims de quem está chamando
 
     try {
-        // 2. Verificação de segurança: O usuário é facilitador desta turma OU um admin?
+        // 2. Busca o ID do documento Firestore do chamador
+        const callerQuery = await db.collection('voluntarios').where('authUid', '==', callerAuthUid).limit(1).get();
+        if (callerQuery.empty) {
+            throw new HttpsError('not-found', 'Seu perfil de voluntário não foi encontrado para verificar permissão.');
+        }
+        const callerFirestoreId = callerQuery.docs[0].id; // ID do documento (ex: 1QZSUQu...)
+
+        // 3. Busca dados da turma
         const turmaRef = db.collection('turmas').doc(turmaId);
         const turmaDoc = await turmaRef.get();
 
         if (!turmaDoc.exists) {
             throw new HttpsError('not-found', 'A turma especificada não foi encontrada.');
         }
-
         const turmaData = turmaDoc.data();
-        const isFacilitator = turmaData.facilitadoresIds && turmaData.facilitadoresIds.includes(facilitatorAuthUid);
-        const isAdmin = ['super-admin', 'diretor', 'tesoureiro'].includes(userRole);
 
-        if (!isFacilitator && !isAdmin) {
-            throw new HttpsError('permission-denied', 'Você não tem permissão para inscrever alunos nesta turma.');
+        // 4. Verificação de segurança CORRIGIDA
+        const isAdminGlobal = ['super-admin', 'diretor', 'tesoureiro'].some(role => callerClaims[role] === true || callerClaims.role === role);
+        const isEducacionalAdminRole = callerClaims['dirigente-escola'] === true || callerClaims['secretario-escola'] === true || callerClaims.role === 'dirigente-escola' || callerClaims.role === 'secretario-escola';
+        const isFacilitatorInTurma = (turmaData.facilitadoresIds || []).includes(callerFirestoreId); // Compara ID do Firestore
+
+        const temPermissao = isAdminGlobal || (isFacilitatorInTurma && isEducacionalAdminRole);
+
+        console.log(`Verificando permissão matricularNovoAluno: isAdminGlobal=${isAdminGlobal}, isEducacionalAdminRole=${isEducacionalAdminRole}, isFacilitatorInTurma=${isFacilitatorInTurma} (Caller Firestore ID: ${callerFirestoreId}, Turma Facilitadores: ${turmaData.facilitadoresIds})`);
+
+        if (!temPermissao) {
+            console.error(`Permissão negada para matricularNovoAluno. User: ${callerFirestoreId}, Turma: ${turmaId}`);
+            throw new HttpsError('permission-denied', 'Você não tem permissão para inscrever alunos nesta turma (Admin Global ou Admin Educacional da Turma necessário).');
         }
 
-        // 3. Se a segurança passou, executa a tarefa
+        // 5. Se a segurança passou, executa a tarefa
         console.log(`Permissão concedida. Cadastrando aluno "${nome}" na turma ${turmaId}.`);
-        
-        // Cria o registro na coleção 'alunos'
+
+        // Cria o registro na coleção 'alunos' (ou pode criar direto em 'voluntarios'?)
+        // Vamos manter a criação em 'alunos' por enquanto, como estava
         const novoAlunoRef = await db.collection("alunos").add({
             nome,
             endereco: endereco || '',
@@ -1283,29 +1326,36 @@ exports.matricularNovoAluno = onCall(OPCOES_FUNCAO, async (request) => {
 
         // Inscreve o aluno na subcoleção 'participantes' da turma
         const novoParticipante = {
-            participanteId: novoAlunoRef.id,
+            participanteId: novoAlunoRef.id, // ID do doc em 'alunos'
             nome: nome,
             inscritoEm: admin.firestore.FieldValue.serverTimestamp(),
-            origem: 'aluno'
+            origem: 'aluno', // Marca como origem 'aluno'
+            avaliacoes: {} // Inicializa avaliações
         };
 
         if (turmaData.isEAE) {
-            novoParticipante.grau = 'Aluno';
+            novoParticipante.grau = 'Aluno'; // Grau inicial padrão
+            const anoAtual = turmaData.anoAtual || 1;
+            novoParticipante.avaliacoes[anoAtual] = { // Estrutura inicial de notas
+               notaFrequencia: 0, mediaRI: 0, mediaFinal: 0, statusAprovacao: 'Em Andamento'
+            };
         }
 
         await turmaRef.collection("participantes").add(novoParticipante);
-        
+
         return { success: true, message: `Aluno "${nome}" cadastrado e inscrito com sucesso!` };
 
     } catch (error) {
         console.error("Erro na função matricularNovoAluno:", error);
-        // Se o erro já for um HttpsError, repassa ele. Senão, cria um erro genérico.
         if (error instanceof HttpsError) {
             throw error;
         }
         throw new HttpsError('internal', 'Ocorreu um erro interno ao processar a matrícula.');
     }
 });
+// ==========================================================
+// ## FIM DA FUNÇÃO matricularNovoAluno CORRIGIDA ##
+// ==========================================================
 
 // ===================================================================
 // ## NOVO ROBÔ DE PROMOÇÃO DE ALUNO PARA VOLUNTÁRIO ##
@@ -1332,7 +1382,7 @@ exports.promoverAlunoParaVoluntario = onCall(OPCOES_FUNCAO, async (request) => {
         }
 
         const turmaData = turmaDoc.data();
-        const isAdmin = ['super-admin', 'diretor', 'tesoureiro'].includes(userRole);
+        const isAdmin = ['super-admin', 'dirigente-escola', 'secretario-escola', 'diretor', 'tesoureiro'].includes(userRole);
         
         // Busca o ID do usuário (facilitador) a partir do authUid
         const facilitadorQuery = await db.collection('voluntarios').where('authUid', '==', userAuthUid).limit(1).get();
