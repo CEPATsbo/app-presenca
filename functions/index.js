@@ -1107,86 +1107,150 @@ exports.gerarCronogramaAutomaticamente = onDocumentCreated({ ...OPCOES_FUNCAO, d
     return null;
 });
 
-/**
- * ROBÔ 3: O "Cérebro" unificado que recalcula o cronograma (efeito dominó).
- * GATILHO: Escrita em 'cronograma' ou 'recessos' de uma turma.
- */
+// ==========================================================
+// ## FUNÇÃO recalcularCronogramaCompleto CORRIGIDA ##
+// ==========================================================
 exports.recalcularCronogramaCompleto = onDocumentWritten({ ...OPCOES_FUNCAO, document: 'turmas/{turmaId}/{subcolecao}/{docId}' }, async (event) => {
-    
+
     const { turmaId, subcolecao } = event.params;
 
+    // Só reage a mudanças em cronograma ou recessos
     if (subcolecao !== "cronograma" && subcolecao !== "recessos") {
         return null;
     }
-    
-    // ===================================================================
-    // ## CORREÇÃO FINAL E INTELIGENTE ##
-    // O robô agora só ignora a CRIAÇÃO de aulas REGULARES.
-    // Ele CONTINUARÁ a funcionar para criação de RECESSOS e AULAS EXTRAS.
-    // ===================================================================
+
+    // Ignora a criação inicial de aulas REGULARES para evitar loop com o robô 2
     const dadosDepois = event.data.after.data();
     const isCreation = !event.data.before.exists;
     const isAulaRegular = dadosDepois && dadosDepois.isExtra !== true;
 
     if (subcolecao === "cronograma" && isCreation && isAulaRegular) {
-        console.log(`CRIAÇÃO de aula regular detectada. O Robô de Recálculo ignora para evitar "guerra".`);
+        console.log(`CRIAÇÃO de aula regular ${dadosDepois?.numeroDaAula}. Robô Recalcular ignora.`);
         return null;
     }
-    
-    console.log(`Gatilho de reajuste válido para turma ${turmaId} devido a mudança em ${subcolecao}.`);
-    
+
+    console.log(`Gatilho de reajuste válido para turma ${turmaId} (mudança em ${subcolecao}, Doc: ${event.params.docId}). Iniciando recálculo...`);
+
     try {
         const turmaRef = db.collection("turmas").doc(turmaId);
         const turmaDoc = await turmaRef.get();
-        if (!turmaDoc.exists) return null;
+        if (!turmaDoc.exists) {
+             console.warn(`Turma ${turmaId} não encontrada. Abortando recálculo.`);
+             return null;
+        }
 
         const turmaData = turmaDoc.data();
+        // Garante que temos os dados necessários
+        if (!turmaData.dataInicio || turmaData.diaDaSemana === undefined) {
+            console.warn(`Turma ${turmaId} sem data de início ou dia da semana definidos. Abortando recálculo.`);
+            return null;
+        }
         const dataInicio = turmaData.dataInicio.toDate();
         const diaDaSemana = turmaData.diaDaSemana;
-        
+
+        // Busca todas as aulas normais, extras e recessos
         const [aulasNormaisSnap, aulasExtrasSnap, recessosSnap] = await Promise.all([
             turmaRef.collection("cronograma").where("isExtra", "==", false).orderBy("numeroDaAula").get(),
             turmaRef.collection("cronograma").where("isExtra", "==", true).get(),
             turmaRef.collection("recessos").get(),
         ]);
 
-        const datasAulasExtras = aulasExtrasSnap.docs.map(doc => doc.data().dataAgendada.toDate().getTime());
-        const periodosRecesso = recessosSnap.docs.map(doc => ({
-            inicio: doc.data().dataInicio.toDate(),
-            fim: doc.data().dataFim.toDate(),
-        }));
-        
-        const batch = db.batch();
-        let dataAulaAtual = new Date(dataInicio.getTime());
+        // ### AJUSTE NA COMPARAÇÃO DE DATAS ###
+        // Função auxiliar para obter YYYY-MM-DD de um Date object (considerando UTC para evitar fuso)
+        const toYYYYMMDD = (date) => {
+            const d = new Date(date); // Cria cópia para não modificar original
+            const year = d.getUTCFullYear();
+            const month = String(d.getUTCMonth() + 1).padStart(2, '0');
+            const day = String(d.getUTCDate()).padStart(2, '0');
+            return `${year}-${month}-${day}`;
+        };
 
+        // Cria um SET (conjunto) de strings YYYY-MM-DD das datas ocupadas por aulas extras
+        const datasOcupadasExtras = new Set(
+            aulasExtrasSnap.docs.map(doc => toYYYYMMDD(doc.data().dataAgendada.toDate()))
+        );
+        console.log(`Datas ocupadas por aulas extras (YYYY-MM-DD):`, Array.from(datasOcupadasExtras));
+
+        // Cria array de períodos de recesso (comparação mantém objetos Date por enquanto)
+        const periodosRecesso = recessosSnap.docs.map(doc => ({
+             // Zera a hora para comparar apenas dias
+            inicio: new Date(doc.data().dataInicio.toDate().setUTCHours(0, 0, 0, 0)),
+            fim: new Date(doc.data().dataFim.toDate().setUTCHours(0, 0, 0, 0)),
+        }));
+        console.log(`Períodos de Recesso (UTC):`, periodosRecesso);
+
+
+        const batch = db.batch();
+        let dataAulaAtual = new Date(dataInicio.getTime()); // Começa na data de início da turma
+        let aulasAtualizadasCount = 0;
+
+        // Loop pelas AULAS NORMAIS em ordem
         for (const aulaDoc of aulasNormaisSnap.docs) {
+            const aulaDataOriginal = aulaDoc.data();
+
+            // Encontra o próximo dia da semana correto (ou a própria data de início se for o dia certo)
             while (dataAulaAtual.getDay() !== diaDaSemana) {
                 dataAulaAtual.setDate(dataAulaAtual.getDate() + 1);
             }
-            
+             // Zera a hora para garantir consistência na comparação
+            dataAulaAtual.setUTCHours(0,0,0,0);
+
+
+            // Verifica se a data atual está ocupada (extra ou recesso)
             let dataValidaEncontrada = false;
             while (!dataValidaEncontrada) {
-                let isDataOcupada = datasAulasExtras.includes(dataAulaAtual.getTime());
+                 // Converte dataAulaAtual para string YYYY-MM-DD para checar no Set
+                const dataAtualStr = toYYYYMMDD(dataAulaAtual);
+                let isDataOcupada = datasOcupadasExtras.has(dataAtualStr);
+
+                // Compara dataAulaAtual (já zerada) com os períodos de recesso (também zerados)
                 let isRecesso = periodosRecesso.some(p => dataAulaAtual >= p.inicio && dataAulaAtual <= p.fim);
-                
+
                 if (isDataOcupada || isRecesso) {
+                    console.log(`Data ${dataAtualStr} pulada (Ocupada=${isDataOcupada}, Recesso=${isRecesso}) para aula ${aulaDataOriginal.numeroDaAula}.`);
+                    // Se ocupada, avança 7 dias e RECOMEÇA a verificação para a nova data
                     dataAulaAtual.setDate(dataAulaAtual.getDate() + 7);
+                    dataAulaAtual.setUTCHours(0,0,0,0); // Zera hora novamente
                 } else {
+                    // Data válida!
                     dataValidaEncontrada = true;
                 }
             }
-            
-            batch.update(aulaDoc.ref, { dataAgendada: admin.firestore.Timestamp.fromDate(dataAulaAtual) });
+
+            // Compara a nova data calculada com a data atual no Firestore
+            const dataAgendadaAtualNoFirestore = aulaDataOriginal.dataAgendada.toDate();
+            // Compara apenas YYYY-MM-DD para evitar atualizações desnecessárias por causa de hora/fuso
+            if (toYYYYMMDD(dataAulaAtual) !== toYYYYMMDD(dataAgendadaAtualNoFirestore)) {
+                console.log(`Atualizando data da aula ${aulaDataOriginal.numeroDaAula} (${aulaDataOriginal.titulo}) para ${toYYYYMMDD(dataAulaAtual)}`);
+                batch.update(aulaDoc.ref, { dataAgendada: admin.firestore.Timestamp.fromDate(dataAulaAtual) });
+                aulasAtualizadasCount++;
+            } else {
+                 console.log(`Data da aula ${aulaDataOriginal.numeroDaAula} (${toYYYYMMDD(dataAulaAtual)}) já está correta. Nenhuma atualização necessária.`);
+            }
+
+
+            // Avança 7 dias para a PRÓXIMA aula normal
             dataAulaAtual.setDate(dataAulaAtual.getDate() + 7);
         }
+        // ### FIM DO AJUSTE NA COMPARAÇÃO ###
 
-        await batch.commit();
-        console.log(`Cronograma da turma ${turmaId} recalculado com sucesso.`);
+
+        if (aulasAtualizadasCount > 0) {
+            await batch.commit();
+            console.log(`SUCESSO! ${aulasAtualizadasCount} aulas do cronograma da turma ${turmaId} foram reajustadas.`);
+        } else {
+            console.log(`Nenhuma data precisou ser alterada para a turma ${turmaId}.`);
+        }
+
     } catch (error) {
-        console.error(`Erro ao recalcular cronograma da turma ${turmaId}:`, error);
+        console.error(`ERRO CRÍTICO ao recalcular cronograma da turma ${turmaId}:`, error);
+        // Considerar logar o erro em uma coleção específica para monitoramento
     }
-    return null;
+    return null; // Encerra a função
 });
+// ==========================================================
+// ## FIM DA FUNÇÃO recalcularCronogramaCompleto CORRIGIDA ##
+// ==========================================================
 /**
  * ROBÔ 4: Calcula a frequência e as médias de um aluno.
  * GATILHO: Escrita em 'frequencias' de uma turma.

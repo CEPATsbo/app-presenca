@@ -1,5 +1,7 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
-import { getAuth, signInWithEmailAndPassword } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-auth.js";
+// ### AJUSTE: Importa sendPasswordResetEmail ###
+import { getAuth, signInWithEmailAndPassword, sendPasswordResetEmail } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-auth.js";
+// ### FIM DO AJUSTE ###
 import { getFirestore, collection, query, where, getDocs, serverTimestamp, setDoc, doc, orderBy, getDoc, addDoc } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
 import Fuse from 'https://cdn.jsdelivr.net/npm/fuse.js@7.0.0/dist/fuse.mjs';
 
@@ -20,19 +22,14 @@ const auth = getAuth(app);
 const db = getFirestore(app);
 
 // ===================================================================
-// --- ADICIONADO: FUNÇÃO DE NORMALIZAÇÃO ---
+// --- FUNÇÃO DE NORMALIZAÇÃO ---
 // ===================================================================
-/**
- * FUNÇÃO DE NORMALIZAÇÃO (Remove acentos e põe em minúsculas)
- * @param {string} str A string para normalizar
- * @returns {string} A string normalizada
- */
 function normalizarString(str) {
-    if (!str) return ""; // Proteção contra valores nulos ou indefinidos
+    if (!str) return "";
     return str
-        .toLowerCase() // 1. Converte para minúsculas
-        .normalize("NFD") // 2. Separa acentos das letras
-        .replace(/[\u0300-\u036f]/g, ""); // 3. Remove os acentos
+        .toLowerCase()
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "");
 }
 // ===================================================================
 
@@ -51,6 +48,10 @@ const btnSairRapido = document.getElementById('btn-sair-rapido');
 const feedbackGeoRapido = document.getElementById('feedback-geolocalizacao-rapido');
 const btnRegistrarPresenca = document.getElementById('btn-registrar-presenca');
 const btnAtivarNotificacoes = document.getElementById('btn-ativar-notificacoes');
+// ### AJUSTE: Pega o link "Esqueci minha senha" ###
+const linkEsqueciSenha = document.getElementById('link-esqueci-senha');
+// ### FIM DO AJUSTE ###
+
 
 async function carregarMural() {
     if (!muralContainer) return;
@@ -81,6 +82,10 @@ function getDataDeHojeSP() {
 }
 
 async function registrarPresencaComGeolocalizacao(voluntarioParaRegistrar, atividadesSelecionadas) {
+    if (!btnRegistrarPresenca || !registroRapidoSection || !statusRapidoSection || !statusNome || !statusAtividades || !feedbackGeoRapido) {
+        console.error("Elementos do DOM ausentes para registro de presença.");
+        return;
+    }
     btnRegistrarPresenca.disabled = true;
     btnRegistrarPresenca.textContent = 'Verificando localização...';
 
@@ -98,20 +103,20 @@ async function registrarPresencaComGeolocalizacao(voluntarioParaRegistrar, ativi
             if (distancia <= RAIO_EM_METROS) {
                 try {
                     btnRegistrarPresenca.textContent = 'Registrando...';
-                    
+
                     const dataHoje = getDataDeHojeSP();
                     const presencaId = `${dataHoje}_${voluntarioParaRegistrar.nome.replace(/\s+/g, '_')}`;
                     const docRef = doc(db, "presencas", presencaId);
 
-                    await setDoc(docRef, { 
-                        nome: voluntarioParaRegistrar.nome, 
-                        atividade: atividadesSelecionadas.join(', '), 
-                        data: dataHoje, 
-                        primeiroCheckin: serverTimestamp(), 
-                        ultimaAtualizacao: serverTimestamp(), 
+                    await setDoc(docRef, {
+                        nome: voluntarioParaRegistrar.nome,
+                        atividade: atividadesSelecionadas.join(', '),
+                        data: dataHoje,
+                        primeiroCheckin: serverTimestamp(),
+                        ultimaAtualizacao: serverTimestamp(),
                         status: 'presente',
-                        authUid: null,
-                        voluntarioId: voluntarioParaRegistrar.id
+                        authUid: null, // Presença rápida não tem authUid
+                        voluntarioId: voluntarioParaRegistrar.id // ID do documento em 'voluntarios'
                     }, { merge: true });
 
                     statusNome.textContent = voluntarioParaRegistrar.nome;
@@ -134,12 +139,21 @@ async function registrarPresencaComGeolocalizacao(voluntarioParaRegistrar, ativi
         },
         (error) => {
             console.error("Erro de geolocalização:", error);
-            alert("Não foi possível obter sua localização. Verifique as permissões do navegador e tente novamente.");
+            let msgErro = "Não foi possível obter sua localização. Verifique as permissões do navegador e tente novamente.";
+            if (error.code === error.PERMISSION_DENIED) {
+                 msgErro = "Você negou a permissão de localização. Habilite-a nas configurações do navegador para registrar a presença.";
+            } else if (error.code === error.POSITION_UNAVAILABLE) {
+                 msgErro = "Informação de localização indisponível no momento.";
+            } else if (error.code === error.TIMEOUT) {
+                 msgErro = "Tempo esgotado ao tentar obter a localização.";
+            }
+            alert(msgErro);
             btnRegistrarPresenca.disabled = false;
             btnRegistrarPresenca.textContent = 'Registrar Presença';
         }
     );
 }
+
 
 async function habilitarNotificacoes() {
     const VAPID_PUBLIC_KEY = 'BMpfTCErYrAMkosCBVdmAg3-gAfv82Q6TTIg2amEmIST0_SipaUpq7AxDZ1VhiGfxilUzugQxrK92Buu6d9FM2Y';
@@ -155,16 +169,23 @@ async function habilitarNotificacoes() {
         }
 
         const registration = await navigator.serviceWorker.ready;
-        const subscription = await registration.pushManager.subscribe({
-            userVisibleOnly: true,
-            applicationServerKey: VAPID_PUBLIC_KEY
-        });
-        
-        const subscriptionId = btoa(JSON.stringify(subscription)).substring(0, 50);
+        let subscription = await registration.pushManager.getSubscription(); // Verifica se já existe
+
+        if (!subscription) {
+            subscription = await registration.pushManager.subscribe({
+                userVisibleOnly: true,
+                applicationServerKey: VAPID_PUBLIC_KEY
+            });
+        } else {
+             console.log("Usuário já inscrito para notificações.");
+        }
+
+        // Usa endpoint como ID único (mais robusto)
+        const subscriptionId = btoa(subscription.endpoint).replace(/=/g, ''); // Base64 URL safe
         await setDoc(doc(db, "inscricoes", subscriptionId), subscription.toJSON());
 
         alert("Notificações ativadas com sucesso!");
-        btnAtivarNotificacoes.style.display = 'none';
+        if(btnAtivarNotificacoes) btnAtivarNotificacoes.style.display = 'none';
 
     } catch (error) {
         console.error("Erro ao se inscrever para notificações:", error);
@@ -180,17 +201,56 @@ carregarMural();
 if (formLogin) {
     formLogin.addEventListener('submit', (event) => {
         event.preventDefault();
-        const email = document.getElementById('email-login').value;
-        const senha = document.getElementById('senha-login').value;
+        const emailInput = document.getElementById('email-login');
+        const senhaInput = document.getElementById('senha-login');
+        const email = emailInput ? emailInput.value : '';
+        const senha = senhaInput ? senhaInput.value : '';
+
         if (!email || !senha) { return alert("Por favor, preencha email e senha."); }
+
+        const btnEntrar = formLogin.querySelector('button[type="submit"]');
+        if(btnEntrar) btnEntrar.disabled = true; // Desabilita botão
+
         signInWithEmailAndPassword(auth, email, senha)
-            .then(() => { window.location.href = '/meu-cepat.html'; }) // ATENÇÃO: Verifique se este é o destino correto
+            .then(() => { window.location.href = '/meu-cepat.html'; })
             .catch((error) => {
                 console.error("Erro de login:", error.code);
                 alert("Email ou senha incorretos. Tente novamente.");
+                 if(btnEntrar) btnEntrar.disabled = false; // Reabilita em caso de erro
             });
     });
 }
+
+// ### AJUSTE: Listener para o link "Esqueci minha senha" ###
+if (linkEsqueciSenha) {
+    linkEsqueciSenha.addEventListener('click', (event) => {
+        event.preventDefault(); // Impede a navegação para '#'
+
+        const email = prompt("Digite seu endereço de email cadastrado para enviarmos o link de redefinição de senha:");
+
+        if (email) { // Verifica se o usuário digitou algo
+             sendPasswordResetEmail(auth, email)
+                .then(() => {
+                    alert("Email de redefinição de senha enviado com sucesso para " + email + ". Verifique sua caixa de entrada (e spam).");
+                })
+                .catch((error) => {
+                    console.error("Erro ao enviar email de redefinição:", error);
+                    let mensagemErro = "Ocorreu um erro ao enviar o email de redefinição. Tente novamente.";
+                    if (error.code === 'auth/user-not-found') {
+                        mensagemErro = "Este endereço de email não foi encontrado em nosso sistema.";
+                    } else if (error.code === 'auth/invalid-email') {
+                         mensagemErro = "O endereço de email fornecido não é válido.";
+                    }
+                    alert(mensagemErro);
+                });
+        } else {
+            // Opcional: Avisar se o usuário cancelou ou não digitou nada
+            // alert("Operação cancelada.");
+        }
+    });
+}
+// ### FIM DO AJUSTE ###
+
 
 if (formPresencaRapida) {
     (async function buscarAtividadesDoFirestore() {
@@ -198,64 +258,85 @@ if (formPresencaRapida) {
         try {
             const q = query(collection(db, "atividades"), where("ativo", "==", true), orderBy("nome"));
             const snapshot = await getDocs(q);
-            atividadesContainer.innerHTML = '';
+            atividadesContainer.innerHTML = ''; // Limpa "Carregando..."
+            if (snapshot.empty) {
+                 atividadesContainer.innerHTML = '<p>Nenhuma atividade cadastrada.</p>';
+                 return;
+            }
             snapshot.forEach(doc => {
                 const atividade = doc.data().nome;
                 const div = document.createElement('div');
-                div.innerHTML = `<input type="checkbox" name="atividade" value="${atividade}" id="classic-${atividade}"> <label for="classic-${atividade}">${atividade}</label>`;
+                // Usa IDs únicos para labels e inputs
+                const inputId = `atividade-${doc.id}`;
+                div.innerHTML = `<input type="checkbox" name="atividade" value="${atividade}" id="${inputId}"> <label for="${inputId}">${atividade}</label>`;
                 atividadesContainer.appendChild(div);
             });
-        } catch (e) { console.error("Erro ao buscar atividades:", e); }
+        } catch (e) {
+            console.error("Erro ao buscar atividades:", e);
+            atividadesContainer.innerHTML = '<p style="color:red;">Erro ao carregar atividades.</p>';
+        }
     })();
 
-    btnSelecionarAtividades.addEventListener('click', () => {
-        atividadesWrapper.style.display = atividadesWrapper.style.display === 'block' ? 'none' : 'block';
-    });
+    if(btnSelecionarAtividades && atividadesWrapper){
+        btnSelecionarAtividades.addEventListener('click', () => {
+            atividadesWrapper.style.display = atividadesWrapper.style.display === 'block' ? 'none' : 'block';
+        });
+    }
+
 
     formPresencaRapida.addEventListener('submit', async (event) => {
         event.preventDefault();
-        const nomeDigitado = nomeInput.value.trim();
+        const nomeDigitado = nomeInput ? nomeInput.value.trim() : '';
         const atividadesSelecionadasNode = document.querySelectorAll('#form-presenca-rapida input[name="atividade"]:checked');
         const atividadesSelecionadas = Array.from(atividadesSelecionadasNode).map(cb => cb.value);
-        
+
         if (!nomeDigitado || nomeDigitado.split(' ').length < 2) { return alert("Por favor, digite seu nome completo."); }
         if (atividadesSelecionadas.length === 0) { return alert("Por favor, selecione pelo menos uma atividade."); }
 
         try {
-            const voluntariosSnapshot = await getDocs(query(collection(db, "voluntarios")));
+            const voluntariosSnapshot = await getDocs(query(collection(db, "voluntarios"))); // Adiciona query() para clareza
             const listaDeVoluntarios = voluntariosSnapshot.docs.map(d => ({ id: d.id, ...d.data() }));
-            const fuse = new Fuse(listaDeVoluntarios, { keys: ['nome'], includeScore: true, threshold: 0.45 });
-            const resultados = fuse.search(nomeDigitado);
-            let voluntarioParaRegistrar = { id: null, nome: nomeDigitado };
-            
+
+            // Configuração do Fuse.js (ajuste threshold se necessário)
+            const fuse = new Fuse(listaDeVoluntarios, {
+                 keys: ['nome_normalizado', 'nome'], // Busca primeiro no nome normalizado
+                 includeScore: true,
+                 threshold: 0.35 // Mais restritivo para evitar falsos positivos
+             });
+
+             const nomeNormalizadoBusca = normalizarString(nomeDigitado);
+            const resultados = fuse.search(nomeNormalizadoBusca); // Busca pelo nome normalizado
+
+            let voluntarioParaRegistrar = { id: null, nome: nomeDigitado }; // Padrão: novo voluntário
+            let encontrado = false;
+
             if (resultados.length > 0) {
                 const melhorResultado = resultados[0].item;
-                if (nomeDigitado.toLowerCase() !== melhorResultado.nome.toLowerCase()) {
-                    if (confirm(`Encontramos um nome parecido: "${melhorResultado.nome}".\n\nÉ você?`)) { 
+                 // Compara nomes normalizados para maior precisão
+                if (normalizarString(melhorResultado.nome) === nomeNormalizadoBusca) {
+                     console.log("Voluntário encontrado por correspondência exata (normalizada):", melhorResultado.nome);
+                     voluntarioParaRegistrar = melhorResultado;
+                     encontrado = true;
+                } else if (resultados[0].score < 0.3) { // Se for muito parecido (score baixo)
+                    if (confirm(`Encontramos um nome parecido: "${melhorResultado.nome}".\n\nÉ você?`)) {
                         voluntarioParaRegistrar = melhorResultado;
+                         encontrado = true;
                     }
-                } else { 
-                    voluntarioParaRegistrar = melhorResultado;
+                    // Se não confirmar, continua como novo voluntário
                 }
             }
 
-            if (!voluntarioParaRegistrar.id) {
-                // --- MODIFICAÇÃO AQUI ---
-                // 1. Normaliza o nome antes de salvar
+            // Se não encontrou correspondência ou o usuário negou a sugestão
+            if (!encontrado) {
                 const nomeNormalizado = normalizarString(voluntarioParaRegistrar.nome);
-
                 console.log(`Criando novo voluntário órfão: ${voluntarioParaRegistrar.nome} (Normalizado: ${nomeNormalizado})`);
-
                 const novoVoluntarioDoc = await addDoc(collection(db, "voluntarios"), {
                     nome: voluntarioParaRegistrar.nome,
-                    nome_normalizado: nomeNormalizado, // 2. Adiciona o campo normalizado
+                    nome_normalizado: nomeNormalizado,
                     statusVoluntario: 'ativo',
                     criadoEm: serverTimestamp()
-                    // O authUid fica ausente por padrão, que é o que queremos (órfão)
                 });
-                // --- FIM DA MODIFICAÇÃO ---
-                
-                voluntarioParaRegistrar.id = novoVoluntarioDoc.id;
+                voluntarioParaRegistrar.id = novoVoluntarioDoc.id; // Pega o ID do novo documento
             }
 
             await registrarPresencaComGeolocalizacao(voluntarioParaRegistrar, atividadesSelecionadas);
@@ -263,23 +344,36 @@ if (formPresencaRapida) {
         } catch (error) {
             console.error("ERRO CRÍTICO no registro rápido:", error);
             alert("Ocorreu um erro crítico. Verifique o console para mais detalhes.");
-            btnRegistrarPresenca.disabled = false;
-            btnRegistrarPresenca.textContent = 'Registrar Presença';
+            if(btnRegistrarPresenca) { // Reabilita o botão em caso de erro
+                btnRegistrarPresenca.disabled = false;
+                btnRegistrarPresenca.textContent = 'Registrar Presença';
+            }
         }
     });
 }
 
-if (btnSairRapido) {
+if (btnSairRapido && formPresencaRapida && atividadesWrapper && statusRapidoSection && registroRapidoSection && btnRegistrarPresenca) {
     btnSairRapido.addEventListener('click', () => {
-        formPresencaRapida.reset();
-        atividadesWrapper.style.display = 'none';
-        statusRapidoSection.classList.add('hidden');
-        registroRapidoSection.classList.remove('hidden');
-        btnRegistrarPresenca.disabled = false;
+        formPresencaRapida.reset(); // Limpa o formulário
+        atividadesWrapper.style.display = 'none'; // Esconde atividades
+        statusRapidoSection.classList.add('hidden'); // Esconde status
+        registroRapidoSection.classList.remove('hidden'); // Mostra formulário
+        btnRegistrarPresenca.disabled = false; // Reabilita botão
         btnRegistrarPresenca.textContent = 'Registrar Presença';
+        if (feedbackGeoRapido) feedbackGeoRapido.textContent = ''; // Limpa feedback geo
     });
 }
 
 if (btnAtivarNotificacoes) {
     btnAtivarNotificacoes.addEventListener('click', habilitarNotificacoes);
+    // Opcional: Esconder o botão se o navegador não suportar ou se já tiver permissão
+    if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
+       btnAtivarNotificacoes.style.display = 'none';
+    } else {
+        navigator.permissions.query({name:'push', userVisibleOnly:true}).then(permissionStatus => {
+             if (permissionStatus.state === 'granted') {
+                 btnAtivarNotificacoes.style.display = 'none'; // Já tem permissão
+             }
+        });
+    }
 }
