@@ -43,13 +43,9 @@
             font-size: 0.9em;
         }
         #lista-ativos li:hover { opacity: 0.8; }
-
-        /* --- NOVAS CORES PARA O ACESSO RÁPIDO --- */
         #lista-ativos li.status-presente { background-color: var(--cor-presente); }
         #lista-ativos li.status-alta-programada { background-color: var(--cor-alta); }
         #lista-ativos li.status-novo-ciclo { background-color: var(--cor-migracao); }
-        /* --- FIM DAS NOVAS CORES --- */
-
         .actions-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-top: 20px; }
         .actions-grid-freq { display: flex; gap: 15px; margin-top: 10px; }
         #search-results-container { position: relative; }
@@ -168,34 +164,28 @@
             };
 
             async function calcularSemanaAtual(tratamentoId) {
-                // Esta função agora chama getContagemSemanasValidas usando a data de HOJE
+                // Conta atendimentos válidos (não-falta E com data preenchida) ANTES do início do dia de HOJE.
                 if (!tratamentoId) return 1;
                 const hojeInicio = new Date();
                 hojeInicio.setHours(0, 0, 0, 0);
-                const contagem = await getContagemSemanasValidas(tratamentoId, Timestamp.fromDate(hojeInicio));
-                return contagem + 1;
-            }
+                const dataLimite = Timestamp.fromDate(hojeInicio);
 
-            async function getContagemSemanasValidas(tratamentoId, dataLimite = Timestamp.now()) {
-                // Conta atendimentos válidos ANTES da dataLimite
-                 if (!tratamentoId) return 0;
                  const qHistorico = query(
                     atendimentosRef,
                     where("tratamentoId", "==", tratamentoId),
-                    where("dataAtendimento", "<", dataLimite) // Apenas uma desigualdade
+                    where("dataAtendimento", "<", dataLimite) // Só atendimentos passados
                 );
                 const historicoSnapshot = await getDocs(qHistorico);
 
-                // Filtra o tipo 'falta' no lado do cliente
                 let atendimentosPassadosValidos = 0;
                 historicoSnapshot.forEach(doc => {
                     const data = doc.data();
-                    // Garante que não conta placeholders sem data ou faltas
-                    if (data.tipo !== 'falta' && data.dataAtendimento !== null) {
+                    if (data.tipo !== 'falta' && data.dataAtendimento !== null) { // Garante que não conta faltas nem placeholders
                         atendimentosPassadosValidos++;
                     }
                 });
-                return atendimentosPassadosValidos;
+                // A semana atual é o número de atendimentos passados válidos + 1
+                return atendimentosPassadosValidos + 1;
             }
 
 
@@ -295,21 +285,16 @@
                     ]);
 
                     let statusHoje = 'pendente';
-                    let placeholderSnapshot = null; // <- Inicializado aqui
-
-                    // Conta semanas válidas ANTES de hoje
-                    const contagemSemanas = await getContagemSemanasValidas(tratamento.id, Timestamp.fromDate(hojeInicio));
+                    let placeholderSnapshot = null;
 
                     // ===================================================================
-                    // ADIÇÃO DOS CONSOLE.LOG PARA DEBUG
+                    // LÓGICA CORRIGIDA PARA BUSCAR PLACEHOLDER
                     // ===================================================================
-                    if (tratamento.id === 'wCSk2Rb05HPsTiqqts8L') { // <--- COLOQUE O ID DO TRATAMENTO AQUI
-                        console.log(`[Debug ${tratamento.assistidoId}] Contagem Semanas Válidas (antes de hoje): ${contagemSemanas}`);
-                    }
-                    // ===================================================================
+                    // Calcula qual seria a semana HOJE
+                    const semanaAtualHoje = await calcularSemanaAtual(tratamento.id);
 
-                    // Só procura placeholder se ele completou 4 semanas válidas (indo para a 5ª)
-                    if (contagemSemanas === 4) {
+                    // Só procura placeholder se HOJE for a 5ª semana
+                    if (semanaAtualHoje === 5) {
                          const qPlaceholder5Semana = query(atendimentosRef,
                             where("tratamentoId", "==", tratamento.id),
                             where("semana", "==", 5),
@@ -318,30 +303,19 @@
                             limit(1)
                         );
                         placeholderSnapshot = await getDocs(qPlaceholder5Semana);
-
-                        // ===================================================================
-                        // ADIÇÃO DOS CONSOLE.LOG PARA DEBUG
-                        // ===================================================================
-                        if (tratamento.id === 'wCSk2Rb05HPsTiqqts8L') { // <--- COLOQUE O ID DO TRATAMENTO AQUI
-                           console.log(`[Debug ${tratamento.assistidoId}] Buscou Placeholder? Sim. Encontrou? ${!placeholderSnapshot.empty}`);
-                           if (!placeholderSnapshot.empty) {
-                               console.log("[Debug Placeholder Data]", placeholderSnapshot.docs[0].data());
-                           }
-                        }
-                        // ===================================================================
-                    } else {
-                         // ===================================================================
-                         // ADIÇÃO DOS CONSOLE.LOG PARA DEBUG
-                         // ===================================================================
-                         if (tratamento.id === 'wCSk2Rb05HPsTiqqts8L') { // <--- COLOQUE O ID DO TRATAMENTO AQUI
-                            console.log(`[Debug ${tratamento.assistidoId}] Buscou Placeholder? Não (Contagem semanas != 4)`);
-                         }
-                         // ===================================================================
                     }
+                    // ===================================================================
+                    // FIM DA CORREÇÃO
+                    // ===================================================================
+
 
                     // Define o statusHoje baseado nas verificações
                     if (!frequenciaSnapshot.empty) {
                         statusHoje = 'presente';
+                         // Armazena a semana atual para o botão de falta
+                         metadadosTratamento[tratamento.id] = {
+                            semanaAtual: semanaAtualHoje
+                         };
                     } else if (placeholderSnapshot && !placeholderSnapshot.empty) {
                         const placeholderData = { id: placeholderSnapshot.docs[0].id, ...placeholderSnapshot.docs[0].data() };
 
@@ -359,7 +333,7 @@
                     } else {
                          // Armazena a semana atual para o botão de falta (se não for 5ª com placeholder)
                          metadadosTratamento[tratamento.id] = {
-                            semanaAtual: contagemSemanas + 1
+                            semanaAtual: semanaAtualHoje
                          };
                     }
 
@@ -431,12 +405,10 @@
                         // --- CASO A: ALTA PROGRAMADA ---
                         if (atendimentoPreRegistrado.tipo === 'alta_programada') {
 
-                            // 1. Atualiza o placeholder da 5ª semana com a data de hoje (serverTimestamp)
                             batch.update(atendimentoDocRef, {
                                 dataAtendimento: dataAtual
                             });
 
-                            // 2. Adiciona na fila para a ENTREVISTA DE FEEDBACK
                             batch.set(doc(filaRef), {
                                 assistidoId: assistidoSelecionado.id,
                                 nomeAssistido: assistidoSelecionado.nome,
@@ -445,7 +417,7 @@
                                 status: 'aguardando_entrevista_ou_passe',
                                 passeRecomendado: atendimentoPreRegistrado.passeRecomendado,
                                 semana_atual: 5,
-                                tipoAtendimento: 'alta_programada', // Flag crucial
+                                tipoAtendimento: 'alta_programada',
                                 chegadaEm: dataAtual,
                                 recepcionista: { uid: user.uid, nome: user.displayName }
                             });
@@ -515,7 +487,7 @@
 
                     // --- CASO C: FLUXO NORMAL (Semanas 1-4) ---
                     } else {
-                        const semanaAtual = dadosMeta?.semanaAtual || await calcularSemanaAtual(tratamentoAtivoSelecionado.id);
+                        const semanaAtual = dadosMeta?.semanaAtual || await calcularSemanaAtual(tratamentoAtivoSelecionado.id); // Pega a semana já calculada
                         const passeDoCiclo = tratamentoAtivoSelecionado.passe_ciclo_atual;
 
                         const placeholderHistoricoRef = doc(collection(db, 'atendimentos_ae'));
@@ -572,17 +544,16 @@
                     const novoTotalFaltas = (tratamentoAtivoSelecionado.faltas_acumuladas || 0) + 1;
                     const passeDoCiclo = tratamentoAtivoSelecionado.passe_ciclo_atual;
 
-                    // Usa a semana atual armazenada ou recalcula se não encontrada
                     const semanaAtual = metadadosTratamento[tratamentoAtivoSelecionado.id]?.semanaAtual || await calcularSemanaAtual(tratamentoAtivoSelecionado.id);
 
                     const batch = writeBatch(db);
-                    const dataAtualFalta = serverTimestamp(); // Usar server timestamp
+                    const dataAtualFalta = serverTimestamp();
 
                     batch.set(doc(atendimentosRef), {
                         assistidoId: assistidoSelecionado.id,
                         tratamentoId: tratamentoAtivoSelecionado.id,
                         tipo: 'falta',
-                        dataAtendimento: dataAtualFalta, // Usar timestamp do servidor
+                        dataAtendimento: dataAtualFalta,
                         semana: semanaAtual
                     });
 
@@ -597,7 +568,6 @@
                             encerrarTratamento = true;
                             motivo = 'Tratamento encerrado automaticamente por falta (Tolerância Zero para P3A/P3B).';
                         } else {
-                            // Este else não deveria acontecer com >= 1, mas incluído por segurança
                             motivo = `Falta registrada com sucesso! Total de faltas: ${novoTotalFaltas}.`;
                         }
 
@@ -621,7 +591,7 @@
                     if (encerrarTratamento) {
                         batch.update(tratamentoDocRef, {
                             status: 'encerrado_por_falta',
-                            dataFim: dataAtualFalta // Usar timestamp do servidor
+                            dataFim: dataAtualFalta
                         });
                         registrarLog('Encerramento por Falta (AE)', {
                             assistidoId: assistidoSelecionado.id,
