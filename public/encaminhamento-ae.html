@@ -139,7 +139,8 @@
 
                 unsubscribeFila = onSnapshot(qFila, async (snapshot) => {
                     const promessas = snapshot.docs.map(docSnapshot => getContextoDoAtendimento(docSnapshot));
-                    atendimentosDoDia = await Promise.all(promessas.filter(p => p !== null));
+                    // CORREÇÃO: Resolve as promessas e DEPOIS filtra os resultados nulos
+                    atendimentosDoDia = (await Promise.all(promessas)).filter(atendimento => atendimento !== null);
                     renderizarCards();
                 });
             }
