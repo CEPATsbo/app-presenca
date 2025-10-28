@@ -31,7 +31,7 @@
             <label for="assistido-id">ID do Assistido:</label>
             <input type="text" id="assistido-id" placeholder="Cole aqui o ID do documento do assistido">
         </div>
-        
+
         <div class="form-item">
             <label for="acao">Ação a Simular:</label>
             <select id="acao">
@@ -52,9 +52,6 @@
 
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
-        // ===================================================================
-        // IMPORTS MODIFICADOS (adicionado serverTimestamp)
-        // ===================================================================
         import { getFirestore, collection, doc, getDoc, query, where, getDocs, addDoc, Timestamp, orderBy, limit, writeBatch, increment, updateDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
         import { protegerPagina } from '/auth.js';
 
@@ -86,7 +83,7 @@
             };
             const atendimentosRef = collection(db, 'atendimentos_ae');
             const tratamentosRef = collection(db, 'tratamentos_ae');
-            const filaRef = collection(db, 'fila_atendimento_ae'); // Adicionado
+            const filaRef = collection(db, 'fila_atendimento_ae');
 
             const hoje = new Date();
             const offset = hoje.getTimezoneOffset();
@@ -100,19 +97,31 @@
             }
 
             // ===================================================================
-            // NOVA FUNÇÃO (Cálculo de Semanas Válidas)
+            // FUNÇÃO CORRIGIDA (getContagemSemanasValidas)
             // ===================================================================
              async function getContagemSemanasValidas(tratamentoId, dataLimite) {
                  if (!tratamentoId) return 0;
+                 // Query SEM o filtro 'tipo != falta'
                  const qHistorico = query(
-                    atendimentosRef, 
+                    atendimentosRef,
                     where("tratamentoId", "==", tratamentoId),
-                    where("tipo", "!=", "falta"),
-                    where("dataAtendimento", "<", dataLimite) // Contar só atendimentos ANTES da data simulada
+                    where("dataAtendimento", "<", dataLimite) // Apenas uma desigualdade
                 );
                 const historicoSnapshot = await getDocs(qHistorico);
-                return historicoSnapshot.size;
+
+                // Filtra o tipo 'falta' no lado do cliente
+                let atendimentosPassadosValidos = 0;
+                historicoSnapshot.forEach(doc => {
+                    if (doc.data().tipo !== 'falta') {
+                        atendimentosPassadosValidos++;
+                    }
+                });
+                return atendimentosPassadosValidos;
             }
+            // ===================================================================
+            // FIM DA CORREÇÃO
+            // ===================================================================
+
 
             ui.btnSimular.addEventListener('click', async () => {
                 ui.btnSimular.disabled = true;
@@ -147,17 +156,12 @@
                     if (tratamentoSnapshot.empty) { throw new Error(`Nenhum tratamento ATIVO encontrado para o ID: ${assistidoId}`); }
                     const tratamentoDoc = tratamentoSnapshot.docs[0];
                     const tratamento = { id: tratamentoDoc.id, ...tratamentoDoc.data() };
-                    
-                    // Usar a hora local para evitar problemas de fuso
-                    const dataSimuladaObj = new Date(dataSimulada + 'T12:00:00'); 
+
+                    const dataSimuladaObj = new Date(dataSimulada + 'T12:00:00');
                     const dataTimestamp = Timestamp.fromDate(dataSimuladaObj);
 
                     if (acao === 'presenca') {
                         const batch = writeBatch(db);
-                        
-                        // --- LÓGICA ATUALIZADA DA MÁQUINA DO TEMPO ---
-                        
-                        // 1. Calcular quantas semanas válidas ocorreram ANTES da data simulada
                         const semanasValidasAnteriores = await getContagemSemanasValidas(tratamento.id, dataTimestamp);
                         const semanaAtualCalculada = semanasValidasAnteriores + 1;
 
@@ -165,15 +169,14 @@
                         let atendimentoParaFilaData = null;
                         let semanaParaFila = semanaAtualCalculada;
                         let passeParaFila = tratamento.passe_ciclo_atual;
-                        let tipoAtendimentoParaFila = null; // Para casos especiais como alta
+                        let tipoAtendimentoParaFila = null;
 
-                        // 2. É a 5ª semana E JÁ EXISTE um placeholder pré-registrado?
                         let placeholder5SemanaDoc = null;
                         if (semanaAtualCalculada === 5) {
                              const qPlaceholder5Semana = query(atendimentosRef,
                                 where("tratamentoId", "==", tratamento.id),
                                 where("semana", "==", 5),
-                                where("dataAtendimento", "==", null), // Só pega se ainda não foi preenchido
+                                where("dataAtendimento", "==", null),
                                 limit(1)
                             );
                             const placeholderSnapshot = await getDocs(qPlaceholder5Semana);
@@ -182,32 +185,25 @@
                             }
                         }
 
-                        // CASO 1: Placeholder da 5ª semana encontrado! Atualizar e usar seus dados.
                         if (placeholder5SemanaDoc) {
                             log('Placeholder da 5ª semana encontrado. Atualizando...');
                             atendimentoParaFilaRef = placeholder5SemanaDoc.ref;
                             atendimentoParaFilaData = placeholder5SemanaDoc.data();
-                            
-                            // Atualiza o placeholder com a data simulada
+
                             batch.update(atendimentoParaFilaRef, { dataAtendimento: dataTimestamp });
-                            
+
                             semanaParaFila = 5;
-                            passeParaFila = atendimentoParaFilaData.passeRecomendado; // Usa o passe guardado
-                            
-                            // Se for alta, marca o tipo na fila
+                            passeParaFila = atendimentoParaFilaData.passeRecomendado;
+
                             if (atendimentoParaFilaData.tipo === 'alta_programada') {
                                 tipoAtendimentoParaFila = 'alta_programada';
                                 log('Tipo: Alta Programada detectada.');
                             } else if (atendimentoParaFilaData.passePara) {
-                                // Se for novo ciclo, ele será ativado na Recepção real.
-                                // A máquina do tempo só precisa adicionar à fila como semana 5 normal.
                                 log('Tipo: Novo Ciclo Programado detectado. Será ativado na presença real.');
                             }
 
-                        // CASO 2: Fluxo normal (Semanas 1-4 ou 5ª semana sem placeholder)
                         } else {
                             log(`Criando novo registro para Semana ${semanaAtualCalculada}...`);
-                            // Cria um novo registro de atendimento
                             const novoAtendimentoRef = doc(atendimentosRef);
                             batch.set(novoAtendimentoRef, {
                                 assistidoId: assistidoId,
@@ -218,56 +214,53 @@
                                 entrevistador: 'Aguardando Detalhes',
                                 passeRecomendado: tratamento.passe_ciclo_atual,
                                 notas: '',
-                                detalhes_preenchidos: false // Importante para Arquivo Geral
+                                detalhes_preenchidos: false
                             });
-                            atendimentoParaFilaRef = novoAtendimentoRef; // Usará este ID na fila
+                            atendimentoParaFilaRef = novoAtendimentoRef;
                             semanaParaFila = semanaAtualCalculada;
                             passeParaFila = tratamento.passe_ciclo_atual;
                         }
 
-                        // 3. Adicionar à fila de atendimento
                         const dadosFila = {
-                            assistidoId: assistidoId, 
-                            nomeAssistido: nomeAssistido, 
+                            assistidoId: assistidoId,
+                            nomeAssistido: nomeAssistido,
                             tratamentoId: tratamento.id,
                             atendimentoId: atendimentoParaFilaRef.id,
-                            status: 'aguardando_entrevista_ou_passe', 
+                            status: 'aguardando_entrevista_ou_passe',
                             passeRecomendado: passeParaFila,
-                            semana_atual: semanaParaFila, 
+                            semana_atual: semanaParaFila,
                             chegadaEm: dataTimestamp,
                             recepcionista: { uid: user.uid, nome: `Simulação por ${user.displayName}` }
                         };
-                        // Adiciona o tipo especial se for alta
                         if(tipoAtendimentoParaFila) {
                             dadosFila.tipoAtendimento = tipoAtendimentoParaFila;
                         }
 
                         batch.set(doc(filaRef), dadosFila);
-                        
+
                         await batch.commit();
                         log(`Sucesso: '${nomeAssistido}' (Semana ${semanaParaFila}) adicionado à fila e ao histórico do dia ${dataSimuladaObj.toLocaleDateString()}.`);
 
                     } else if (acao === 'falta') {
-                        // --- LÓGICA DE FALTA ATUALIZADA COM NOVAS REGRAS ---
                         const batch = writeBatch(db);
                         const tratamentoDocRef = doc(db, 'tratamentos_ae', tratamento.id);
                         const novoTotalFaltas = (tratamento.faltas_acumuladas || 0) + 1;
                         const passeDoCiclo = tratamento.passe_ciclo_atual;
-                        
-                        const dataLimiteFalta = Timestamp.fromDate(dataSimuladaObj); // Usar data simulada como limite
+
+                        const dataLimiteFalta = Timestamp.fromDate(dataSimuladaObj);
                         const semanasValidasAnterioresFalta = await getContagemSemanasValidas(tratamento.id, dataLimiteFalta);
                         const semanaAtualFalta = semanasValidasAnterioresFalta + 1;
 
                         batch.set(doc(atendimentosRef), {
-                            assistidoId: assistidoId, 
-                            tratamentoId: tratamento.id, 
+                            assistidoId: assistidoId,
+                            tratamentoId: tratamento.id,
                             tipo: 'falta',
-                            dataAtendimento: dataTimestamp, // Data Simulada
-                            semana: semanaAtualFalta 
+                            dataAtendimento: dataTimestamp,
+                            semana: semanaAtualFalta
                         });
-                        
+
                         batch.update(tratamentoDocRef, { faltas_acumuladas: increment(1) });
-                        
+
                         let encerrarTratamento = false;
                         let motivo = '';
 
@@ -289,12 +282,12 @@
                         }
 
                         if (encerrarTratamento) {
-                            batch.update(tratamentoDocRef, { 
+                            batch.update(tratamentoDocRef, {
                                 status: 'encerrado_por_falta',
-                                dataFim: dataTimestamp // Usar data simulada
+                                dataFim: dataTimestamp
                             });
                         }
-                        
+
                         await batch.commit();
                         log(motivo);
                     }
