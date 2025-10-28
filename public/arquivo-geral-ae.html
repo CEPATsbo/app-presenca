@@ -9,8 +9,9 @@
         body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background-color: #f4f6f9; margin: 0; padding: 20px; }
         .container { width: 100%; max-width: 1400px; margin: 0 auto; background-color: #fff; padding: 30px; border-radius: 12px; box-shadow: 0 6px 24px rgba(0,0,0,0.1); }
         .nav-voltar { margin-bottom: 20px; }
-        .btn, .btn-voltar, .btn-editar { background-color: var(--cor-primaria); color: white; border: none; padding: 12px 20px; border-radius: 8px; font-weight: bold; text-decoration: none; display: inline-block; cursor: pointer; }
+        .btn, .btn-voltar, .btn-editar, .btn-acao { background-color: var(--cor-primaria); color: white; border: none; padding: 12px 20px; border-radius: 8px; font-weight: bold; text-decoration: none; display: inline-block; cursor: pointer; }
         .btn-voltar { background-color: #6c757d; }
+        .btn-acao { background-color: #28a745; width: 100%; box-sizing: border-box; text-align: center; margin: 10px 15px; padding: 12px; width: calc(100% - 30px); }
         .hidden { display: none; }
         
         .filtros-container { display: flex; flex-direction: column; gap: 15px; margin-bottom: 20px; }
@@ -157,7 +158,7 @@
                     if (assistidoParaMostrar) {
                         const liCorrespondente = ui.listaAssistidos.querySelector(`[data-assistido-id="${assistidoIdUrl}"]`);
                         if (liCorrespondente) liCorrespondente.classList.add('selecionado');
-                        mostrarDetalhes(assistidoParaMostrar);
+                        mostrarDetalhes(assistidoParaMostrar, user); // Passando user
                     }
                 }
             }
@@ -175,13 +176,13 @@
                     li.addEventListener('click', () => {
                         document.querySelectorAll('#lista-assistidos li').forEach(el => el.classList.remove('selecionado'));
                         li.classList.add('selecionado');
-                        mostrarDetalhes(assistido);
+                        mostrarDetalhes(assistido, user); // Passando user
                     });
                     ui.listaAssistidos.appendChild(li);
                 });
             }
 
-            async function mostrarDetalhes(assistido) {
+            async function mostrarDetalhes(assistido, user) {
                 assistidoAtualmenteSelecionado = assistido;
                 ui.detalhesAssistido.innerHTML = `<h2>Histórico de ${assistido.nome}</h2><p>Carregando histórico...</p>`;
                 
@@ -198,10 +199,61 @@
                 const atendimentosSnapshot = await getDocs(qAtendimentos);
                 const todosAtendimentos = atendimentosSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
 
-                renderizarHistorico(assistido, ciclos, todosAtendimentos);
+                renderizarHistorico(assistido, ciclos, todosAtendimentos, user); // Passando user
             }
             
-            function renderizarHistorico(assistido, ciclos, todosAtendimentos) {
+            // ===================================================================
+            // INÍCIO DA ÁREA MODIFICADA (AJUSTE 2 - ETAPA 1)
+            // ===================================================================
+
+            async function prepararReavaliacao(ciclo, user) {
+                if (!confirm(`Preparar a 5ª Semana (Reavaliação) para o ciclo iniciado em ${ciclo.dataInicio.toDate().toLocaleDateString('pt-br')}?`)) {
+                    return;
+                }
+                
+                const btn = document.getElementById(`btn-preparar-${ciclo.id}`);
+                btn.disabled = true;
+                btn.textContent = 'Criando...';
+
+                try {
+                    const novoAtendimento = {
+                        assistidoId: ciclo.assistidoId,
+                        tratamentoId: ciclo.id,
+                        tipo: 'tratamento_semanal',
+                        // Deixamos dataAtendimento nulo por enquanto. Será preenchido pela recepção.
+                        dataAtendimento: null, 
+                        semana: 5,
+                        entrevistador: 'Aguardando Decisão',
+                        passeRecomendado: ciclo.passe_ciclo_atual,
+                        notas: '',
+                        detalhes_preenchidos: false, // Entrevistador ainda precisa preencher
+                        decisao_pre_registrada: false, // Flag para o novo fluxo
+                        criadoPor: { uid: user.uid, nome: user.displayName || 'Usuário do Sistema' },
+                        criadoEm: serverTimestamp()
+                    };
+
+                    const docRef = await addDoc(atendimentosRef, novoAtendimento);
+
+                    registrarLog('Preparação de Reavaliação (AE)', {
+                        assistidoId: ciclo.assistidoId,
+                        tratamentoId: ciclo.id,
+                        atendimentoId: docRef.id
+                    });
+                    
+                    alert('Placeholder da 5ª Semana criado. Você já pode registrar a decisão do colegiado.');
+                    
+                    // Recarrega os detalhes para mostrar o novo item
+                    mostrarDetalhes(assistidoAtualmenteSelecionado, user);
+
+                } catch (error) {
+                    console.error("Erro ao preparar reavaliação:", error);
+                    alert("Falha ao criar o registro da 5ª semana.");
+                    btn.disabled = false;
+                    btn.textContent = 'Preparar Reavaliação (5ª Semana)';
+                }
+            }
+
+            function renderizarHistorico(assistido, ciclos, todosAtendimentos, user) {
                 const dnFormatado = assistido.dn ? new Date(assistido.dn + 'T12:00:00').toLocaleDateString('pt-br') : 'Não informado';
                 let html = `<h2>Histórico de ${assistido.nome}</h2>`;
                 html += `<p><strong>DN:</strong> ${dnFormatado} | <strong>Telefone:</strong> ${assistido.telefone || 'Não informado'}</p>`;
@@ -220,23 +272,39 @@
                                     <ul class="atendimentos-lista">`;
                         
                         const atendimentosDoCiclo = todosAtendimentos.filter(a => a.tratamentoId === ciclo.id);
+                        
+                        // Contagem de atendimentos válidos (não-falta)
+                        const atendimentosValidos = atendimentosDoCiclo.filter(a => a.tipo !== 'falta');
+                        atendimentosValidos.sort((a, b) => a.dataAtendimento?.toMillis() - b.dataAtendimento?.toMillis());
+                        
+                        const semana5JaExiste = atendimentosValidos.find(a => a.semana === 5);
+
                         if (atendimentosDoCiclo.length === 0) {
                             html += '<li>Nenhum atendimento registrado para este ciclo.</li>';
                         } else {
-                            atendimentosDoCiclo.sort((a, b) => a.dataAtendimento.toMillis() - b.dataAtendimento.toMillis()).forEach(a => {
+                            // Ordena todos para exibição
+                            atendimentosDoCiclo.sort((a, b) => a.dataAtendimento?.toMillis() - b.dataAtendimento?.toMillis()).forEach(a => {
                                 html += renderizarItemAtendimento(a, ciclo.passe_ciclo_atual);
                             });
                         }
+
+                        // --- NOVA LÓGICA DO BOTÃO ---
+                        // Se o ciclo está ativo, já completou 4 semanas válidas E a 5ª semana ainda não foi criada...
+                        if (ciclo.status === 'ativo' && atendimentosValidos.length === 4 && !semana5JaExiste) {
+                             html += `<button id="btn-preparar-${ciclo.id}" class="btn-acao">Preparar Reavaliação (5ª Semana)</button>`;
+                        }
+                        // --- FIM DA NOVA LÓGICA ---
+
                         html += `</ul></div>`;
                     });
                 }
                 
                 const passesAvulsos = todosAtendimentos.filter(a => a.tipo === 'avulso');
                 if (passesAvulsos.length > 0) {
-                     html += `<div class="ciclo-tratamento">
+                    html += `<div class="ciclo-tratamento">
                                     <div class="ciclo-header"><span>Passes Avulsos</span></div>
                                     <ul class="atendimentos-lista">`;
-                    passesAvulsos.sort((a, b) => a.dataAtendimento.toMillis() - b.dataAtendimento.toMillis()).forEach(a => {
+                    passesAvulsos.sort((a, b) => a.dataAtendimento?.toMillis() - b.dataAtendimento?.toMillis()).forEach(a => {
                         html += renderizarItemAtendimento(a, null);
                     });
                     html += `</ul></div>`;
@@ -248,10 +316,20 @@
 
                 html += '</div>';
                 ui.detalhesAssistido.innerHTML = html;
+
+                // Adiciona o listener para o botão que acabamos de criar (se ele existir)
+                ciclos.forEach(ciclo => {
+                    const btn = document.getElementById(`btn-preparar-${ciclo.id}`);
+                    if (btn) {
+                        btn.addEventListener('click', () => prepararReavaliacao(ciclo, user));
+                    }
+                });
             }
 
             function renderizarItemAtendimento(a, passe_ciclo_atual) {
-                const dataAtendimento = a.dataAtendimento.toDate().toLocaleDateString('pt-br');
+                // Se dataAtendimento for nulo (placeholder da 5ª semana), exibe um status diferente
+                const dataAtendimento = a.dataAtendimento ? a.dataAtendimento.toDate().toLocaleDateString('pt-br') : "Aguardando Presença";
+                
                 let tipoAtendimento = a.tipo?.replace(/_/g, ' ') || 'N/A';
                 let infoExtra = '';
                 let botaoEditarHtml = '';
@@ -278,15 +356,25 @@
                 }
 
                 if (precisaEntrevista) {
-                     if (a.detalhes_preenchidos === true) {
-                        iconeHtml = '<span>✅</span>';
+                    // --- LÓGICA DE ÍCONE ATUALIZADA ---
+                    if (a.semana === 5 && a.decisao_pre_registrada === true && a.dataAtendimento === null) {
+                         iconeHtml = '<span>🔵</span>'; // Decisão registrada, aguardando presença
+                         tipoAtendimento = "Reavaliação (Decisão Pronta)";
+                    } else if (a.detalhes_preenchidos === true) {
+                        iconeHtml = '<span>✅</span>'; // Entrevista preenchida
                     } else {
-                        iconeHtml = '<span>📝</span>';
+                        iconeHtml = '<span>📝</span>'; // Pendente
                     }
                     botaoEditarHtml = `<a href="/entrevista-ae.html?atendimentoId=${a.id}" target="_blank" class="btn btn-editar">Ver / Editar</a>`;
                 }
                 
-                return `<li>
+                // Exibição especial para placeholder da 5ª semana sem data
+                let estiloItem = '';
+                if (a.dataAtendimento === null && a.semana === 5) {
+                    estiloItem = 'style="background-color: #fffbe6;"'; // Um fundo amarelo claro
+                }
+
+                return `<li ${estiloItem}>
                             <div class="atendimento-info">
                                 ${iconeHtml}
                                 <span><strong>${dataAtendimento}</strong> - ${tipoAtendimento} ${infoExtra}</span>
@@ -294,6 +382,10 @@
                             ${botaoEditarHtml}
                         </li>`;
             }
+
+            // ===================================================================
+            // FIM DA ÁREA MODIFICADA
+            // ===================================================================
 
             ui.alfabetoFiltro.addEventListener('click', (e) => {
                 if (e.target.tagName === 'BUTTON') {
@@ -314,7 +406,7 @@
 
             window.addEventListener('focus', () => {
                 if (assistidoAtualmenteSelecionado) {
-                    mostrarDetalhes(assistidoAtualmenteSelecionado);
+                    mostrarDetalhes(assistidoAtualmenteSelecionado, user); // Passando user
                 }
             });
 

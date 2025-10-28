@@ -39,6 +39,7 @@
         .erro { color: #dc3545; font-weight: bold; text-align: center; }
         .hidden { display: none; }
         .botoes-colegiado { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 10px; }
+        .data-aviso { font-weight: bold; color: #0056b3; }
     </style>
 </head>
 <body>
@@ -154,11 +155,15 @@
                 const formHtml = criarFormulario(atendimento);
                 formularioContainer.innerHTML = formHtml;
                 preencherFormulario(atendimento, nomeAssistido);
-                manipularEstadoFormulario(atendimento.detalhes_preenchidos === true);
                 
-                document.getElementById('btn-salvar-decisao')?.addEventListener('click', () => salvarDecisaoColegiado(atendimento));
-                document.getElementById('btn-salvar-entrevista')?.addEventListener('click', () => salvarEntrevistaCompleta(atendimento));
-                document.getElementById('btn-dar-alta')?.addEventListener('click', () => darAlta(atendimento));
+                // Trava o formulário se os detalhes estiverem preenchidos,
+                // OU se a decisão do colegiado já foi salva (mesmo que aguardando presença)
+                const travar = atendimento.detalhes_preenchidos === true || atendimento.decisaoColegiadoSalva === true;
+                manipularEstadoFormulario(travar);
+                
+                document.getElementById('btn-salvar-decisao')?.addEventListener('click', () => salvarDecisaoColegiado(atendimento, atendimentoDocRef));
+                document.getElementById('btn-salvar-entrevista')?.addEventListener('click', () => salvarEntrevistaCompleta(atendimento, atendimentoDocRef));
+                document.getElementById('btn-dar-alta')?.addEventListener('click', () => darAlta(atendimento, atendimentoDocRef));
                 
                 const selectBox = document.querySelector('.select-box');
                 const checkboxes = document.querySelector('.checkboxes');
@@ -180,61 +185,47 @@
                 }
             }
 
-            async function salvarDecisaoColegiado(atendimento) {
+            // ===================================================================
+            // INÍCIO DA ÁREA MODIFICADA (AJUSTE 2 - ETAPA 2)
+            // ===================================================================
+
+            async function salvarDecisaoColegiado(atendimento, atendimentoDocRef) {
                 const btn = document.getElementById('btn-salvar-decisao');
                 btn.disabled = true;
                 btn.textContent = 'Salvando Decisão...';
 
                 const passePara = document.getElementById('colegiado-para')?.value;
                 if (!passePara) {
-                    alert('Por favor, selecione um passe no campo "PARA:" para iniciar um novo ciclo.');
+                    alert('Por favor, selecione um passe no campo "PARA:" para registrar a migração.');
                     btn.disabled = false;
                     btn.textContent = 'Salvar Decisão e Iniciar Novo Ciclo';
                     return;
                 }
+                
+                const colegiadoNotas = document.getElementById('colegiado-notas')?.value.trim() || "Reavaliação: Encaminhado para novo ciclo.";
+                const encaminhamentos = Array.from(document.querySelectorAll('.checkboxes input:checked')).map(cb => cb.value);
 
                 try {
-                    const batch = writeBatch(db);
-                    const tratamentoDocRef = doc(db, 'tratamentos_ae', atendimento.tratamentoId);
-                    
-                    batch.update(tratamentoDocRef, { status: 'concluido_por_reavaliacao', dataFim: serverTimestamp() });
-                    
-                    const novoTratamentoRef = doc(tratamentosRef);
-                    batch.set(novoTratamentoRef, {
-                        assistidoId: atendimento.assistidoId, dataInicio: serverTimestamp(), status: 'ativo',
-                        faltas_acumuladas: 0, passe_ciclo_atual: passePara
-                    });
-                    
-                    const atendimentoDocRef = doc(db, 'atendimentos_ae', atendimento.id);
-                    batch.update(atendimentoDocRef, {
-                        tratamentoId: novoTratamentoRef.id,
-                        semana: 1,
+                    const dadosParaAtualizar = {
                         passePara: passePara,
-                        passeRecomendado: passePara,
-                        decisaoColegiadoSalva: true 
-                    });
-
-                    const filaDocRef = await encontrarFilaDoDia(atendimento);
-                    if (filaDocRef) {
-                        batch.update(filaDocRef, {
-                            tratamentoId: novoTratamentoRef.id,
-                            semana_atual: 1,
-                            passeRecomendado: passePara,
-                            decisao_registrada: true
-                        });
-                    }
+                        colegiadoNotas: colegiadoNotas,
+                        encaminhamentos: encaminhamentos,
+                        decisao_pre_registrada: true, // Flag para o novo fluxo
+                        decisaoColegiadoSalva: true   // Trava os botões do colegiado
+                    };
                     
-                    await batch.commit();
+                    await updateDoc(atendimentoDocRef, dadosParaAtualizar);
 
-                    registrarLog('Decisão de Reavaliação (AE)', {
+                    registrarLog('Decisão de Reavaliação Pré-Registrada (AE)', {
                         assistidoId: atendimento.assistidoId,
+                        atendimentoId: atendimento.id,
                         assistidoNome: document.getElementById('assistido-nome').textContent,
                         dePasse: atendimento.passeRecomendado,
                         paraPasse: passePara
                     });
                     
-                    alert('Decisão salva com sucesso! O novo ciclo foi iniciado e o card no encaminhamento foi liberado.');
-                    location.reload();
+                    alert('Decisão de "Novo Ciclo" pré-registrada com sucesso! Ela será ativada quando o assistido registrar presença.');
+                    manipularEstadoFormulario(true); // Trava o formulário
 
                 } catch (error) {
                     console.error("Erro ao salvar decisão:", error);
@@ -243,13 +234,52 @@
                     btn.textContent = 'Salvar Decisão e Iniciar Novo Ciclo';
                 }
             }
+            
+            async function darAlta(atendimento, atendimentoDocRef) {
+                const btn = document.getElementById('btn-dar-alta');
+                btn.disabled = true;
+                
+                if (confirm(`Tem certeza que deseja programar a alta para este assistido?`)) {
+                    
+                    const colegiadoNotas = document.getElementById('colegiado-notas')?.value.trim() || "Atendimento de reavaliação finalizado com alta.";
+                    const encaminhamentos = Array.from(document.querySelectorAll('.checkboxes input:checked')).map(cb => cb.value);
 
-            async function salvarEntrevistaCompleta(atendimento) {
+                    try {
+                        const dadosParaAtualizar = {
+                            tipo: 'alta_programada',
+                            colegiadoNotas: colegiadoNotas,
+                            encaminhamentos: encaminhamentos,
+                            decisao_pre_registrada: true, // Flag para o novo fluxo
+                            decisaoColegiadoSalva: true,  // Trava os botões do colegiado
+                            detalhes_preenchidos: true    // Considera preenchido
+                        };
+
+                        await updateDoc(atendimentoDocRef, dadosParaAtualizar);
+
+                        registrarLog('Registro de Alta Programada (AE)', {
+                            assistidoId: atendimento.assistidoId,
+                            atendimentoId: atendimento.id,
+                            assistidoNome: document.getElementById('assistido-nome').textContent
+                        });
+
+                        alert('Alta programada com sucesso! O tratamento será encerrado quando o assistido registrar presença.');
+                        manipularEstadoFormulario(true); // Trava o formulário
+                    } catch (error) {
+                        console.error("Erro ao programar alta:", error);
+                        alert("Falha ao programar a alta. Tente novamente.");
+                        btn.disabled = false;
+                    }
+                } else {
+                    btn.disabled = false;
+                }
+            }
+
+            async function salvarEntrevistaCompleta(atendimento, atendimentoDocRef) {
                 const btn = document.getElementById('btn-salvar-entrevista');
                 
                 const entrevistadorNome = document.getElementById('entrevistador-nome').value.trim();
                 const entrevistaNotas = document.getElementById('entrevista-notas').value.trim();
-                const isReavaliacao = (atendimento.semana === 5 || !!atendimento.passePara);
+                const isReavaliacao = (atendimento.semana === 5 || !!atendimento.passePara || atendimento.tipo === 'alta_programada');
 
                 if (!entrevistadorNome || !entrevistaNotas) {
                     alert('Para marcar a entrevista como concluída, os campos "Entrevistador" e "Descrição da Entrevista" são obrigatórios.');
@@ -267,7 +297,6 @@
                 btn.textContent = 'Salvando...';
 
                 try {
-                    const atendimentoDocRef = doc(db, 'atendimentos_ae', atendimento.id);
                     const dadosParaAtualizar = {
                         entrevistador: entrevistadorNome,
                         notas: entrevistaNotas,
@@ -319,17 +348,27 @@
                     document.getElementById('retorno-fim').value = atendimento.horarioFim || '';
                 }
                 if (document.querySelector('input[name="evolucao"]')) {
-                     if (atendimento.evolucao) {
-                        const evolucaoRadio = document.querySelector(`input[name="evolucao"][value="${atendimento.evolucao}"]`);
-                        if (evolucaoRadio) evolucaoRadio.checked = true;
-                    }
+                        if (atendimento.evolucao) {
+                            const evolucaoRadio = document.querySelector(`input[name="evolucao"][value="${atendimento.evolucao}"]`);
+                            if (evolucaoRadio) evolucaoRadio.checked = true;
+                        }
                 }
                 if (document.getElementById('colegiado-para')) {
                     if (atendimento.passePara) {
                         document.getElementById('colegiado-para').value = atendimento.passePara;
                     }
+                    // Se for alta programada, desabilita a seleção de "PARA"
+                    if (atendimento.tipo === 'alta_programada') {
+                        const selectPara = document.getElementById('colegiado-para');
+                        selectPara.disabled = true;
+                        // Adiciona uma opção de "ALTA" se não existir
+                        if (!selectPara.querySelector('option[value="alta"]')) {
+                             selectPara.innerHTML += `<option value="alta">ALTA PROGRAMADA</option>`;
+                        }
+                        selectPara.value = 'alta';
+                    }
                     if (document.getElementById('colegiado-notas')) {
-                         document.getElementById('colegiado-notas').value = atendimento.colegiadoNotas || '';
+                            document.getElementById('colegiado-notas').value = atendimento.colegiadoNotas || '';
                     }
                     if (atendimento.encaminhamentos && atendimento.encaminhamentos.length > 0) {
                         const selectBox = document.querySelector('.select-box');
@@ -352,18 +391,25 @@
             function criarFormulario(atendimento) {
                 const semanaNum = atendimento.semana;
                 const passeDe = atendimento.passeRecomendado;
-                const isReavaliacao = (atendimento.semana === 5 || !!atendimento.passePara);
+                
+                // A reavaliação é a semana 5, ou se já tiver uma decisão de "passePara" ou "alta_programada"
+                const isReavaliacao = (atendimento.semana === 5 || !!atendimento.passePara || atendimento.tipo === 'alta_programada');
+                
                 const isInicioRealDeTratamento = (atendimento.semana === 1 && !atendimento.passePara);
-                const dataAtendimento = atendimento.dataAtendimento ? atendimento.dataAtendimento.toDate().toLocaleDateString('pt-br') : new Date().toLocaleDateString('pt-br');
+                
+                // --- LÓGICA DE DATA ATUALIZADA ---
+                const dataAtendimento = atendimento.dataAtendimento 
+                    ? atendimento.dataAtendimento.toDate().toLocaleDateString('pt-br') 
+                    : `<span class="data-aviso">Decisão Pré-Registro (Aguardando Presença)</span>`;
                 
                 let acompanhamentoHtml = '';
                 if (!isInicioRealDeTratamento) {
                     acompanhamentoHtml = `<hr><h5>Detalhes do Passe</h5><div class="form-grid">
-                        <div class="form-item"><label for="retorno-passe">Passe:</label><input type="text" id="retorno-passe" class="readonly-input" value="${passeDe}" readonly></div>
-                        <div class="form-item"><label for="retorno-inicio">Início:</label><input type="time" id="retorno-inicio"></div>
-                        <div class="form-item"><label for="retorno-fim">Fim:</label><input type="time" id="retorno-fim"></div>
-                    </div>
-                    <div class="form-item" style="margin-top:15px;"><label>Evolução:</label><div style="display:flex; gap: 15px;"><label><input type="radio" name="evolucao" value="melhorou"> Melhorou</label><label><input type="radio" name="evolucao" value="piorou"> Piorou</label><label><input type="radio" name="evolucao" value="na_mesma" checked> Na Mesma</label></div></div>`;
+                            <div class="form-item"><label for="retorno-passe">Passe:</label><input type="text" id="retorno-passe" class="readonly-input" value="${passeDe}" readonly></div>
+                            <div class="form-item"><label for="retorno-inicio">Início:</label><input type="time" id="retorno-inicio"></div>
+                            <div class="form-item"><label for="retorno-fim">Fim:</label><input type="time" id="retorno-fim"></div>
+                        </div>
+                        <div class="form-item" style="margin-top:15px;"><label>Evolução:</label><div style="display:flex; gap: 15px;"><label><input type="radio" name="evolucao" value="melhorou"> Melhorou</label><label><input type="radio" name="evolucao" value="piorou"> Piorou</label><label><input type="radio" name="evolucao" value="na_mesma" checked> Na Mesma</label></div></div>`;
                 }
 
                 let colegiadoHtml = '';
@@ -371,22 +417,28 @@
 
                 if (isReavaliacao) {
                     let botoesColegiadoHtml = '';
+                    
+                    // Mostra os botões de decisão APENAS se a decisão ainda não foi salva
                     if (!atendimento.decisaoColegiadoSalva) {
                         botoesColegiadoHtml = `<div class="botoes-colegiado">
-                           <button id="btn-salvar-decisao" type="button" class="btn btn-success">Salvar Decisão e Iniciar Novo Ciclo</button>
-                           <button id="btn-dar-alta" type="button" class="btn btn-danger">Confirmar e Dar Alta</button>
+                            <button id="btn-salvar-decisao" type="button" class="btn btn-success">Salvar Decisão e Iniciar Novo Ciclo</button>
+                            <button id="btn-dar-alta" type="button" class="btn btn-danger">Confirmar e Dar Alta</button>
                         </div>`;
+                    } else if (atendimento.tipo === 'alta_programada') {
+                        botoesColegiadoHtml = `<p style="text-align:center; font-weight: bold; color: #dc3545;">ALTA PROGRAMADA. Aguardando presença para encerrar o tratamento.</p>`;
+                    } else if (atendimento.passePara) {
+                         botoesColegiadoHtml = `<p style="text-align:center; font-weight: bold; color: #007bff;">NOVO CICLO ( ${atendimento.passePara} ) PROGRAMADO. Aguardando presença para iniciar.</p>`;
                     }
 
                     colegiadoHtml = `<hr><h5>Colegiado</h5>
-                        <div class="form-grid"><div class="form-item"><label for="colegiado-de">DE:</label><select id="colegiado-de" class="readonly-input" disabled>${gerarOpcoesPasse(passeDe)}</select></div><div class="form-item"><label for="colegiado-para">PARA (Mudar o passe):</label><select id="colegiado-para">${gerarOpcoesPasse()}</select></div></div>
-                        <div class="form-item" style="margin-top:15px;"><label>Encaminhamentos (Múltipla Escolha):</label><div class="multiselect">
-                            <div class="select-box" tabindex="0">Selecione...</div>
-                            <div class="checkboxes">
-                                <label><input type="checkbox" value="ENL"/> ENL</label><label><input type="checkbox" value="LEITURAS"/> Leituras</label><label><input type="checkbox" value="EAE"/> EAE</label><label><input type="checkbox" value="VOLUNTARIADO"/> Voluntariado</label><label><input type="checkbox" value="MÉDICO"/> Médico</label><label><input type="checkbox" value="ALIMENTO"/> Alimento</label><label><input type="checkbox" value="NATUREZA"/> Natureza</label><label><input type="checkbox" value="MOCIDADE"/> Mocidade</label><label><input type="checkbox" value="EVANGELIZAÇÃO"/> Evangelização</label>
-                            </div></div></div>
-                        <div class="form-item" style="margin-top: 15px;"><label for="colegiado-notas">Orientações do Colegiado:</label><textarea id="colegiado-notas" rows="4"></textarea></div>
-                        ${botoesColegiadoHtml}`;
+                            <div class="form-grid"><div class="form-item"><label for="colegiado-de">DE:</label><select id="colegiado-de" class="readonly-input" disabled>${gerarOpcoesPasse(passeDe)}</select></div><div class="form-item"><label for="colegiado-para">PARA (Mudar o passe):</label><select id="colegiado-para">${gerarOpcoesPasse()}</select></div></div>
+                            <div class="form-item" style="margin-top:15px;"><label>Encaminhamentos (Múltipla Escolha):</label><div class="multiselect">
+                                <div class="select-box" tabindex="0">Selecione...</div>
+                                <div class="checkboxes">
+                                    <label><input type="checkbox" value="ENL"/> ENL</label><label><input type="checkbox" value="LEITURAS"/> Leituras</label><label><input type="checkbox" value="EAE"/> EAE</label><label><input type="checkbox" value="VOLUNTARIADO"/> Voluntariado</label><label><input type="checkbox" value="MÉDICO"/> Médico</label><label><input type="checkbox" value="ALIMENTO"/> Alimento</label><label><input type="checkbox" value="NATUREZA"/> Natureza</label><label><input type="checkbox" value="MOCIDADE"/> Mocidade</label><label><input type="checkbox" value="EVANGELIZAÇÃO"/> Evangelização</label>
+                                </div></div></div>
+                            <div class="form-item" style="margin-top: 15px;"><label for="colegiado-notas">Orientações do Colegiado:</label><textarea id="colegiado-notas" rows="4"></textarea></div>
+                            ${botoesColegiadoHtml}`;
                     
                     botoesHtml = `<button id="btn-salvar-entrevista" type="button" class="btn btn-primary" style="width: 100%; margin-top: 20px;">Salvar Alterações</button>`;
                 } else {
@@ -396,71 +448,26 @@
                 const legenda = isInicioRealDeTratamento ? "Entrevista de Início de Tratamento" : `Detalhes do Atendimento da ${semanaNum}ª Semana`;
 
                 return `<fieldset><legend>${legenda}</legend>
-                    <div class="form-grid" style="background-color: #f8f9fa; padding: 10px; border-radius: 6px;">
-                        <div class="form-item"><label>Assistido:</label><h3 id="assistido-nome" style="text-align:left; margin:0;">Carregando...</h3></div>
-                        <div class="form-item"><label>Data do Atendimento:</label><p id="data-atendimento" style="margin:0; font-weight:bold;">${dataAtendimento}</p></div>
-                    </div><hr>
-                    <div class="form-grid">
-                        <div class="form-item"><label for="entrevistador-nome">Entrevistador:</label><input type="text" id="entrevistador-nome"></div>
-                    </div>
-                    <div class="form-item" style="margin-top: 15px;"><label for="entrevista-notas">Descrição da Entrevista:</label><textarea id="entrevista-notas" rows="6"></textarea></div>
-                    ${acompanhamentoHtml}
-                    ${colegiadoHtml}
-                    ${botoesHtml}
+                        <div class="form-grid" style="background-color: #f8f9fa; padding: 10px; border-radius: 6px;">
+                            <div class="form-item"><label>Assistido:</label><h3 id="assistido-nome" style="text-align:left; margin:0;">Carregando...</h3></div>
+                            <div class="form-item"><label>Data do Atendimento:</label><p id="data-atendimento" style="margin:0;">${dataAtendimento}</p></div>
+                        </div><hr>
+                        <div class="form-grid">
+                            <div class="form-item"><label for="entrevistador-nome">Entrevistador:</label><input type="text" id="entrevistador-nome"></div>
+                        </div>
+                        <div class="form-item" style="margin-top: 15px;"><label for="entrevista-notas">Descrição da Entrevista:</label><textarea id="entrevista-notas" rows="6"></textarea></div>
+                        ${acompanhamentoHtml}
+                        ${colegiadoHtml}
+                        ${botoesHtml}
                 </fieldset>`;
             }
+            
+            // Esta função foi removida pois sua lógica foi incorporada em `darAlta` e `salvarDecisaoColegiado`
+            // async function encontrarFilaDoDia(atendimento) { ... }
 
-            async function encontrarFilaDoDia(atendimento) {
-                const q = query(filaRef, where("atendimentoId", "==", atendimento.id), limit(1));
-                const filaSnapshot = await getDocs(q);
-                if (!filaSnapshot.empty) return filaSnapshot.docs[0].ref;
-
-                const dataDoAtendimento = atendimento.dataAtendimento.toDate();
-                const inicioDoDia = new Date(dataDoAtendimento.setHours(0,0,0,0));
-                const fimDoDia = new Date(dataDoAtendimento.setHours(23,59,59,999));
-                const qFallback = query(filaRef, where("assistidoId", "==", atendimento.assistidoId), where("chegadaEm", ">=", Timestamp.fromDate(inicioDoDia)), where("chegadaEm", "<=", Timestamp.fromDate(fimDoDia)), limit(1));
-                const filaSnapshotFallback = await getDocs(qFallback);
-                if (!filaSnapshotFallback.empty) return filaSnapshotFallback.docs[0].ref;
-                
-                return null;
-            }
-
-            async function darAlta(atendimento) {
-                const btn = document.getElementById('btn-dar-alta');
-                btn.disabled = true;
-                if (confirm(`Tem certeza que deseja dar alta para este assistido?`)) {
-                    
-                    const batch = writeBatch(db);
-                    const tratamentoDocRef = doc(db, 'tratamentos_ae', atendimento.tratamentoId);
-                    batch.update(tratamentoDocRef, { status: 'concluido_com_alta', dataFim: serverTimestamp() });
-                    
-                    const atendimentoDocRef = doc(db, 'atendimentos_ae', atendimento.id);
-                    batch.update(atendimentoDocRef, {
-                         tipo: 'alta',
-                         colegiadoNotas: document.getElementById('colegiado-notas')?.value || "Atendimento de reavaliação finalizado com alta.",
-                         detalhes_preenchidos: true,
-                         decisaoColegiadoSalva: true
-                    });
-                    
-                    const filaDocRef = await encontrarFilaDoDia(atendimento);
-                    if (filaDocRef) {
-                        batch.update(filaDocRef, { decisao_registrada: true });
-                    }
-                    
-                    await batch.commit();
-
-                    registrarLog('Registro de Alta (AE)', {
-                        assistidoId: atendimento.assistidoId,
-                        atendimentoId: atendimento.id,
-                        assistidoNome: document.getElementById('assistido-nome').textContent
-                    });
-
-                    alert('Alta registrada! O tratamento foi encerrado.');
-                    manipularEstadoFormulario(true);
-                } else {
-                     btn.disabled = false;
-                }
-            }
+            // ===================================================================
+            // FIM DA ÁREA MODIFICADA
+            // ===================================================================
         }
     </script>
 </body>
