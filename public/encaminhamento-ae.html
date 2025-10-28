@@ -25,7 +25,7 @@
         .actions-3-buttons .btn, .actions-1-button .btn { width: 100%; padding: 15px 5px; font-size: 0.9em; }
         .chamado-entrevista { border-left-color: #17a2b8; }
         .entrevista-realizada { border-left-color: var(--cor-aviso); }
-        .card-alta { border-left-color: var(--cor-alta); } /* Novo estilo para Alta */
+        .card-alta { border-left-color: var(--cor-alta); }
         .chamado-passe { border-left-color: #28a745; background-color: #f8f9fa; opacity: 0.8; }
         .chamado-passe h3, .chamado-passe .info { text-decoration: line-through; }
         .hidden { display: none; }
@@ -39,7 +39,7 @@
     <div class="container-principal">
         <nav class="nav-voltar"><a href="/dashboard-ae.html" class="btn-voltar">⬅ Voltar para o Painel AE</a></nav>
         <div id="acesso-negado" class="container hidden"><h1>Acesso Negado</h1></div>
-        
+
         <div id="main-content" class="container hidden">
             <h1>Painel de Encaminhamento</h1>
             <p style="text-align:center; margin-top:-10px; margin-bottom:20px;">Controle as chamadas para entrevista e para as salas de passe.</p>
@@ -57,14 +57,11 @@
 
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
-        // ===================================================================
-        // IMPORTS MODIFICADOS
-        // ===================================================================
         import { getFirestore, collection, doc, getDoc, onSnapshot, updateDoc, query, where, orderBy, Timestamp, getDocs, setDoc, serverTimestamp, deleteDoc, writeBatch, addDoc } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
         import { protegerPagina } from '/auth.js';
 
         const firebaseConfig = {
-            apiKey: "AIzaSyBV7RPjk3cFTqL-aIpflJcUojKg1ZXMLuU",
+             apiKey: "AIzaSyBV7RPjk3cFTqL-aIpflJcUojKg1ZXMLuU",
             authDomain: "voluntarios-ativos---cepat.firebaseapp.com",
             projectId: "voluntarios-ativos---cepat",
             storageBucket: "voluntarios-ativos---cepat.firebasestorage.app",
@@ -77,7 +74,7 @@
             document.getElementById('main-content').classList.remove('hidden');
             document.getElementById('acesso-negado').classList.add('hidden');
             inicializarPagina(user);
-        }).catch(err => { 
+        }).catch(err => {
             document.getElementById('acesso-negado').classList.remove('hidden');
             document.getElementById('main-content').classList.add('hidden');
         });
@@ -87,16 +84,13 @@
             const filaRef = collection(db, 'fila_atendimento_ae');
             const tratamentosRef = collection(db, 'tratamentos_ae');
             const painelEstadoRef = doc(db, 'painel_estado', 'atual');
-            const logAuditoriaRef = collection(db, 'log_auditoria'); // NOVO
+            const logAuditoriaRef = collection(db, 'log_auditoria');
             const cardsContainer = document.getElementById('cards-container');
             const seletorData = document.getElementById('seletor-data');
 
             let atendimentosDoDia = [];
-            let unsubscribeFila; 
+            let unsubscribeFila;
 
-            // ===================================================================
-            // NOVA FUNÇÃO
-            // ===================================================================
             async function registrarLog(acao, detalhes) {
                 try {
                     await addDoc(logAuditoriaRef, {
@@ -114,7 +108,7 @@
             const offset = hoje.getTimezoneOffset();
             const hojeLocal = new Date(hoje.getTime() - (offset*60*1000));
             seletorData.value = hojeLocal.toISOString().split("T")[0];
-            
+
             monitorarFila(seletorData.value);
 
             seletorData.addEventListener('change', () => {
@@ -129,22 +123,21 @@
                 const dataSelecionada = new Date(dataString + 'T12:00:00');
                 const inicioDoDia = new Date(dataSelecionada.setHours(0, 0, 0, 0));
                 const fimDoDia = new Date(dataSelecionada.setHours(23, 59, 59, 999));
-                
+
                 const qFila = query(
-                    filaRef, 
-                    where("chegadaEm", ">=", Timestamp.fromDate(inicioDoDia)), 
-                    where("chegadaEm", "<=", Timestamp.fromDate(fimDoDia)), 
+                    filaRef,
+                    where("chegadaEm", ">=", Timestamp.fromDate(inicioDoDia)),
+                    where("chegadaEm", "<=", Timestamp.fromDate(fimDoDia)),
                     orderBy("chegadaEm", "asc")
                 );
 
                 unsubscribeFila = onSnapshot(qFila, async (snapshot) => {
                     const promessas = snapshot.docs.map(docSnapshot => getContextoDoAtendimento(docSnapshot));
-                    // CORREÇÃO: Resolve as promessas e DEPOIS filtra os resultados nulos
-                    atendimentosDoDia = (await Promise.all(promessas)).filter(atendimento => atendimento !== null);
+                    atendimentosDoDia = (await Promise.all(promessas)).filter(atendimento => atendimento !== null); // Correção do filtro null
                     renderizarCards();
                 });
             }
-            
+
             function renderizarCards() {
                 cardsContainer.innerHTML = '';
                 if (atendimentosDoDia.length === 0) {
@@ -156,42 +149,62 @@
                 });
             }
 
+            // ===================================================================
+            // FUNÇÃO getContextoDoAtendimento MODIFICADA
+            // ===================================================================
             async function getContextoDoAtendimento(filaDocSnapshot) {
-                const atendimento = { id: filaDocSnapshot.id, ...filaDocSnapshot.data() };
-                
-                // Se for avulso ou alta programada, não precisamos buscar o tratamento
-                if (atendimento.tipoAtendimento === 'avulso') {
-                    return { ...atendimento, precisaEntrevista: false };
-                }
-                if (atendimento.tipoAtendimento === 'alta_programada') {
-                    return { ...atendimento, precisaEntrevista: true, passe_ciclo_atual: 'ALTA' };
-                }
-                // --- Fim da lógica simplificada ---
+                const atendimentoFila = { id: filaDocSnapshot.id, ...filaDocSnapshot.data() };
 
-                if (!atendimento.tratamentoId) return null;
+                // Retorna dados básicos se for avulso ou alta programada (não precisa buscar tratamento)
+                if (atendimentoFila.tipoAtendimento === 'avulso') {
+                    return { ...atendimentoFila, precisaEntrevista: false };
+                }
+                if (atendimentoFila.tipoAtendimento === 'alta_programada') {
+                    // Retorna o passeRecomendado da fila (que é o passe da 4a semana)
+                    return { ...atendimentoFila, precisaEntrevista: true, passeParaMostrar: atendimentoFila.passeRecomendado };
+                }
 
-                const tratamentoDocRef = doc(db, 'tratamentos_ae', atendimento.tratamentoId);
+                // Se for um atendimento normal ou migração de ciclo, busca o tratamento
+                if (!atendimentoFila.tratamentoId) return null;
+
+                const tratamentoDocRef = doc(db, 'tratamentos_ae', atendimentoFila.tratamentoId);
                 const tratamentoDoc = await getDoc(tratamentoDocRef);
+                // Retorna null se o tratamento associado não for encontrado
                 if (!tratamentoDoc.exists()) {
-                    return null; 
+                    console.warn(`Tratamento ${atendimentoFila.tratamentoId} não encontrado para item da fila ${atendimentoFila.id}`);
+                    return null;
                 }
                 const tratamento = tratamentoDoc.data();
-                
-                const semanaNum = atendimento.semana_atual || 1;
-                
+
+                const semanaNum = atendimentoFila.semana_atual || 1;
+
                 let precisaEntrevista = false;
                 // P3A/P3B agora tem entrevista em todas as semanas do ciclo
                 if (tratamento.passe_ciclo_atual === 'P3A' || tratamento.passe_ciclo_atual === 'P3B' || [1, 4, 5].includes(semanaNum)) {
                     precisaEntrevista = true;
                 }
-                return { ...atendimento, precisaEntrevista, passe_ciclo_atual: tratamento.passe_ciclo_atual, status_tratamento: tratamento.status };
-            }
 
+                // Retorna os dados combinados, incluindo o passeRecomendado da fila
+                return {
+                    ...atendimentoFila,
+                    precisaEntrevista,
+                    passeParaMostrar: atendimentoFila.passeRecomendado, // Usa o passe da fila para exibição
+                    status_tratamento: tratamento.status
+                };
+            }
+            // ===================================================================
+            // FIM DA MODIFICAÇÃO
+            // ===================================================================
+
+
+            // ===================================================================
+            // FUNÇÃO criarCard MODIFICADA
+            // ===================================================================
             function criarCard(atendimento) {
                 const card = document.createElement('div');
                 card.className = 'assistido-card';
                 const statusFila = atendimento.status;
-                
+
                 if (statusFila === 'chamado_passe') {
                     card.classList.add('chamado-passe');
                     card.innerHTML = `<h3>${atendimento.nomeAssistido}</h3><p class="info">Atendimento finalizado.</p>`;
@@ -209,32 +222,15 @@
                     actionsClass = 'actions-3-buttons';
                     const entrevistaChamada = statusFila === 'chamado_entrevista';
                     const entrevistaRealizada = statusFila === 'entrevista_realizada';
-                    
+
                     let entrevistaBtnDisabled = entrevistaChamada || entrevistaRealizada;
-                    let passeBtnDisabled = true; 
+                    let passeBtnDisabled = true;
                     let entrevistaRealizadaBtnDisabled = !entrevistaChamada || entrevistaRealizada;
 
-                    // ===================================================================
-                    // LÓGICA DE BOTÕES MODIFICADA (AJUSTE 2)
-                    // ===================================================================
-
-                    // Esta verificação de 'decisao_registrada' não é mais necessária, pois a decisão
-                    // já foi tomada para o item estar na fila na 5a semana.
-                    // Bloco removido:
-                    // if (atendimento.semana_atual === 5 && !atendimento.decisao_registrada) { ... }
-
                     if (entrevistaRealizada) {
-                        // Se for 'alta_programada', o botão de passe NUNCA é habilitado
+                        // Se NÃO for 'alta_programada', habilita o botão de passe
                         if (atendimento.tipoAtendimento !== 'alta_programada') {
-                            
-                            // Se for semana 5 (e não for alta), é uma migração de ciclo. Habilita o passe.
-                            if (atendimento.semana_atual === 5) {
-                                passeBtnDisabled = false;
-                            }
-                            // Se for semana 1-4, habilita o passe
-                            else {
-                                passeBtnDisabled = false;
-                            }
+                           passeBtnDisabled = false;
                         }
                         // Se for 'alta_programada', passeBtnDisabled permanece 'true' (desabilitado)
                     }
@@ -248,61 +244,70 @@
 
                 if (statusFila === 'chamado_entrevista') card.classList.add('chamado-entrevista');
                 if (statusFila === 'entrevista_realizada') card.classList.add('entrevista-realizada');
-                
-                // --- LÓGICA DE LABEL E COR MODIFICADA ---
+
+
+                // Define o label e a cor do card
                 let tipoLabel = '';
+                // Usa o passeParaMostrar (que veio do passeRecomendado da fila) para a label
+                const passeExibicao = atendimento.passeParaMostrar || 'N/A';
+
                 if (atendimento.tipoAtendimento === 'avulso') {
-                    tipoLabel = `Passe Avulso (${atendimento.passeRecomendado || 'N/A'})`;
+                    tipoLabel = `Passe Avulso (${passeExibicao})`;
                 } else if (atendimento.tipoAtendimento === 'alta_programada') {
                     tipoLabel = `ENTREVISTA DE ALTA`;
                     card.classList.add('card-alta'); // Adiciona borda vermelha
                 } else {
-                    tipoLabel = `Assistência (${atendimento.passe_ciclo_atual || 'N/A'})`;
+                    // Para tratamentos normais ou migrações (semana 1), mostra o passe correto
+                    tipoLabel = `Assistência (${passeExibicao})`;
                 }
-                // --- FIM DA MODIFICAÇÃO ---
-                
+
                 card.innerHTML = `
                     <h3>${atendimento.nomeAssistido}</h3>
                     <p class="info">
                         Tipo: <strong>${tipoLabel}</strong><br>
-                        Semana: <strong>${atendimento.semana_atual || 1}</strong><br>
+                        Semana: <strong>${atendimento.semana_atual || 1}</strong><br> {/* Usa semana_atual da fila */}
                         Entrevista hoje: <strong>${atendimento.precisaEntrevista ? 'Sim' : 'Não'}</strong>
                     </p>
                     <div class="${actionsClass}">${buttonsHtml}</div>
                     ${avisoHtml}`;
-                
+
                 return card;
             }
+            // ===================================================================
+            // FIM DA MODIFICAÇÃO
+            // ===================================================================
+
 
             async function atualizarPainelTV(chamadaAtual, novoStatus) {
-                const passe = chamadaAtual.passeRecomendado || chamadaAtual.passe_ciclo_atual;
-                
+                // Usa o passeParaMostrar para definir a sala
+                const passe = chamadaAtual.passeParaMostrar;
+
                 const salas = {
                     'P1': 'SALA 1', 'P2': 'SALA 2', 'P3A': 'SALA 1', 'P3B': 'SALA 1',
                     'P4A': 'SALA 2', 'P4B': 'SALA 2', 'CH': 'SALA 2'
                 };
-                
+
                 let salaDestino = 'ENCAMINHAMENTO';
                 if (novoStatus === 'chamado_entrevista') {
                     salaDestino = 'ENTREVISTA';
                 } else if (novoStatus === 'chamado_passe' && passe && salas[passe]) {
                     salaDestino = salas[passe];
+                } else if (novoStatus === 'chamado_passe' && chamadaAtual.tipoAtendimento === 'alta_programada') {
+                     // Caso especial: se for alta, não deveria chamar pro passe, mas por segurança...
+                     salaDestino = 'SAÍDA'; // Ou alguma outra indicação
                 }
+
 
                 const painelAtualDoc = await getDoc(painelEstadoRef);
                 const painelData = painelAtualDoc.exists() ? painelAtualDoc.data() : { historico: [] };
-                
+
                 let novoHistorico = [];
-                if (painelData.nome) { 
-                    novoHistorico.push({
-                        nome: painelData.nome,
-                        sala: painelData.sala
-                    });
+                if (painelData.nome) {
+                    novoHistorico.push({ nome: painelData.nome, sala: painelData.sala });
                 }
                 if (painelData.historico) {
                     novoHistorico = novoHistorico.concat(painelData.historico);
                 }
-                
                 novoHistorico = novoHistorico.slice(0, 4);
 
                 const dadosParaAtualizar = {
@@ -320,64 +325,61 @@
                 const id = target.dataset.id;
                 if (!id || target.disabled) return;
 
-                const atendimentoChamado = atendimentosDoDia.find(a => a.id === id);
-                if (!atendimentoChamado) return;
-                
+                // Encontra o atendimento na lista JÁ FILTRADA de nulos
+                const atendimentoChamado = atendimentosDoDia.find(a => a && a.id === id);
+                if (!atendimentoChamado) {
+                     console.error(`Atendimento com ID ${id} não encontrado na lista 'atendimentosDoDia'.`);
+                     return; // Adiciona uma proteção extra
+                }
+
                 target.disabled = true;
 
                 try {
                     if (target.classList.contains('btn-chamar-entrevista')) {
                         await atualizarPainelTV(atendimentoChamado, 'chamado_entrevista');
                         await updateDoc(doc(db, 'fila_atendimento_ae', id), { status: 'chamado_entrevista' });
-                    
-                    // ===================================================================
-                    // LÓGICA DO BOTÃO 2 MODIFICADA (AJUSTE 2 FINAL)
-                    // ===================================================================
+
                     } else if (target.classList.contains('btn-entrevista-realizada')) {
-                        
-                        // --- CASO A: É UMA ENTREVISTA DE ALTA ---
+
                         if (atendimentoChamado.tipoAtendimento === 'alta_programada') {
-                            
+
                             if (confirm(`Confirmar encerramento do tratamento de ${atendimentoChamado.nomeAssistido} por ALTA?`)) {
                                 const batch = writeBatch(db);
-                                
-                                // 1. Atualiza o tratamento para "concluido_com_alta"
                                 const tratamentoDocRef = doc(db, 'tratamentos_ae', atendimentoChamado.tratamentoId);
                                 batch.update(tratamentoDocRef, {
                                     status: 'concluido_com_alta',
                                     dataFim: serverTimestamp()
                                 });
-
-                                // 2. Deleta o item da fila, pois o atendimento acabou (sem passe)
-                                batch.delete(doc(db, 'fila_atendimento_ae', id));
-
+                                batch.delete(doc(db, 'fila_atendimento_ae', id)); // Remove da fila
                                 await batch.commit();
-                                
-                                registrarLog('Tratamento Encerrado por Alta (AE)', {
-                                    assistidoId: atendimentoChamado.assistidoId,
-                                    assistidoNome: atendimentoChamado.nomeAssistido,
-                                    tratamentoId: atendimentoChamado.tratamentoId
-                                });
+                                registrarLog('Tratamento Encerrado por Alta (AE)', { assistidoId: atendimentoChamado.assistidoId, assistidoNome: atendimentoChamado.nomeAssistido, tratamentoId: atendimentoChamado.tratamentoId });
                             } else {
-                                target.disabled = false; // Reabilita o botão se o usuário cancelar
+                                target.disabled = false;
                             }
-
-                        // --- CASO B: É UMA ENTREVISTA NORMAL (Semana 1, 4, P3, ou 5 de Migração) ---
                         } else {
+                            // Se for entrevista normal (ou migração), apenas atualiza o status na fila
                             await updateDoc(doc(db, 'fila_atendimento_ae', id), { status: 'entrevista_realizada' });
+                            // Reabilita o botão para permitir correções se necessário (ou remove essa linha se não quiser permitir)
+                            target.disabled = false;
                         }
-                    // ===================================================================
-                    // FIM DA MODIFICAÇÃO
-                    // ===================================================================
 
                     } else if (target.classList.contains('btn-chamar-passe')) {
+                         // Adiciona uma checagem extra para garantir que não chame para passe em caso de alta
+                         if (atendimentoChamado.tipoAtendimento === 'alta_programada') {
+                             alert("Este assistido está de alta e não deve ser chamado para o passe.");
+                             target.disabled = true; // Mantém desabilitado
+                             return;
+                         }
                         await atualizarPainelTV(atendimentoChamado, 'chamado_passe');
                         await updateDoc(doc(db, 'fila_atendimento_ae', id), { status: 'chamado_passe' });
                     }
                 } catch (error) {
                     console.error("Erro ao processar chamada:", error);
                     alert("Ocorreu um erro. Tente novamente.");
-                    target.disabled = false;
+                    // Tenta reabilitar o botão em caso de erro, exceto se for o de alta que falhou na confirmação
+                    if (!(target.classList.contains('btn-entrevista-realizada') && atendimentoChamado.tipoAtendimento === 'alta_programada')) {
+                       target.disabled = false;
+                    }
                 }
             });
         }
