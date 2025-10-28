@@ -5,9 +5,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Recepção - Atendimento Espiritual</title>
     <style>
-        :root { 
-            --cor-primaria: #007bff; 
-            --cor-borda: #ddd; 
+        :root {
+            --cor-primaria: #007bff;
+            --cor-borda: #ddd;
             --fundo-desabilitado: #f9f9f9;
             --cor-presente: #28a745;
             --cor-pendente: #6c757d;
@@ -33,20 +33,22 @@
         .form-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; align-items: end; }
         .hidden { display: none; }
         #lista-ativos { list-style-type: none; padding: 0; display: flex; flex-wrap: wrap; gap: 10px; }
-        #lista-ativos li { 
-            background-color: var(--cor-pendente); 
-            color: white; 
-            padding: 10px 15px; 
-            border-radius: 20px; 
-            cursor: pointer; 
-            transition: background-color 0.2s; 
-            font-size: 0.9em; 
+        #lista-ativos li {
+            background-color: var(--cor-pendente);
+            color: white;
+            padding: 10px 15px;
+            border-radius: 20px;
+            cursor: pointer;
+            transition: background-color 0.2s;
+            font-size: 0.9em;
         }
         #lista-ativos li:hover { opacity: 0.8; }
-        
+
+        /* --- NOVAS CORES PARA O ACESSO RÁPIDO --- */
         #lista-ativos li.status-presente { background-color: var(--cor-presente); }
         #lista-ativos li.status-alta-programada { background-color: var(--cor-alta); }
         #lista-ativos li.status-novo-ciclo { background-color: var(--cor-migracao); }
+        /* --- FIM DAS NOVAS CORES --- */
 
         .actions-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-top: 20px; }
         .actions-grid-freq { display: flex; gap: 15px; margin-top: 10px; }
@@ -75,7 +77,7 @@
                 </div>
             </div>
         </fieldset>
-        
+
         <hr style="width:100%; margin: 30px 0; border: 1px solid #eee;">
 
         <form id="ficha-atendimento" onsubmit="return false;">
@@ -99,7 +101,7 @@
         import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
         import { getFirestore, collection, addDoc, doc, getDoc, serverTimestamp, query, where, limit, getDocs, Timestamp, orderBy, updateDoc, increment, writeBatch } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
         import { protegerPagina } from '/auth.js';
-        
+
         const firebaseConfig = {
             apiKey: "AIzaSyBV7RPjk3cFTqL-aIpflJcUojKg1ZXMLuU",
             authDomain: "voluntarios-ativos---cepat.firebaseapp.com",
@@ -109,11 +111,11 @@
             appId: "1:66122858261:web:7fa21f1805463b5c08331c"
         };
         initializeApp(firebaseConfig);
-        
+
         protegerPagina(['recepcionista', 'diretor', 'conselheiro', 'tesoureiro', 'entrevistador', 'super-admin']).then(user => {
             document.getElementById('main-content').classList.remove('hidden');
             inicializarPagina(user);
-        }).catch(err => { 
+        }).catch(err => {
             document.getElementById('acesso-negado').classList.remove('hidden');
             document.getElementById('main-content').classList.add('hidden');
         });
@@ -159,41 +161,43 @@
                     console.error("Erro ao registrar log:", error);
                 }
             }
-            
+
             const capitalizarNome = (nome) => {
                 if (!nome) return '';
                 return nome.toLowerCase().replace(/(^|\s)\S/g, L => L.toUpperCase());
             };
 
             async function calcularSemanaAtual(tratamentoId) {
+                // Esta função agora chama getContagemSemanasValidas usando a data de HOJE
                 if (!tratamentoId) return 1;
-                // Busca atendimentos válidos (não-falta) deste tratamento
-                const qHistorico = query(
-                    atendimentosRef, 
-                    where("tratamentoId", "==", tratamentoId),
-                    where("tipo", "!=", "falta")
-                );
-                const historicoSnapshot = await getDocs(qHistorico);
-                // A semana atual é o número de atendimentos válidos + 1
-                return historicoSnapshot.size + 1;
+                const hojeInicio = new Date();
+                hojeInicio.setHours(0, 0, 0, 0);
+                const contagem = await getContagemSemanasValidas(tratamentoId, Timestamp.fromDate(hojeInicio));
+                return contagem + 1;
             }
-            
-            // ===================================================================
-            // INÍCIO DA MODIFICAÇÃO (Cálculo de semana mais robusto)
-            // ===================================================================
-            async function getContagemSemanasValidas(tratamentoId) {
+
+            async function getContagemSemanasValidas(tratamentoId, dataLimite = Timestamp.now()) {
+                // Conta atendimentos válidos ANTES da dataLimite
                  if (!tratamentoId) return 0;
                  const qHistorico = query(
-                    atendimentosRef, 
+                    atendimentosRef,
                     where("tratamentoId", "==", tratamentoId),
-                    where("tipo", "!=", "falta")
+                    where("dataAtendimento", "<", dataLimite) // Apenas uma desigualdade
                 );
                 const historicoSnapshot = await getDocs(qHistorico);
-                return historicoSnapshot.size;
+
+                // Filtra o tipo 'falta' no lado do cliente
+                let atendimentosPassadosValidos = 0;
+                historicoSnapshot.forEach(doc => {
+                    const data = doc.data();
+                    // Garante que não conta placeholders sem data ou faltas
+                    if (data.tipo !== 'falta' && data.dataAtendimento !== null) {
+                        atendimentosPassadosValidos++;
+                    }
+                });
+                return atendimentosPassadosValidos;
             }
-            // ===================================================================
-            // FIM DA MODIFICAÇÃO
-            // ===================================================================
+
 
             const resetarFormularioBusca = () => {
                 assistidoSelecionado = null;
@@ -206,7 +210,7 @@
                 ui.nomeInput.disabled = false;
                 ui.nomeInput.focus();
             };
-            
+
             const validarDadosPessoais = () => {
                 if (!ui.nomeInput.value || !ui.telefoneInput.value || !ui.dnInput.value) {
                     alert("Por favor, preencha os campos Nome, Telefone e DN antes de continuar.");
@@ -218,29 +222,29 @@
             const criarNovoAssistidoSeNaoExistir = async () => {
                 if (assistidoSelecionado) return { id: assistidoSelecionado.id, nome: assistidoSelecionado.nome };
                 if (!validarDadosPessoais()) throw new Error("Dados pessoais incompletos");
-                
+
                 const nomeOriginal = ui.nomeInput.value.trim();
                 const nomeCapitalizado = capitalizarNome(nomeOriginal);
 
-                const novoAssistidoData = { 
-                    nome: nomeCapitalizado, 
-                    nome_lower: nomeCapitalizado.toLowerCase(), 
-                    telefone: ui.telefoneInput.value, 
-                    dn: ui.dnInput.value, 
-                    criadoEm: serverTimestamp(), 
-                    criadoPor: { uid: user.uid, nome: user.displayName } 
+                const novoAssistidoData = {
+                    nome: nomeCapitalizado,
+                    nome_lower: nomeCapitalizado.toLowerCase(),
+                    telefone: ui.telefoneInput.value,
+                    dn: ui.dnInput.value,
+                    criadoEm: serverTimestamp(),
+                    criadoPor: { uid: user.uid, nome: user.displayName }
                 };
                 const docRef = await addDoc(assistidosRef, novoAssistidoData);
                 assistidoSelecionado = { id: docRef.id, ...novoAssistidoData };
-                
+
                 registrarLog('Criação de Novo Assistido (AE)', {
                     assistidoId: docRef.id,
                     assistidoNome: nomeCapitalizado
                 });
-                
+
                 return { id: docRef.id, nome: nomeCapitalizado };
             };
-            
+
             const checarHistoricoEExibirBotao = async (assistidoId) => {
                 if (!assistidoId) return;
                 const qTratamentos = query(tratamentosRef, where("assistidoId", "==", assistidoId), limit(1));
@@ -254,14 +258,14 @@
                     ui.btnVerHistorico.classList.add('hidden');
                 }
             };
-            
+
             const carregarTratamentosAtivos = async () => {
                 ui.listaAtivos.innerHTML = '<li>Carregando...</li>';
                 metadadosTratamento = {};
 
                 const q = query(tratamentosRef, where("status", "==", "ativo"));
                 const snapshot = await getDocs(q);
-                
+
                 if (snapshot.empty) {
                     ui.listaAtivos.innerHTML = '<li>Nenhum tratamento ativo no momento.</li>';
                     return;
@@ -275,46 +279,73 @@
                 const promessas = snapshot.docs.map(async (tratamentoDoc) => {
                     const tratamento = { id: tratamentoDoc.id, ...tratamentoDoc.data()};
                     if (!tratamento.assistidoId) return null;
-                    
+
                     const assistidoDocRef = doc(db, 'assistidos', tratamento.assistidoId);
-                    
-                    const qFrequenciaHoje = query(filaRef, 
+
+                    const qFrequenciaHoje = query(filaRef,
                         where("assistidoId", "==", tratamento.assistidoId),
                         where("chegadaEm", ">=", Timestamp.fromDate(hojeInicio)),
                         where("chegadaEm", "<=", Timestamp.fromDate(hojeFim)),
                         limit(1)
                     );
-                    
-                    // --- MODIFICAÇÃO (AJUSTE 2 - ETAPA 3) ---
-                    // Contar semanas válidas e checar placeholder da 5ª semana
-                    const contagemSemanas = await getContagemSemanasValidas(tratamento.id);
-                    let placeholderSnapshot = null;
-                    
-                    // Só procuramos placeholder se ele estiver na 4ª semana (indo para a 5ª)
-                    // E se o placeholder já não tiver sido usado (dataAtendimento == null)
+
+                    const [assistidoDoc, frequenciaSnapshot] = await Promise.all([
+                        getDoc(assistidoDocRef),
+                        getDocs(qFrequenciaHoje)
+                    ]);
+
+                    let statusHoje = 'pendente';
+                    let placeholderSnapshot = null; // <- Inicializado aqui
+
+                    // Conta semanas válidas ANTES de hoje
+                    const contagemSemanas = await getContagemSemanasValidas(tratamento.id, Timestamp.fromDate(hojeInicio));
+
+                    // ===================================================================
+                    // ADIÇÃO DOS CONSOLE.LOG PARA DEBUG
+                    // ===================================================================
+                    if (tratamento.id === 'wCSk2Rb05HPsTiqqts8L') { // <--- COLOQUE O ID DO TRATAMENTO AQUI
+                        console.log(`[Debug ${tratamento.assistidoId}] Contagem Semanas Válidas (antes de hoje): ${contagemSemanas}`);
+                    }
+                    // ===================================================================
+
+                    // Só procura placeholder se ele completou 4 semanas válidas (indo para a 5ª)
                     if (contagemSemanas === 4) {
-                        const qPlaceholder5Semana = query(atendimentosRef,
+                         const qPlaceholder5Semana = query(atendimentosRef,
                             where("tratamentoId", "==", tratamento.id),
                             where("semana", "==", 5),
                             where("decisao_pre_registrada", "==", true),
-                            where("dataAtendimento", "==", null), 
+                            where("dataAtendimento", "==", null), // Só pega se ainda não marcou presença
                             limit(1)
                         );
                         placeholderSnapshot = await getDocs(qPlaceholder5Semana);
+
+                        // ===================================================================
+                        // ADIÇÃO DOS CONSOLE.LOG PARA DEBUG
+                        // ===================================================================
+                        if (tratamento.id === 'wCSk2Rb05HPsTiqqts8L') { // <--- COLOQUE O ID DO TRATAMENTO AQUI
+                           console.log(`[Debug ${tratamento.assistidoId}] Buscou Placeholder? Sim. Encontrou? ${!placeholderSnapshot.empty}`);
+                           if (!placeholderSnapshot.empty) {
+                               console.log("[Debug Placeholder Data]", placeholderSnapshot.docs[0].data());
+                           }
+                        }
+                        // ===================================================================
+                    } else {
+                         // ===================================================================
+                         // ADIÇÃO DOS CONSOLE.LOG PARA DEBUG
+                         // ===================================================================
+                         if (tratamento.id === 'wCSk2Rb05HPsTiqqts8L') { // <--- COLOQUE O ID DO TRATAMENTO AQUI
+                            console.log(`[Debug ${tratamento.assistidoId}] Buscou Placeholder? Não (Contagem semanas != 4)`);
+                         }
+                         // ===================================================================
                     }
 
-                    const [assistidoDoc, frequenciaSnapshot] = await Promise.all([
-                        getDoc(assistidoDocRef), 
-                        getDocs(qFrequenciaHoje)
-                    ]);
-                    
-                    let statusHoje = 'pendente'; 
-                    
+                    // Define o statusHoje baseado nas verificações
                     if (!frequenciaSnapshot.empty) {
                         statusHoje = 'presente';
                     } else if (placeholderSnapshot && !placeholderSnapshot.empty) {
                         const placeholderData = { id: placeholderSnapshot.docs[0].id, ...placeholderSnapshot.docs[0].data() };
-                        
+
+                        // Armazena dados para botões de presença/falta
                         metadadosTratamento[tratamento.id] = {
                             atendimento5semana: placeholderData,
                             semanaAtual: 5 // Confirma que é a semana 5
@@ -326,13 +357,12 @@
                             statusHoje = 'novo-ciclo';
                         }
                     } else {
-                         // Armazena a semana atual para o botão de falta
+                         // Armazena a semana atual para o botão de falta (se não for 5ª com placeholder)
                          metadadosTratamento[tratamento.id] = {
                             semanaAtual: contagemSemanas + 1
                          };
                     }
-                    // --- FIM DA MODIFICAÇÃO ---
-                    
+
                     return assistidoDoc.exists() ? { assistido: {id: assistidoDoc.id, ...assistidoDoc.data()}, tratamento, statusHoje } : null;
                 });
 
@@ -344,7 +374,7 @@
                     const li = document.createElement('li');
                     li.textContent = item.assistido.nome;
                     li.className = `status-${item.statusHoje}`;
-                    
+
                     if (item.statusHoje === 'alta-programada') {
                         li.title = "Decisão: ALTA PROGRAMADA (Aguardando Entrevista)";
                     } else if (item.statusHoje === 'novo-ciclo') {
@@ -361,7 +391,7 @@
                     ui.listaAtivos.appendChild(li);
                 });
             };
-            
+
             const handlePhone = (event) => {
                 let input = event.target.value.replace(/\D/g, '');
                 input = input.substring(0, 11);
@@ -370,16 +400,12 @@
                 event.target.value = input;
             };
 
-            // ===================================================================
-            // INÍCIO DA ÁREA MODIFICADA (AJUSTE 2 - ETAPA 4 CORRIGIDA)
-            // ===================================================================
-
-            ui.btnMarcarPresenca.addEventListener('click', async (e) => {
+             ui.btnMarcarPresenca.addEventListener('click', async (e) => {
                 e.target.disabled = true;
                 const hojeInicio = new Date();
                 hojeInicio.setHours(0, 0, 0, 0);
-                
-                const qCheck = query(filaRef, 
+
+                const qCheck = query(filaRef,
                     where("assistidoId", "==", assistidoSelecionado.id),
                     where("chegadaEm", ">=", Timestamp.fromDate(hojeInicio)),
                     limit(1)
@@ -391,21 +417,21 @@
                     return;
                 }
 
-                const dataAtual = serverTimestamp();
+                const dataAtual = serverTimestamp(); // Usar serverTimestamp para consistência
                 const batch = writeBatch(db);
 
                 try {
                     const dadosMeta = metadadosTratamento[tratamentoAtivoSelecionado.id];
-                    
-                    // 2. Verificar se este clique é uma ativação de 5ª semana
+
+                    // 2. Verificar se este clique é uma ativação de 5ª semana (usando dadosMeta)
                     if (dadosMeta && dadosMeta.atendimento5semana) {
                         const atendimentoPreRegistrado = dadosMeta.atendimento5semana;
                         const atendimentoDocRef = doc(db, 'atendimentos_ae', atendimentoPreRegistrado.id);
-                        
-                        // --- CASO A: ALTA PROGRAMADA (FLUXO CORRIGIDO) ---
+
+                        // --- CASO A: ALTA PROGRAMADA ---
                         if (atendimentoPreRegistrado.tipo === 'alta_programada') {
-                            
-                            // 1. Atualiza o placeholder da 5ª semana com a data de hoje
+
+                            // 1. Atualiza o placeholder da 5ª semana com a data de hoje (serverTimestamp)
                             batch.update(atendimentoDocRef, {
                                 dataAtendimento: dataAtual
                             });
@@ -417,36 +443,34 @@
                                 tratamentoId: tratamentoAtivoSelecionado.id,
                                 atendimentoId: atendimentoDocRef.id,
                                 status: 'aguardando_entrevista_ou_passe',
-                                passeRecomendado: atendimentoPreRegistrado.passeRecomendado, // Passe da 4ª semana
+                                passeRecomendado: atendimentoPreRegistrado.passeRecomendado,
                                 semana_atual: 5,
-                                tipoAtendimento: 'alta_programada', // Flag para o Encaminhamento.html
+                                tipoAtendimento: 'alta_programada', // Flag crucial
                                 chegadaEm: dataAtual,
                                 recepcionista: { uid: user.uid, nome: user.displayName }
                             });
-                            
+
                             await batch.commit();
-                            
+
                             registrarLog('Ativação de Entrevista de Alta (AE)', {
                                 assistidoId: assistidoSelecionado.id,
                                 assistidoNome: assistidoSelecionado.nome,
                                 tratamentoId: tratamentoAtivoSelecionado.id
                             });
-                            
+
                             alert(`Presença registrada para ${assistidoSelecionado.nome}. Assistido encaminhado para a ENTREVISTA DE ALTA (não haverá passe).`);
 
                         // --- CASO B: NOVO CICLO PROGRAMADO ---
                         } else if (atendimentoPreRegistrado.passePara) {
-                            
+
                             const novoPasse = atendimentoPreRegistrado.passePara;
                             const tratamentoAtualDocRef = doc(db, 'tratamentos_ae', tratamentoAtivoSelecionado.id);
 
-                            // 1. Encerra o tratamento antigo
                             batch.update(tratamentoAtualDocRef, {
                                 status: 'concluido_por_reavaliacao',
                                 dataFim: dataAtual
                             });
 
-                            // 2. Cria o novo tratamento
                             const novoTratamentoRef = doc(tratamentosRef);
                             batch.set(novoTratamentoRef, {
                                 assistidoId: assistidoSelecionado.id,
@@ -456,16 +480,14 @@
                                 passe_ciclo_atual: novoPasse
                             });
 
-                            // 3. Migra o atendimento (placeholder) para o novo tratamento
                             batch.update(atendimentoDocRef, {
                                 dataAtendimento: dataAtual,
                                 tratamentoId: novoTratamentoRef.id,
-                                semana: 1, // Vira semana 1
+                                semana: 1,
                                 passeRecomendado: novoPasse,
-                                tipo: 'tratamento_semanal' // Garante que é um atendimento normal
+                                tipo: 'tratamento_semanal'
                             });
 
-                            // 4. Adiciona na fila de hoje (já como Semana 1 do novo ciclo)
                             batch.set(doc(filaRef), {
                                 assistidoId: assistidoSelecionado.id,
                                 nomeAssistido: assistidoSelecionado.nome,
@@ -473,13 +495,13 @@
                                 atendimentoId: atendimentoDocRef.id,
                                 status: 'aguardando_entrevista_ou_passe',
                                 passeRecomendado: novoPasse,
-                                semana_atual: 1, 
+                                semana_atual: 1,
                                 chegadaEm: dataAtual,
                                 recepcionista: { uid: user.uid, nome: user.displayName }
                             });
-                            
+
                             await batch.commit();
-                            
+
                             registrarLog('Ativação de Novo Ciclo (AE)', {
                                 assistidoId: assistidoSelecionado.id,
                                 assistidoNome: assistidoSelecionado.nome,
@@ -487,15 +509,15 @@
                                 tratamentoNovoId: novoTratamentoRef.id,
                                 novoPasse: novoPasse
                             });
-                            
+
                             alert(`Presença registrada. ${assistidoSelecionado.nome} iniciou um NOVO CICLO (Semana 1, Passe ${novoPasse}) e foi enviado para a fila.`);
                         }
 
                     // --- CASO C: FLUXO NORMAL (Semanas 1-4) ---
                     } else {
-                        const semanaAtual = dadosMeta.semanaAtual || await calcularSemanaAtual(tratamentoAtivoSelecionado.id);
+                        const semanaAtual = dadosMeta?.semanaAtual || await calcularSemanaAtual(tratamentoAtivoSelecionado.id);
                         const passeDoCiclo = tratamentoAtivoSelecionado.passe_ciclo_atual;
-                        
+
                         const placeholderHistoricoRef = doc(collection(db, 'atendimentos_ae'));
                         batch.set(placeholderHistoricoRef, {
                             assistidoId: assistidoSelecionado.id,
@@ -506,9 +528,9 @@
                             entrevistador: 'Aguardando Detalhes',
                             passeRecomendado: passeDoCiclo,
                             notas: '',
-                            detalhes_preenchidos: false 
+                            detalhes_preenchidos: false
                         });
-                        
+
                         batch.set(doc(filaRef), {
                             assistidoId: assistidoSelecionado.id,
                             nomeAssistido: assistidoSelecionado.nome,
@@ -516,15 +538,15 @@
                             atendimentoId: placeholderHistoricoRef.id,
                             status: 'aguardando_entrevista_ou_passe',
                             passeRecomendado: passeDoCiclo,
-                            semana_atual: semanaAtual, 
+                            semana_atual: semanaAtual,
                             chegadaEm: dataAtual,
                             recepcionista: { uid: user.uid, nome: user.displayName }
                         });
-                        
+
                         await batch.commit();
-                        
+
                         alert(`Presença de ${assistidoSelecionado.nome} (Semana ${semanaAtual}) registrada com sucesso!`);
-                        
+
                         registrarLog('Marcação de Presença (AE)', {
                             assistidoId: assistidoSelecionado.id,
                             assistidoNome: assistidoSelecionado.nome,
@@ -542,33 +564,25 @@
                 }
             });
 
-            // ===================================================================
-            // FIM DA ÁREA MODIFICADA (AJUSTE 2 - ETAPA 4 CORRIGIDA)
-            // ===================================================================
-
-
-            // ===================================================================
-            // INÍCIO DA ÁREA MODIFICADA (AJUSTE 1: REGRAS DE FALTA)
-            // ===================================================================
-
-            ui.btnMarcarFaltaRapido.addEventListener('click', async (e) => {
+             ui.btnMarcarFaltaRapido.addEventListener('click', async (e) => {
                 e.target.disabled = true;
                 if (confirm(`Confirmar uma falta para ${assistidoSelecionado.nome}?`)) {
-                    
+
                     const tratamentoDocRef = doc(db, 'tratamentos_ae', tratamentoAtivoSelecionado.id);
                     const novoTotalFaltas = (tratamentoAtivoSelecionado.faltas_acumuladas || 0) + 1;
                     const passeDoCiclo = tratamentoAtivoSelecionado.passe_ciclo_atual;
-                    
-                    // Pega a semana atual que já calculamos ao carregar a lista
+
+                    // Usa a semana atual armazenada ou recalcula se não encontrada
                     const semanaAtual = metadadosTratamento[tratamentoAtivoSelecionado.id]?.semanaAtual || await calcularSemanaAtual(tratamentoAtivoSelecionado.id);
-                    
+
                     const batch = writeBatch(db);
-                    
-                    batch.set(doc(atendimentosRef), { 
-                        assistidoId: assistidoSelecionado.id, 
-                        tratamentoId: tratamentoAtivoSelecionado.id, 
-                        tipo: 'falta', 
-                        dataAtendimento: serverTimestamp(),
+                    const dataAtualFalta = serverTimestamp(); // Usar server timestamp
+
+                    batch.set(doc(atendimentosRef), {
+                        assistidoId: assistidoSelecionado.id,
+                        tratamentoId: tratamentoAtivoSelecionado.id,
+                        tipo: 'falta',
+                        dataAtendimento: dataAtualFalta, // Usar timestamp do servidor
                         semana: semanaAtual
                     });
 
@@ -582,29 +596,32 @@
                         if (novoTotalFaltas >= 1) {
                             encerrarTratamento = true;
                             motivo = 'Tratamento encerrado automaticamente por falta (Tolerância Zero para P3A/P3B).';
+                        } else {
+                            // Este else não deveria acontecer com >= 1, mas incluído por segurança
+                            motivo = `Falta registrada com sucesso! Total de faltas: ${novoTotalFaltas}.`;
                         }
-                    
+
                     // REGRA A: Passes Padrão
                     } else {
                         // REGRA A.1: Semana 5 Neutra
                         if (semanaAtual === 5) {
                             encerrarTratamento = false;
                             motivo = `Falta registrada (Semana 5). Total de faltas: ${novoTotalFaltas}.`;
-                        
+
                         // REGRA A.2: Semanas 1-4
                         } else if (novoTotalFaltas >= 2) {
                             encerrarTratamento = true;
                             motivo = `Falta registrada. ATENÇÃO: Tratamento encerrado automaticamente por exceder o limite de 2 faltas.`;
-                        
+
                         } else {
                             motivo = `Falta registrada com sucesso! Total de faltas: ${novoTotalFaltas}.`;
                         }
                     }
 
                     if (encerrarTratamento) {
-                        batch.update(tratamentoDocRef, { 
+                        batch.update(tratamentoDocRef, {
                             status: 'encerrado_por_falta',
-                            dataFim: serverTimestamp()
+                            dataFim: dataAtualFalta // Usar timestamp do servidor
                         });
                         registrarLog('Encerramento por Falta (AE)', {
                             assistidoId: assistidoSelecionado.id,
@@ -624,7 +641,7 @@
                             semana: semanaAtual
                         });
                     }
-                    
+
                     await batch.commit();
                     alert(motivo);
 
@@ -634,13 +651,10 @@
                 e.target.disabled = false;
             });
 
-            // ===================================================================
-            // FIM DA ÁREA MODIFICADA (AJUSTE 1)
-            // ===================================================================
 
             ui.nomeInput.addEventListener('input', async (e) => {
                 const termo = e.target.value.trim();
-                
+
                 if (assistidoSelecionado && termo.toLowerCase() !== assistidoSelecionado.nome.toLowerCase()) {
                     assistidoSelecionado = null;
                     ui.telefoneInput.value = '';
@@ -680,8 +694,8 @@
             });
 
             ui.nomeInput.addEventListener('blur', () => {
-                setTimeout(() => { 
-                    ui.searchResults.innerHTML = ''; 
+                setTimeout(() => {
+                    ui.searchResults.innerHTML = '';
                 }, 200);
             });
 
@@ -709,12 +723,12 @@
                     });
 
                     location.reload();
-                } catch(error) { 
-                    console.error("Erro ao registrar passe avulso:", error); 
+                } catch(error) {
+                    console.error("Erro ao registrar passe avulso:", error);
                     e.target.disabled = false;
                 }
             });
-            
+
             ui.btnIniciarTratamento.addEventListener('click', async (e) => {
                 e.target.disabled = true;
                 if (!validarDadosPessoais()) { e.target.disabled = false; return; }
@@ -724,11 +738,11 @@
                     const diffMs = Date.now() - idadeDate.getTime();
                     const idade = new Date(diffMs).getUTCFullYear() - 1970;
                     const passeInicial = idade >= 12 ? 'P2' : 'P4B';
-                    
+
                     const batch = writeBatch(db);
                     const novoTratamentoRef = doc(tratamentosRef);
                     batch.set(novoTratamentoRef, { assistidoId: assistidoId, dataInicio: serverTimestamp(), status: 'ativo', faltas_acumuladas: 0, passe_ciclo_atual: passeInicial });
-                    
+
                     const dataAtual = serverTimestamp();
                     const novoAtendimentoRef = doc(collection(db, 'atendimentos_ae'));
 
@@ -744,18 +758,18 @@
                         detalhes_preenchidos: false
                     });
 
-                    batch.set(doc(filaRef), { 
-                        assistidoId: assistidoId, 
-                        nomeAssistido: nomeAssistido, 
-                        tratamentoId: novoTratamentoRef.id, 
-                        atendimentoId: novoAtendimentoRef.id, 
-                        status: 'aguardando_entrevista_ou_passe', 
+                    batch.set(doc(filaRef), {
+                        assistidoId: assistidoId,
+                        nomeAssistido: nomeAssistido,
+                        tratamentoId: novoTratamentoRef.id,
+                        atendimentoId: novoAtendimentoRef.id,
+                        status: 'aguardando_entrevista_ou_passe',
                         passeRecomendado: passeInicial,
                         semana_atual: 1,
-                        chegadaEm: dataAtual, 
-                        recepcionista: { uid: user.uid, nome: user.displayName } 
+                        chegadaEm: dataAtual,
+                        recepcionista: { uid: user.uid, nome: user.displayName }
                     });
-                    
+
                     await batch.commit();
                     alert('Assistência Espiritual iniciada com sucesso e enviada para a fila!');
 
@@ -766,13 +780,13 @@
                     });
 
                     location.reload();
-                } catch(error) { 
-                    console.error("Erro ao iniciar assistência:", error); 
+                } catch(error) {
+                    console.error("Erro ao iniciar assistência:", error);
                     alert(`Ocorreu um erro: ${error.message}`);
                     e.target.disabled = false;
                 }
             });
-            
+
             ui.btnLimpar.addEventListener('click', resetarFormularioBusca);
             ui.telefoneInput.addEventListener('input', handlePhone);
 
