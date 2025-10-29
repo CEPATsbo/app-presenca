@@ -27,35 +27,45 @@
         .multiselect { position: relative; }
         .select-box { border: 1px solid #ccc; border-radius: 6px; padding: 10px; cursor: pointer; background-color: #fff; min-height: 1.5em; }
         .select-box[disabled] { background-color: var(--fundo-desabilitado); cursor: not-allowed; }
+
+        /* --- INÍCIO DAS MODIFICAÇÕES CSS --- */
         .checkboxes {
             display: none; position: absolute; background: white; border: 1px solid var(--cor-borda);
             border-radius: 6px; z-index: 100; max-height: 200px; overflow-y: auto;
-            padding: 5px 10px; /* Adicionado padding lateral */ width: 100%; box-sizing: border-box; /* Garante padding correto */
+            padding: 5px 10px; /* Mantém padding lateral */
+            /* width: 100%; */ /* REMOVIDO */
+            box-sizing: border-box;
             top: 100%;
             margin-top: 2px;
             left: 0;
+            /* NOVO: Define uma largura máxima e mínima */
+            max-width: 300px; /* Ajuste este valor conforme necessário */
+            width: max-content; /* Tenta ajustar à largura do maior conteúdo */
+            min-width: 200px; /* Garante uma largura mínima */
         }
-        /* --- NOVO: Estilos para alinhar checkboxes --- */
         .checkboxes label {
-            display: flex; /* Alinha checkbox e texto */
-            align-items: center; /* Centraliza verticalmente */
-            gap: 8px; /* Espaço entre checkbox e texto */
-            padding: 6px 0; /* Espaçamento vertical entre itens */
-            margin: 0; /* Remove margens padrão */
+            display: flex;
+            align-items: center;
+            /* NOVO: Reduzido o espaço */
+            gap: 4px; /* Diminui o espaço entre o checkbox e o texto */
+            padding: 5px 0; /* Espaçamento vertical */
+            margin: 0;
             cursor: pointer;
-            font-size: 0.95em; /* Ajuste tamanho da fonte se necessário */
+            font-size: 0.95em;
         }
         .checkboxes label input[type="checkbox"] {
-             margin: 0; /* Remove margens padrão do checkbox */
-             flex-shrink: 0; /* Impede que o checkbox encolha */
+             margin: 0;
+             flex-shrink: 0;
+             /* Opcional: Ajustar tamanho e margem direita se ainda não estiver ideal */
+             /* width: 1em; height: 1em; margin-right: 4px; */
         }
-        /* --- FIM DA MODIFICAÇÃO CSS --- */
+        /* --- FIM DAS MODIFICAÇÕES CSS --- */
+
         .checkboxes.visible { display: block; }
         .erro { color: #dc3545; font-weight: bold; text-align: center; }
         .hidden { display: none; }
         .botoes-colegiado { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 10px; }
         .data-aviso { font-weight: bold; color: #0056b3; }
-        /* Estilo para seção Colegiado travada */
         .colegiado-travado p { text-align:center; font-weight: bold; }
         .colegiado-travado .status-alta { color: #dc3545; }
         .colegiado-travado .status-novo-ciclo { color: #007bff; }
@@ -63,7 +73,7 @@
     </style>
 </head>
 <body>
-    {/* --- MODIFICAÇÃO HTML: Adicionado ID e href="#" --- */}
+    {/* */}
     <nav class="nav-voltar"><a href="#" id="btn-voltar-fecha" class="btn-voltar">⬅ Voltar para o Painel AE (Fecha Aba)</a></nav>
     <div id="acesso-negado" class="container hidden"><h1>Acesso Negado</h1></div>
 
@@ -310,17 +320,12 @@
                 const btn = document.getElementById('btn-salvar-entrevista');
                 const entrevistadorNome = document.getElementById('entrevistador-nome').value.trim();
                 const entrevistaNotas = document.getElementById('entrevista-notas').value.trim();
-                // Considera reavaliação se tiver colegiadoNotas (campo só existe no form da 5a sem / 1a pós-migração)
                 const isReavaliacaoForm = !!document.getElementById('colegiado-notas');
 
-                if (!entrevistadorNome || !entrevistaNotas) {
-                    alert('Para marcar a entrevista como concluída, os campos "Entrevistador" e "Descrição da Entrevista" são obrigatórios.'); return;
-                }
+                if (!entrevistadorNome || !entrevistaNotas) { alert('Campos "Entrevistador" e "Descrição da Entrevista" são obrigatórios.'); return; }
                 if (isReavaliacaoForm) {
                     const colegiadoNotas = document.getElementById('colegiado-notas')?.value.trim();
-                    if (!colegiadoNotas) {
-                        alert('Para reavaliação (ou 1ª semana pós-migração), "Orientações do Colegiado" é obrigatório.'); return;
-                    }
+                    if (!colegiadoNotas) { alert('Para reavaliação (ou 1ª semana pós-migração), "Orientações do Colegiado" é obrigatório.'); return; }
                 }
 
                 btn.disabled = true; btn.textContent = 'Salvando...';
@@ -337,13 +342,11 @@
                     await updateDoc(atendimentoDocRef, dadosParaAtualizar);
                     registrarLog('Preenchimento de Entrevista (AE)', { assistidoId: atendimento.assistidoId, atendimentoId: atendimento.id, semana: atendimento.semana, assistidoNome: document.getElementById('assistido-nome').textContent });
                     alert('Entrevista salva com sucesso!');
-                    manipularEstadoFormulario(true); // Trava o formulário após salvar
+                    manipularEstadoFormulario(true);
                 } catch (error) {
                     console.error("Erro ao salvar entrevista completa:", error); alert("Falha ao salvar. Tente novamente.");
-                    // Reabilita o botão em caso de erro para permitir nova tentativa
                     btn.disabled = false; btn.textContent = 'Salvar Alterações';
                 }
-                // Removido o 'finally' daqui para que o botão só reabilite em caso de erro.
             }
             // ===================================================================
             // FIM DA MODIFICAÇÃO JAVASCRIPT
@@ -358,21 +361,19 @@
                     } else if (!atendimento.detalhes_preenchidos) {
                          document.getElementById('entrevistador-nome').value = user.displayName || '';
                     } else {
-                         // Se detalhes já preenchidos mas entrevistador era placeholder, limpa
                          document.getElementById('entrevistador-nome').value = '';
                     }
                 }
                 if (document.getElementById('entrevista-notas')) { document.getElementById('entrevista-notas').value = atendimento.notas || ''; }
                 // Linhas removidas: retorno-inicio, retorno-fim
                 if (document.querySelector('input[name="evolucao"]')) {
-                    // Define 'Na Mesma' como padrão se nenhum valor estiver salvo
                     const evolucaoSalva = atendimento.evolucao || 'na_mesma';
                     const evolucaoRadio = document.querySelector(`input[name="evolucao"][value="${evolucaoSalva}"]`);
                     if (evolucaoRadio) evolucaoRadio.checked = true;
                 }
                 if (document.getElementById('colegiado-para')) {
                     if (atendimento.passePara) { document.getElementById('colegiado-para').value = atendimento.passePara; }
-                    if (atendimento.tipo === 'alta_programada' || atendimento.tipo === 'alta') { // Checa ambos os tipos
+                    if (atendimento.tipo === 'alta_programada' || atendimento.tipo === 'alta') {
                         const selectPara = document.getElementById('colegiado-para');
                         if (!selectPara.querySelector('option[value="alta"]')) { selectPara.innerHTML += `<option value="alta">ALTA PROGRAMADA</option>`; }
                         selectPara.value = 'alta';
@@ -405,13 +406,13 @@
                 const semanaNum = atendimento.semana;
                 const passeDe = atendimento.passeRecomendado;
                 const isInicioRealDeTratamento = (semanaNum === 1 && !atendimento.decisao_pre_registrada && !atendimento.passePara && atendimento.tipo !== 'alta_programada');
-                const isFaseDeDecisao5Semana = (semanaNum === 5 && atendimento.decisaoColegiadoSalva !== true && atendimento.dataAtendimento === null); // Adicionado cheque dataAtendimento === null
+                const isFaseDeDecisao5Semana = (semanaNum === 5 && atendimento.decisaoColegiadoSalva !== true && atendimento.dataAtendimento === null);
                 const incluiSecaoColegiado = (semanaNum === 5 || (semanaNum === 1 && (atendimento.passePara || atendimento.tipo === 'alta_programada')));
 
                 let legenda = '';
                 if (isInicioRealDeTratamento) { legenda = "Entrevista de Início de Tratamento"; }
                 else if (semanaNum === 1 && !isInicioRealDeTratamento) { legenda = "Detalhes do Atendimento da 1ª Semana (Novo Ciclo)"; }
-                else if (atendimento.tipo === 'alta' || atendimento.tipo === 'alta_programada') { legenda = `Entrevista de Encerramento (Alta)`; } // Legenda para alta
+                else if (atendimento.tipo === 'alta' || atendimento.tipo === 'alta_programada') { legenda = `Entrevista de Encerramento (Alta)`; }
                 else { legenda = `Detalhes do Atendimento da ${semanaNum}ª Semana`; }
 
                 const dataAtendimento = atendimento.dataAtendimento ? atendimento.dataAtendimento.toDate().toLocaleDateString('pt-br') : `<span class="data-aviso">Decisão Pré-Registro (Aguardando Presença)</span>`;
@@ -470,7 +471,7 @@
             // FIM DA MODIFICAÇÃO JAVASCRIPT
             // ===================================================================
 
-        }
+        } // Fim da função inicializarPagina
     </script>
 </body>
 </html>
