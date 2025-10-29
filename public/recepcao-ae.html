@@ -146,7 +146,7 @@
             };
 
             async function registrarLog(acao, detalhes) {
-                try {
+                 try {
                     await addDoc(logAuditoriaRef, {
                         timestamp: serverTimestamp(),
                         autor: { uid: user.uid, nome: user.displayName || 'Usuário do Sistema' },
@@ -227,7 +227,7 @@
                 const docRef = await addDoc(assistidosRef, novoAssistidoData);
                 assistidoSelecionado = { id: docRef.id, ...novoAssistidoData };
 
-                registrarLog('Criação de Novo Assistido (AE)', {
+                await registrarLog('Criação de Novo Assistido (AE)', {
                     assistidoId: docRef.id,
                     assistidoNome: nomeCapitalizado
                 });
@@ -252,116 +252,51 @@
             const carregarTratamentosAtivos = async () => {
                 ui.listaAtivos.innerHTML = '<li>Carregando...</li>';
                 metadadosTratamento = {};
-
                 const q = query(tratamentosRef, where("status", "==", "ativo"));
                 const snapshot = await getDocs(q);
-
-                if (snapshot.empty) {
-                    ui.listaAtivos.innerHTML = '<li>Nenhum tratamento ativo no momento.</li>';
-                    return;
-                }
-
-                const hojeInicio = new Date();
-                hojeInicio.setHours(0, 0, 0, 0);
-                const hojeFim = new Date();
-                hojeFim.setHours(23, 59, 59, 999);
+                if (snapshot.empty) { ui.listaAtivos.innerHTML = '<li>Nenhum tratamento ativo.</li>'; return; }
+                const hojeInicio = new Date(); hojeInicio.setHours(0, 0, 0, 0);
+                const hojeFim = new Date(); hojeFim.setHours(23, 59, 59, 999);
 
                 const promessas = snapshot.docs.map(async (tratamentoDoc) => {
                     const tratamento = { id: tratamentoDoc.id, ...tratamentoDoc.data()};
                     if (!tratamento.assistidoId) return null;
-
                     const assistidoDocRef = doc(db, 'assistidos', tratamento.assistidoId);
-
-                    const qFrequenciaHoje = query(filaRef,
-                        where("assistidoId", "==", tratamento.assistidoId),
-                        where("chegadaEm", ">=", Timestamp.fromDate(hojeInicio)),
-                        where("chegadaEm", "<=", Timestamp.fromDate(hojeFim)),
-                        limit(1)
-                    );
-
-                    const [assistidoDoc, frequenciaSnapshot] = await Promise.all([
-                        getDoc(assistidoDocRef),
-                        getDocs(qFrequenciaHoje)
-                    ]);
-
+                    const qFrequenciaHoje = query(filaRef, where("assistidoId", "==", tratamento.assistidoId), where("chegadaEm", ">=", Timestamp.fromDate(hojeInicio)), where("chegadaEm", "<=", Timestamp.fromDate(hojeFim)), limit(1));
+                    const [assistidoDoc, frequenciaSnapshot] = await Promise.all([ getDoc(assistidoDocRef), getDocs(qFrequenciaHoje) ]);
                     let statusHoje = 'pendente';
                     let placeholderSnapshot = null;
-
-                    // ===================================================================
-                    // LÓGICA CORRIGIDA PARA BUSCAR PLACEHOLDER
-                    // ===================================================================
-                    // Calcula qual seria a semana HOJE
                     const semanaAtualHoje = await calcularSemanaAtual(tratamento.id);
 
-                    // Só procura placeholder se HOJE for a 5ª semana
                     if (semanaAtualHoje === 5) {
-                         const qPlaceholder5Semana = query(atendimentosRef,
-                            where("tratamentoId", "==", tratamento.id),
-                            where("semana", "==", 5),
-                            where("decisao_pre_registrada", "==", true),
-                            where("dataAtendimento", "==", null), // Só pega se ainda não marcou presença
-                            limit(1)
-                        );
-                        placeholderSnapshot = await getDocs(qPlaceholder5Semana);
+                         const qPlaceholder5Semana = query(atendimentosRef, where("tratamentoId", "==", tratamento.id), where("semana", "==", 5), where("decisao_pre_registrada", "==", true), where("dataAtendimento", "==", null), limit(1));
+                         placeholderSnapshot = await getDocs(qPlaceholder5Semana);
                     }
-                    // ===================================================================
-                    // FIM DA CORREÇÃO
-                    // ===================================================================
 
-
-                    // Define o statusHoje baseado nas verificações
                     if (!frequenciaSnapshot.empty) {
                         statusHoje = 'presente';
-                         // Armazena a semana atual para o botão de falta
-                         metadadosTratamento[tratamento.id] = {
-                            semanaAtual: semanaAtualHoje
-                         };
+                         metadadosTratamento[tratamento.id] = { semanaAtual: semanaAtualHoje };
                     } else if (placeholderSnapshot && !placeholderSnapshot.empty) {
                         const placeholderData = { id: placeholderSnapshot.docs[0].id, ...placeholderSnapshot.docs[0].data() };
-
-                        // Armazena dados para botões de presença/falta
-                        metadadosTratamento[tratamento.id] = {
-                            atendimento5semana: placeholderData,
-                            semanaAtual: 5 // Confirma que é a semana 5
-                        };
-
-                        if (placeholderData.tipo === 'alta_programada') {
-                            statusHoje = 'alta-programada';
-                        } else if (placeholderData.passePara) {
-                            statusHoje = 'novo-ciclo';
-                        }
+                        metadadosTratamento[tratamento.id] = { atendimento5semana: placeholderData, semanaAtual: 5 };
+                        if (placeholderData.tipo === 'alta_programada') { statusHoje = 'alta-programada'; }
+                        else if (placeholderData.passePara) { statusHoje = 'novo-ciclo'; }
                     } else {
-                         // Armazena a semana atual para o botão de falta (se não for 5ª com placeholder)
-                         metadadosTratamento[tratamento.id] = {
-                            semanaAtual: semanaAtualHoje
-                         };
+                         metadadosTratamento[tratamento.id] = { semanaAtual: semanaAtualHoje };
                     }
-
                     return assistidoDoc.exists() ? { assistido: {id: assistidoDoc.id, ...assistidoDoc.data()}, tratamento, statusHoje } : null;
                 });
 
                 const itensLista = (await Promise.all(promessas)).filter(item => item !== null);
                 itensLista.sort((a, b) => a.assistido.nome.localeCompare(b.assistido.nome));
-
                 ui.listaAtivos.innerHTML = '';
                 itensLista.forEach(item => {
                     const li = document.createElement('li');
                     li.textContent = item.assistido.nome;
                     li.className = `status-${item.statusHoje}`;
-
-                    if (item.statusHoje === 'alta-programada') {
-                        li.title = "Decisão: ALTA PROGRAMADA (Aguardando Entrevista)";
-                    } else if (item.statusHoje === 'novo-ciclo') {
-                        const passe = metadadosTratamento[item.tratamento.id]?.atendimento5semana?.passePara || 'N/I';
-                        li.title = `Decisão: NOVO CICLO (Passe ${passe})`;
-                    }
-
-                    li.addEventListener('click', () => {
-                        tratamentoAtivoSelecionado = item.tratamento;
-                        assistidoSelecionado = item.assistido;
-                        ui.nomeFrequencia.textContent = item.assistido.nome;
-                        ui.painelAcoesFrequencia.classList.remove('hidden');
-                    });
+                    if (item.statusHoje === 'alta-programada') { li.title = "Decisão: ALTA PROGRAMADA (Aguardando Entrevista)"; }
+                    else if (item.statusHoje === 'novo-ciclo') { const passe = metadadosTratamento[item.tratamento.id]?.atendimento5semana?.passePara || 'N/I'; li.title = `Decisão: NOVO CICLO (Passe ${passe})`; }
+                    li.addEventListener('click', () => { tratamentoAtivoSelecionado = item.tratamento; assistidoSelecionado = item.assistido; ui.nomeFrequencia.textContent = item.assistido.nome; ui.painelAcoesFrequencia.classList.remove('hidden'); });
                     ui.listaAtivos.appendChild(li);
                 });
             };
@@ -391,140 +326,73 @@
                     return;
                 }
 
-                const dataAtual = serverTimestamp(); // Usar serverTimestamp para consistência
+                const dataAtual = serverTimestamp();
                 const batch = writeBatch(db);
 
                 try {
                     const dadosMeta = metadadosTratamento[tratamentoAtivoSelecionado.id];
 
-                    // 2. Verificar se este clique é uma ativação de 5ª semana (usando dadosMeta)
                     if (dadosMeta && dadosMeta.atendimento5semana) {
                         const atendimentoPreRegistrado = dadosMeta.atendimento5semana;
                         const atendimentoDocRef = doc(db, 'atendimentos_ae', atendimentoPreRegistrado.id);
 
-                        // --- CASO A: ALTA PROGRAMADA ---
                         if (atendimentoPreRegistrado.tipo === 'alta_programada') {
-
-                            batch.update(atendimentoDocRef, {
-                                dataAtendimento: dataAtual
-                            });
-
+                            batch.update(atendimentoDocRef, { dataAtendimento: dataAtual });
                             batch.set(doc(filaRef), {
-                                assistidoId: assistidoSelecionado.id,
-                                nomeAssistido: assistidoSelecionado.nome,
-                                tratamentoId: tratamentoAtivoSelecionado.id,
-                                atendimentoId: atendimentoDocRef.id,
-                                status: 'aguardando_entrevista_ou_passe',
-                                passeRecomendado: atendimentoPreRegistrado.passeRecomendado,
-                                semana_atual: 5,
-                                tipoAtendimento: 'alta_programada',
-                                chegadaEm: dataAtual,
-                                recepcionista: { uid: user.uid, nome: user.displayName }
+                                assistidoId: assistidoSelecionado.id, nomeAssistido: assistidoSelecionado.nome, tratamentoId: tratamentoAtivoSelecionado.id,
+                                atendimentoId: atendimentoDocRef.id, status: 'aguardando_entrevista_ou_passe', passeRecomendado: atendimentoPreRegistrado.passeRecomendado,
+                                semana_atual: 5, tipoAtendimento: 'alta_programada', chegadaEm: dataAtual, recepcionista: { uid: user.uid, nome: user.displayName }
                             });
-
                             await batch.commit();
-
-                            registrarLog('Ativação de Entrevista de Alta (AE)', {
-                                assistidoId: assistidoSelecionado.id,
-                                assistidoNome: assistidoSelecionado.nome,
-                                tratamentoId: tratamentoAtivoSelecionado.id
-                            });
-
+                            await registrarLog('Ativação de Entrevista de Alta (AE)', { assistidoId: assistidoSelecionado.id, assistidoNome: assistidoSelecionado.nome, tratamentoId: tratamentoAtivoSelecionado.id });
                             alert(`Presença registrada para ${assistidoSelecionado.nome}. Assistido encaminhado para a ENTREVISTA DE ALTA (não haverá passe).`);
 
-                        // --- CASO B: NOVO CICLO PROGRAMADO ---
                         } else if (atendimentoPreRegistrado.passePara) {
-
                             const novoPasse = atendimentoPreRegistrado.passePara;
                             const tratamentoAtualDocRef = doc(db, 'tratamentos_ae', tratamentoAtivoSelecionado.id);
-
-                            batch.update(tratamentoAtualDocRef, {
-                                status: 'concluido_por_reavaliacao',
-                                dataFim: dataAtual
-                            });
-
+                            batch.update(tratamentoAtualDocRef, { status: 'concluido_por_reavaliacao', dataFim: dataAtual });
                             const novoTratamentoRef = doc(tratamentosRef);
-                            batch.set(novoTratamentoRef, {
-                                assistidoId: assistidoSelecionado.id,
-                                dataInicio: dataAtual,
-                                status: 'ativo',
-                                faltas_acumuladas: 0,
-                                passe_ciclo_atual: novoPasse
-                            });
-
-                            batch.update(atendimentoDocRef, {
-                                dataAtendimento: dataAtual,
-                                tratamentoId: novoTratamentoRef.id,
-                                semana: 1,
-                                passeRecomendado: novoPasse,
-                                tipo: 'tratamento_semanal'
-                            });
-
+                            batch.set(novoTratamentoRef, { assistidoId: assistidoSelecionado.id, dataInicio: dataAtual, status: 'ativo', faltas_acumuladas: 0, passe_ciclo_atual: novoPasse });
+                            batch.update(atendimentoDocRef, { dataAtendimento: dataAtual, tratamentoId: novoTratamentoRef.id, semana: 1, passeRecomendado: novoPasse, tipo: 'tratamento_semanal' });
                             batch.set(doc(filaRef), {
-                                assistidoId: assistidoSelecionado.id,
-                                nomeAssistido: assistidoSelecionado.nome,
-                                tratamentoId: novoTratamentoRef.id,
-                                atendimentoId: atendimentoDocRef.id,
-                                status: 'aguardando_entrevista_ou_passe',
-                                passeRecomendado: novoPasse,
-                                semana_atual: 1,
-                                chegadaEm: dataAtual,
-                                recepcionista: { uid: user.uid, nome: user.displayName }
+                                assistidoId: assistidoSelecionado.id, nomeAssistido: assistidoSelecionado.nome, tratamentoId: novoTratamentoRef.id,
+                                atendimentoId: atendimentoDocRef.id, status: 'aguardando_entrevista_ou_passe', passeRecomendado: novoPasse,
+                                semana_atual: 1, chegadaEm: dataAtual, recepcionista: { uid: user.uid, nome: user.displayName }
                             });
-
                             await batch.commit();
-
-                            registrarLog('Ativação de Novo Ciclo (AE)', {
-                                assistidoId: assistidoSelecionado.id,
-                                assistidoNome: assistidoSelecionado.nome,
-                                tratamentoAntigoId: tratamentoAtivoSelecionado.id,
-                                tratamentoNovoId: novoTratamentoRef.id,
-                                novoPasse: novoPasse
-                            });
-
+                            await registrarLog('Ativação de Novo Ciclo (AE)', { assistidoId: assistidoSelecionado.id, assistidoNome: assistidoSelecionado.nome, tratamentoAntigoId: tratamentoAtivoSelecionado.id, tratamentoNovoId: novoTratamentoRef.id, novoPasse: novoPasse });
                             alert(`Presença registrada. ${assistidoSelecionado.nome} iniciou um NOVO CICLO (Semana 1, Passe ${novoPasse}) e foi enviado para a fila.`);
+                        } else {
+                             // Caso raro: placeholder existe mas sem decisão clara (trata como semana 5 normal)
+                            const semanaAtual = 5; // Força semana 5
+                            const passeDoCiclo = tratamentoAtivoSelecionado.passe_ciclo_atual;
+                            batch.update(atendimentoDocRef, { dataAtendimento: dataAtual }); // Só atualiza a data
+                            batch.set(doc(filaRef), {
+                                assistidoId: assistidoSelecionado.id, nomeAssistido: assistidoSelecionado.nome, tratamentoId: tratamentoAtivoSelecionado.id,
+                                atendimentoId: atendimentoDocRef.id, status: 'aguardando_entrevista_ou_passe', passeRecomendado: passeDoCiclo,
+                                semana_atual: semanaAtual, chegadaEm: dataAtual, recepcionista: { uid: user.uid, nome: user.displayName }
+                            });
+                            await batch.commit();
+                            alert(`Presença de ${assistidoSelecionado.nome} (Semana ${semanaAtual}) registrada com sucesso!`);
+                            await registrarLog('Marcação de Presença (AE)', { assistidoId: assistidoSelecionado.id, assistidoNome: assistidoSelecionado.nome, tratamentoId: tratamentoAtivoSelecionado.id, semana: semanaAtual });
                         }
-
-                    // --- CASO C: FLUXO NORMAL (Semanas 1-4) ---
                     } else {
-                        const semanaAtual = dadosMeta?.semanaAtual || await calcularSemanaAtual(tratamentoAtivoSelecionado.id); // Pega a semana já calculada
+                        const semanaAtual = dadosMeta?.semanaAtual || await calcularSemanaAtual(tratamentoAtivoSelecionado.id);
                         const passeDoCiclo = tratamentoAtivoSelecionado.passe_ciclo_atual;
-
                         const placeholderHistoricoRef = doc(collection(db, 'atendimentos_ae'));
                         batch.set(placeholderHistoricoRef, {
-                            assistidoId: assistidoSelecionado.id,
-                            tratamentoId: tratamentoAtivoSelecionado.id,
-                            tipo: 'tratamento_semanal',
-                            dataAtendimento: dataAtual,
-                            semana: semanaAtual,
-                            entrevistador: 'Aguardando Detalhes',
-                            passeRecomendado: passeDoCiclo,
-                            notas: '',
-                            detalhes_preenchidos: false
+                            assistidoId: assistidoSelecionado.id, tratamentoId: tratamentoAtivoSelecionado.id, tipo: 'tratamento_semanal',
+                            dataAtendimento: dataAtual, semana: semanaAtual, entrevistador: 'Aguardando Detalhes',
+                            passeRecomendado: passeDoCiclo, notas: '', detalhes_preenchidos: false
                         });
-
                         batch.set(doc(filaRef), {
-                            assistidoId: assistidoSelecionado.id,
-                            nomeAssistido: assistidoSelecionado.nome,
-                            tratamentoId: tratamentoAtivoSelecionado.id,
-                            atendimentoId: placeholderHistoricoRef.id,
-                            status: 'aguardando_entrevista_ou_passe',
-                            passeRecomendado: passeDoCiclo,
-                            semana_atual: semanaAtual,
-                            chegadaEm: dataAtual,
-                            recepcionista: { uid: user.uid, nome: user.displayName }
+                            assistidoId: assistidoSelecionado.id, nomeAssistido: assistidoSelecionado.nome, tratamentoId: tratamentoAtivoSelecionado.id,
+                            atendimentoId: placeholderHistoricoRef.id, status: 'aguardando_entrevista_ou_passe', passeRecomendado: passeDoCiclo,
+                            semana_atual: semanaAtual, chegadaEm: dataAtual, recepcionista: { uid: user.uid, nome: user.displayName }
                         });
-
                         await batch.commit();
-
                         alert(`Presença de ${assistidoSelecionado.nome} (Semana ${semanaAtual}) registrada com sucesso!`);
-
-                        registrarLog('Marcação de Presença (AE)', {
-                            assistidoId: assistidoSelecionado.id,
-                            assistidoNome: assistidoSelecionado.nome,
-                            tratamentoId: tratamentoAtivoSelecionado.id,
-                            semana: semanaAtual
-                        });
+                        await registrarLog('Marcação de Presença (AE)', { assistidoId: assistidoSelecionado.id, assistidoNome: assistidoSelecionado.nome, tratamentoId: tratamentoAtivoSelecionado.id, semana: semanaAtual });
                     }
                 } catch (error) {
                     console.error("Erro ao marcar presença: ", error);
@@ -536,6 +404,9 @@
                 }
             });
 
+            // ===================================================================
+            // INÍCIO DO BLOCO MODIFICADO: LÓGICA DE FALTAS REFINADA
+            // ===================================================================
              ui.btnMarcarFaltaRapido.addEventListener('click', async (e) => {
                 e.target.disabled = true;
                 if (confirm(`Confirmar uma falta para ${assistidoSelecionado.nome}?`)) {
@@ -543,12 +414,12 @@
                     const tratamentoDocRef = doc(db, 'tratamentos_ae', tratamentoAtivoSelecionado.id);
                     const novoTotalFaltas = (tratamentoAtivoSelecionado.faltas_acumuladas || 0) + 1;
                     const passeDoCiclo = tratamentoAtivoSelecionado.passe_ciclo_atual;
-
                     const semanaAtual = metadadosTratamento[tratamentoAtivoSelecionado.id]?.semanaAtual || await calcularSemanaAtual(tratamentoAtivoSelecionado.id);
 
                     const batch = writeBatch(db);
-                    const dataAtualFalta = serverTimestamp();
+                    const dataAtualFalta = serverTimestamp(); // Usar server timestamp
 
+                    // 1. Sempre registra a falta no histórico
                     batch.set(doc(atendimentosRef), {
                         assistidoId: assistidoSelecionado.id,
                         tratamentoId: tratamentoAtivoSelecionado.id,
@@ -557,204 +428,161 @@
                         semana: semanaAtual
                     });
 
+                    // 2. Sempre incrementa o contador de faltas no tratamento
                     batch.update(tratamentoDocRef, { faltas_acumuladas: increment(1) });
 
                     let encerrarTratamento = false;
                     let motivo = '';
+                    const logDetalhes = { assistidoId: assistidoSelecionado.id, assistidoNome: assistidoSelecionado.nome, tratamentoId: tratamentoAtivoSelecionado.id, totalFaltas: novoTotalFaltas, passe: passeDoCiclo, semana: semanaAtual };
 
-                    // REGRA B: Tolerância Zero (P3A ou P3B)
-                    if (passeDoCiclo === 'P3A' || passeDoCiclo === 'P3B') {
-                        if (novoTotalFaltas >= 1) {
-                            encerrarTratamento = true;
-                            motivo = 'Tratamento encerrado automaticamente por falta (Tolerância Zero para P3A/P3B).';
+                    // 3. Aplicar a lógica de encerramento refinada
+                    console.log(`[Debug Falta] Verificando: Semana=${semanaAtual}, Passe Atual=${passeDoCiclo}, Faltas=${novoTotalFaltas}`);
+
+                    // REGRA GERAL: É a Semana 5?
+                    if (semanaAtual === 5) {
+                        console.log('[Debug Falta] É Semana 5.');
+                        // REGRA 5.A: O ciclo ATUAL é P3A/P3B?
+                        if (passeDoCiclo === 'P3A' || passeDoCiclo === 'P3B') {
+                            console.log('[Debug Falta W5] Ciclo atual é P3A/P3B.');
+                            // REGRA 5.A.1: Verificar a DECISÃO PRÉ-REGISTRADA
+                            const dadosMeta = metadadosTratamento[tratamentoAtivoSelecionado.id];
+                            const decisao5Semana = dadosMeta?.atendimento5semana;
+
+                            if (decisao5Semana) {
+                                console.log('[Debug Falta W5] Decisão placeholder encontrada:', decisao5Semana);
+                                // REGRA 5.A.1.a: É Alta? Tolera.
+                                if (decisao5Semana.tipo === 'alta_programada') {
+                                    console.log('[Debug Falta W5] Decisão é ALTA. Tolerando ausência.');
+                                    encerrarTratamento = false;
+                                // REGRA 5.A.1.b: É Novo Ciclo? Verificar o passe de destino.
+                                } else if (decisao5Semana.passePara) {
+                                    const proximoPasse = decisao5Semana.passePara;
+                                    console.log('[Debug Falta W5] Decisão é Novo Ciclo para:', proximoPasse);
+                                    // Se o próximo passe TAMBÉM é P3A ou P3B, aplica Tolerância Zero.
+                                    if (proximoPasse === 'P3A' || proximoPasse === 'P3B') {
+                                        console.log('[Debug Falta W5] Próximo ciclo TAMBÉM é P3. Aplicando Tolerância Zero.');
+                                        if (novoTotalFaltas >= 1) { encerrarTratamento = true; }
+                                    } else {
+                                        // Se o próximo passe NÃO é P3, tolera.
+                                        console.log('[Debug Falta W5] Próximo ciclo NÃO é P3. Tolerando ausência.');
+                                        encerrarTratamento = false;
+                                    }
+                                } else {
+                                     // Caso raro: placeholder sem decisão clara. Tolera por segurança.
+                                     console.warn('[Debug Falta W5] Placeholder sem decisão clara. Tolerando ausência.');
+                                     encerrarTratamento = false;
+                                }
+                            } else {
+                                // Caso raro: Semana 5, P3 atual, mas sem placeholder? Tolera por segurança.
+                                console.warn('[Debug Falta W5] Placeholder não encontrado. Tolerando ausência.');
+                                encerrarTratamento = false;
+                            }
+                        // REGRA 5.B: O ciclo ATUAL NÃO é P3A/P3B? Tolera.
                         } else {
-                            motivo = `Falta registrada com sucesso! Total de faltas: ${novoTotalFaltas}.`;
+                             console.log('[Debug Falta W5] Ciclo atual NÃO é P3A/P3B. Tolerando ausência.');
+                             encerrarTratamento = false;
                         }
+                        // Define o motivo para Semana 5
+                        if (!encerrarTratamento) { motivo = `Falta registrada (Semana 5). Total de faltas: ${novoTotalFaltas}.`; }
+                        else { motivo = `Falta registrada (Semana 5). ATENÇÃO: Tratamento encerrado por falta (Tolerância Zero para P3A/P3B continuando P3).`; }
 
-                    // REGRA A: Passes Padrão
+                    // REGRA GERAL: NÃO é a Semana 5 (Semanas 1-4)
                     } else {
-                        // REGRA A.1: Semana 5 Neutra
-                        if (semanaAtual === 5) {
-                            encerrarTratamento = false;
-                            motivo = `Falta registrada (Semana 5). Total de faltas: ${novoTotalFaltas}.`;
-
-                        // REGRA A.2: Semanas 1-4
-                        } else if (novoTotalFaltas >= 2) {
-                            encerrarTratamento = true;
-                            motivo = `Falta registrada. ATENÇÃO: Tratamento encerrado automaticamente por exceder o limite de 2 faltas.`;
-
+                         console.log(`[Debug Falta W${semanaAtual}] Aplicando regras padrão.`);
+                        // REGRA 1-4.A: Ciclo atual é P3A/P3B? Tolerância Zero.
+                        if (passeDoCiclo === 'P3A' || passeDoCiclo === 'P3B') {
+                            if (novoTotalFaltas >= 1) {
+                                encerrarTratamento = true;
+                                motivo = 'Tratamento encerrado automaticamente por falta (Tolerância Zero para P3A/P3B).';
+                            } else { motivo = `Falta registrada com sucesso! Total de faltas: ${novoTotalFaltas}.`; }
+                        // REGRA 1-4.B: Ciclo atual NÃO é P3A/P3B? Limite de 2 faltas.
                         } else {
-                            motivo = `Falta registrada com sucesso! Total de faltas: ${novoTotalFaltas}.`;
+                            if (novoTotalFaltas >= 2) {
+                                encerrarTratamento = true;
+                                motivo = `Falta registrada. ATENÇÃO: Tratamento encerrado automaticamente por exceder o limite de 2 faltas.`;
+                            } else { motivo = `Falta registrada com sucesso! Total de faltas: ${novoTotalFaltas}.`; }
                         }
                     }
 
+                    // 4. Executar o encerramento, se necessário
                     if (encerrarTratamento) {
                         batch.update(tratamentoDocRef, {
                             status: 'encerrado_por_falta',
                             dataFim: dataAtualFalta
                         });
-                        registrarLog('Encerramento por Falta (AE)', {
-                            assistidoId: assistidoSelecionado.id,
-                            assistidoNome: assistidoSelecionado.nome,
-                            tratamentoId: tratamentoAtivoSelecionado.id,
-                            totalFaltas: novoTotalFaltas,
-                            passe: passeDoCiclo,
-                            semana: semanaAtual
-                        });
+                        await registrarLog('Encerramento por Falta (AE)', logDetalhes);
+                        console.log(`[Debug Falta] Decisão: ENCERRAR tratamento. Motivo: ${motivo}`);
                     } else {
-                         registrarLog('Marcação de Falta (AE)', {
-                            assistidoId: assistidoSelecionado.id,
-                            assistidoNome: assistidoSelecionado.nome,
-                            tratamentoId: tratamentoAtivoSelecionado.id,
-                            totalFaltas: novoTotalFaltas,
-                            passe: passeDoCiclo,
-                            semana: semanaAtual
-                        });
+                         await registrarLog('Marcação de Falta (AE)', logDetalhes);
+                         console.log(`[Debug Falta] Decisão: NÃO encerrar tratamento. Motivo: ${motivo}`);
                     }
 
+                    // 5. Salvar tudo e notificar
                     await batch.commit();
                     alert(motivo);
 
                     ui.painelAcoesFrequencia.classList.add('hidden');
-                    await carregarTratamentosAtivos();
+                    await carregarTratamentosAtivos(); // Recarrega a lista para refletir o status
                 }
                 e.target.disabled = false;
             });
+            // ===================================================================
+            // FIM DO BLOCO MODIFICADO
+            // ===================================================================
 
 
             ui.nomeInput.addEventListener('input', async (e) => {
                 const termo = e.target.value.trim();
-
                 if (assistidoSelecionado && termo.toLowerCase() !== assistidoSelecionado.nome.toLowerCase()) {
-                    assistidoSelecionado = null;
-                    ui.telefoneInput.value = '';
-                    ui.dnInput.value = '';
-                    ui.btnVerHistorico.classList.add('hidden');
+                    assistidoSelecionado = null; ui.telefoneInput.value = ''; ui.dnInput.value = ''; ui.btnVerHistorico.classList.add('hidden');
                 }
-
-                if (termo.length > 0 && !assistidoSelecionado) {
-                    ui.novoAtendimentoSection.classList.remove('hidden');
-                } else if (termo.length === 0) {
-                    ui.novoAtendimentoSection.classList.add('hidden');
-                }
-
-                if (termo.length < 3) {
-                    ui.searchResults.innerHTML = '';
-                    return;
-                }
-
+                if (termo.length > 0 && !assistidoSelecionado) { ui.novoAtendimentoSection.classList.remove('hidden'); } else if (termo.length === 0) { ui.novoAtendimentoSection.classList.add('hidden'); }
+                if (termo.length < 3) { ui.searchResults.innerHTML = ''; return; }
                 const q = query(assistidosRef, where('nome_lower', '>=', termo.toLowerCase()), where('nome_lower', '<=', termo.toLowerCase() + '\uf8ff'), limit(5));
                 const snapshot = await getDocs(q);
                 ui.searchResults.innerHTML = '';
                 snapshot.forEach(doc => {
-                    const assistido = { id: doc.id, ...doc.data() };
-                    const li = document.createElement('li');
-                    li.textContent = assistido.nome;
+                    const assistido = { id: doc.id, ...doc.data() }; const li = document.createElement('li'); li.textContent = assistido.nome;
                     li.addEventListener('click', async () => {
-                        assistidoSelecionado = assistido;
-                        ui.nomeInput.value = assistido.nome;
-                        ui.telefoneInput.value = assistido.telefone || '';
-                        ui.dnInput.value = assistido.dn || '';
-                        ui.searchResults.innerHTML = '';
-                        ui.novoAtendimentoSection.classList.remove('hidden');
-                        await checarHistoricoEExibirBotao(assistido.id);
+                        assistidoSelecionado = assistido; ui.nomeInput.value = assistido.nome; ui.telefoneInput.value = assistido.telefone || ''; ui.dnInput.value = assistido.dn || '';
+                        ui.searchResults.innerHTML = ''; ui.novoAtendimentoSection.classList.remove('hidden'); await checarHistoricoEExibirBotao(assistido.id);
                     });
                     ui.searchResults.appendChild(li);
                 });
             });
 
-            ui.nomeInput.addEventListener('blur', () => {
-                setTimeout(() => {
-                    ui.searchResults.innerHTML = '';
-                }, 200);
-            });
+            ui.nomeInput.addEventListener('blur', () => { setTimeout(() => { ui.searchResults.innerHTML = ''; }, 200); });
 
             ui.btnRegistrarAvulso.addEventListener('click', async (e) => {
-                e.target.disabled = true;
-                if (!validarDadosPessoais()) { e.target.disabled = false; return; }
+                e.target.disabled = true; if (!validarDadosPessoais()) { e.target.disabled = false; return; }
                 try {
                     const { id: assistidoId, nome: nomeAssistido } = await criarNovoAssistidoSeNaoExistir();
-                    const idadeDate = new Date(ui.dnInput.value);
-                    const diffMs = Date.now() - idadeDate.getTime();
-                    const idade = new Date(diffMs).getUTCFullYear() - 1970;
-                    const passeAvulso = idade >= 12 ? 'P2' : 'P4B';
-                    const dataAtual = serverTimestamp();
-
+                    const idadeDate = new Date(ui.dnInput.value); const diffMs = Date.now() - idadeDate.getTime(); const idade = new Date(diffMs).getUTCFullYear() - 1970;
+                    const passeAvulso = idade >= 12 ? 'P2' : 'P4B'; const dataAtual = serverTimestamp();
                     const batch = writeBatch(db);
                     batch.set(doc(filaRef), { assistidoId: assistidoId, nomeAssistido: nomeAssistido, status: 'aguardando_entrevista_ou_passe', passeRecomendado: passeAvulso, tipoAtendimento: 'avulso', semana_atual: 1, chegadaEm: dataAtual, recepcionista: { uid: user.uid, nome: user.displayName } });
                     batch.set(doc(atendimentosRef), { assistidoId: assistidoId, tratamentoId: null, tipo: 'avulso', dataAtendimento: dataAtual, passeRecomendado: passeAvulso });
-                    await batch.commit();
-                    alert('Passe avulso registrado e enviado para a fila!');
-
-                    registrarLog('Registro de Passe Avulso (AE)', {
-                        assistidoId: assistidoId,
-                        assistidoNome: nomeAssistido,
-                        passeRecomendado: passeAvulso
-                    });
-
+                    await batch.commit(); alert('Passe avulso registrado e enviado para a fila!');
+                    await registrarLog('Registro de Passe Avulso (AE)', { assistidoId: assistidoId, assistidoNome: nomeAssistido, passeRecomendado: passeAvulso });
                     location.reload();
-                } catch(error) {
-                    console.error("Erro ao registrar passe avulso:", error);
-                    e.target.disabled = false;
-                }
+                } catch(error) { console.error("Erro ao registrar passe avulso:", error); e.target.disabled = false; }
             });
 
             ui.btnIniciarTratamento.addEventListener('click', async (e) => {
-                e.target.disabled = true;
-                if (!validarDadosPessoais()) { e.target.disabled = false; return; }
+                e.target.disabled = true; if (!validarDadosPessoais()) { e.target.disabled = false; return; }
                 try {
                     const { id: assistidoId, nome: nomeAssistido } = await criarNovoAssistidoSeNaoExistir();
-                    const idadeDate = new Date(ui.dnInput.value);
-                    const diffMs = Date.now() - idadeDate.getTime();
-                    const idade = new Date(diffMs).getUTCFullYear() - 1970;
+                    const idadeDate = new Date(ui.dnInput.value); const diffMs = Date.now() - idadeDate.getTime(); const idade = new Date(diffMs).getUTCFullYear() - 1970;
                     const passeInicial = idade >= 12 ? 'P2' : 'P4B';
-
-                    const batch = writeBatch(db);
-                    const novoTratamentoRef = doc(tratamentosRef);
+                    const batch = writeBatch(db); const novoTratamentoRef = doc(tratamentosRef);
                     batch.set(novoTratamentoRef, { assistidoId: assistidoId, dataInicio: serverTimestamp(), status: 'ativo', faltas_acumuladas: 0, passe_ciclo_atual: passeInicial });
-
-                    const dataAtual = serverTimestamp();
-                    const novoAtendimentoRef = doc(collection(db, 'atendimentos_ae'));
-
-                    batch.set(novoAtendimentoRef, {
-                        assistidoId: assistidoId,
-                        tratamentoId: novoTratamentoRef.id,
-                        tipo: 'tratamento_semanal',
-                        dataAtendimento: dataAtual,
-                        semana: 1,
-                        entrevistador: 'Aguardando Detalhes',
-                        passeRecomendado: passeInicial,
-                        notas: '',
-                        detalhes_preenchidos: false
-                    });
-
-                    batch.set(doc(filaRef), {
-                        assistidoId: assistidoId,
-                        nomeAssistido: nomeAssistido,
-                        tratamentoId: novoTratamentoRef.id,
-                        atendimentoId: novoAtendimentoRef.id,
-                        status: 'aguardando_entrevista_ou_passe',
-                        passeRecomendado: passeInicial,
-                        semana_atual: 1,
-                        chegadaEm: dataAtual,
-                        recepcionista: { uid: user.uid, nome: user.displayName }
-                    });
-
-                    await batch.commit();
-                    alert('Assistência Espiritual iniciada com sucesso e enviada para a fila!');
-
-                    registrarLog('Início de Assistência Espiritual', {
-                        assistidoId: assistidoId,
-                        assistidoNome: nomeAssistido,
-                        passeInicial: passeInicial
-                    });
-
+                    const dataAtual = serverTimestamp(); const novoAtendimentoRef = doc(collection(db, 'atendimentos_ae'));
+                    batch.set(novoAtendimentoRef, { assistidoId: assistidoId, tratamentoId: novoTratamentoRef.id, tipo: 'tratamento_semanal', dataAtendimento: dataAtual, semana: 1, entrevistador: 'Aguardando Detalhes', passeRecomendado: passeInicial, notas: '', detalhes_preenchidos: false });
+                    batch.set(doc(filaRef), { assistidoId: assistidoId, nomeAssistido: nomeAssistido, tratamentoId: novoTratamentoRef.id, atendimentoId: novoAtendimentoRef.id, status: 'aguardando_entrevista_ou_passe', passeRecomendado: passeInicial, semana_atual: 1, chegadaEm: dataAtual, recepcionista: { uid: user.uid, nome: user.displayName } });
+                    await batch.commit(); alert('Assistência Espiritual iniciada com sucesso e enviada para a fila!');
+                    await registrarLog('Início de Assistência Espiritual', { assistidoId: assistidoId, assistidoNome: nomeAssistido, passeInicial: passeInicial });
                     location.reload();
-                } catch(error) {
-                    console.error("Erro ao iniciar assistência:", error);
-                    alert(`Ocorreu um erro: ${error.message}`);
-                    e.target.disabled = false;
-                }
+                } catch(error) { console.error("Erro ao iniciar assistência:", error); alert(`Ocorreu um erro: ${error.message}`); e.target.disabled = false; }
             });
 
             ui.btnLimpar.addEventListener('click', resetarFormularioBusca);
