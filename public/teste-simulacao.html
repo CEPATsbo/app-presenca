@@ -52,7 +52,6 @@
 
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
-        // Imports atualizados
         import { getFirestore, collection, doc, getDoc, query, where, getDocs, addDoc, Timestamp, orderBy, limit, writeBatch, increment, updateDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
         import { protegerPagina } from '/auth.js';
 
@@ -85,7 +84,7 @@
             const atendimentosRef = collection(db, 'atendimentos_ae');
             const tratamentosRef = collection(db, 'tratamentos_ae');
             const filaRef = collection(db, 'fila_atendimento_ae');
-            const logAuditoriaRef = collection(db, 'log_auditoria'); // Para registrar logs
+            const logAuditoriaRef = collection(db, 'log_auditoria');
 
             const hoje = new Date();
             const offset = hoje.getTimezoneOffset();
@@ -152,21 +151,36 @@
 
                     const qTratamento = query( tratamentosRef, where('assistidoId', '==', assistidoId), where('status', '==', 'ativo'), orderBy('dataInicio', 'desc'), limit(1) );
                     const tratamentoSnapshot = await getDocs(qTratamento);
-                    if (tratamentoSnapshot.empty) { throw new Error(`Nenhum tratamento ATIVO encontrado para o ID: ${assistidoId}`); }
-                    const tratamentoDoc = tratamentoSnapshot.docs[0];
-                    const tratamento = { id: tratamentoDoc.id, ...tratamentoDoc.data() };
+                    // Modificação: Permite simular falta mesmo se tratamento já foi encerrado (para testar regras)
+                    let tratamentoDoc = null;
+                    let tratamento = null;
+                    if (!tratamentoSnapshot.empty) {
+                        tratamentoDoc = tratamentoSnapshot.docs[0];
+                        tratamento = { id: tratamentoDoc.id, ...tratamentoDoc.data() };
+                    } else if (acao === 'falta') {
+                        // Se for falta, busca o último tratamento encerrado para aplicar a regra
+                        const qUltimoTratamento = query(tratamentosRef, where('assistidoId', '==', assistidoId), orderBy('dataInicio', 'desc'), limit(1));
+                        const ultimoTratamentoSnapshot = await getDocs(qUltimoTratamento);
+                        if(ultimoTratamentoSnapshot.empty) { throw new Error(`Nenhum tratamento encontrado para o ID: ${assistidoId}`); }
+                        tratamentoDoc = ultimoTratamentoSnapshot.docs[0];
+                        tratamento = { id: tratamentoDoc.id, ...tratamentoDoc.data() };
+                        log("Aviso: Tratamento não está ativo. Simulando falta no último tratamento encontrado.");
+                    } else {
+                         throw new Error(`Nenhum tratamento ATIVO encontrado para o ID: ${assistidoId} para simular presença.`);
+                    }
+
 
                     const dataSimuladaObj = new Date(dataSimulada + 'T12:00:00');
                     const dataTimestamp = Timestamp.fromDate(dataSimuladaObj); // Usar timestamp para queries
                     const dataInicioSimulada = new Date(dataSimulada + 'T00:00:00');
                     const dataFimSimulada = new Date(dataSimulada + 'T23:59:59');
 
-                    // ===================================================================
-                    // LÓGICA DE PRESENÇA ATUALIZADA (Baseada na Recepcao-ae.html)
-                    // ===================================================================
                     if (acao === 'presenca') {
+                        // Verifica se o tratamento está realmente ativo para presença
+                        if (tratamento.status !== 'ativo') {
+                            throw new Error(`O tratamento ${tratamento.id} não está ativo. Não é possível simular presença.`);
+                        }
 
-                        // 0. Checar se já existe presença NA FILA para esta data simulada
                         const qCheckFila = query(filaRef,
                             where("assistidoId", "==", assistidoId),
                             where("chegadaEm", ">=", Timestamp.fromDate(dataInicioSimulada)),
@@ -193,7 +207,6 @@
                              const qPlaceholder5Semana = query(atendimentosRef,
                                 where("tratamentoId", "==", tratamento.id),
                                 where("semana", "==", 5),
-                                // where("decisao_pre_registrada", "==", true), // Não precisa checar, só se existe e data=null
                                 where("dataAtendimento", "==", null),
                                 limit(1)
                             );
@@ -203,50 +216,33 @@
                             }
                         }
 
-                        // CASO 1: Placeholder da 5ª semana encontrado! Atualizar e usar seus dados.
                         if (placeholder5SemanaDoc) {
                             log('Placeholder da 5ª semana encontrado. Processando decisão...');
                             atendimentoParaFilaRef = placeholder5SemanaDoc.ref;
                             atendimentoParaFilaData = placeholder5SemanaDoc.data();
-                            semanaParaFila = 5; // Mantém 5 para o atendimento original
-                            passeParaFila = atendimentoParaFilaData.passeRecomendado; // Usa passe original
+                            semanaParaFila = 5;
+                            passeParaFila = atendimentoParaFilaData.passeRecomendado;
 
-                            // CASO 1.A: ALTA PROGRAMADA
                             if (atendimentoParaFilaData.tipo === 'alta_programada') {
                                 log('Tipo: Alta Programada detectada. Adicionando à fila para entrevista.');
-                                // Atualiza placeholder com data
                                 batch.update(atendimentoParaFilaRef, { dataAtendimento: dataTimestamp });
-                                tipoAtendimentoParaFila = 'alta_programada'; // Flag para Encaminhamento
-                                // Tratamento será encerrado no Encaminhamento
+                                tipoAtendimentoParaFila = 'alta_programada';
 
-                            // CASO 1.B: NOVO CICLO PROGRAMADO
                             } else if (atendimentoParaFilaData.passePara) {
                                 log('Tipo: Novo Ciclo Programado detectado. Ativando...');
                                 const novoPasse = atendimentoParaFilaData.passePara;
                                 const tratamentoAtualDocRef = doc(db, 'tratamentos_ae', tratamento.id);
-
-                                // Encerra tratamento antigo
-                                batch.update(tratamentoAtualDocRef, { status: 'concluido_por_reavaliacao', dataFim: dataTimestamp }); // Usar data simulada
-                                // Cria novo tratamento
+                                batch.update(tratamentoAtualDocRef, { status: 'concluido_por_reavaliacao', dataFim: dataTimestamp });
                                 const novoTratamentoRef = doc(tratamentosRef);
                                 batch.set(novoTratamentoRef, { assistidoId: assistidoId, dataInicio: dataTimestamp, status: 'ativo', faltas_acumuladas: 0, passe_ciclo_atual: novoPasse });
-                                // Migra atendimento para novo tratamento, definindo semana 1
                                 batch.update(atendimentoParaFilaRef, { dataAtendimento: dataTimestamp, tratamentoId: novoTratamentoRef.id, semana: 1, passeRecomendado: novoPasse, tipo: 'tratamento_semanal' });
-
-                                // Ajusta dados para a fila
-                                semanaParaFila = 1; // Fila reflete a nova semana
-                                passeParaFila = novoPasse; // Fila reflete o novo passe
-                                tratamento.id = novoTratamentoRef.id; // Atualiza ID do tratamento para a fila
-
+                                semanaParaFila = 1; passeParaFila = novoPasse; tratamento.id = novoTratamentoRef.id; // Atualiza IDs para a fila
                                 await registrarLogSimulacao('Ativação de Novo Ciclo', { assistidoId, nomeAssistido, tratamentoAntigoId: tratamentoDoc.id, tratamentoNovoId: novoTratamentoRef.id, novoPasse });
 
                            } else {
-                                // Caso placeholder exista mas sem decisão (não deveria acontecer, mas por segurança)
                                 log('Placeholder da 5ª semana encontrado, mas sem decisão. Tratando como presença normal da 5ª semana.');
                                 batch.update(atendimentoParaFilaRef, { dataAtendimento: dataTimestamp });
                            }
-
-                        // CASO 2: Fluxo normal (Semanas 1-4 ou 5ª sem placeholder)
                         } else {
                             log(`Criando novo registro para Semana ${semanaAtualCalculada}...`);
                             const novoAtendimentoRef = doc(atendimentosRef);
@@ -260,22 +256,19 @@
                             passeParaFila = tratamento.passe_ciclo_atual;
                         }
 
-                        // Adicionar à fila de atendimento com os dados corretos
                         const dadosFila = {
-                            assistidoId: assistidoId, nomeAssistido: nomeAssistido, tratamentoId: tratamento.id, // Usa o ID do tratamento ATUAL/NOVO
+                            assistidoId: assistidoId, nomeAssistido: nomeAssistido, tratamentoId: tratamento.id,
                             atendimentoId: atendimentoParaFilaRef.id, status: 'aguardando_entrevista_ou_passe', passeRecomendado: passeParaFila,
                             semana_atual: semanaParaFila, chegadaEm: dataTimestamp, recepcionista: { uid: user.uid, nome: `Simulação por ${user.displayName}` }
                         };
                         if(tipoAtendimentoParaFila) { dadosFila.tipoAtendimento = tipoAtendimentoParaFila; }
-
                         batch.set(doc(filaRef), dadosFila);
                         await batch.commit();
-
                         await registrarLogSimulacao('Marcação de Presença', { assistidoId, nomeAssistido, tratamentoId: tratamento.id, semana: semanaParaFila, data: dataSimulada });
                         log(`Sucesso: Presença de '${nomeAssistido}' (Semana ${semanaParaFila}, Passe ${passeParaFila}) simulada para ${dataSimuladaObj.toLocaleDateString()}.`);
 
                     // ===================================================================
-                    // LÓGICA DE FALTA (Permanece a mesma, mas usa data simulada)
+                    // LÓGICA DE FALTA ATUALIZADA (REPLICA A LÓGICA REFINADA DA RECEPÇÃO)
                     // ===================================================================
                     } else if (acao === 'falta') {
                         const batch = writeBatch(db);
@@ -293,32 +286,66 @@
                             semana: semanaAtualFalta
                         });
 
-                        batch.update(tratamentoDocRef, { faltas_acumuladas: increment(1) });
+                        // Só incrementa falta se o tratamento ainda estiver ativo
+                        if (tratamento.status === 'ativo') {
+                           batch.update(tratamentoDocRef, { faltas_acumuladas: increment(1) });
+                        } else {
+                            log("Aviso: Tratamento já encerrado. Registrando falta no histórico apenas.");
+                        }
+
 
                         let encerrarTratamento = false;
                         let motivo = '';
+                        const logDetalhes = { assistidoId, nomeAssistido, tratamentoId: tratamento.id, totalFaltas: novoTotalFaltas, passe: passeDoCiclo, semana: semanaAtualFalta, data: dataSimulada };
 
-                        if (passeDoCiclo === 'P3A' || passeDoCiclo === 'P3B') {
-                            if (novoTotalFaltas >= 1) {
-                                encerrarTratamento = true;
-                                motivo = 'Tratamento encerrado automaticamente por falta (Tolerância Zero para P3A/P3B).';
-                            } else { motivo = `Falta registrada com sucesso! Total de faltas: ${novoTotalFaltas}.`; }
-                        } else {
+                        // Só aplica lógica de encerramento se o tratamento AINDA ESTIVER ativo
+                        if (tratamento.status === 'ativo') {
                             if (semanaAtualFalta === 5) {
-                                encerrarTratamento = false;
-                                motivo = `Falta registrada (Semana 5). Total de faltas: ${novoTotalFaltas}.`;
-                            } else if (novoTotalFaltas >= 2) {
-                                encerrarTratamento = true;
-                                motivo = `Falta registrada. ATENÇÃO: Tratamento encerrado automaticamente por exceder o limite de 2 faltas.`;
-                            } else { motivo = `Falta registrada com sucesso! Total de faltas: ${novoTotalFaltas}.`; }
+                                if (passeDoCiclo === 'P3A' || passeDoCiclo === 'P3B') {
+                                    // Buscar a decisão pré-registrada para a 5ª semana
+                                     const qPlaceholder5Semana = query(atendimentosRef,
+                                        where("tratamentoId", "==", tratamento.id),
+                                        where("semana", "==", 5),
+                                        where("dataAtendimento", "==", null), // Só pega se ainda não marcou presença
+                                        limit(1)
+                                    );
+                                    const placeholderSnapshot = await getDocs(qPlaceholder5Semana);
+                                    const decisao5Semana = (!placeholderSnapshot.empty) ? placeholderSnapshot.docs[0].data() : null;
+
+                                    if (decisao5Semana) {
+                                        if (decisao5Semana.tipo === 'alta_programada') { encerrarTratamento = false; }
+                                        else if (decisao5Semana.passePara) {
+                                            const proximoPasse = decisao5Semana.passePara;
+                                            if (proximoPasse === 'P3A' || proximoPasse === 'P3B') { if (novoTotalFaltas >= 1) { encerrarTratamento = true; } }
+                                            else { encerrarTratamento = false; }
+                                        } else { encerrarTratamento = false; } // Tolera se não achou decisão
+                                    } else { encerrarTratamento = false; } // Tolera se não achou placeholder
+                                } else { encerrarTratamento = false; } // Não é P3, tolera na semana 5
+
+                                if (!encerrarTratamento) { motivo = `Falta registrada (Semana 5). Total de faltas: ${novoTotalFaltas}.`; }
+                                else { motivo = `Falta registrada (Semana 5). ATENÇÃO: Tratamento encerrado por falta (Tolerância Zero para P3A/P3B continuando P3).`; }
+
+                            } else { // Semanas 1-4
+                                if (passeDoCiclo === 'P3A' || passeDoCiclo === 'P3B') {
+                                    if (novoTotalFaltas >= 1) { encerrarTratamento = true; motivo = 'Tratamento encerrado automaticamente por falta (Tolerância Zero para P3A/P3B).'; }
+                                    else { motivo = `Falta registrada com sucesso! Total de faltas: ${novoTotalFaltas}.`; }
+                                } else {
+                                    if (novoTotalFaltas >= 2) { encerrarTratamento = true; motivo = `Falta registrada. ATENÇÃO: Tratamento encerrado automaticamente por exceder o limite de 2 faltas.`; }
+                                    else { motivo = `Falta registrada com sucesso! Total de faltas: ${novoTotalFaltas}.`; }
+                                }
+                            }
+
+                            if (encerrarTratamento) {
+                                batch.update(tratamentoDocRef, { status: 'encerrado_por_falta', dataFim: dataTimestamp }); // Usar data simulada
+                                await registrarLogSimulacao('Encerramento por Falta', logDetalhes);
+                            } else {
+                                await registrarLogSimulacao('Marcação de Falta', logDetalhes);
+                            }
+                        } else { // Se tratamento já estava encerrado
+                             motivo = `Falta registrada no histórico para tratamento já encerrado (${tratamento.status}).`;
+                             await registrarLogSimulacao('Marcação de Falta (Trat. Encerrado)', logDetalhes);
                         }
 
-                        if (encerrarTratamento) {
-                            batch.update(tratamentoDocRef, { status: 'encerrado_por_falta', dataFim: dataTimestamp }); // Usar data simulada
-                             await registrarLogSimulacao('Encerramento por Falta', { assistidoId, nomeAssistido, tratamentoId: tratamento.id, totalFaltas: novoTotalFaltas, passe: passeDoCiclo, semana: semanaAtualFalta, data: dataSimulada });
-                        } else {
-                            await registrarLogSimulacao('Marcação de Falta', { assistidoId, nomeAssistido, tratamentoId: tratamento.id, totalFaltas: novoTotalFaltas, passe: passeDoCiclo, semana: semanaAtualFalta, data: dataSimulada });
-                        }
 
                         await batch.commit();
                         log(motivo);
