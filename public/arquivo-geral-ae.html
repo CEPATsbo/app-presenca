@@ -22,20 +22,28 @@
 
         .main-grid { display: grid; grid-template-columns: 350px 1fr; gap: 30px; min-height: 60vh; }
         .lista-assistidos-col { border-right: 1px solid var(--cor-borda); padding-right: 20px; }
-        #lista-assistidos { list-style-type: none; padding: 0; margin: 0; max-height: 60vh; overflow-y: auto; }
-        /* Estilo para o item da lista */
-        #lista-assistidos li {
-            padding: 15px;
-            border-bottom: 1px solid #eee;
-            cursor: pointer;
-            font-weight: 500;
-            display: flex; /* Para alinhar o ícone */
-            align-items: center; /* Para alinhar o ícone */
-            gap: 8px; /* Espaço entre ícone e nome */
+        /* --- NOVO: Estilo para o cabeçalho da lista --- */
+        .lista-assistidos-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px; /* Ajuste conforme necessário */
         }
+        .lista-assistidos-header h2 {
+             margin: 0; /* Remove margem padrão do h2 */
+        }
+        /* --- NOVO: Estilo para o botão de atualizar --- */
+        #btn-atualizar-lista {
+            font-size: 0.8em;
+            padding: 5px 10px;
+            background-color: #6c757d;
+            border-radius: 6px;
+        }
+
+        #lista-assistidos { list-style-type: none; padding: 0; margin: 0; max-height: calc(60vh - 50px); /* Ajusta altura para caber botão */ overflow-y: auto; }
+        #lista-assistidos li { padding: 15px; border-bottom: 1px solid #eee; cursor: pointer; font-weight: 500; display: flex; align-items: center; gap: 8px; }
         #lista-assistidos li:hover { background-color: var(--fundo-selecionado); }
         #lista-assistidos li.selecionado { background-color: var(--cor-primaria); color: white; font-weight: bold; }
-        /* Estilo para o ícone de pendência */
         .icone-pendente { color: #ffc107; font-weight: bold; font-size: 1.1em; /* Ajuste o tamanho se necessário */ }
 
 
@@ -67,7 +75,12 @@
             </section>
             <main class="main-grid">
                 <div class="lista-assistidos-col">
-                    <h2 style="margin-top:0;">Assistidos</h2>
+                    {/* --- NOVO: Cabeçalho com Título e Botão --- */}
+                    <div class="lista-assistidos-header">
+                        <h2 style="margin-top:0;">Assistidos</h2>
+                        <button id="btn-atualizar-lista" class="btn">Atualizar Lista 🔄</button>
+                    </div>
+                    {/* --- FIM DA MODIFICAÇÃO --- */}
                     <ul id="lista-assistidos"><p>Carregando assistidos...</p></ul>
                 </div>
                 <div class="detalhes-assistido-col">
@@ -119,6 +132,8 @@
                 campoBusca: document.getElementById('campo-busca'),
                 listaAssistidos: document.getElementById('lista-assistidos'),
                 detalhesAssistido: document.getElementById('detalhes-assistido'),
+                // --- NOVO: Referência ao botão ---
+                btnAtualizarLista: document.getElementById('btn-atualizar-lista')
             };
 
             async function registrarLog(acao, detalhes) {
@@ -149,7 +164,7 @@
                 ui.alfabetoFiltro.appendChild(btnTodos);
             }
 
-            async function prepararReavaliacao(ciclo, user) {
+             async function prepararReavaliacao(ciclo, user) {
                 if (!confirm(`Preparar a 5ª Semana (Reavaliação) para o ciclo iniciado em ${ciclo.dataInicio.toDate().toLocaleDateString('pt-br')}?`)) {
                     return;
                 }
@@ -209,7 +224,7 @@
                     if (['P3A', 'P3B'].includes(passe_ciclo_atual) && [2, 3].includes(semanaNum)) { precisaEntrevista = true; }
                 }
                 if (a.tipo === 'avulso') { tipoAtendimento = 'Passe Avulso'; infoExtra = `(${a.passeRecomendado})`; }
-                else if (a.tipo === 'falta') { tipoAtendimento = 'Falta'; infoExtra = ''; } // Corrige para mostrar 'Falta'
+                else if (a.tipo === 'falta') { tipoAtendimento = 'Falta'; infoExtra = ''; }
                 else { tipoAtendimento = `Semana ${a.semana || '?'}`; infoExtra = `(${a.passeRecomendado})`; }
 
                 if (precisaEntrevista) {
@@ -222,9 +237,6 @@
                 return `<li ${estiloItem}><div class="atendimento-info">${iconeHtml}<span><strong>${dataAtendimento}</strong> - ${tipoAtendimento} ${infoExtra}</span></div>${botaoEditarHtml}</li>`;
             }
 
-            // ===================================================================
-            // INÍCIO DA ÁREA MODIFICADA: carregarAssistidos e renderizarListaAssistidos
-            // ===================================================================
             async function carregarAssistidos(filtroLetra = '', termoBusca = '') {
                 ui.listaAssistidos.innerHTML = '<p>Buscando...</p>';
                 let assistidosParaExibir = [];
@@ -351,20 +363,15 @@
                         li.classList.add('selecionado');
                     }
 
-                    // *** AQUI ESTAVA O ERRO ANTERIOR ***
-                    // O event listener PRECISA chamar a função mostrarDetalhes
                     li.addEventListener('click', () => {
                         document.querySelectorAll('#lista-assistidos li').forEach(el => el.classList.remove('selecionado'));
                         li.classList.add('selecionado');
-                        // Chama a função definida neste escopo
-                        mostrarDetalhes(assistido, user);
+                        mostrarDetalhes(assistido, user); // Chama a função definida neste escopo
                     });
                     ui.listaAssistidos.appendChild(li);
                 });
             }
 
-            // *** A DEFINIÇÃO DA FUNÇÃO mostrarDetalhes ***
-            // Ela precisa estar aqui, dentro de inicializarPagina
             async function mostrarDetalhes(assistido, user) {
                 assistidoAtualmenteSelecionado = assistido; // Atualiza a variável global
                 ui.detalhesAssistido.innerHTML = `<h2>Histórico de ${assistido.nome}</h2><p>Carregando histórico...</p>`;
@@ -384,38 +391,65 @@
 
                 renderizarHistorico(assistido, ciclos, todosAtendimentos, user); // Chama a função que monta o HTML do histórico
             }
-            // ===================================================================
-            // FIM DA ÁREA MODIFICADA
-            // ===================================================================
 
 
+            // --- Listener para filtro de letra ---
             ui.alfabetoFiltro.addEventListener('click', (e) => {
                 if (e.target.tagName === 'BUTTON') {
+                    const letraSelecionada = e.target.dataset.letra;
                     document.querySelectorAll('#alfabeto-filtro button').forEach(btn => btn.classList.remove('ativo'));
                     e.target.classList.add('ativo');
                     ui.campoBusca.value = '';
                     assistidoAtualmenteSelecionado = null;
                     ui.detalhesAssistido.innerHTML = `<p style="text-align: center; color: #666; margin-top: 50px;">Carregando lista...</p>`;
-                    carregarAssistidos(e.target.dataset.letra, '');
+                    carregarAssistidos(letraSelecionada, '');
                 }
             });
 
+            // --- Listener para campo de busca ---
             ui.campoBusca.addEventListener('input', (e) => {
                 clearTimeout(debounceTimer);
                 debounceTimer = setTimeout(() => {
+                    const termoBusca = e.target.value;
                     document.querySelectorAll('#alfabeto-filtro button').forEach(btn => btn.classList.remove('ativo'));
+                    // Se a busca for limpa, ativa o botão "Todos" e carrega a lista padrão
+                    if (!termoBusca) {
+                        const btnTodos = ui.alfabetoFiltro.querySelector('button[data-letra=""]');
+                        if(btnTodos) btnTodos.classList.add('ativo');
+                    }
                     assistidoAtualmenteSelecionado = null;
                     ui.detalhesAssistido.innerHTML = `<p style="text-align: center; color: #666; margin-top: 50px;">Carregando lista...</p>`;
-                    carregarAssistidos('', e.target.value);
+                    carregarAssistidos('', termoBusca); // Passa '' como filtroLetra
                 }, 500);
             });
 
+            // --- Listener para o botão Atualizar Lista ---
+            ui.btnAtualizarLista.addEventListener('click', () => {
+                console.log("Botão Atualizar clicado."); // Log para debug
+                // Descobre qual filtro está ativo (letra ou busca)
+                const filtroLetraAtivo = ui.alfabetoFiltro.querySelector('button.ativo')?.dataset.letra || '';
+                const termoBuscaAtivo = ui.campoBusca.value;
+
+                // Mostra feedback visual
+                ui.listaAssistidos.innerHTML = '<p>Atualizando lista...</p>';
+                if (!assistidoAtualmenteSelecionado) { // Só limpa detalhes se nenhum estiver selecionado
+                     ui.detalhesAssistido.innerHTML = `<p style="text-align: center; color: #666; margin-top: 50px;">Selecione um assistido...</p>`;
+                }
+
+                // Chama carregarAssistidos com os filtros/busca atuais
+                carregarAssistidos(filtroLetraAtivo, termoBuscaAtivo);
+            });
+
+            // --- Listener para recarregar histórico AO VOLTAR PARA A ABA ---
             window.addEventListener('focus', () => {
                 if (assistidoAtualmenteSelecionado) {
+                    console.log("Janela focada, recarregando detalhes..."); // Log para debug
+                    // Recarrega apenas os detalhes do assistido selecionado
                     mostrarDetalhes(assistidoAtualmenteSelecionado, user);
                 }
             });
 
+            // --- Inicialização ---
             gerarBotoesAlfabeto();
             carregarAssistidos(); // Carga inicial
         }
