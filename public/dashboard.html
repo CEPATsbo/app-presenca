@@ -67,7 +67,6 @@
             color: inherit;
             transition: transform 0.2s, box-shadow 0.2s;
             position: relative;
-            /* ## A BORDA PADRÃO AGORA É TRANSPARENTE ## */
             border-left: 5px solid transparent;
         }
         .card.hidden {
@@ -88,6 +87,14 @@
             line-height: 1.5;
             text-align: left;
         }
+        /* Estilo específico para o parágrafo de aviso */
+        #card-ae-warning {
+             color: #dc3545; /* Cor vermelha para atenção */
+             font-weight: bold;
+             margin-top: 5px; /* Espaçamento */
+             display: none; /* Começa escondido */
+        }
+
         .logout-container {
             width: 100%;
             max-width: 1000px;
@@ -104,11 +111,7 @@
             font-weight: bold;
             text-decoration: none;
         }
-        .card.notificacao-ativa { /* Estilo antigo, não mais usado para AE */
-            background-color: #fff3cd;
-            border-left-color: #ffc107 !important; /* !important para sobrescrever */
-            animation: pulse 1.5s infinite;
-        }
+        /* Badge de notificação */
         .notification-badge {
             position: absolute;
             top: 15px;
@@ -125,11 +128,17 @@
             font-size: 0.9em;
             display: none; /* Começa escondido */
         }
+        /* Remover animação pulse (se não for mais necessária) */
+        /*
+        .card.notificacao-ativa {
+            animation: pulse 1.5s infinite;
+        }
         @keyframes pulse {
             0% { box-shadow: 0 0 0 0 rgba(255, 193, 7, 0.7); }
             70% { box-shadow: 0 0 0 10px rgba(255, 193, 7, 0); }
             100% { box-shadow: 0 0 0 0 rgba(255, 193, 7, 0); }
         }
+        */
     </style>
 </head>
 <body>
@@ -144,11 +153,20 @@
 
     <div id="main-content" class="card-container">
 
+        {/* =================================================================== */}
+        {/* Card da Assistência Espiritual MODIFICADO (comentário removido, <p> adicionado) */}
+        {/* =================================================================== */}
         <a href="/dashboard-ae.html" class="card" id="card-assistencia-espiritual" data-role="super-admin,diretor,tesoureiro,conselheiro,entrevistador,recepcionista,irradiador" style="border-left-color: #2ecc71;">
             <h2 id="card-ae-titulo">Assistência Espiritual</h2>
             <p id="card-ae-status">Gerenciar todo o fluxo de atendimento Fraterno.</p>
-            <span class="notification-badge" id="card-ae-badge">0</span> {/* Removida a classe 'hidden' inicial, JS controla */}
+            {/* NOVO PARÁGRAFO PARA O AVISO */}
+            <p id="card-ae-warning"></p>
+            <span class="notification-badge" id="card-ae-badge">0</span>
         </a>
+        {/* =================================================================== */}
+        {/* FIM DA MODIFICAÇÃO */}
+        {/* =================================================================== */}
+
 
         <a href="/dashboard-educacional.html" class="card" data-role="super-admin,secretario-escola,dirigente-escola,diretor,tesoureiro" style="border-left-color: #3498db;">
             <h2>Módulo Educacional</h2>
@@ -263,10 +281,8 @@
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
         import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-auth.js";
-        // ===================================================================
-        // IMPORTS MODIFICADOS (getFirestore adicionado aqui)
-        // ===================================================================
         import { getFirestore, collection, query, where, onSnapshot, Timestamp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
+
 
         const firebaseConfig = {
             apiKey: "AIzaSyBV7RPjk3cFTqL-aIpflJcUojKg1ZXMLuU",
@@ -279,10 +295,7 @@
 
         const app = initializeApp(firebaseConfig);
         const auth = getAuth(app);
-        // ===================================================================
-        // INICIALIZAÇÃO DO FIRESTORE (Adicionado)
-        // ===================================================================
-        const db = getFirestore(app); // Inicializa o Firestore aqui
+        const db = getFirestore(app); // Inicializa o Firestore
 
         onAuthStateChanged(auth, (user) => {
             if (user) {
@@ -292,16 +305,17 @@
                         const rolesPermitidas = card.dataset.role.split(',');
 
                         if (userRole === 'super-admin' || rolesPermitidas.includes(userRole)) {
-                            card.style.display = 'block'; // Mostra o card se permitido
+                            card.style.display = 'block';
                         } else {
-                            card.style.display = 'none'; // Esconde o card se não permitido
+                            card.style.display = 'none';
                         }
                     });
-                    document.getElementById('main-content').style.display = 'grid'; // Mostra o container
+                    document.getElementById('main-content').style.display = 'grid';
 
-                    // Chama a função de monitoramento DEPOIS de verificar as permissões
-                    if (document.getElementById('card-assistencia-espiritual').style.display !== 'none') {
-                         monitorarEntrevistasPendentes(); // Nome atualizado
+                    // Chama a função de monitoramento SE o card for visível
+                    const cardAE = document.getElementById('card-assistencia-espiritual');
+                    if (cardAE && cardAE.style.display !== 'none') {
+                         monitorarEntrevistasPendentes();
                     }
                 });
             } else {
@@ -317,14 +331,10 @@
             });
         });
 
-        // ===================================================================
-        // FUNÇÃO DE MONITORAMENTO CORRIGIDA
-        // ===================================================================
-        function monitorarEntrevistasPendentes() { // Nome atualizado
-            // const db = getFirestore(); // db já foi inicializado acima
-            const atendimentosRef = collection(db, 'atendimentos_ae'); // Coleção correta
+        // Função de monitoramento corrigida
+        function monitorarEntrevistasPendentes() {
+            const atendimentosRef = collection(db, 'atendimentos_ae');
 
-            // Query correta para buscar entrevistas pendentes
             const qPendentes = query(
                 atendimentosRef,
                 where("detalhes_preenchidos", "==", false),
@@ -332,52 +342,45 @@
                 // Nota: Pode precisar de índice no Firestore.
             );
 
-            // Escuta em tempo real
             onSnapshot(qPendentes, (snapshot) => {
-                atualizarCardNotificacao(snapshot.size); // Chama a função de atualização da UI
+                atualizarCardNotificacao(snapshot.size);
             }, (error) => {
                 console.error("Erro ao monitorar entrevistas pendentes:", error);
-                atualizarCardNotificacao(0); // Esconde o badge em caso de erro
+                atualizarCardNotificacao(0);
             });
         }
-        // ===================================================================
-        // FIM DA CORREÇÃO
-        // ===================================================================
-
 
         // ===================================================================
-        // FUNÇÃO DE ATUALIZAÇÃO DA UI CORRIGIDA
+        // FUNÇÃO DE ATUALIZAÇÃO DA UI CORRIGIDA (com parágrafo de aviso)
         // ===================================================================
         function atualizarCardNotificacao(count) {
             const card = document.getElementById('card-assistencia-espiritual');
-            const status = document.getElementById('card-ae-status');
+            const status = document.getElementById('card-ae-status'); // Parágrafo original
+            const warning = document.getElementById('card-ae-warning'); // NOVO: Parágrafo de aviso
             const badge = document.getElementById('card-ae-badge');
 
-            // Verifica se todos os elementos existem antes de tentar usá-los
-            if (!card || !status || !badge) {
+            // Verifica se todos os elementos existem
+            if (!card || !status || !warning || !badge) {
                 console.error("Um ou mais elementos do card de notificação AE não foram encontrados no HTML.");
                 return;
             }
 
+            // Mantém o texto original SEMPRE visível
+            status.textContent = 'Gerenciar todo o fluxo de atendimento Fraterno.';
+            card.classList.remove('notificacao-ativa'); // Remove estilo antigo
+            card.style.borderLeftColor = '#2ecc71'; // Garante cor original da borda
+
             if (count > 0) {
-                card.classList.remove('notificacao-ativa'); // Remove estilo antigo
-                card.style.borderLeftColor = '#2ecc71'; // Garante cor original da borda
+                // Mostra o aviso e o badge
+                warning.textContent = `Atenção: ${count} entrevista(s) aguardando preenchimento.`;
+                warning.style.display = 'block'; // Mostra o parágrafo de aviso
 
-                // Atualiza o texto descritivo
-                status.textContent = `Atenção: ${count} entrevista(s) aguardando preenchimento.`;
-
-                badge.textContent = count; // Atualiza o número no badge
-                // badge.classList.remove('hidden'); // Não usamos mais a classe hidden aqui
-                badge.style.display = 'flex'; // Torna o badge visível
+                badge.textContent = count;
+                badge.style.display = 'flex'; // Mostra o badge
 
             } else {
-                card.classList.remove('notificacao-ativa');
-                card.style.borderLeftColor = '#2ecc71';
-
-                // Restaura o texto padrão
-                status.textContent = 'Gerenciar todo o fluxo de atendimento Fraterno.';
-
-                // badge.classList.add('hidden'); // Não usamos mais a classe hidden aqui
+                // Esconde o aviso e o badge
+                warning.style.display = 'none'; // Esconde o parágrafo de aviso
                 badge.style.display = 'none'; // Esconde o badge
             }
         }
