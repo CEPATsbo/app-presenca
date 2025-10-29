@@ -149,18 +149,89 @@
                 ui.alfabetoFiltro.appendChild(btnTodos);
             }
 
+            async function prepararReavaliacao(ciclo, user) {
+                if (!confirm(`Preparar a 5ª Semana (Reavaliação) para o ciclo iniciado em ${ciclo.dataInicio.toDate().toLocaleDateString('pt-br')}?`)) {
+                    return;
+                }
+                const btn = document.getElementById(`btn-preparar-${ciclo.id}`);
+                btn.disabled = true; btn.textContent = 'Criando...';
+                try {
+                    const novoAtendimento = { assistidoId: ciclo.assistidoId, tratamentoId: ciclo.id, tipo: 'tratamento_semanal', dataAtendimento: null, semana: 5, entrevistador: 'Aguardando Decisão', passeRecomendado: ciclo.passe_ciclo_atual, notas: '', detalhes_preenchidos: false, decisao_pre_registrada: false, criadoPor: { uid: user.uid, nome: user.displayName || 'Usuário do Sistema' }, criadoEm: serverTimestamp() };
+                    const docRef = await addDoc(atendimentosRef, novoAtendimento);
+                    registrarLog('Preparação de Reavaliação (AE)', { assistidoId: ciclo.assistidoId, tratamentoId: ciclo.id, atendimentoId: docRef.id });
+                    alert('Placeholder da 5ª Semana criado. Você já pode registrar a decisão do colegiado.');
+                    mostrarDetalhes(assistidoAtualmenteSelecionado, user); // Recarrega
+                } catch (error) {
+                    console.error("Erro ao preparar reavaliação:", error); alert("Falha ao criar o registro da 5ª semana.");
+                    btn.disabled = false; btn.textContent = 'Preparar Reavaliação (5ª Semana)';
+                }
+            }
+
+            function renderizarHistorico(assistido, ciclos, todosAtendimentos, user) {
+                const dnFormatado = assistido.dn ? new Date(assistido.dn + 'T12:00:00').toLocaleDateString('pt-br') : 'Não informado';
+                let html = `<h2>Histórico de ${assistido.nome}</h2>`;
+                html += `<p><strong>DN:</strong> ${dnFormatado} | <strong>Telefone:</strong> ${assistido.telefone || 'Não informado'}</p>`;
+                html += '<div id="historico-container">';
+                if (ciclos.length > 0) {
+                    ciclos.forEach(ciclo => {
+                        const dataInicio = ciclo.dataInicio ? ciclo.dataInicio.toDate().toLocaleDateString('pt-br') : 'N/A';
+                        const statusClasse = ciclo.status === 'ativo' ? 'status-ativo' : 'status-concluido';
+                        html += `<div class="ciclo-tratamento"><div class="ciclo-header"><span>Início: ${dataInicio} | Passe do Ciclo: ${ciclo.passe_ciclo_atual || 'N/A'}</span><span class="${statusClasse}">${ciclo.status.replace(/_/g, ' ')}</span></div><ul class="atendimentos-lista">`;
+                        const atendimentosDoCiclo = todosAtendimentos.filter(a => a.tratamentoId === ciclo.id);
+                        const atendimentosValidos = atendimentosDoCiclo.filter(a => a.tipo !== 'falta');
+                        atendimentosValidos.sort((a, b) => a.dataAtendimento?.toMillis() - b.dataAtendimento?.toMillis());
+                        const semana5JaExiste = atendimentosValidos.find(a => a.semana === 5);
+                        if (atendimentosDoCiclo.length === 0) { html += '<li>Nenhum atendimento registrado.</li>'; }
+                        else { atendimentosDoCiclo.sort((a, b) => a.dataAtendimento?.toMillis() - b.dataAtendimento?.toMillis()).forEach(a => { html += renderizarItemAtendimento(a, ciclo.passe_ciclo_atual); }); }
+                        if (ciclo.status === 'ativo' && atendimentosValidos.length === 4 && !semana5JaExiste) { html += `<button id="btn-preparar-${ciclo.id}" class="btn-acao">Preparar Reavaliação (5ª Semana)</button>`; }
+                        html += `</ul></div>`;
+                    });
+                }
+                const passesAvulsos = todosAtendimentos.filter(a => a.tipo === 'avulso');
+                if (passesAvulsos.length > 0) {
+                    html += `<div class="ciclo-tratamento"><div class="ciclo-header"><span>Passes Avulsos</span></div><ul class="atendimentos-lista">`;
+                    passesAvulsos.sort((a, b) => a.dataAtendimento?.toMillis() - b.dataAtendimento?.toMillis()).forEach(a => { html += renderizarItemAtendimento(a, null); });
+                    html += `</ul></div>`;
+                }
+                if (ciclos.length === 0 && passesAvulsos.length === 0) { html += '<p>Nenhum atendimento registrado.</p>'; }
+                html += '</div>';
+                ui.detalhesAssistido.innerHTML = html;
+                ciclos.forEach(ciclo => { const btn = document.getElementById(`btn-preparar-${ciclo.id}`); if (btn) { btn.addEventListener('click', () => prepararReavaliacao(ciclo, user)); } });
+            }
+
+            function renderizarItemAtendimento(a, passe_ciclo_atual) {
+                const dataAtendimento = a.dataAtendimento ? a.dataAtendimento.toDate().toLocaleDateString('pt-br') : "Aguardando Presença";
+                let tipoAtendimento = a.tipo?.replace(/_/g, ' ') || 'N/A';
+                let infoExtra = ''; let botaoEditarHtml = ''; let iconeHtml = ''; let precisaEntrevista = false;
+                if (a.tipo !== 'falta' && a.tipo !== 'avulso') {
+                    const semanaNum = a.semana || 0;
+                    if ([1, 4, 5].includes(semanaNum)) { precisaEntrevista = true; }
+                    if (['P3A', 'P3B'].includes(passe_ciclo_atual) && [2, 3].includes(semanaNum)) { precisaEntrevista = true; }
+                }
+                if (a.tipo === 'avulso') { tipoAtendimento = 'Passe Avulso'; infoExtra = `(${a.passeRecomendado})`; }
+                else if (a.tipo === 'falta') { tipoAtendimento = 'Falta'; infoExtra = ''; } // Corrige para mostrar 'Falta'
+                else { tipoAtendimento = `Semana ${a.semana || '?'}`; infoExtra = `(${a.passeRecomendado})`; }
+
+                if (precisaEntrevista) {
+                    if (a.semana === 5 && a.decisao_pre_registrada === true && a.dataAtendimento === null) { iconeHtml = '<span>🔵</span>'; tipoAtendimento = "Reavaliação (Decisão Pronta)"; }
+                    else if (a.detalhes_preenchidos === true) { iconeHtml = '<span>✅</span>'; }
+                    else { iconeHtml = '<span>📝</span>'; } // Pendente
+                    botaoEditarHtml = `<a href="/entrevista-ae.html?atendimentoId=${a.id}" target="_blank" class="btn btn-editar">Ver / Editar</a>`;
+                }
+                let estiloItem = ''; if (a.dataAtendimento === null && a.semana === 5) { estiloItem = 'style="background-color: #fffbe6;"'; }
+                return `<li ${estiloItem}><div class="atendimento-info">${iconeHtml}<span><strong>${dataAtendimento}</strong> - ${tipoAtendimento} ${infoExtra}</span></div>${botaoEditarHtml}</li>`;
+            }
+
             // ===================================================================
             // INÍCIO DA ÁREA MODIFICADA: carregarAssistidos e renderizarListaAssistidos
             // ===================================================================
             async function carregarAssistidos(filtroLetra = '', termoBusca = '') {
                 ui.listaAssistidos.innerHTML = '<p>Buscando...</p>';
                 let assistidosParaExibir = [];
-                // Determina se a visão é padrão (sem filtro/busca) ou filtrada
                 const isVisaoPadrao = !filtroLetra && !termoBusca;
 
                 try {
                     // 1. Buscar SEMPRE os IDs com pendências (para o ícone)
-                    // Esta busca acontece independentemente do filtro principal
                     const qPendingInterviews = query(atendimentosRef,
                         where("detalhes_preenchidos", "==", false),
                         where("entrevistador", "==", "Aguardando Detalhes")
@@ -171,8 +242,7 @@
                     // console.log(`Encontrados ${assistidosComPendencias.size} assistidos com pendências.`); // Log de debug (opcional)
 
                     // 2. Lógica de busca principal
-                    // CASO A: Filtro de letra ou busca por nome (mostra TODOS que batem com o filtro)
-                    if (!isVisaoPadrao) {
+                    if (!isVisaoPadrao) { // Filtro ou Busca Ativos
                         let q;
                         if (termoBusca) {
                             const termo = termoBusca.toLowerCase();
@@ -185,98 +255,83 @@
                         assistidosParaExibir = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
                         // console.log(`Busca/Filtro: Exibindo ${assistidosParaExibir.length} assistidos.`); // Log de debug (opcional)
 
-                    // CASO B: Visão padrão (sem filtro/busca) - mostra Ativos + Pendentes
-                    } else {
-                        // Busca IDs com tratamentos ativos
+                    } else { // Visão Padrão (Ativos + Pendentes)
                         const qActiveTreatments = query(tratamentosRef, where('status', '==', 'ativo'));
                         const activeSnapshot = await getDocs(qActiveTreatments);
                         const activeAssistidoIds = new Set(activeSnapshot.docs.map(doc => doc.data().assistidoId));
                         // console.log(`Encontrados ${activeAssistidoIds.size} assistidos com tratamentos ativos.`); // Log de debug (opcional)
 
-                        // Combina os IDs (Ativos + Pendentes)
                         const idsParaMostrar = new Set([...activeAssistidoIds, ...assistidosComPendencias]);
                         // console.log(`Total de IDs únicos para mostrar (Ativos OU Pendentes): ${idsParaMostrar.size}`); // Log de debug (opcional)
 
                         if (idsParaMostrar.size > 0) {
-                            // Converte Set para Array para usar na query 'in'
                             const idsArray = Array.from(idsParaMostrar);
-
-                            // Firestore limita 'in' a 30 IDs por query.
-                            // Se tiver mais, precisa dividir em múltiplas queries.
-                            const MAX_IDS_PER_QUERY = 30; // Limite atual do Firestore
+                            const MAX_IDS_PER_QUERY = 30;
                             if (idsArray.length > MAX_IDS_PER_QUERY) {
                                 console.warn(`A lista de assistidos ativos/pendentes (${idsArray.length}) excede o limite de ${MAX_IDS_PER_QUERY} do Firestore. Exibindo apenas os primeiros ${MAX_IDS_PER_QUERY}.`);
-                                // Limita o array para a primeira query (pode-se implementar paginação ou múltiplas queries aqui)
                                 idsArray.splice(MAX_IDS_PER_QUERY);
                             }
-
-                            // Query usando documentId() e 'in'
+                            // Usar documentId() importado
                             const qDefault = query(assistidosRef, where(documentId(), 'in', idsArray));
                             const defaultSnapshot = await getDocs(qDefault);
                             assistidosParaExibir = defaultSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-
-                            // Ordena alfabeticamente APÓS buscar, pois 'in' não garante ordem
                             assistidosParaExibir.sort((a, b) => a.nome.localeCompare(b.nome));
                             // console.log(`Visão Padrão: Exibindo ${assistidosParaExibir.length} assistidos (Ativos ou Pendentes).`); // Log de debug (opcional)
                         } else {
                              // console.log("Nenhum assistido ativo ou com pendências encontrado."); // Log de debug (opcional)
-                             assistidosParaExibir = []; // Lista vazia
+                             assistidosParaExibir = [];
                         }
                     }
 
-                    // 3. Renderiza a lista (passando as pendências para o ícone)
+                    // 3. Renderiza a lista
                     renderizarListaAssistidos(assistidosParaExibir, assistidosComPendencias);
 
-                    // 4. Seleciona assistido da URL (se houver)
+                    // 4. Seleciona assistido da URL ou limpa detalhes
                     const params = new URLSearchParams(window.location.search);
                     const assistidoIdUrl = params.get('assistidoId');
                     if (assistidoIdUrl) {
                         const assistidoParaMostrar = assistidosParaExibir.find(a => a.id === assistidoIdUrl);
-                        // Se o assistido da URL está na lista atual, seleciona-o
                         if (assistidoParaMostrar) {
                             const liCorrespondente = ui.listaAssistidos.querySelector(`[data-assistido-id="${assistidoIdUrl}"]`);
-                            if (liCorrespondente && !liCorrespondente.classList.contains('selecionado')) { // Evita recarregar se já selecionado
+                            if (liCorrespondente && !liCorrespondente.classList.contains('selecionado')) {
                                 liCorrespondente.classList.add('selecionado');
                                 mostrarDetalhes(assistidoParaMostrar, user);
                             }
                         } else if (!assistidoAtualmenteSelecionado || assistidoAtualmenteSelecionado.id !== assistidoIdUrl) {
-                            // Se o assistido da URL NÃO está na lista atual E não é o já selecionado,
-                            // carrega ele individualmente para mostrar o histórico.
                             console.log(`Assistido da URL (${assistidoIdUrl}) não está na lista filtrada. Carregando individualmente...`);
                             const docRef = doc(db, 'assistidos', assistidoIdUrl);
                             const docSnap = await getDoc(docRef);
                             if (docSnap.exists()) {
-                                // Adiciona temporariamente à lista para seleção visual (opcional)
                                 const tempAssistido = { id: docSnap.id, ...docSnap.data() };
-                                renderizarListaAssistidos([tempAssistido, ...assistidosParaExibir], assistidosComPendencias); // Adiciona no início
+                                // Temporariamente adiciona à lista para seleção visual
+                                renderizarListaAssistidos([tempAssistido, ...assistidosParaExibir].sort((a,b)=>a.nome.localeCompare(b.nome)), assistidosComPendencias);
                                 const liCorrespondente = ui.listaAssistidos.querySelector(`[data-assistido-id="${assistidoIdUrl}"]`);
                                 if (liCorrespondente) liCorrespondente.classList.add('selecionado');
                                 mostrarDetalhes(tempAssistido, user);
-                            } else {
-                                 ui.detalhesAssistido.innerHTML = `<p class="erro">Assistido com ID ${assistidoIdUrl} não encontrado.</p>`;
-                            }
+                            } else { ui.detalhesAssistido.innerHTML = `<p class="erro">Assistido com ID ${assistidoIdUrl} não encontrado.</p>`; }
                         }
-                    // Se não veio ID na URL e nenhum está selecionado, limpa detalhes
                     } else if (assistidosParaExibir.length > 0 && !assistidoAtualmenteSelecionado) {
                          ui.detalhesAssistido.innerHTML = `<p style="text-align: center; color: #666; margin-top: 50px;">Selecione um assistido na lista à esquerda para ver seu histórico.</p>`;
                     } else if (assistidosParaExibir.length === 0){
-                         // Se a lista resultante está vazia, limpa detalhes
                          ui.detalhesAssistido.innerHTML = `<p style="text-align: center; color: #666; margin-top: 50px;">Nenhum assistido encontrado.</p>`;
                     }
-
 
                 } catch (error) {
                     console.error("Erro ao carregar assistidos:", error);
                     ui.listaAssistidos.innerHTML = '<p style="color: red;">Erro ao carregar lista.</p>';
                     if (error.code === 'failed-precondition') {
                          alert("Erro: O Firestore precisa de um índice para esta consulta. Verifique o console (F12) para o link de criação do índice ou detalhes.");
-                         console.error("Link para criar índice (copie e cole no navegador se não for clicável):", error.message.substring(error.message.indexOf('https://console.firebase.google.com')));
+                         // Tenta extrair e logar o link do índice
+                         const urlMatch = error.message.match(/https?:\/\/[^\s]+/);
+                         if(urlMatch && urlMatch[0]){
+                             console.error("Link para criar índice (copie e cole no navegador):", urlMatch[0]);
+                         }
                      }
                 }
             }
 
             function renderizarListaAssistidos(assistidos, pendingAssistidoIds) {
-                ui.listaAssistidos.innerHTML = ''; // Limpa a lista existente
+                ui.listaAssistidos.innerHTML = '';
                 if (assistidos.length === 0) {
                     ui.listaAssistidos.innerHTML = '<p>Nenhum assistido encontrado para os critérios atuais.</p>';
                     return;
@@ -284,69 +339,85 @@
                 assistidos.forEach(assistido => {
                     const li = document.createElement('li');
                     let liContent = '';
-                    // Adiciona o ícone se o ID do assistido estiver no Set de pendências
                     if (pendingAssistidoIds.has(assistido.id)) {
-                        liContent += '<span class="icone-pendente">📝</span>'; // Adiciona ícone antes do nome
+                        liContent += '<span class="icone-pendente">📝</span>'; // Ícone antes do nome
                     }
-                    liContent += assistido.nome; // Adiciona o nome
+                    liContent += assistido.nome; // Nome
 
-                    li.innerHTML = liContent; // Define o conteúdo HTML (renderiza o span)
+                    li.innerHTML = liContent;
                     li.dataset.assistidoId = assistido.id;
 
-                    // Marca como selecionado se for o assistido atualmente carregado
                     if(assistidoAtualmenteSelecionado && assistido.id === assistidoAtualmenteSelecionado.id){
                         li.classList.add('selecionado');
                     }
 
+                    // *** AQUI ESTAVA O ERRO ANTERIOR ***
+                    // O event listener PRECISA chamar a função mostrarDetalhes
                     li.addEventListener('click', () => {
-                        // Desmarca outros itens
                         document.querySelectorAll('#lista-assistidos li').forEach(el => el.classList.remove('selecionado'));
-                        // Marca o item clicado
                         li.classList.add('selecionado');
-                        // Mostra os detalhes
+                        // Chama a função definida neste escopo
                         mostrarDetalhes(assistido, user);
                     });
                     ui.listaAssistidos.appendChild(li);
                 });
             }
+
+            // *** A DEFINIÇÃO DA FUNÇÃO mostrarDetalhes ***
+            // Ela precisa estar aqui, dentro de inicializarPagina
+            async function mostrarDetalhes(assistido, user) {
+                assistidoAtualmenteSelecionado = assistido; // Atualiza a variável global
+                ui.detalhesAssistido.innerHTML = `<h2>Histórico de ${assistido.nome}</h2><p>Carregando histórico...</p>`;
+
+                await registrarLog('Visualização de Histórico (AE)', {
+                    assistidoId: assistido.id,
+                    assistidoNome: assistido.nome
+                });
+
+                const qTratamentos = query(tratamentosRef, where('assistidoId', '==', assistido.id), orderBy('dataInicio', 'desc'));
+                const tratamentosSnapshot = await getDocs(qTratamentos);
+                const ciclos = tratamentosSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+
+                const qAtendimentos = query(atendimentosRef, where('assistidoId', '==', assistido.id), orderBy('dataAtendimento', 'desc'));
+                const atendimentosSnapshot = await getDocs(qAtendimentos);
+                const todosAtendimentos = atendimentosSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+
+                renderizarHistorico(assistido, ciclos, todosAtendimentos, user); // Chama a função que monta o HTML do histórico
+            }
             // ===================================================================
             // FIM DA ÁREA MODIFICADA
             // ===================================================================
 
-            // --- Listener para filtro de letra ---
+
             ui.alfabetoFiltro.addEventListener('click', (e) => {
                 if (e.target.tagName === 'BUTTON') {
                     document.querySelectorAll('#alfabeto-filtro button').forEach(btn => btn.classList.remove('ativo'));
                     e.target.classList.add('ativo');
-                    ui.campoBusca.value = ''; // Limpa busca
-                    assistidoAtualmenteSelecionado = null; // Limpa seleção
-                    ui.detalhesAssistido.innerHTML = `<p style="text-align: center; color: #666; margin-top: 50px;">Carregando lista...</p>`; // Feedback visual
-                    carregarAssistidos(e.target.dataset.letra, ''); // Carrega filtrado
+                    ui.campoBusca.value = '';
+                    assistidoAtualmenteSelecionado = null;
+                    ui.detalhesAssistido.innerHTML = `<p style="text-align: center; color: #666; margin-top: 50px;">Carregando lista...</p>`;
+                    carregarAssistidos(e.target.dataset.letra, '');
                 }
             });
 
-            // --- Listener para campo de busca ---
             ui.campoBusca.addEventListener('input', (e) => {
                 clearTimeout(debounceTimer);
                 debounceTimer = setTimeout(() => {
-                    document.querySelectorAll('#alfabeto-filtro button').forEach(btn => btn.classList.remove('ativo')); // Desativa letras
-                    assistidoAtualmenteSelecionado = null; // Limpa seleção
-                    ui.detalhesAssistido.innerHTML = `<p style="text-align: center; color: #666; margin-top: 50px;">Carregando lista...</p>`; // Feedback visual
-                    carregarAssistidos('', e.target.value); // Carrega com busca
+                    document.querySelectorAll('#alfabeto-filtro button').forEach(btn => btn.classList.remove('ativo'));
+                    assistidoAtualmenteSelecionado = null;
+                    ui.detalhesAssistido.innerHTML = `<p style="text-align: center; color: #666; margin-top: 50px;">Carregando lista...</p>`;
+                    carregarAssistidos('', e.target.value);
                 }, 500);
             });
 
-            // --- Listener para recarregar histórico ao focar na janela ---
             window.addEventListener('focus', () => {
                 if (assistidoAtualmenteSelecionado) {
-                    // Recarrega apenas se um assistido estiver selecionado
                     mostrarDetalhes(assistidoAtualmenteSelecionado, user);
                 }
             });
 
-            // --- Inicialização ---
             gerarBotoesAlfabeto();
-            carregarAssistidos(); // Carrega a lista padrão inicial (ativos + pendentes)
+            carregarAssistidos(); // Carga inicial
         }
     </script>
 </body>
