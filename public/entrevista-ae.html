@@ -27,27 +27,20 @@
         .multiselect { position: relative; }
         .select-box { border: 1px solid #ccc; border-radius: 6px; padding: 10px; cursor: pointer; background-color: #fff; min-height: 1.5em; }
         .select-box[disabled] { background-color: var(--fundo-desabilitado); cursor: not-allowed; }
-        
-        /* --- INÍCIO DAS MODIFICAÇÕES CSS (Checkboxes) --- */
         .checkboxes {
-            display: none; position: absolute; background: white; border: 1px solid var(--cor-borda);
-            border-radius: 6px; z-index: 100; max-height: 200px; overflow-y: auto;
-            padding: 5px 10px; 
-            /* width: 100%; */ /* REMOVIDO */
-            box-sizing: border-box;
-            top: 100%;
-            margin-top: 2px;
-            left: 0;
-            /* NOVO: Define uma largura máxima e mínima */
-            max-width: 300px; 
-            width: max-content; 
-            min-width: 200px;
+            display: grid; /* MODIFICADO */
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); /* MODIFICADO */
+            gap: 5px 15px; /* MODIFICADO */
+            padding: 10px 15px; /* MODIFICADO */
+            border: 1px solid var(--cor-borda); /* MODIFICADO */
+            border-radius: 6px; /* MODIFICADO */
+            margin-top: 5px; /* MODIFICADO */
         }
         .checkboxes label {
             display: flex;
             align-items: center;
-            gap: 4px; /* Diminui o espaço */
-            padding: 5px 0; /* Espaçamento vertical */
+            gap: 5px; /* MODIFICADO */
+            padding: 3px 0; /* MODIFICADO */
             margin: 0;
             cursor: pointer;
             font-size: 0.95em;
@@ -55,10 +48,9 @@
         .checkboxes label input[type="checkbox"] {
              margin: 0;
              flex-shrink: 0;
+             width: 1em;
+             height: 1em;
         }
-        /* --- FIM DAS MODIFICAÇÕES CSS --- */
-        
-        .checkboxes.visible { display: block; }
         .erro { color: #dc3545; font-weight: bold; text-align: center; }
         .hidden { display: none; }
         .botoes-colegiado { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 10px; }
@@ -70,7 +62,6 @@
     </style>
 </head>
 <body>
-    {/* */}
     <nav class="nav-voltar"><a href="#" id="btn-voltar-fecha" class="btn-voltar">⬅ Voltar para o Painel AE (Fecha Aba)</a></nav>
     <div id="acesso-negado" class="container hidden"><h1>Acesso Negado</h1></div>
 
@@ -88,11 +79,6 @@
         import { getAuth } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-auth.js";
         import { protegerPagina } from '/auth.js';
 
-        // ===================================================================
-        // CORREÇÃO DO ERRO (app/duplicate-app)
-        // A config do Firebase ainda é necessária se o auth.js não a exportar,
-        // mas a INICIALIZAÇÃO (initializeApp) é removida.
-        // ===================================================================
         const firebaseConfig = {
             apiKey: "AIzaSyBV7RPjk3cFTqL-aIpflJcUojKg1ZXMLuU",
             authDomain: "voluntarios-ativos---cepat.firebaseapp.com",
@@ -101,11 +87,8 @@
             messagingSenderId: "66122858261",
             appId: "1:66122858261:web:7fa21f1805463b5c08331c"
         };
-        // initializeApp(firebaseConfig); // <-- LINHA REMOVIDA (Esta era a causa do erro)
-        const auth = getAuth(); // Apenas obtemos o auth; a app já foi iniciada pelo auth.js
-        // ===================================================================
-        // FIM DA CORREÇÃO
-        // ===================================================================
+        // initializeApp(firebaseConfig); // REMOVIDO para corrigir 'duplicate-app'
+        const auth = getAuth(); // auth.js já inicializa
 
         protegerPagina(['entrevistador', 'tesoureiro', 'conselheiro', 'diretor', 'super-admin']).then(user => {
             inicializarPagina(user);
@@ -115,7 +98,7 @@
         });
 
         function inicializarPagina(user) {
-            const db = getFirestore(); // Apenas obtemos o Firestore
+            const db = getFirestore();
             const tratamentosRef = collection(db, 'tratamentos_ae');
             const atendimentosRef = collection(db, 'atendimentos_ae');
             const filaRef = collection(db, 'fila_atendimento_ae');
@@ -124,16 +107,15 @@
             const formularioContainer = document.getElementById('formulario-container');
             const params = new URLSearchParams(window.location.search);
             const atendimentoIdParaEditar = params.get('atendimentoId');
-            
-            // --- MODIFICAÇÃO JAVASCRIPT: Botão Voltar/Fechar ---
+
             const btnVoltarFecha = document.getElementById('btn-voltar-fecha');
             if(btnVoltarFecha) {
                 btnVoltarFecha.addEventListener('click', (e) => {
-                    e.preventDefault(); 
-                    console.log('Tentando fechar a janela...');
+                    e.preventDefault();
+                    // console.log('Tentando fechar a janela...'); // Log de debug (opcional)
                     window.close();
                     setTimeout(() => {
-                        console.log('window.close() pode ter falhado. Redirecionando...');
+                        // console.log('window.close() pode ter falhado. Redirecionando...'); // Log de debug (opcional)
                         window.location.href = '/arquivo-geral-ae.html';
                     }, 300);
                 });
@@ -161,32 +143,29 @@
             function manipularEstadoFormulario(travado) {
                 const form = formularioContainer.querySelector('fieldset');
                 if (!form) return;
-                form.querySelectorAll('input:not(#colegiado-de), select:not(#colegiado-de), textarea, input[name="evolucao"]').forEach(el => {
+
+                form.querySelectorAll('input:not(#colegiado-de):not([type="checkbox"]), select:not(#colegiado-de), textarea, input[name="evolucao"]').forEach(el => {
                     if (!el.classList.contains('readonly-input')) {
                         el.disabled = travado;
                     }
                 });
-                // --- MODIFICAÇÃO JAVASCRIPT: Alvo nos checkboxes, não no selectBox ---
+
                 form.querySelectorAll('.checkboxes input[type="checkbox"]').forEach(checkbox => {
                     checkbox.disabled = travado;
                 });
-                // const selectBox = form.querySelector('.select-box'); // Linha removida
-                // if (selectBox) { ... } // Bloco removido
-                // --- FIM DA MODIFICAÇÃO ---
 
                 const colegiadoSection = form.querySelector('.colegiado-section');
                 if (colegiadoSection) {
                     const decisaoSalva = colegiadoSection.classList.contains('colegiado-travado');
                     form.querySelectorAll('#colegiado-para, #colegiado-notas').forEach(el => el.disabled = (travado || decisaoSalva));
-                     // --- MODIFICAÇÃO JAVASCRIPT: Alvo nos checkboxes ---
                      form.querySelectorAll('.checkboxes input[type="checkbox"]').forEach(checkbox => {
                          checkbox.disabled = (travado || decisaoSalva);
                      });
-                     // const selectBox = form.querySelector('.select-box'); // Linha removida
-                     // if (selectBox) { ... } // Bloco removido
                 }
+
                 const btnSalvar = document.getElementById('btn-salvar-entrevista');
                 if(btnSalvar) btnSalvar.style.display = travado ? 'none' : 'block';
+
                 const btnHabilitarExistente = document.getElementById('btn-habilitar-edicao');
                 if(btnHabilitarExistente) btnHabilitarExistente.remove();
                 if (travado) {
@@ -223,12 +202,6 @@
                 document.getElementById('btn-salvar-decisao')?.addEventListener('click', () => salvarDecisaoColegiado(atendimento, atendimentoDocRef));
                 document.getElementById('btn-salvar-entrevista')?.addEventListener('click', () => salvarEntrevistaCompleta(atendimento, atendimentoDocRef));
                 document.getElementById('btn-dar-alta')?.addEventListener('click', () => darAlta(atendimento, atendimentoDocRef));
-
-                // --- MODIFICAÇÃO JAVASCRIPT: Lógica do select-box removida ---
-                // const selectBox = document.querySelector('.select-box');
-                // const checkboxes = document.querySelector('.checkboxes');
-                // if (selectBox && checkboxes) { ... }
-                // --- FIM DA MODIFICAÇÃO ---
             }
 
 
@@ -275,25 +248,21 @@
                 }
             }
 
-            // --- MODIFICAÇÃO JAVASCRIPT: salvarEntrevistaCompleta (remove horarioInicio/Fim) ---
             async function salvarEntrevistaCompleta(atendimento, atendimentoDocRef) {
                 const btn = document.getElementById('btn-salvar-entrevista');
                 const entrevistadorNome = document.getElementById('entrevistador-nome').value.trim();
                 const entrevistaNotas = document.getElementById('entrevista-notas').value.trim();
                 const isReavaliacaoForm = !!document.getElementById('colegiado-notas');
-
                 if (!entrevistadorNome || !entrevistaNotas) { alert('Campos "Entrevistador" e "Descrição da Entrevista" são obrigatórios.'); return; }
                 if (isReavaliacaoForm) {
                     const colegiadoNotas = document.getElementById('colegiado-notas')?.value.trim();
                     if (!colegiadoNotas) { alert('Para reavaliação (ou 1ª semana pós-migração), "Orientações do Colegiado" é obrigatório.'); return; }
                 }
-
                 btn.disabled = true; btn.textContent = 'Salvando...';
                 try {
                     const dadosParaAtualizar = {
                         entrevistador: entrevistadorNome,
                         notas: entrevistaNotas,
-                        // horarioInicio e horarioFim removidos
                         evolucao: document.querySelector('input[name="evolucao"]:checked')?.value || null,
                         colegiadoNotas: document.getElementById('colegiado-notas')?.value.trim() || null,
                         encaminhamentos: Array.from(document.querySelectorAll('.checkboxes input:checked')).map(cb => cb.value),
@@ -321,7 +290,6 @@
                     }
                 }
                 if (document.getElementById('entrevista-notas')) { document.getElementById('entrevista-notas').value = atendimento.notas || ''; }
-                // campos horarioInicio/Fim removidos
                 if (document.querySelector('input[name="evolucao"]')) {
                     const evolucaoSalva = atendimento.evolucao || 'na_mesma';
                     const evolucaoRadio = document.querySelector(`input[name="evolucao"][value="${evolucaoSalva}"]`);
@@ -336,14 +304,12 @@
                     }
                 }
                  if (document.getElementById('colegiado-notas')) { document.getElementById('colegiado-notas').value = atendimento.colegiadoNotas || ''; }
-                 // --- MODIFICAÇÃO: Lógica do select-box removida ---
                  if (atendimento.encaminhamentos && atendimento.encaminhamentos.length > 0) {
                      atendimento.encaminhamentos.forEach(val => {
                          const checkbox = document.querySelector(`.checkboxes input[value="${val}"]`);
                          if (checkbox) checkbox.checked = true;
                      });
                  }
-                 // --- FIM DA MODIFICAÇÃO ---
             }
 
             const gerarOpcoesPasse = (selecionado = '') => {
@@ -354,7 +320,7 @@
             };
 
             // ===================================================================
-            // INÍCIO DA MODIFICAÇÃO JAVASCRIPT: Função criarFormulario
+            // INÍCIO DA MODIFICAÇÃO JAVASCRIPT: Função criarFormulario (HTML dos checkboxes)
             // ===================================================================
             function criarFormulario(atendimento) {
                 const semanaNum = atendimento.semana;
@@ -373,7 +339,6 @@
 
                 let acompanhamentoHtml = '';
                 if (!isInicioRealDeTratamento) {
-                    // Campos de Início e Fim REMOVIDOS daqui
                     acompanhamentoHtml = `<hr><h5>Detalhes do Passe</h5><div class="form-grid">
                             <div class="form-item"><label for="retorno-passe">Passe:</label><input type="text" id="retorno-passe" class="readonly-input" value="${passeDe || 'N/A'}" readonly></div>
                         </div>
@@ -390,8 +355,8 @@
                          if (atendimento.tipo === 'alta_programada' || atendimento.tipo === 'alta') { statusColegiadoHtml = `<p class="status-alta">ALTA PROGRAMADA. Aguardando presença para encerrar.</p>`; }
                          else if (atendimento.passePara) { statusColegiadoHtml = `<p class="status-novo-ciclo">NOVO CICLO (${atendimento.passePara}) PROGRAMADO. Aguardando presença para iniciar.</p>`; }
                     }
-
-                    // --- HTML MODIFICADO: Remove .multiselect e .select-box ---
+                    
+                    // --- HTML MODIFICADO: Remove .multiselect e .select-box, remove comentário errado ---
                     colegiadoHtml = `<hr><div class="${classeColegiado}"><h5>Colegiado</h5>
                             <div class="form-grid">
                                <div class="form-item"><label for="colegiado-de">DE (Passe Anterior):</label><select id="colegiado-de" class="readonly-input" disabled>${gerarOpcoesPasse(passeDe)}</select></div>
@@ -399,7 +364,6 @@
                             </div>
                             <div class="form-item" style="margin-top:15px;">
                                 <label>Encaminhamentos (Múltipla Escolha):</label>
-                                {/* O div .checkboxes agora está diretamente aqui */}
                                 <div class="checkboxes">
                                     <label><input type="checkbox" value="ENL"/> ENL</label><label><input type="checkbox" value="LEITURAS"/> Leituras</label><label><input type="checkbox" value="EAE"/> EAE</label><label><input type="checkbox" value="VOLUNTARIADO"/> Voluntariado</label><label><input type="checkbox" value="MÉDICO"/> Médico</label><label><input type="checkbox" value="ALIMENTO"/> Alimento</label><label><input type="checkbox" value="NATUREZA"/> Natureza</label><label><input type="checkbox" value="MOCIDADE"/> Mocidade</label><label><input type="checkbox" value="EVANGELIZAÇÃO"/> Evangelização</label>
                                 </div>
