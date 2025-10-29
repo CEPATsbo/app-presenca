@@ -33,10 +33,8 @@
         .btn-edit { background-color: #1976d2; color: white; border-color: #1976d2;}
         .btn-toggle { background-color: #ffb300; }
         .btn-delete { background-color: #c62828; color: white; border-color: #c62828; }
-        /* ### AJUSTE NOS BOTÕES DE PROMOÇÃO/REVOGAÇÃO ### */
         .btn-promover { background-color: #4caf50; color: white; border-color: #4caf50; }
         .btn-revogar { background-color: #e57373; color: white; border-color: #e57373; }
-        /* --- Fim do Ajuste --- */
         .btn-gerar-cracha { background-color: #007bff; color: white; border-color: #007bff; }
         .tasv-container { text-align: center; }
         .tasv-container label { font-size: 0.8em; font-weight: bold; }
@@ -140,8 +138,12 @@
             const gerarCracha = httpsCallable(functions, 'gerarCracha');
             const backfillNomesCracha = httpsCallable(functions, 'backfillNomesCracha');
 
-            // Mapeamento de todas as funções de cargo
+            // ### AJUSTE 1 DE 2: Adicionadas funções de Diretor e Tesoureiro ###
             const funcoesCargos = {
+                'promoverParaDiretor': httpsCallable(functions, 'promoverParaDiretor'),
+                'revogarAcessoDiretor': httpsCallable(functions, 'revogarAcessoDiretor'),
+                'promoverParaTesoureiro': httpsCallable(functions, 'promoverParaTesoureiro'),
+                'revogarAcessoTesoureiro': httpsCallable(functions, 'revogarAcessoTesoureiro'),
                 'promoverParaConselheiro': httpsCallable(functions, 'promoverParaConselheiro'),
                 'revogarAcessoConselheiro': httpsCallable(functions, 'revogarAcessoConselheiro'),
                 'promoverParaProdutorEvento': httpsCallable(functions, 'promoverParaProdutorEvento'),
@@ -232,18 +234,37 @@
                         const li = document.createElement('li');
                         li.className = `item-voluntario ${statusClasse}`;
                         
-                        // ### AJUSTE 1 DE 2: Lógica de botões de promoção/revogação ###
+                        // ### AJUSTE 2 DE 2: Lógica de botões ATUALIZADA ###
                         let botoesPromocao = '';
-                        if (userRole === 'super-admin' && v.authUid) {
+                        // Só o super-admin pode ver botões de promoção
+                        // E não pode gerenciar a si mesmo ou outros super-admins
+                        if (userRole === 'super-admin' && v.authUid && v.role !== 'super-admin' && v.authUid !== user.uid) { 
                             const cargoAtual = v.role || 'voluntario';
                             const authUid = v.authUid;
                             const nome = v.nome;
 
+                            // --- CARGOS GLOBAIS (NOVOS AQUI) ---
+                            // Diretor
+                            if (cargoAtual === 'diretor') {
+                                botoesPromocao += `<button data-auth-uid="${authUid}" data-nome="${nome}" class="btn-revogar btn-revogar-diretor">Revogar Diretor</button>`;
+                            } else {
+                                botoesPromocao += `<button data-auth-uid="${authUid}" data-nome="${nome}" class="btn-promover btn-promover-diretor">Promover a Diretor</button>`;
+                            }
+                            // Tesoureiro
+                            if (cargoAtual === 'tesoureiro') {
+                                botoesPromocao += `<button data-auth-uid="${authUid}" data-nome="${nome}" class="btn-revogar btn-revogar-tesoureiro">Revogar Tesoureiro</button>`;
+                            } else {
+                                botoesPromocao += `<button data-auth-uid="${authUid}" data-nome="${nome}" class="btn-promover btn-promover-tesoureiro">Promover a Tesoureiro</button>`;
+                            }
+                            
+                            // --- OUTROS CARGOS (JÁ EXISTENTES) ---
                             // Conselheiro
                             if (cargoAtual === 'conselheiro') {
                                 botoesPromocao += `<button data-auth-uid="${authUid}" data-nome="${nome}" class="btn-revogar btn-revogar-conselheiro">Revogar Conselheiro</button>`;
                             } else if (totalConselheiros < 5) {
                                 botoesPromocao += `<button data-auth-uid="${authUid}" data-nome="${nome}" class="btn-promover btn-promover-conselheiro">Promover a Conselheiro</button>`;
+                            } else {
+                                botoesPromocao += `<button disabled title="Limite de 5 conselheiros atingido.">Promover a Conselheiro</button>`;
                             }
 
                             // Produtor de Evento
@@ -281,21 +302,21 @@
                                 botoesPromocao += `<button data-auth-uid="${authUid}" data-nome="${nome}" class="btn-promover btn-promover-entrevistador">Promover a Entrevistador(a)</button>`;
                             }
                             
-                            // Dirigente de Escola (NOVO)
+                            // Dirigente de Escola
                             if (cargoAtual === 'dirigente-escola') {
                                 botoesPromocao += `<button data-auth-uid="${authUid}" data-nome="${nome}" class="btn-revogar btn-revogar-dirigente-escola">Revogar Dirigente</button>`;
                             } else {
                                 botoesPromocao += `<button data-auth-uid="${authUid}" data-nome="${nome}" class="btn-promover btn-promover-dirigente-escola">Promover a Dirigente</button>`;
                             }
                             
-                            // Secretário de Escola (NOVO)
+                            // Secretário de Escola
                             if (cargoAtual === 'secretario-escola') {
                                 botoesPromocao += `<button data-auth-uid="${authUid}" data-nome="${nome}" class="btn-revogar btn-revogar-secretario-escola">Revogar Secretário(a)</button>`;
                             } else {
                                 botoesPromocao += `<button data-auth-uid="${authUid}" data-nome="${nome}" class="btn-promover btn-promover-secretario-escola">Promover a Secretário(a)</button>`;
                             }
                         }
-                        // ### FIM DO AJUSTE 1 ###
+                        // ### FIM DO AJUSTE 2 ###
                         
                         let botaoCracha = '';
                         if (v.codigoVoluntario && v.nomeParaCracha) {
@@ -362,7 +383,6 @@
                     }
                 });
 
-                // ### AJUSTE 2 DE 2: Lógica de clique unificada para PROMOVER e REVOGAR ###
                 ui.listaUl.addEventListener('click', async (e) => {
                     const target = e.target;
                     const docId = target.dataset.docId;
@@ -433,7 +453,6 @@
                         }
                     }
 
-                    // Nova lógica unificada para chamar Cloud Functions de cargos
                     if (authUid) {
                         const nome = target.dataset.nome;
                         let functionName = '';
@@ -441,8 +460,17 @@
                         let logAction = '';
                         let isRevoke = false;
 
-                        // Mapeamento de todos os botões para suas respectivas funções
-                        if (target.classList.contains('btn-promover-conselheiro')) {
+                        // ### AJUSTE: Adiciona Diretor e Tesoureiro ###
+                        if (target.classList.contains('btn-promover-diretor')) {
+                            functionName = 'promoverParaDiretor'; roleName = 'Diretor(a)'; logAction = 'PROMOVEU_DIRETOR';
+                        } else if (target.classList.contains('btn-revogar-diretor')) {
+                            functionName = 'revogarAcessoDiretor'; roleName = 'Diretor(a)'; logAction = 'REVOGOU_DIRETOR'; isRevoke = true;
+                        } else if (target.classList.contains('btn-promover-tesoureiro')) {
+                            functionName = 'promoverParaTesoureiro'; roleName = 'Tesoureiro(a)'; logAction = 'PROMOVEU_TESOUREIRO';
+                        } else if (target.classList.contains('btn-revogar-tesoureiro')) {
+                            functionName = 'revogarAcessoTesoureiro'; roleName = 'Tesoureiro(a)'; logAction = 'REVOGOU_TESOUREIRO'; isRevoke = true;
+                        // ### FIM DO AJUSTE ###
+                        } else if (target.classList.contains('btn-promover-conselheiro')) {
                             functionName = 'promoverParaConselheiro'; roleName = 'Conselheiro'; logAction = 'PROMOVEU_CONSELHEIRO';
                         } else if (target.classList.contains('btn-revogar-conselheiro')) {
                             functionName = 'revogarAcessoConselheiro'; roleName = 'Conselheiro'; logAction = 'REVOGOU_CONSELHEIRO'; isRevoke = true;
@@ -468,7 +496,6 @@
                             functionName = 'revogarAcessoEntrevistador'; roleName = 'Entrevistador(a)'; logAction = 'REVOGOU_ENTREVISTADOR'; isRevoke = true;
                         } else if (target.classList.contains('btn-promover-dirigente-escola')) {
                             functionName = 'promoverParaDirigenteEscola'; roleName = 'Dirigente de Escola'; logAction = 'PROMOVEU_DIRIGENTE_ESCOLA';
-D
                         } else if (target.classList.contains('btn-revogar-dirigente-escola')) {
                             functionName = 'revogarAcessoDirigenteEscola'; roleName = 'Dirigente de Escola'; logAction = 'REVOGOU_DIRIGENTE_ESCOLA'; isRevoke = true;
                         } else if (target.classList.contains('btn-promover-secretario-escola')) {
@@ -477,7 +504,6 @@ D
                             functionName = 'revogarAcessoSecretarioEscola'; roleName = 'Secretário(a) de Escola'; logAction = 'REVOGOU_SECRETARIO_ESCOLA'; isRevoke = true;
                         }
 
-                        // Se um botão de cargo foi clicado, executa a ação
                         if (functionName) {
                             const acaoTexto = isRevoke ? 'revogar o cargo' : 'promover';
                             if (confirm(`Tem certeza que deseja ${acaoTexto} ${nome} ${isRevoke ? 'de' : 'para'} ${roleName}?`)) {
@@ -485,6 +511,7 @@ D
                                 target.textContent = "Processando...";
                                 try {
                                     const acaoFuncao = funcoesCargos[functionName];
+                                    if (!acaoFuncao) throw new Error(`Função ${functionName} não encontrada no map.`);
                                     const resultado = await acaoFuncao({ uid: authUid });
                                     alert(resultado.data.message);
                                     await registrarLog(logAction, { alvo: { nome, uid: authUid } });
@@ -492,12 +519,11 @@ D
                                     console.error(`Erro ao ${acaoTexto}:`, error);
                                     alert(`Erro: ${error.message}`);
                                 }
-                                // O onSnapshot irá recarregar a lista, então não precisamos reverter o botão
+                                // O onSnapshot irá recarregar a lista
                             }
                         }
                     }
                 });
-                // ### FIM DO AJUSTE 2 ###
                 
                 ui.btnSalvar.addEventListener('click', async () => {
                     if (!currentEditingId) return;
