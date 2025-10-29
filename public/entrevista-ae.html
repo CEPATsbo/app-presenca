@@ -24,26 +24,30 @@
         .form-item .readonly-input { background-color: var(--fundo-desabilitado); }
         .form-item input:disabled, .form-item select:disabled, .form-item textarea:disabled { background-color: var(--fundo-desabilitado); cursor: not-allowed; }
         .form-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; align-items: end; }
-
-        /* --- INÍCIO DAS MODIFICAÇÕES CSS --- */
+        .multiselect { position: relative; }
+        .select-box { border: 1px solid #ccc; border-radius: 6px; padding: 10px; cursor: pointer; background-color: #fff; min-height: 1.5em; }
+        .select-box[disabled] { background-color: var(--fundo-desabilitado); cursor: not-allowed; }
+        
+        /* --- INÍCIO DAS MODIFICAÇÕES CSS (Checkboxes) --- */
         .checkboxes {
-            /* display: none; position: absolute; */ /* REMOVIDO */
-            /* REMOVIDO background, border, z-index, max-height, overflow, width, top, margin-top, left */
-            /* NOVO: Organiza em colunas */
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); /* Cria colunas responsivas */
-            gap: 5px 15px; /* Espaçamento vertical e horizontal */
-            padding: 5px 0; /* Padding vertical leve */
-            border: 1px solid var(--cor-borda); /* Adiciona borda para agrupar visualmente */
-            border-radius: 6px;
-            padding: 10px 15px; /* Padding interno */
-            margin-top: 5px; /* Espaço após o label */
+            display: none; position: absolute; background: white; border: 1px solid var(--cor-borda);
+            border-radius: 6px; z-index: 100; max-height: 200px; overflow-y: auto;
+            padding: 5px 10px; 
+            /* width: 100%; */ /* REMOVIDO */
+            box-sizing: border-box;
+            top: 100%;
+            margin-top: 2px;
+            left: 0;
+            /* NOVO: Define uma largura máxima e mínima */
+            max-width: 300px; 
+            width: max-content; 
+            min-width: 200px;
         }
         .checkboxes label {
             display: flex;
             align-items: center;
-            gap: 5px; /* Espaço BEM REDUZIDO entre checkbox e texto */
-            padding: 3px 0; /* Padding vertical mínimo */
+            gap: 4px; /* Diminui o espaço */
+            padding: 5px 0; /* Espaçamento vertical */
             margin: 0;
             cursor: pointer;
             font-size: 0.95em;
@@ -51,16 +55,10 @@
         .checkboxes label input[type="checkbox"] {
              margin: 0;
              flex-shrink: 0;
-             /* Força um tamanho se necessário */
-             width: 1em;
-             height: 1em;
         }
-        /* Remove o :hover que escondia a lista */
-        /* .checkboxes.visible { display: block; } */ /* REMOVIDO */
-        /* Remove estilos do select-box simulado */
-        /* .multiselect, .select-box { ... } */ /* REMOVIDO (ou pode deixar se usar em outro lugar) */
         /* --- FIM DAS MODIFICAÇÕES CSS --- */
-
+        
+        .checkboxes.visible { display: block; }
         .erro { color: #dc3545; font-weight: bold; text-align: center; }
         .hidden { display: none; }
         .botoes-colegiado { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 10px; }
@@ -72,6 +70,7 @@
     </style>
 </head>
 <body>
+    {/* */}
     <nav class="nav-voltar"><a href="#" id="btn-voltar-fecha" class="btn-voltar">⬅ Voltar para o Painel AE (Fecha Aba)</a></nav>
     <div id="acesso-negado" class="container hidden"><h1>Acesso Negado</h1></div>
 
@@ -89,9 +88,24 @@
         import { getAuth } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-auth.js";
         import { protegerPagina } from '/auth.js';
 
-        const firebaseConfig = { /* ... (configuração inalterada) ... */ };
-        initializeApp(firebaseConfig);
-        const auth = getAuth();
+        // ===================================================================
+        // CORREÇÃO DO ERRO (app/duplicate-app)
+        // A config do Firebase ainda é necessária se o auth.js não a exportar,
+        // mas a INICIALIZAÇÃO (initializeApp) é removida.
+        // ===================================================================
+        const firebaseConfig = {
+            apiKey: "AIzaSyBV7RPjk3cFTqL-aIpflJcUojKg1ZXMLuU",
+            authDomain: "voluntarios-ativos---cepat.firebaseapp.com",
+            projectId: "voluntarios-ativos---cepat",
+            storageBucket: "voluntarios-ativos---cepat.firebasestorage.app",
+            messagingSenderId: "66122858261",
+            appId: "1:66122858261:web:7fa21f1805463b5c08331c"
+        };
+        // initializeApp(firebaseConfig); // <-- LINHA REMOVIDA (Esta era a causa do erro)
+        const auth = getAuth(); // Apenas obtemos o auth; a app já foi iniciada pelo auth.js
+        // ===================================================================
+        // FIM DA CORREÇÃO
+        // ===================================================================
 
         protegerPagina(['entrevistador', 'tesoureiro', 'conselheiro', 'diretor', 'super-admin']).then(user => {
             inicializarPagina(user);
@@ -101,7 +115,7 @@
         });
 
         function inicializarPagina(user) {
-            const db = getFirestore();
+            const db = getFirestore(); // Apenas obtemos o Firestore
             const tratamentosRef = collection(db, 'tratamentos_ae');
             const atendimentosRef = collection(db, 'atendimentos_ae');
             const filaRef = collection(db, 'fila_atendimento_ae');
@@ -110,13 +124,18 @@
             const formularioContainer = document.getElementById('formulario-container');
             const params = new URLSearchParams(window.location.search);
             const atendimentoIdParaEditar = params.get('atendimentoId');
-
+            
+            // --- MODIFICAÇÃO JAVASCRIPT: Botão Voltar/Fechar ---
             const btnVoltarFecha = document.getElementById('btn-voltar-fecha');
             if(btnVoltarFecha) {
                 btnVoltarFecha.addEventListener('click', (e) => {
-                    e.preventDefault();
+                    e.preventDefault(); 
+                    console.log('Tentando fechar a janela...');
                     window.close();
-                    setTimeout(() => { window.location.href = '/arquivo-geral-ae.html'; }, 300);
+                    setTimeout(() => {
+                        console.log('window.close() pode ter falhado. Redirecionando...');
+                        window.location.href = '/arquivo-geral-ae.html';
+                    }, 300);
                 });
             }
 
@@ -126,96 +145,72 @@
                 formularioContainer.innerHTML = `<p class="erro">Nenhum atendimento selecionado.</p>`;
             }
 
-            async function registrarLog(acao, detalhes) { /* ... (inalterado) ... */ }
+            async function registrarLog(acao, detalhes) {
+                try {
+                    await addDoc(logAuditoriaRef, {
+                        timestamp: serverTimestamp(),
+                        autor: { uid: user.uid, nome: user.displayName || 'Usuário do Sistema' },
+                        acao: acao,
+                        detalhes: detalhes
+                    });
+                } catch (error) {
+                    console.error("Erro ao registrar log:", error);
+                }
+            }
 
-            // ===================================================================
-            // INÍCIO DA MODIFICAÇÃO JAVASCRIPT: manipularEstadoFormulario
-            // ===================================================================
             function manipularEstadoFormulario(travado) {
                 const form = formularioContainer.querySelector('fieldset');
                 if (!form) return;
-
-                // Trava/Destrava campos normais (input, select, textarea, radio)
-                form.querySelectorAll('input:not(#colegiado-de):not([type="checkbox"]), select:not(#colegiado-de), textarea, input[name="evolucao"]').forEach(el => {
+                form.querySelectorAll('input:not(#colegiado-de), select:not(#colegiado-de), textarea, input[name="evolucao"]').forEach(el => {
                     if (!el.classList.contains('readonly-input')) {
                         el.disabled = travado;
                     }
                 });
-
-                // Trava/Destrava Checkboxes de Encaminhamentos
+                // --- MODIFICAÇÃO JAVASCRIPT: Alvo nos checkboxes, não no selectBox ---
                 form.querySelectorAll('.checkboxes input[type="checkbox"]').forEach(checkbox => {
                     checkbox.disabled = travado;
                 });
-                // Remove a lógica antiga do selectBox simulado
-                // const selectBox = form.querySelector('.select-box');
-                // if (selectBox) { travado ? selectBox.setAttribute('disabled', 'disabled') : selectBox.removeAttribute('disabled'); }
+                // const selectBox = form.querySelector('.select-box'); // Linha removida
+                // if (selectBox) { ... } // Bloco removido
+                // --- FIM DA MODIFICAÇÃO ---
 
-
-                // Lógica específica para a seção Colegiado (se existir)
                 const colegiadoSection = form.querySelector('.colegiado-section');
                 if (colegiadoSection) {
                     const decisaoSalva = colegiadoSection.classList.contains('colegiado-travado');
-                    // Trava campos de decisão se já foi salvo OU se formulário geral está travado
                     form.querySelectorAll('#colegiado-para, #colegiado-notas').forEach(el => el.disabled = (travado || decisaoSalva));
-                    // Trava Checkboxes de Encaminhamentos também se decisão salva
+                     // --- MODIFICAÇÃO JAVASCRIPT: Alvo nos checkboxes ---
                      form.querySelectorAll('.checkboxes input[type="checkbox"]').forEach(checkbox => {
                          checkbox.disabled = (travado || decisaoSalva);
                      });
+                     // const selectBox = form.querySelector('.select-box'); // Linha removida
+                     // if (selectBox) { ... } // Bloco removido
                 }
-
-
                 const btnSalvar = document.getElementById('btn-salvar-entrevista');
                 if(btnSalvar) btnSalvar.style.display = travado ? 'none' : 'block';
-
-                // Botão Habilitar Edição
                 const btnHabilitarExistente = document.getElementById('btn-habilitar-edicao');
                 if(btnHabilitarExistente) btnHabilitarExistente.remove();
                 if (travado) {
                     const btnHabilitar = document.createElement('button');
                     btnHabilitar.id = 'btn-habilitar-edicao';
                     btnHabilitar.className = 'btn btn-secondary';
-                    btnHabilitar.style.width = '100%'; btnHabilitar.style.marginTop = '10px';
-                    btnHabilitar.innerHTML = '🔒 Habilitar Edição'; btnHabilitar.type = 'button';
-                    btnHabilitar.onclick = () => { if (confirm('Tem certeza?')) { manipularEstadoFormulario(false); } };
+                    btnHabilitar.style.width = '100%';
+                    btnHabilitar.style.marginTop = '10px';
+                    btnHabilitar.innerHTML = '🔒 Habilitar Edição';
+                    btnHabilitar.type = 'button';
+                    btnHabilitar.onclick = () => {
+                        if (confirm('Tem certeza que deseja editar esta entrevista?')) {
+                            manipularEstadoFormulario(false);
+                        }
+                    };
                     form.appendChild(btnHabilitar);
                 }
-            }
-            // ===================================================================
-            // FIM DA MODIFICAÇÃO JAVASCRIPT
-            // ===================================================================
-
-            async function salvarDecisaoColegiado(atendimento, atendimentoDocRef) { /* ... (inalterado) ... */ }
-            async function darAlta(atendimento, atendimentoDocRef) { /* ... (inalterado) ... */ }
-            const gerarOpcoesPasse = (selecionado = '') => { /* ... (inalterado) ... */ };
-
-            function preencherFormulario(atendimento, nomeAssistido) {
-                document.getElementById('assistido-nome').textContent = nomeAssistido;
-                if (document.getElementById('entrevistador-nome')) { /* ... (lógica inalterada) ... */ }
-                if (document.getElementById('entrevista-notas')) { document.getElementById('entrevista-notas').value = atendimento.notas || ''; }
-                if (document.querySelector('input[name="evolucao"]')) { /* ... (lógica inalterada) ... */ }
-                if (document.getElementById('colegiado-para')) { /* ... (lógica inalterada) ... */ }
-                if (document.getElementById('colegiado-notas')) { document.getElementById('colegiado-notas').value = atendimento.colegiadoNotas || ''; }
-
-                // --- MODIFICAÇÃO: Preenche checkboxes diretamente ---
-                 if (atendimento.encaminhamentos && atendimento.encaminhamentos.length > 0) {
-                     // Remove a lógica do selectBox simulado
-                     // const selectBox = document.querySelector('.select-box');
-                     // if(selectBox){ selectBox.textContent = atendimento.encaminhamentos.join(', '); }
-
-                     // Marca os checkboxes correspondentes
-                     atendimento.encaminhamentos.forEach(val => {
-                         const checkbox = document.querySelector(`.checkboxes input[value="${val}"]`);
-                         if (checkbox) checkbox.checked = true;
-                     });
-                 }
-                 // --- FIM DA MODIFICAÇÃO ---
             }
 
 
             async function carregarFormularioParaEdicao(atendimentoId) {
                 const atendimentoDocRef = doc(db, 'atendimentos_ae', atendimentoId);
                 const atendimentoDoc = await getDoc(atendimentoDocRef);
-                if (!atendimentoDoc.exists()) { formularioContainer.innerHTML = `<p class="erro">Atendimento não encontrado.</p>`; return; }
+                if (!atendimentoDoc.exists()) { formularioContainer.innerHTML = `<p class="erro">Atendimento com ID ${atendimentoId} não encontrado.</p>`; return; }
                 const atendimento = { id: atendimentoDoc.id, ...atendimentoDoc.data() };
                 const assistidoDoc = await getDoc(doc(db, 'assistidos', atendimento.assistidoId));
                 const nomeAssistido = assistidoDoc.exists() ? assistidoDoc.data().nome : "Assistido não encontrado";
@@ -229,16 +224,60 @@
                 document.getElementById('btn-salvar-entrevista')?.addEventListener('click', () => salvarEntrevistaCompleta(atendimento, atendimentoDocRef));
                 document.getElementById('btn-dar-alta')?.addEventListener('click', () => darAlta(atendimento, atendimentoDocRef));
 
-                // --- MODIFICAÇÃO: Remove lógica do selectBox/checkboxes visibility ---
+                // --- MODIFICAÇÃO JAVASCRIPT: Lógica do select-box removida ---
                 // const selectBox = document.querySelector('.select-box');
                 // const checkboxes = document.querySelector('.checkboxes');
-                // if (selectBox && checkboxes) { ... listeners removidos ... }
+                // if (selectBox && checkboxes) { ... }
                 // --- FIM DA MODIFICAÇÃO ---
             }
 
 
+            async function salvarDecisaoColegiado(atendimento, atendimentoDocRef) {
+                const btn = document.getElementById('btn-salvar-decisao');
+                btn.disabled = true;
+                btn.textContent = 'Salvando Decisão...';
+                const passePara = document.getElementById('colegiado-para')?.value;
+                if (!passePara) { alert('Por favor, selecione um passe no campo "PARA:" para registrar a migração.'); btn.disabled = false; btn.textContent = 'Salvar Decisão e Iniciar Novo Ciclo'; return; }
+                const colegiadoNotas = document.getElementById('colegiado-notas')?.value.trim() || "Reavaliação: Encaminhado para novo ciclo.";
+                const encaminhamentos = Array.from(document.querySelectorAll('.checkboxes input:checked')).map(cb => cb.value);
+                try {
+                    const dadosParaAtualizar = { passePara: passePara, colegiadoNotas: colegiadoNotas, encaminhamentos: encaminhamentos, decisao_pre_registrada: true, decisaoColegiadoSalva: true };
+                    await updateDoc(atendimentoDocRef, dadosParaAtualizar);
+                    registrarLog('Decisão de Reavaliação Pré-Registrada (AE)', { assistidoId: atendimento.assistidoId, atendimentoId: atendimento.id, assistidoNome: document.getElementById('assistido-nome').textContent, dePasse: atendimento.passeRecomendado, paraPasse: passePara });
+                    alert('Decisão de "Novo Ciclo" pré-registrada com sucesso! Ela será ativada quando o assistido registrar presença.');
+                    manipularEstadoFormulario(true);
+                    carregarFormularioParaEdicao(atendimento.id);
+                } catch (error) {
+                    console.error("Erro ao salvar decisão:", error); alert("Falha ao salvar a decisão. Tente novamente.");
+                    btn.disabled = false; btn.textContent = 'Salvar Decisão e Iniciar Novo Ciclo';
+                }
+            }
+
+            async function darAlta(atendimento, atendimentoDocRef) {
+                const btn = document.getElementById('btn-dar-alta');
+                btn.disabled = true;
+                if (confirm(`Tem certeza que deseja programar a alta para este assistido?`)) {
+                    const colegiadoNotas = document.getElementById('colegiado-notas')?.value.trim() || "Atendimento de reavaliação finalizado com alta.";
+                    const encaminhamentos = Array.from(document.querySelectorAll('.checkboxes input:checked')).map(cb => cb.value);
+                    try {
+                        const dadosParaAtualizar = { tipo: 'alta_programada', colegiadoNotas: colegiadoNotas, encaminhamentos: encaminhamentos, decisao_pre_registrada: true, decisaoColegiadoSalva: true, detalhes_preenchidos: true };
+                        await updateDoc(atendimentoDocRef, dadosParaAtualizar);
+                        registrarLog('Registro de Alta Programada (AE)', { assistidoId: atendimento.assistidoId, atendimentoId: atendimento.id, assistidoNome: document.getElementById('assistido-nome').textContent });
+                        alert('Alta programada com sucesso! O tratamento será encerrado quando o assistido registrar presença.');
+                        manipularEstadoFormulario(true);
+                        carregarFormularioParaEdicao(atendimento.id);
+                    } catch (error) {
+                        console.error("Erro ao programar alta:", error); alert("Falha ao programar a alta. Tente novamente.");
+                        btn.disabled = false;
+                    }
+                } else {
+                    btn.disabled = false;
+                }
+            }
+
+            // --- MODIFICAÇÃO JAVASCRIPT: salvarEntrevistaCompleta (remove horarioInicio/Fim) ---
             async function salvarEntrevistaCompleta(atendimento, atendimentoDocRef) {
-                 const btn = document.getElementById('btn-salvar-entrevista');
+                const btn = document.getElementById('btn-salvar-entrevista');
                 const entrevistadorNome = document.getElementById('entrevistador-nome').value.trim();
                 const entrevistaNotas = document.getElementById('entrevista-notas').value.trim();
                 const isReavaliacaoForm = !!document.getElementById('colegiado-notas');
@@ -254,7 +293,7 @@
                     const dadosParaAtualizar = {
                         entrevistador: entrevistadorNome,
                         notas: entrevistaNotas,
-                        // horarioInicio e horarioFim já removidos
+                        // horarioInicio e horarioFim removidos
                         evolucao: document.querySelector('input[name="evolucao"]:checked')?.value || null,
                         colegiadoNotas: document.getElementById('colegiado-notas')?.value.trim() || null,
                         encaminhamentos: Array.from(document.querySelectorAll('.checkboxes input:checked')).map(cb => cb.value),
@@ -270,8 +309,52 @@
                 }
             }
 
+            function preencherFormulario(atendimento, nomeAssistido) {
+                document.getElementById('assistido-nome').textContent = nomeAssistido;
+                if (document.getElementById('entrevistador-nome')) {
+                    if (atendimento.entrevistador && atendimento.entrevistador !== 'Aguardando Detalhes' && atendimento.entrevistador !== 'Passe Direto' && atendimento.entrevistador !== 'Aguardando Decisão') {
+                         document.getElementById('entrevistador-nome').value = atendimento.entrevistador;
+                    } else if (!atendimento.detalhes_preenchidos) {
+                         document.getElementById('entrevistador-nome').value = user.displayName || '';
+                    } else {
+                         document.getElementById('entrevistador-nome').value = '';
+                    }
+                }
+                if (document.getElementById('entrevista-notas')) { document.getElementById('entrevista-notas').value = atendimento.notas || ''; }
+                // campos horarioInicio/Fim removidos
+                if (document.querySelector('input[name="evolucao"]')) {
+                    const evolucaoSalva = atendimento.evolucao || 'na_mesma';
+                    const evolucaoRadio = document.querySelector(`input[name="evolucao"][value="${evolucaoSalva}"]`);
+                    if (evolucaoRadio) evolucaoRadio.checked = true;
+                }
+                if (document.getElementById('colegiado-para')) {
+                    if (atendimento.passePara) { document.getElementById('colegiado-para').value = atendimento.passePara; }
+                    if (atendimento.tipo === 'alta_programada' || atendimento.tipo === 'alta') {
+                        const selectPara = document.getElementById('colegiado-para');
+                        if (!selectPara.querySelector('option[value="alta"]')) { selectPara.innerHTML += `<option value="alta">ALTA PROGRAMADA</option>`; }
+                        selectPara.value = 'alta';
+                    }
+                }
+                 if (document.getElementById('colegiado-notas')) { document.getElementById('colegiado-notas').value = atendimento.colegiadoNotas || ''; }
+                 // --- MODIFICAÇÃO: Lógica do select-box removida ---
+                 if (atendimento.encaminhamentos && atendimento.encaminhamentos.length > 0) {
+                     atendimento.encaminhamentos.forEach(val => {
+                         const checkbox = document.querySelector(`.checkboxes input[value="${val}"]`);
+                         if (checkbox) checkbox.checked = true;
+                     });
+                 }
+                 // --- FIM DA MODIFICAÇÃO ---
+            }
+
+            const gerarOpcoesPasse = (selecionado = '') => {
+                const passes = ['P1', 'P2', 'P3A', 'P3B', 'P4A', 'P4B', 'CH'];
+                let html = '<option value="">Selecione...</option>';
+                passes.forEach(p => { html += `<option value="${p}" ${p === selecionado ? 'selected' : ''}>${p}</option>`; });
+                return html;
+            };
+
             // ===================================================================
-            // INÍCIO DA MODIFICAÇÃO JAVASCRIPT: Função criarFormulario (layout checkboxes)
+            // INÍCIO DA MODIFICAÇÃO JAVASCRIPT: Função criarFormulario
             // ===================================================================
             function criarFormulario(atendimento) {
                 const semanaNum = atendimento.semana;
@@ -290,10 +373,10 @@
 
                 let acompanhamentoHtml = '';
                 if (!isInicioRealDeTratamento) {
-                    // Campos de Início e Fim já removidos
+                    // Campos de Início e Fim REMOVIDOS daqui
                     acompanhamentoHtml = `<hr><h5>Detalhes do Passe</h5><div class="form-grid">
                             <div class="form-item"><label for="retorno-passe">Passe:</label><input type="text" id="retorno-passe" class="readonly-input" value="${passeDe || 'N/A'}" readonly></div>
-                            </div>
+                        </div>
                         <div class="form-item" style="margin-top:15px;"><label>Evolução:</label><div style="display:flex; gap: 15px;"><label><input type="radio" name="evolucao" value="melhorou"> Melhorou</label><label><input type="radio" name="evolucao" value="piorou"> Piorou</label><label><input type="radio" name="evolucao" value="na_mesma" checked> Na Mesma</label></div></div>`;
                 }
 
