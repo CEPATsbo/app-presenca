@@ -10,7 +10,6 @@
         .btn-voltar { background-color: #e9ecef; color: #495057; border: 1px solid #dee2e6; padding: 10px 20px; border-radius: 8px; font-weight: bold; font-size: 1em; text-decoration: none; }
         .container { background-color: white; padding: 40px; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.15); width: 100%; max-width: 900px; margin-bottom: 30px; }
         h1, h2 { text-align: center; color: #333; margin-top: 0; }
-        /* Removemos os estilos de botões de ação que não são mais necessários */
         table { width: 100%; border-collapse: collapse; margin-top: 15px; }
         th, td { padding: 12px; border-bottom: 1px solid #eee; text-align: left; vertical-align: middle; }
         th { background-color: #f2f2f2; }
@@ -28,6 +27,7 @@
     </nav>
 
     <div id="main-content" style="display: none;">
+        
         <div class="container">
             <h2>Gestão Atual</h2>
             <p style="text-align: center; margin-top: -10px; margin-bottom: 20px;">Lista de voluntários com cargos administrativos. A promoção/revogação agora é feita em "Gerenciar Voluntários".</p>
@@ -60,7 +60,6 @@
     <script type="module">
         import { initializeApp, getApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
         import { getFirestore, collection, query, where, onSnapshot, getDocs, Timestamp, orderBy, addDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
-        // ### AJUSTE: getFunctions e httpsCallable REMOVIDOS ###
         import { protegerPagina } from '/auth.js';
 
         const firebaseConfig = {
@@ -73,7 +72,6 @@
         };
         initializeApp(firebaseConfig);
 
-        // Acesso à página mantido para quem podia ver antes (Conselho, Diretoria)
         protegerPagina(['super-admin', 'diretor', 'tesoureiro', 'conselheiro'])
             .then(user => {
                 document.getElementById('main-content').style.display = 'block';
@@ -87,14 +85,11 @@
         function inicializarPagina(user) {
             const app = getApp();
             const db = getFirestore(app);
-            // ### AJUSTE: 'functions' e 'userRole' REMOVIDOS (userRole não é usado aqui) ###
-
-            // ### AJUSTE: Referências aos elementos do formulário REMOVIDAS ###
+            
             const tabelaDiretoria = document.getElementById('tabela-diretoria');
             const tabelaLogs = document.getElementById('tabela-logs');
             const btnFiltrarLogs = document.getElementById('btn-filtrar-logs');
 
-            // Mapa de nomes (Mantido)
             const mapaNomesCargos = {
                 'super-admin': 'Super Administrador',
                 'diretor': 'Diretor(a)',
@@ -105,49 +100,73 @@
                 'bibliotecario': 'Bibliotecário(a)',
                 'recepcionista': 'Recepcionista (AE)',
                 'entrevistador': 'Entrevistador(a) (AE)',
-                'dirigente-escola': 'Dirigente de Escola', // Adicionado
-                'secretario-escola': 'Secretário(a) de Escola', // Adicionado
+                'dirigente-escola': 'Dirigente de Escola',
+                'secretario-escola': 'Secretário(a) de Escola',
                 'voluntario': 'Voluntário(a)'
             };
 
-            carregarDiretoria(); // Não precisa mais passar parâmetros
+            carregarDiretoria();
             setupLogFilters();
 
-            function carregarDiretoria() {
-                // Lista de cargos de gestão para exibir na tabela (Mantida)
-                const cargosGestao = [
+            // ### AJUSTE: Função 'carregarDiretoria' modificada para 2 consultas ###
+            async function carregarDiretoria() {
+                tabelaDiretoria.innerHTML = `<tr><td colspan="3">Carregando gestão...</td></tr>`;
+
+                // Lista de 11 cargos dividida em duas
+                const cargosGestao_Parte1 = [
                     "diretor", "super-admin", "tesoureiro", "conselheiro", 
-                    "bibliotecario", "produtor-evento", "irradiador", 
-                    "recepcionista", "entrevistador",
-                    "dirigente-escola", "secretario-escola"
+                    "bibliotecario", "produtor-evento" // 6 itens
                 ];
-                const q = query(collection(db, "voluntarios"), where("role", "in", cargosGestao));
+                const cargosGestao_Parte2 = [
+                    "irradiador", "recepcionista", "entrevistador",
+                    "dirigente-escola", "secretario-escola" // 5 itens
+                ];
                 
-                onSnapshot(q, (snapshot) => {
+                const colRef = collection(db, "voluntarios");
+                
+                // Cria as duas consultas
+                const q1 = query(colRef, where("role", "in", cargosGestao_Parte1));
+                const q2 = query(colRef, where("role", "in", cargosGestao_Parte2));
+
+                try {
+                    // Executa as duas consultas em paralelo
+                    const [snapshot1, snapshot2] = await Promise.all([
+                        getDocs(q1),
+                        getDocs(q2)
+                    ]);
+
+                    // Junta os resultados das duas consultas
+                    const todosOsDocumentos = [...snapshot1.docs, ...snapshot2.docs];
+
                     tabelaDiretoria.innerHTML = '';
-                    if (snapshot.empty) {
-                        tabelaDiretoria.innerHTML = '<tr><td colspan="3">Nenhum membro da gestão encontrado.</td></tr>'; // Colspan 3
+                    if (todosOsDocumentos.length === 0) {
+                        tabelaDiretoria.innerHTML = '<tr><td colspan="3">Nenhum membro da gestão encontrado.</td></tr>';
                         return;
                     }
-                    snapshot.docs.sort((a,b) => a.data().nome.localeCompare(b.data().nome)).forEach(doc => {
+                    
+                    // Ordena os resultados combinados pelo nome (no lado do cliente)
+                    todosOsDocumentos.sort((a,b) => a.data().nome.localeCompare(b.data().nome)).forEach(doc => {
                         const v = doc.data();
                         const tr = document.createElement('tr');
-                        
                         const nomeCargo = mapaNomesCargos[v.role] || v.role;
 
                         tr.innerHTML = `
                             <td>${v.nome}</td>
                             <td>${v.email || 'N/A'}</td>
                             <td>${nomeCargo}</td>
-                            `;
+                        `;
                         tabelaDiretoria.appendChild(tr);
                     });
-                });
+                } catch (error) {
+                    console.error("Erro ao carregar diretoria:", error);
+                    tabelaDiretoria.innerHTML = '<tr><td colspan="3" style="color: red;">Erro ao carregar dados.</td></tr>';
+                    // Se o erro for de índice, o Firestore geralmente sugere o link no console
+                    if (error.code === 'failed-precondition') {
+                         console.error("ERRO: O Firestore está exigindo um índice. Por favor, crie o índice que ele sugere no link de erro no console.");
+                    }
+                }
             }
-
-            // ### AJUSTE: 'tabelaDiretoria.addEventListener' REMOVIDO ###
-            
-            // ### AJUSTE: 'if (btnConvidar) { ... }' REMOVIDO ###
+            // ### FIM DO AJUSTE ###
 
             // Funções de Log (sem alterações)
             function setupLogFilters() {
