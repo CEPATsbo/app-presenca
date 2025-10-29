@@ -149,27 +149,20 @@
                 });
             }
 
-            // ===================================================================
-            // FUNÇÃO getContextoDoAtendimento MODIFICADA
-            // ===================================================================
             async function getContextoDoAtendimento(filaDocSnapshot) {
                 const atendimentoFila = { id: filaDocSnapshot.id, ...filaDocSnapshot.data() };
 
-                // Retorna dados básicos se for avulso ou alta programada (não precisa buscar tratamento)
                 if (atendimentoFila.tipoAtendimento === 'avulso') {
                     return { ...atendimentoFila, precisaEntrevista: false };
                 }
                 if (atendimentoFila.tipoAtendimento === 'alta_programada') {
-                    // Retorna o passeRecomendado da fila (que é o passe da 4a semana)
                     return { ...atendimentoFila, precisaEntrevista: true, passeParaMostrar: atendimentoFila.passeRecomendado };
                 }
 
-                // Se for um atendimento normal ou migração de ciclo, busca o tratamento
                 if (!atendimentoFila.tratamentoId) return null;
 
                 const tratamentoDocRef = doc(db, 'tratamentos_ae', atendimentoFila.tratamentoId);
                 const tratamentoDoc = await getDoc(tratamentoDocRef);
-                // Retorna null se o tratamento associado não for encontrado
                 if (!tratamentoDoc.exists()) {
                     console.warn(`Tratamento ${atendimentoFila.tratamentoId} não encontrado para item da fila ${atendimentoFila.id}`);
                     return null;
@@ -179,27 +172,19 @@
                 const semanaNum = atendimentoFila.semana_atual || 1;
 
                 let precisaEntrevista = false;
-                // P3A/P3B agora tem entrevista em todas as semanas do ciclo
                 if (tratamento.passe_ciclo_atual === 'P3A' || tratamento.passe_ciclo_atual === 'P3B' || [1, 4, 5].includes(semanaNum)) {
                     precisaEntrevista = true;
                 }
 
-                // Retorna os dados combinados, incluindo o passeRecomendado da fila
                 return {
                     ...atendimentoFila,
                     precisaEntrevista,
-                    passeParaMostrar: atendimentoFila.passeRecomendado, // Usa o passe da fila para exibição
+                    passeParaMostrar: atendimentoFila.passeRecomendado,
                     status_tratamento: tratamento.status
                 };
             }
-            // ===================================================================
-            // FIM DA MODIFICAÇÃO
-            // ===================================================================
 
 
-            // ===================================================================
-            // FUNÇÃO criarCard MODIFICADA
-            // ===================================================================
             function criarCard(atendimento) {
                 const card = document.createElement('div');
                 card.className = 'assistido-card';
@@ -228,11 +213,9 @@
                     let entrevistaRealizadaBtnDisabled = !entrevistaChamada || entrevistaRealizada;
 
                     if (entrevistaRealizada) {
-                        // Se NÃO for 'alta_programada', habilita o botão de passe
                         if (atendimento.tipoAtendimento !== 'alta_programada') {
                            passeBtnDisabled = false;
                         }
-                        // Se for 'alta_programada', passeBtnDisabled permanece 'true' (desabilitado)
                     }
 
                     buttonsHtml = `
@@ -246,77 +229,53 @@
                 if (statusFila === 'entrevista_realizada') card.classList.add('entrevista-realizada');
 
 
-                // Define o label e a cor do card
                 let tipoLabel = '';
-                // Usa o passeParaMostrar (que veio do passeRecomendado da fila) para a label
                 const passeExibicao = atendimento.passeParaMostrar || 'N/A';
 
                 if (atendimento.tipoAtendimento === 'avulso') {
                     tipoLabel = `Passe Avulso (${passeExibicao})`;
                 } else if (atendimento.tipoAtendimento === 'alta_programada') {
                     tipoLabel = `ENTREVISTA DE ALTA`;
-                    card.classList.add('card-alta'); // Adiciona borda vermelha
+                    card.classList.add('card-alta');
                 } else {
-                    // Para tratamentos normais ou migrações (semana 1), mostra o passe correto
                     tipoLabel = `Assistência (${passeExibicao})`;
                 }
 
+                // ===================================================================
+                // INÍCIO DA MODIFICAÇÃO (Remoção do comentário)
+                // ===================================================================
                 card.innerHTML = `
                     <h3>${atendimento.nomeAssistido}</h3>
                     <p class="info">
                         Tipo: <strong>${tipoLabel}</strong><br>
-                        Semana: <strong>${atendimento.semana_atual || 1}</strong><br> {/* Usa semana_atual da fila */}
+                        Semana: <strong>${atendimento.semana_atual || 1}</strong><br> {/* Comentário removido daqui */}
                         Entrevista hoje: <strong>${atendimento.precisaEntrevista ? 'Sim' : 'Não'}</strong>
                     </p>
                     <div class="${actionsClass}">${buttonsHtml}</div>
                     ${avisoHtml}`;
+                // ===================================================================
+                // FIM DA MODIFICAÇÃO
+                // ===================================================================
 
                 return card;
             }
-            // ===================================================================
-            // FIM DA MODIFICAÇÃO
-            // ===================================================================
 
 
             async function atualizarPainelTV(chamadaAtual, novoStatus) {
-                // Usa o passeParaMostrar para definir a sala
                 const passe = chamadaAtual.passeParaMostrar;
-
-                const salas = {
-                    'P1': 'SALA 1', 'P2': 'SALA 2', 'P3A': 'SALA 1', 'P3B': 'SALA 1',
-                    'P4A': 'SALA 2', 'P4B': 'SALA 2', 'CH': 'SALA 2'
-                };
-
+                const salas = { 'P1': 'SALA 1', 'P2': 'SALA 2', 'P3A': 'SALA 1', 'P3B': 'SALA 1', 'P4A': 'SALA 2', 'P4B': 'SALA 2', 'CH': 'SALA 2' };
                 let salaDestino = 'ENCAMINHAMENTO';
-                if (novoStatus === 'chamado_entrevista') {
-                    salaDestino = 'ENTREVISTA';
-                } else if (novoStatus === 'chamado_passe' && passe && salas[passe]) {
-                    salaDestino = salas[passe];
-                } else if (novoStatus === 'chamado_passe' && chamadaAtual.tipoAtendimento === 'alta_programada') {
-                     // Caso especial: se for alta, não deveria chamar pro passe, mas por segurança...
-                     salaDestino = 'SAÍDA'; // Ou alguma outra indicação
-                }
-
+                if (novoStatus === 'chamado_entrevista') { salaDestino = 'ENTREVISTA'; }
+                else if (novoStatus === 'chamado_passe' && passe && salas[passe]) { salaDestino = salas[passe]; }
+                else if (novoStatus === 'chamado_passe' && chamadaAtual.tipoAtendimento === 'alta_programada') { salaDestino = 'SAÍDA'; }
 
                 const painelAtualDoc = await getDoc(painelEstadoRef);
                 const painelData = painelAtualDoc.exists() ? painelAtualDoc.data() : { historico: [] };
-
                 let novoHistorico = [];
-                if (painelData.nome) {
-                    novoHistorico.push({ nome: painelData.nome, sala: painelData.sala });
-                }
-                if (painelData.historico) {
-                    novoHistorico = novoHistorico.concat(painelData.historico);
-                }
+                if (painelData.nome) { novoHistorico.push({ nome: painelData.nome, sala: painelData.sala }); }
+                if (painelData.historico) { novoHistorico = novoHistorico.concat(painelData.historico); }
                 novoHistorico = novoHistorico.slice(0, 4);
-
-                const dadosParaAtualizar = {
-                    nome: chamadaAtual.nomeAssistido,
-                    sala: salaDestino,
-                    historico: novoHistorico,
-                    timestamp: serverTimestamp()
-                };
-
+                const dadosParaAtualizar = { nome: chamadaAtual.nomeAssistido, sala: salaDestino, historico: novoHistorico, timestamp: serverTimestamp() };
                 await setDoc(painelEstadoRef, dadosParaAtualizar);
             }
 
@@ -324,51 +283,32 @@
                 const target = e.target;
                 const id = target.dataset.id;
                 if (!id || target.disabled) return;
-
-                // Encontra o atendimento na lista JÁ FILTRADA de nulos
                 const atendimentoChamado = atendimentosDoDia.find(a => a && a.id === id);
-                if (!atendimentoChamado) {
-                     console.error(`Atendimento com ID ${id} não encontrado na lista 'atendimentosDoDia'.`);
-                     return; // Adiciona uma proteção extra
-                }
-
+                if (!atendimentoChamado) { console.error(`Atendimento com ID ${id} não encontrado.`); return; }
                 target.disabled = true;
 
                 try {
                     if (target.classList.contains('btn-chamar-entrevista')) {
                         await atualizarPainelTV(atendimentoChamado, 'chamado_entrevista');
                         await updateDoc(doc(db, 'fila_atendimento_ae', id), { status: 'chamado_entrevista' });
-
                     } else if (target.classList.contains('btn-entrevista-realizada')) {
-
                         if (atendimentoChamado.tipoAtendimento === 'alta_programada') {
-
                             if (confirm(`Confirmar encerramento do tratamento de ${atendimentoChamado.nomeAssistido} por ALTA?`)) {
                                 const batch = writeBatch(db);
                                 const tratamentoDocRef = doc(db, 'tratamentos_ae', atendimentoChamado.tratamentoId);
-                                batch.update(tratamentoDocRef, {
-                                    status: 'concluido_com_alta',
-                                    dataFim: serverTimestamp()
-                                });
-                                batch.delete(doc(db, 'fila_atendimento_ae', id)); // Remove da fila
+                                batch.update(tratamentoDocRef, { status: 'concluido_com_alta', dataFim: serverTimestamp() });
+                                batch.delete(doc(db, 'fila_atendimento_ae', id));
                                 await batch.commit();
                                 registrarLog('Tratamento Encerrado por Alta (AE)', { assistidoId: atendimentoChamado.assistidoId, assistidoNome: atendimentoChamado.nomeAssistido, tratamentoId: atendimentoChamado.tratamentoId });
-                            } else {
-                                target.disabled = false;
-                            }
+                            } else { target.disabled = false; }
                         } else {
-                            // Se for entrevista normal (ou migração), apenas atualiza o status na fila
                             await updateDoc(doc(db, 'fila_atendimento_ae', id), { status: 'entrevista_realizada' });
-                            // Reabilita o botão para permitir correções se necessário (ou remove essa linha se não quiser permitir)
                             target.disabled = false;
                         }
-
                     } else if (target.classList.contains('btn-chamar-passe')) {
-                         // Adiciona uma checagem extra para garantir que não chame para passe em caso de alta
                          if (atendimentoChamado.tipoAtendimento === 'alta_programada') {
                              alert("Este assistido está de alta e não deve ser chamado para o passe.");
-                             target.disabled = true; // Mantém desabilitado
-                             return;
+                             target.disabled = true; return;
                          }
                         await atualizarPainelTV(atendimentoChamado, 'chamado_passe');
                         await updateDoc(doc(db, 'fila_atendimento_ae', id), { status: 'chamado_passe' });
@@ -376,10 +316,7 @@
                 } catch (error) {
                     console.error("Erro ao processar chamada:", error);
                     alert("Ocorreu um erro. Tente novamente.");
-                    // Tenta reabilitar o botão em caso de erro, exceto se for o de alta que falhou na confirmação
-                    if (!(target.classList.contains('btn-entrevista-realizada') && atendimentoChamado.tipoAtendimento === 'alta_programada')) {
-                       target.disabled = false;
-                    }
+                    if (!(target.classList.contains('btn-entrevista-realizada') && atendimentoChamado.tipoAtendimento === 'alta_programada')) { target.disabled = false; }
                 }
             });
         }
