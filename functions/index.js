@@ -60,9 +60,7 @@ async function enviarNotificacoesParaTodos(titulo, corpo) {
     return { successCount, failureCount, totalCount: inscricoesSnapshot.size };
 }
 
-// ### AJUSTE NA promoverUsuario PARA SUPORTAR claims BOOLEANOS (opcional mas bom) ###
-// Esta versão tenta setar claims booleanos também, além do 'role' principal.
-// Se você só usa o 'role' principal, a versão anterior funciona.
+// ### FUNÇÃO promoverUsuario MANTIDA COMO NO SEU ORIGINAL (LÓGICA DE ROLE ÚNICO) ###
 const promoverUsuario = async (uid, novoPapel) => {
     if (!uid) return;
     try {
@@ -77,8 +75,9 @@ const promoverUsuario = async (uid, novoPapel) => {
              }
         } else if (novoPapel === 'voluntario') {
              // Ao revogar, remove todos os claims booleanos relacionados a cargos (exceto 'role')
-             // Você pode precisar listar explicitamente os claims a remover se tiver muitos
-             // claims = { role: 'voluntario', dirigente_escola: null, secretario_escola: null, facilitador: null, ... }; // Define como null para remover
+             // Esta é uma lógica simplificada que você tinha, vamos mantê-la.
+             // Se precisar de revogação granular (remover só 1 cargo de vários), precisaríamos de 'revogarCargo'
+             claims = { role: 'voluntario' }; 
         }
 
         await admin.auth().setCustomUserClaims(uid, claims);
@@ -87,8 +86,8 @@ const promoverUsuario = async (uid, novoPapel) => {
         // Atualiza o campo 'role' no Firestore (mantém simples por enquanto)
         const userQuery = await db.collection('voluntarios').where('authUid', '==', uid).limit(1).get();
         if (!userQuery.empty) {
-            await userQuery.docs[0].ref.update({ role: novoPapel });
-             console.log(`Campo 'role' no Firestore atualizado para ${uid} como ${novoPapel}`);
+            await userQuery.docs[0].ref.update({ role: novoPapel }); // Sobrescreve o role
+            console.log(`Campo 'role' no Firestore atualizado para ${uid} como ${novoPapel}`);
         }
     } catch (error) {
         console.error(`Erro ao promover/definir claims para ${uid} como ${novoPapel}:`, error);
@@ -146,20 +145,13 @@ exports.definirSuperAdmin = onRequest(OPCOES_FUNCAO, async (req, res) => {
     } catch (error) { return res.status(500).send(`Erro: ${error.message}`); }
 });
 
-exports.convidarDiretor = onCall(OPCOES_FUNCAO, async (request) => {
-    if (request.auth.token.role !== 'super-admin') { throw new HttpsError('permission-denied', 'Apenas o super-admin pode executar esta ação.'); }
-    const { email, nome } = request.data;
-    if (!email || !nome) { throw new HttpsError('invalid-argument', 'Email e nome são obrigatórios.'); }
-    try {
-        const userRecord = await admin.auth().createUser({ email, displayName: nome });
-        await promoverUsuario(userRecord.uid, 'diretor');
-        const linkDeReset = await admin.auth().generatePasswordResetLink(email);
-        console.log(`IMPORTANTE: Envie este link para ${nome} (${email}) para definir a senha: ${linkDeReset}`);
-        return { success: true, message: `Diretor ${nome} convidado com sucesso!` };
-    } catch (error) {
-        if (error.code === 'auth/email-already-exists') { throw new HttpsError('already-exists', 'Este email já está em uso.'); }
-        throw new HttpsError('internal', 'Ocorreu um erro ao criar o novo diretor.');
-    }
+// ### AJUSTE: ADICIONADA 'promoverParaDiretor' ###
+exports.promoverParaDiretor = onCall(OPCOES_FUNCAO, async (request) => {
+    if (request.auth.token.role !== 'super-admin') { throw new HttpsError('permission-denied', 'Apenas o Super Admin pode promover usuários.'); }
+    const uidParaPromover = request.data.uid;
+    if (!uidParaPromover) { throw new HttpsError('invalid-argument', 'O UID do usuário é necessário.'); }
+    await promoverUsuario(uidParaPromover, 'diretor');
+    return { success: true, message: 'Usuário promovido a Diretor(a) com sucesso.' };
 });
 
 exports.promoverParaTesoureiro = onCall(OPCOES_FUNCAO, async (request) => {
@@ -245,6 +237,15 @@ exports.revogarAcessoDiretor = onCall(OPCOES_FUNCAO, async (request) => {
     if (!uidParaRevogar) { throw new HttpsError('invalid-argument', 'O UID do diretor é necessário.'); }
     await promoverUsuario(uidParaRevogar, 'voluntario');
     return { success: true, message: 'Acesso de diretor revogado com sucesso.' };
+});
+
+// ### AJUSTE: ADICIONADA 'revogarAcessoTesoureiro' ###
+exports.revogarAcessoTesoureiro = onCall(OPCOES_FUNCAO, async (request) => {
+    if (request.auth.token.role !== 'super-admin') { throw new HttpsError('permission-denied', 'Apenas o Super Admin pode revogar acesso.'); }
+    const uidParaRevogar = request.data.uid;
+    if (!uidParaRevogar) { throw new HttpsError('invalid-argument', 'O UID do tesoureiro é necessário.'); }
+    await promoverUsuario(uidParaRevogar, 'voluntario');
+    return { success: true, message: 'Acesso de Tesoureiro revogado com sucesso.' };
 });
 
 exports.revogarAcessoConselheiro = onCall(OPCOES_FUNCAO, async (request) => {
