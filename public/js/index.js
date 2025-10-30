@@ -81,7 +81,7 @@ function getDataDeHojeSP() {
 async function registrarPresencaComGeolocalizacao(voluntarioParaRegistrar, atividadesSelecionadas) {
     if (!btnRegistrarPresenca || !registroRapidoSection || !statusRapidoSection || !statusNome || !statusAtividades || !feedbackGeoRapido) {
         console.error("Elementos do DOM ausentes para registro de presença.");
-        return;
+        return; // Retorna false para indicar falha (ou pode lançar erro)
     }
     btnRegistrarPresenca.disabled = true;
     btnRegistrarPresenca.textContent = 'Verificando localização...';
@@ -90,72 +90,75 @@ async function registrarPresencaComGeolocalizacao(voluntarioParaRegistrar, ativi
         alert("Geolocalização não é suportada pelo seu navegador.");
         btnRegistrarPresenca.disabled = false;
         btnRegistrarPresenca.textContent = 'Registrar Presença';
-        return;
+        return false; // Falha
     }
 
-    navigator.geolocation.getCurrentPosition(
-        async (position) => {
-            const distancia = getDistance(position.coords.latitude, position.coords.longitude, CASA_ESPIRITA_LAT, CASA_ESPIRITA_LON);
+    // Retorna uma Promessa para que o 'submit' possa esperar
+    return new Promise((resolve, reject) => {
+        navigator.geolocation.getCurrentPosition(
+            async (position) => {
+                const distancia = getDistance(position.coords.latitude, position.coords.longitude, CASA_ESPIRITA_LAT, CASA_ESPIRITA_LON);
 
-            if (distancia <= RAIO_EM_METROS) {
-                try {
-                    btnRegistrarPresenca.textContent = 'Registrando...';
-                    
-                    const dataHoje = getDataDeHojeSP();
-                    const presencaId = `${dataHoje}_${voluntarioParaRegistrar.nome.replace(/\s+/g, '_')}`;
-                    const docRef = doc(db, "presencas", presencaId);
-
-                    await setDoc(docRef, { 
-                        nome: voluntarioParaRegistrar.nome, 
-                        atividade: atividadesSelecionadas.join(', '), 
-                        data: dataHoje, 
-                        primeiroCheckin: serverTimestamp(), 
-                        ultimaAtualizacao: serverTimestamp(), 
-                        status: 'presente',
-                        authUid: null,
-                        voluntarioId: voluntarioParaRegistrar.id
-                    }, { merge: true });
-
+                if (distancia <= RAIO_EM_METROS) {
                     try {
-                        localStorage.setItem(LOCAL_STORAGE_KEY_NOME, voluntarioParaRegistrar.nome);
-                        console.log("Nome salvo no localStorage:", voluntarioParaRegistrar.nome);
-                    } catch (e) {
-                        console.warn("Não foi possível salvar o nome no localStorage:", e);
+                        btnRegistrarPresenca.textContent = 'Registrando...';
+                        
+                        const dataHoje = getDataDeHojeSP();
+                        const presencaId = `${dataHoje}_${voluntarioParaRegistrar.nome.replace(/\s+/g, '_')}`;
+                        const docRef = doc(db, "presencas", presencaId);
+
+                        await setDoc(docRef, { 
+                            nome: voluntarioParaRegistrar.nome, 
+                            atividade: atividadesSelecionadas.join(', '), 
+                            data: dataHoje, 
+                            primeiroCheckin: serverTimestamp(), 
+                            ultimaAtualizacao: serverTimestamp(), 
+                            status: 'presente',
+                            authUid: null,
+                            voluntarioId: voluntarioParaRegistrar.id
+                        }, { merge: true });
+
+                        // ### AJUSTE: Linha de salvar no localStorage MOVIDA daqui ###
+
+                        statusNome.textContent = voluntarioParaRegistrar.nome;
+                        statusAtividades.textContent = atividadesSelecionadas.join(', ');
+                        feedbackGeoRapido.textContent = `Presença confirmada a ${distancia.toFixed(0)} metros.`;
+                        registroRapidoSection.classList.add('hidden');
+                        statusRapidoSection.classList.remove('hidden');
+
+                        resolve(true); // Sucesso
+
+                    } catch (error) {
+                        console.error("Erro ao registrar presença:", error);
+                        alert("Ocorreu um erro ao salvar sua presença. Tente novamente.");
+                        btnRegistrarPresenca.disabled = false;
+                        btnRegistrarPresenca.textContent = 'Registrar Presença';
+                        reject(error); // Falha
                     }
-
-                    statusNome.textContent = voluntarioParaRegistrar.nome;
-                    statusAtividades.textContent = atividadesSelecionadas.join(', ');
-                    feedbackGeoRapido.textContent = `Presença confirmada a ${distancia.toFixed(0)} metros.`;
-                    registroRapidoSection.classList.add('hidden');
-                    statusRapidoSection.classList.remove('hidden');
-
-                } catch (error) {
-                    console.error("Erro ao registrar presença:", error);
-                    alert("Ocorreu um erro ao salvar sua presença. Tente novamente.");
+                } else {
+                    alert(`Você está a ${distancia.toFixed(0)} metros de distância. Por favor, aproxime-se da casa para registrar a presença.`);
                     btnRegistrarPresenca.disabled = false;
                     btnRegistrarPresenca.textContent = 'Registrar Presença';
+                    reject(new Error("Fora da área de geolocalização.")); // Falha
                 }
-            } else {
-                alert(`Você está a ${distancia.toFixed(0)} metros de distância. Por favor, aproxime-se da casa para registrar a presença.`);
+            },
+            (error) => {
+                console.error("Erro de geolocalização:", error);
+                let msgErro = "Não foi possível obter sua localização. Verifique as permissões do navegador e tente novamente.";
+                if (error.code === error.PERMISSION_DENIED) {
+                     msgErro = "Você negou a permissão de localização. Habilite-a nas configurações do navegador para registrar a presença.";
+                } else if (error.code === error.POSITION_UNAVAILABLE) {
+                     msgErro = "Informação de localização indisponível no momento.";
+                } else if (error.code === error.TIMEOUT) {
+                     msgErro = "Tempo esgotado ao tentar obter a localização.";
+                }
+                alert(msgErro);
                 btnRegistrarPresenca.disabled = false;
                 btnRegistrarPresenca.textContent = 'Registrar Presença';
+                reject(error); // Falha
             }
-        },
-        (error) => {
-            console.error("Erro de geolocalização:", error);
-            let msgErro = "Não foi possível obter sua localização. Verifique as permissões do navegador e tente novamente.";
-            if (error.code === error.PERMISSION_DENIED) {
-                 msgErro = "Você negou a permissão de localização. Habilite-a nas configurações do navegador para registrar a presença.";
-            } else if (error.code === error.POSITION_UNAVAILABLE) {
-                 msgErro = "Informação de localização indisponível no momento.";
-            } else if (error.code === error.TIMEOUT) {
-                 msgErro = "Tempo esgotado ao tentar obter a localização.";
-            }
-            alert(msgErro);
-            btnRegistrarPresenca.disabled = false;
-            btnRegistrarPresenca.textContent = 'Registrar Presença';
-        }
-    );
+        );
+    });
 }
 
 
@@ -326,13 +329,11 @@ if (formPresencaRapida) {
                 if (normalizarString(melhorResultado.nome) === nomeNormalizadoBusca) {
                      console.log("Voluntário encontrado por correspondência exata (normalizada):", melhorResultado.nome);
                      voluntarioParaRegistrar = melhorResultado;
-                     // ### AJUSTE: Atualiza o campo de nome ###
                      if(nomeInput) nomeInput.value = melhorResultado.nome;
                      encontrado = true;
                 } else if (resultados[0].score < 0.3) {
                     if (confirm(`Encontramos um nome parecido: "${melhorResultado.nome}".\n\nÉ você?`)) {
                         voluntarioParaRegistrar = melhorResultado;
-                        // ### AJUSTE: Atualiza o campo de nome ###
                         if(nomeInput) nomeInput.value = melhorResultado.nome;
                          encontrado = true;
                     }
@@ -351,12 +352,29 @@ if (formPresencaRapida) {
                 voluntarioParaRegistrar.id = novoVoluntarioDoc.id;
             }
 
+            // ### AJUSTE: Salva o nome (corrigido ou novo) no localStorage ANTES da geolocalização ###
+            try {
+                localStorage.setItem(LOCAL_STORAGE_KEY_NOME, voluntarioParaRegistrar.nome);
+                console.log("Nome salvo no localStorage (antes do geo):", voluntarioParaRegistrar.nome);
+            } catch (e) {
+                console.warn("Não foi possível salvar o nome no localStorage:", e);
+            }
+            // ### FIM DO AJUSTE ###
+
+            // Agora, chama a função de geolocalização e espera por ela
             await registrarPresencaComGeolocalizacao(voluntarioParaRegistrar, atividadesSelecionadas);
 
         } catch (error) {
+            // Este catch agora pegará falhas do Fuse, criação de voluntário OU da geolocalização (rejeição da promessa)
             console.error("ERRO CRÍTICO no registro rápido:", error);
-            alert("Ocorreu um erro crítico. Verifique o console para mais detalhes.");
-            if(btnRegistrarPresenca) {
+            // Não exibe alerta duplicado se for erro de geo (pois registrarPresencaComGeolocalizacao já alerta)
+            if (error.message.includes("Fora da área") || error.code === error.PERMISSION_DENIED || error.code === error.POSITION_UNAVAILABLE || error.code === error.TIMEOUT) {
+                 // Erro de geolocalização já tratado com alerta, apenas reseta o botão
+            } else {
+                 alert("Ocorreu um erro crítico. Verifique o console para mais detalhes.");
+            }
+            
+            if(btnRegistrarPresenca) { // Garante que o botão seja reabilitado se a geo falhar
                 btnRegistrarPresenca.disabled = false;
                 btnRegistrarPresenca.textContent = 'Registrar Presença';
             }
