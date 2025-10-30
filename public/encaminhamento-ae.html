@@ -34,33 +34,23 @@
         .filtro-data input { padding: 8px; border: 1px solid #ccc; border-radius: 6px; font-size: 1em; }
         .aviso-decisao { text-align:center; font-weight:bold; color: #c0392b; margin-top: 10px; font-size: 0.9em; }
         
-        /* =================================================================== */
-        /* INÍCIO DA MODIFICAÇÃO CSS: Layout Responsivo */
-        /* =================================================================== */
         @media (max-width: 768px) {
-            body { padding: 10px; } /* Menos padding em telas menores */
-            
-            /* Força os cards a empilhar (1 coluna) */
+            body { padding: 10px; }
             .cards-container {
                 grid-template-columns: 1fr;
                 gap: 15px;
             }
-
             .assistido-card h3 {
-                font-size: 1.8em; /* Fonte maior para nomes */
+                font-size: 1.8em;
             }
-            
             .assistido-card .info {
-                font-size: 1.1em; /* Fonte maior para infos */
+                font-size: 1.1em;
             }
-
-            /* Botões maiores e mais fáceis de tocar */
             .actions-3-buttons .btn, .actions-1-button .btn {
                 padding: 20px 10px;
                 font-size: 1.1em;
                 font-weight: bold;
             }
-
             .btn, .btn-voltar {
                  padding: 15px 20px;
                  font-size: 1.1em;
@@ -69,10 +59,6 @@
                 font-size: 1.1em;
             }
         }
-        /* =================================================================== */
-        /* FIM DA MODIFICAÇÃO CSS */
-        /* =================================================================== */
-
     </style>
 </head>
 <body>
@@ -178,9 +164,6 @@
                 });
             }
 
-            // ===================================================================
-            // INÍCIO DA MODIFICAÇÃO JAVASCRIPT: Ordenação dos Cards
-            // ===================================================================
             function renderizarCards() {
                 cardsContainer.innerHTML = '';
                 if (atendimentosDoDia.length === 0) {
@@ -188,11 +171,7 @@
                     return;
                 }
 
-                // Ordena a lista ANTES de renderizar
-                // Coloca `precisaEntrevista: true` (valor 1) antes de `precisaEntrevista: false` (valor 0)
-                // (b - a) resulta em ordem decrescente (true=1, false=0 -> 1 vem antes de 0)
                 atendimentosDoDia.sort((a, b) => {
-                    // Trata `true` como 1 e `false` como 0 para ordenação numérica
                     const prioridadeA = a.precisaEntrevista ? 1 : 0;
                     const prioridadeB = b.precisaEntrevista ? 1 : 0;
                     return prioridadeB - prioridadeA;
@@ -202,20 +181,23 @@
                     if(atendimento) cardsContainer.appendChild(criarCard(atendimento));
                 });
             }
-            // ===================================================================
-            // FIM DA MODIFICAÇÃO JAVASCRIPT
-            // ===================================================================
 
+            // ===================================================================
+            // INÍCIO DA MODIFICAÇÃO JAVASCRIPT: getContextoDoAtendimento
+            // ===================================================================
             async function getContextoDoAtendimento(filaDocSnapshot) {
                 const atendimentoFila = { id: filaDocSnapshot.id, ...filaDocSnapshot.data() };
 
+                // Retorna dados básicos se for avulso ou alta programada (não precisa buscar tratamento)
                 if (atendimentoFila.tipoAtendimento === 'avulso') {
-                    return { ...atendimentoFila, precisaEntrevista: false };
+                    // CORREÇÃO: Adiciona 'passeParaMostrar' para consistência
+                    return { ...atendimentoFila, precisaEntrevista: false, passeParaMostrar: atendimentoFila.passeRecomendado };
                 }
                 if (atendimentoFila.tipoAtendimento === 'alta_programada') {
                     return { ...atendimentoFila, precisaEntrevista: true, passeParaMostrar: atendimentoFila.passeRecomendado };
                 }
 
+                // Se for um atendimento normal ou migração de ciclo, busca o tratamento
                 if (!atendimentoFila.tratamentoId) return null;
 
                 const tratamentoDocRef = doc(db, 'tratamentos_ae', atendimentoFila.tratamentoId);
@@ -235,11 +217,14 @@
 
                 return {
                     ...atendimentoFila,
-                    precisaEntrevista, // <-- Esta propriedade agora controla a ordem
-                    passeParaMostrar: atendimentoFila.passeRecomendado,
+                    precisaEntrevista,
+                    passeParaMostrar: atendimentoFila.passeRecomendado, // Usa o passe da fila para exibição
                     status_tratamento: tratamento.status
                 };
             }
+            // ===================================================================
+            // FIM DA MODIFICAÇÃO JAVASCRIPT
+            // ===================================================================
 
 
             function criarCard(atendimento) {
@@ -312,7 +297,15 @@
 
 
             async function atualizarPainelTV(chamadaAtual, novoStatus) {
-                const passe = chamadaAtual.passeParaMostrar;
+                // ===================================================================
+                // INÍCIO DA MODIFICAÇÃO JAVASCRIPT: atualizarPainelTV
+                // ===================================================================
+                // A lógica do passe agora verifica as duas propriedades para segurança
+                const passe = chamadaAtual.passeParaMostrar || chamadaAtual.passeRecomendado;
+                // ===================================================================
+                // FIM DA MODIFICAÇÃO JAVASCRIPT
+                // ===================================================================
+                
                 const salas = { 'P1': 'SALA 1', 'P2': 'SALA 2', 'P3A': 'SALA 1', 'P3B': 'SALA 1', 'P4A': 'SALA 2', 'P4B': 'SALA 2', 'CH': 'SALA 2' };
                 let salaDestino = 'ENCAMINHAMENTO';
                 if (novoStatus === 'chamado_entrevista') { salaDestino = 'ENTREVISTA'; }
