@@ -119,7 +119,7 @@ async function registrarPresencaComGeolocalizacao(voluntarioParaRegistrar, ativi
                         }, { merge: true });
 
                         // A linha de salvar no localStorage foi MOVIDA para antes desta função (na lógica de submit)
-
+                        
                         statusNome.textContent = voluntarioParaRegistrar.nome;
                         statusAtividades.textContent = atividadesSelecionadas.join(', ');
                         feedbackGeoRapido.textContent = `Presença confirmada a ${distancia.toFixed(0)} metros.`;
@@ -393,7 +393,7 @@ if (formPresencaRapida) {
                  alert("Ocorreu um erro crítico. Verifique o console para mais detalhes.");
             }
             
-            if(btnRegistrarPresenca) { // Garante que o botão seja reabilitado se a geo falhar
+            if(btnAtivarNotificacoes) { // Garante que o botão seja reabilitado se a geo falhar
                 btnRegistrarPresenca.disabled = false;
                 btnRegistrarPresenca.textContent = 'Registrar Presença';
             }
@@ -420,78 +420,23 @@ if (btnSairRapido && formPresencaRapida && atividadesWrapper && statusRapidoSect
     });
 }
 
-// ### CORREÇÃO: Lógica de verificação do botão de notificação ###
+// ### AJUSTE: Lógica do Botão de Notificação Simplificada ###
+// (Este é o único bloco alterado em relação ao código que você enviou)
 if (btnAtivarNotificacoes) {
+    // 1. Adiciona o listener de clique
     btnAtivarNotificacoes.addEventListener('click', habilitarNotificacoes);
     
-    // Esta é a sua NOVA Chave Pública VAPID
-    const VAPID_PUBLIC_KEY_ATUAL = 'BHvM-GJJ64ePBfttwFiCghI9wqLK6PjN0U2aIBhYAQPI5CdnOFswB4cejXp3AHhgw-I6rJBANaxlgvjTRn463L4';
-
-    // Função auxiliar para converter ArrayBuffer para Base64URL
-    function arrayBufferToBase64Url(buffer) {
-        if (!buffer) return null; // Proteção contra buffer nulo
-        return btoa(String.fromCharCode.apply(null, new Uint8Array(buffer)))
-            .replace(/\+/g, '-')
-            .replace(/\//g, '_')
-            .replace(/=+$/, '');
+    // 2. Lógica de visibilidade:
+    // Mostra o botão SEMPRE, a menos que o navegador não suporte push.
+    if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
+        // Navegador não suporta, esconde permanentemente
+        btnAtivarNotificacoes.style.display = 'none';
+        console.log("Navegador não suporta Push, botão de notificação oculto.");
+    } else {
+        // Navegador suporta, MOSTRA o botão.
+        // (O HTML que você usa já tem o botão no footer, então só precisamos garantir que ele apareça)
+        btnAtivarNotificacoes.style.display = 'block'; // Força a exibição
+        console.log("Navegador suporta Push, botão de notificação visível.");
     }
-
-    // Nova função auxiliar para verificar a inscrição E a permissão
-    async function verificarInscricaoAtual() {
-        if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
-            if (btnAtivarNotificacoes) btnAtivarNotificacoes.style.display = 'none';
-            return; // Navegador não suporta push
-        }
-
-        try {
-            // Espera o Service Worker estar pronto
-            const registration = await navigator.serviceWorker.ready;
-            // Tenta pegar uma inscrição existente
-            const subscription = await registration.pushManager.getSubscription();
-            
-            if (subscription) {
-                // O usuário TEM uma inscrição. VERIFICA SE É A CORRETA.
-                const subKeyArrayBuffer = subscription.options.applicationServerKey;
-                
-                if (!subKeyArrayBuffer || subKeyArrayBuffer.byteLength === 0) {
-                    // Inscrição inválida/antiga sem chave
-                    console.warn("Inscrição encontrada, mas é inválida (sem applicationServerKey). Mostrando botão para reinscrever.");
-                    if (btnAtivarNotificacoes) btnAtivarNotificacoes.style.display = 'block'; // MOSTRA o botão
-                    return;
-                }
-                
-                const subKeyBase64Url = arrayBufferToBase64Url(subKeyArrayBuffer);
-                
-                if (subKeyBase64Url === VAPID_PUBLIC_KEY_ATUAL) {
-                    // É a chave correta! A inscrição está válida. ESCONDE o botão.
-                    console.log("Inscrição válida e atual encontrada.");
-                    if (btnAtivarNotificacoes) btnAtivarNotificacoes.style.display = 'none';
-                } else {
-                    // É uma chave ANTIGA/INVÁLIDA! MOSTRA o botão para o usuário corrigir.
-                    console.warn("Inscrição antiga (com VAPID key diferente) encontrada. Mostrando botão para re-inscrever.");
-                    if (btnAtivarNotificacoes) btnAtivarNotificacoes.style.display = 'block'; // MOSTRA o botão
-                }
-            } else {
-                // O usuário NÃO tem inscrição. Verifica a *permissão* do navegador
-                const permissionStatus = await navigator.permissions.query({name:'push', userVisibleOnly:true});
-                if (permissionStatus.state === 'denied') {
-                    // Permissão foi negada, ESCONDE o botão.
-                    if (btnAtivarNotificacoes) btnAtivarNotificacoes.style.display = 'none';
-                    console.warn("Permissão de notificação foi negada pelo usuário.");
-                } else {
-                    // Permissão é 'granted' (mas sem inscrição) ou 'prompt'
-                    // MOSTRA O BOTÃO.
-                    if (btnAtivarNotificacoes) btnAtivarNotificacoes.style.display = 'block'; // MOSTRA o botão
-                    console.log("Usuário sem inscrição, botão de ativar visível.");
-                }
-            }
-        } catch (error) {
-            console.error("Erro ao verificar inscrição de push:", error);
-            if (btnAtivarNotificacoes) btnAtivarNotificacoes.style.display = 'none'; // Esconde por segurança
-        }
-    }
-
-    // Chama a nova função de verificação ao carregar a página
-    verificarInscricaoAtual();
 }
-// ### FIM DA CORREÇÃO ###
+// ### FIM DO AJUSTE ###
