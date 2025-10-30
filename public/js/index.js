@@ -118,6 +118,8 @@ async function registrarPresencaComGeolocalizacao(voluntarioParaRegistrar, ativi
                             voluntarioId: voluntarioParaRegistrar.id
                         }, { merge: true });
 
+                        // A linha de salvar no localStorage foi MOVIDA para antes desta função
+
                         statusNome.textContent = voluntarioParaRegistrar.nome;
                         statusAtividades.textContent = atividadesSelecionadas.join(', ');
                         feedbackGeoRapido.textContent = `Presença confirmada a ${distancia.toFixed(0)} metros.`;
@@ -206,6 +208,7 @@ async function habilitarNotificacoes() {
 
 carregarMural();
 
+// Carrega o nome salvo ao iniciar a página
 (function carregarNomeSalvo() {
     if (nomeInput) {
         try {
@@ -311,6 +314,12 @@ if (formPresencaRapida) {
         if (atividadesSelecionadas.length === 0) { return alert("Por favor, selecione pelo menos uma atividade."); }
 
         try {
+            // Reabilita o botão aqui caso a lógica do Fuse.js falhe ou seja cancelada
+            if(btnRegistrarPresenca) {
+                btnRegistrarPresenca.disabled = false;
+                btnRegistrarPresenca.textContent = 'Registrar Presença';
+            }
+            
             const voluntariosSnapshot = await getDocs(query(collection(db, "voluntarios")));
             const listaDeVoluntarios = voluntariosSnapshot.docs.map(d => ({ id: d.id, ...d.data() }));
 
@@ -339,7 +348,7 @@ if (formPresencaRapida) {
                         if(nomeInput) nomeInput.value = melhorResultado.nome;
                          encontrado = true;
                     } else {
-                        // Se o usuário clicar em "Cancelar", para a execução
+                        // ### CORREÇÃO: Se o usuário clicar em "Cancelar", para a execução ###
                         alert("Registro cancelado. Por favor, digite seu nome completo exatamente como no cadastro.");
                         return; // Impede que o código continue e salve o nome errado
                     }
@@ -358,25 +367,33 @@ if (formPresencaRapida) {
                 voluntarioParaRegistrar.id = novoVoluntarioDoc.id;
             }
 
-            // Salva o nome (corrigido ou novo) no localStorage ANTES da geolocalização
+            // ### CORREÇÃO: Salva o nome (corrigido ou novo) no localStorage ANTES da geolocalização ###
             try {
                 localStorage.setItem(LOCAL_STORAGE_KEY_NOME, voluntarioParaRegistrar.nome);
                 console.log("Nome salvo no localStorage (antes do geo):", voluntarioParaRegistrar.nome);
             } catch (e) {
                 console.warn("Não foi possível salvar o nome no localStorage:", e);
             }
+            // ### FIM DA CORREÇÃO ###
 
+            // Chama a função de geolocalização (que agora retorna uma promessa)
             await registrarPresencaComGeolocalizacao(voluntarioParaRegistrar, atividadesSelecionadas);
 
         } catch (error) {
+            // Este catch agora pegará falhas do Fuse, criação de voluntário OU da geolocalização (rejeição da promessa)
             console.error("ERRO CRÍTICO no registro rápido:", error);
-            if (error.message.includes("Fora da área") || (error.code && (error.code === error.PERMISSION_DENIED || error.code === error.POSITION_UNAVAILABLE || error.code === error.TIMEOUT))) {
-                 // Erro de geolocalização já tratado, não mostra alerta duplicado
+            
+            // Não exibe alerta duplicado se for erro de geo (pois registrarPresencaComGeolocalizacao já alerta)
+            if (error && error.message && (error.message.includes("Fora da área") || error.message.includes("permissão de localização"))) {
+                 // Erro de geolocalização já tratado, não faz nada
+            } else if (error && error.code && (error.code === error.PERMISSION_DENIED || error.code === error.POSITION_UNAVAILABLE || error.code === error.TIMEOUT)) {
+                 // Erro de geolocalização já tratado, não faz nada
             } else {
+                 // Outro erro crítico (ex: falha ao criar voluntário)
                  alert("Ocorreu um erro crítico. Verifique o console para mais detalhes.");
             }
             
-            if(btnRegistrarPresenca) {
+            if(btnRegistrarPresenca) { // Garante que o botão seja reabilitado se a geo falhar
                 btnRegistrarPresenca.disabled = false;
                 btnRegistrarPresenca.textContent = 'Registrar Presença';
             }
@@ -403,7 +420,7 @@ if (btnSairRapido && formPresencaRapida && atividadesWrapper && statusRapidoSect
     });
 }
 
-// ### AJUSTE FINAL: Lógica de verificação do botão de notificação ###
+// ### CORREÇÃO: Lógica de verificação do botão de notificação ###
 if (btnAtivarNotificacoes) {
     btnAtivarNotificacoes.addEventListener('click', habilitarNotificacoes);
     
@@ -426,12 +443,22 @@ if (btnAtivarNotificacoes) {
         }
 
         try {
+            // Espera o Service Worker estar pronto
             const registration = await navigator.serviceWorker.ready;
+            // Tenta pegar uma inscrição existente
             const subscription = await registration.pushManager.getSubscription();
             
             if (subscription) {
                 // O usuário TEM uma inscrição. VERIFICA SE É A CORRETA.
                 const subKeyArrayBuffer = subscription.options.applicationServerKey;
+                
+                if (!subKeyArrayBuffer || subKeyArrayBuffer.byteLength === 0) {
+                    // Inscrição inválida/antiga sem chave
+                    console.warn("Inscrição encontrada, mas é inválida (sem applicationServerKey). Mostrando botão para reinscrever.");
+                    if (btnAtivarNotificacoes) btnAtivarNotificacoes.style.display = 'block';
+                    return;
+                }
+                
                 const subKeyBase64Url = arrayBufferToBase64Url(subKeyArrayBuffer);
                 
                 if (subKeyBase64Url === VAPID_PUBLIC_KEY_ATUAL) {
@@ -453,7 +480,7 @@ if (btnAtivarNotificacoes) {
                 } else {
                     // Permissão é 'granted' (mas sem inscrição) ou 'prompt'
                     // MOSTRA O BOTÃO.
-                    if (btnAtivarNotificacoes) btnAtivarNotificacoes.style.display = 'block';
+                    if (btnAtivarNotificacoes) btnAtivarNotificacoes.style.display = 'block'; // Mostra o botão
                     console.log("Usuário sem inscrição, botão de ativar visível.");
                 }
             }
@@ -466,4 +493,4 @@ if (btnAtivarNotificacoes) {
     // Chama a nova função de verificação ao carregar a página
     verificarInscricaoAtual();
 }
-// ### FIM DO AJUSTE ###
+// ### FIM DA CORREÇÃO ###
