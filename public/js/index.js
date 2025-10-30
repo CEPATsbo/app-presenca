@@ -326,7 +326,7 @@ if (formPresencaRapida) {
             const fuse = new Fuse(listaDeVoluntarios, {
                  keys: ['nome_normalizado', 'nome'],
                  includeScore: true,
-                 threshold: 0.35 
+                 threshold: 0.4 // Limiar de busca
              });
 
              const nomeNormalizadoBusca = normalizarString(nomeDigitado);
@@ -335,26 +335,40 @@ if (formPresencaRapida) {
             let voluntarioParaRegistrar = { id: null, nome: nomeDigitado };
             let encontrado = false;
 
+            // ### INÍCIO DA LÓGICA CORRIGIDA DO FUSE.JS ###
             if (resultados.length > 0) {
+                // Fuse encontrou pelo menos uma correspondência
                 const melhorResultado = resultados[0].item;
+                const scoreDoMelhorResultado = resultados[0].score;
+
+                // É uma correspondência EXATA (normalizada)?
                 if (normalizarString(melhorResultado.nome) === nomeNormalizadoBusca) {
                      console.log("Voluntário encontrado por correspondência exata (normalizada):", melhorResultado.nome);
                      voluntarioParaRegistrar = melhorResultado;
-                     if(nomeInput) nomeInput.value = melhorResultado.nome;
+                     if(nomeInput) nomeInput.value = melhorResultado.nome; // Garante que o nome oficial esteja no campo
                      encontrado = true;
-                } else if (resultados[0].score < 0.3) {
+                } 
+                // NÃO é exata, mas é PARECIDA (score baixo)? Pergunta ao usuário.
+                // Isso pega o caso do "carlos souza" (autofill) que encontra "Carlos Eduardo de Souza Reis"
+                else if (scoreDoMelhorResultado < 0.45) { // Se o score for bom (baixo)
                     if (confirm(`Encontramos um nome parecido: "${melhorResultado.nome}".\n\nÉ você?`)) {
+                        // Usuário confirmou
                         voluntarioParaRegistrar = melhorResultado;
-                        if(nomeInput) nomeInput.value = melhorResultado.nome;
-                         encontrado = true;
+                        if(nomeInput) nomeInput.value = melhorResultado.nome; // Atualiza o campo com o nome correto
+                        encontrado = true;
                     } else {
-                        // ### CORREÇÃO: Se o usuário clicar em "Cancelar", para a execução ###
+                        // Usuário negou a sugestão
                         alert("Registro cancelado. Por favor, digite seu nome completo exatamente como no cadastro.");
-                        return; // Impede que o código continue e salve o nome errado
+                        return; // Para a execução
                     }
                 }
             }
+            // ### FIM DA LÓGICA CORRIGIDA DO FUSE.JS ###
 
+            // Se, após tudo isso, 'encontrado' ainda for false, significa que:
+            // 1. O Fuse não encontrou NENHUM resultado (resultados.length === 0)
+            // 2. OU o resultado foi muito ruim (score > 0.45)
+            // Então, criamos um novo voluntário com o nome digitado.
             if (!encontrado) {
                 const nomeNormalizado = normalizarString(voluntarioParaRegistrar.nome);
                 console.log(`Criando novo voluntário órfão: ${voluntarioParaRegistrar.nome} (Normalizado: ${nomeNormalizado})`);
@@ -367,33 +381,29 @@ if (formPresencaRapida) {
                 voluntarioParaRegistrar.id = novoVoluntarioDoc.id;
             }
 
-            // ### CORREÇÃO: Salva o nome (corrigido ou novo) no localStorage ANTES da geolocalização ###
+            // Salva o nome (corrigido, novo, ou exato) no localStorage ANTES da geolocalização
             try {
                 localStorage.setItem(LOCAL_STORAGE_KEY_NOME, voluntarioParaRegistrar.nome);
                 console.log("Nome salvo no localStorage (antes do geo):", voluntarioParaRegistrar.nome);
             } catch (e) {
                 console.warn("Não foi possível salvar o nome no localStorage:", e);
             }
-            // ### FIM DA CORREÇÃO ###
 
             // Chama a função de geolocalização (que agora retorna uma promessa)
             await registrarPresencaComGeolocalizacao(voluntarioParaRegistrar, atividadesSelecionadas);
 
         } catch (error) {
-            // Este catch agora pegará falhas do Fuse, criação de voluntário OU da geolocalização (rejeição da promessa)
             console.error("ERRO CRÍTICO no registro rápido:", error);
             
-            // Não exibe alerta duplicado se for erro de geo (pois registrarPresencaComGeolocalizacao já alerta)
             if (error && error.message && (error.message.includes("Fora da área") || error.message.includes("permissão de localização"))) {
                  // Erro de geolocalização já tratado, não faz nada
             } else if (error && error.code && (error.code === error.PERMISSION_DENIED || error.code === error.POSITION_UNAVAILABLE || error.code === error.TIMEOUT)) {
                  // Erro de geolocalização já tratado, não faz nada
             } else if (error) {
-                 // Outro erro crítico (ex: falha ao criar voluntário)
                  alert("Ocorreu um erro crítico. Verifique o console para mais detalhes.");
             }
             
-            if(btnAtivarNotificacoes) { // Garante que o botão seja reabilitado se a geo falhar
+            if(btnRegistrarPresenca) { 
                 btnRegistrarPresenca.disabled = false;
                 btnRegistrarPresenca.textContent = 'Registrar Presença';
             }
@@ -420,13 +430,12 @@ if (btnSairRapido && formPresencaRapida && atividadesWrapper && statusRapidoSect
     });
 }
 
-// ### AJUSTE: Lógica do Botão de Notificação Simplificada ###
-// (Este é o único bloco alterado em relação ao código que você enviou)
+// ### AJUSTE: Lógica do Botão de Notificação SIMPLIFICADA (COMO VOCÊ PEDIU) ###
 if (btnAtivarNotificacoes) {
     // 1. Adiciona o listener de clique
     btnAtivarNotificacoes.addEventListener('click', habilitarNotificacoes);
     
-    // 2. Lógica de visibilidade:
+    // 2. Lógica de visibilidade SIMPLES:
     // Mostra o botão SEMPRE, a menos que o navegador não suporte push.
     if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
         // Navegador não suporta, esconde permanentemente
@@ -434,8 +443,8 @@ if (btnAtivarNotificacoes) {
         console.log("Navegador não suporta Push, botão de notificação oculto.");
     } else {
         // Navegador suporta, MOSTRA o botão.
-        // (O HTML que você usa já tem o botão no footer, então só precisamos garantir que ele apareça)
-        btnAtivarNotificacoes.style.display = 'block'; // Força a exibição
+        // O HTML já o coloca no footer, apenas garantimos que ele apareça.
+        btnAtivarNotificacoes.style.display = 'block'; 
         console.log("Navegador suporta Push, botão de notificação visível.");
     }
 }
