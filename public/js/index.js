@@ -16,6 +16,8 @@ const firebaseConfig = {
 const CASA_ESPIRITA_LAT = -22.75553;
 const CASA_ESPIRITA_LON = -47.36945;
 const RAIO_EM_METROS = 40;
+// ### AJUSTE: Chave para o localStorage ###
+const LOCAL_STORAGE_KEY_NOME = 'cepatPresencaNome';
 
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
@@ -24,12 +26,17 @@ const db = getFirestore(app);
 // ===================================================================
 // --- FUNÇÃO DE NORMALIZAÇÃO ---
 // ===================================================================
+/**
+ * FUNÇÃO DE NORMALIZAÇÃO (Remove acentos e põe em minúsculas)
+ * @param {string} str A string para normalizar
+ * @returns {string} A string normalizada
+ */
 function normalizarString(str) {
-    if (!str) return "";
+    if (!str) return ""; // Proteção contra valores nulos ou indefinidos
     return str
-        .toLowerCase()
-        .normalize("NFD")
-        .replace(/[\u0300-\u036f]/g, "");
+        .toLowerCase() // 1. Converte para minúsculas
+        .normalize("NFD") // 2. Separa acentos das letras
+        .replace(/[\u0300-\u036f]/g, ""); // 3. Remove os acentos
 }
 // ===================================================================
 
@@ -103,21 +110,30 @@ async function registrarPresencaComGeolocalizacao(voluntarioParaRegistrar, ativi
             if (distancia <= RAIO_EM_METROS) {
                 try {
                     btnRegistrarPresenca.textContent = 'Registrando...';
-
+                    
                     const dataHoje = getDataDeHojeSP();
                     const presencaId = `${dataHoje}_${voluntarioParaRegistrar.nome.replace(/\s+/g, '_')}`;
                     const docRef = doc(db, "presencas", presencaId);
 
-                    await setDoc(docRef, {
-                        nome: voluntarioParaRegistrar.nome,
-                        atividade: atividadesSelecionadas.join(', '),
-                        data: dataHoje,
-                        primeiroCheckin: serverTimestamp(),
-                        ultimaAtualizacao: serverTimestamp(),
+                    await setDoc(docRef, { 
+                        nome: voluntarioParaRegistrar.nome, 
+                        atividade: atividadesSelecionadas.join(', '), 
+                        data: dataHoje, 
+                        primeiroCheckin: serverTimestamp(), 
+                        ultimaAtualizacao: serverTimestamp(), 
                         status: 'presente',
-                        authUid: null, // Presença rápida não tem authUid
-                        voluntarioId: voluntarioParaRegistrar.id // ID do documento em 'voluntarios'
+                        authUid: null,
+                        voluntarioId: voluntarioParaRegistrar.id
                     }, { merge: true });
+
+                    // ### AJUSTE: Salva o nome no localStorage após o sucesso ###
+                    try {
+                        localStorage.setItem(LOCAL_STORAGE_KEY_NOME, voluntarioParaRegistrar.nome);
+                        console.log("Nome salvo no localStorage:", voluntarioParaRegistrar.nome);
+                    } catch (e) {
+                        console.warn("Não foi possível salvar o nome no localStorage:", e);
+                    }
+                    // ### FIM DO AJUSTE ###
 
                     statusNome.textContent = voluntarioParaRegistrar.nome;
                     statusAtividades.textContent = atividadesSelecionadas.join(', ');
@@ -154,7 +170,6 @@ async function registrarPresencaComGeolocalizacao(voluntarioParaRegistrar, ativi
     );
 }
 
-
 async function habilitarNotificacoes() {
     const VAPID_PUBLIC_KEY = 'BMpfTCErYrAMkosCBVdmAg3-gAfv82Q6TTIg2amEmIST0_SipaUpq7AxDZ1VhiGfxilUzugQxrK92Buu6d9FM2Y';
 
@@ -179,7 +194,7 @@ async function habilitarNotificacoes() {
         } else {
              console.log("Usuário já inscrito para notificações.");
         }
-
+        
         // Usa endpoint como ID único (mais robusto)
         const subscriptionId = btoa(subscription.endpoint).replace(/=/g, ''); // Base64 URL safe
         await setDoc(doc(db, "inscricoes", subscriptionId), subscription.toJSON());
@@ -198,6 +213,23 @@ async function habilitarNotificacoes() {
 
 carregarMural();
 
+// ### AJUSTE: Carrega o nome salvo ao iniciar a página ###
+(function carregarNomeSalvo() {
+    if (nomeInput) { // Verifica se o campo de nome existe na página
+        try {
+            const nomeSalvo = localStorage.getItem(LOCAL_STORAGE_KEY_NOME);
+            if (nomeSalvo) {
+                nomeInput.value = nomeSalvo;
+                console.log("Nome carregado do localStorage:", nomeSalvo);
+            }
+        } catch (e) {
+            // Isso pode falhar em navegadores com 'localStorage' desabilitado ou em modo privado
+            console.warn("Não foi possível ler o nome do localStorage:", e);
+        }
+    }
+})();
+// ### FIM DO AJUSTE ###
+
 if (formLogin) {
     formLogin.addEventListener('submit', (event) => {
         event.preventDefault();
@@ -212,11 +244,11 @@ if (formLogin) {
         if(btnEntrar) btnEntrar.disabled = true; // Desabilita botão
 
         signInWithEmailAndPassword(auth, email, senha)
-            .then(() => { window.location.href = '/meu-cepat.html'; })
+            .then(() => { window.location.href = '/meu-cepat.html'; }) // ATENÇÃO: Verifique se este é o destino correto
             .catch((error) => {
                 console.error("Erro de login:", error.code);
                 alert("Email ou senha incorretos. Tente novamente.");
-                 if(btnEntrar) btnEntrar.disabled = false; // Reabilita em caso de erro
+                if(btnEntrar) btnEntrar.disabled = false; // Reabilita em caso de erro
             });
     });
 }
@@ -271,9 +303,9 @@ if (formPresencaRapida) {
                 div.innerHTML = `<input type="checkbox" name="atividade" value="${atividade}" id="${inputId}"> <label for="${inputId}">${atividade}</label>`;
                 atividadesContainer.appendChild(div);
             });
-        } catch (e) {
-            console.error("Erro ao buscar atividades:", e);
-            atividadesContainer.innerHTML = '<p style="color:red;">Erro ao carregar atividades.</p>';
+        } catch (e) { 
+            console.error("Erro ao buscar atividades:", e); 
+            if(atividadesContainer) atividadesContainer.innerHTML = '<p style="color:red;">Erro ao carregar atividades.</p>';
         }
     })();
 
@@ -294,49 +326,53 @@ if (formPresencaRapida) {
         if (atividadesSelecionadas.length === 0) { return alert("Por favor, selecione pelo menos uma atividade."); }
 
         try {
-            const voluntariosSnapshot = await getDocs(query(collection(db, "voluntarios"))); // Adiciona query() para clareza
+            const voluntariosSnapshot = await getDocs(query(collection(db, "voluntarios")));
             const listaDeVoluntarios = voluntariosSnapshot.docs.map(d => ({ id: d.id, ...d.data() }));
 
-            // Configuração do Fuse.js (ajuste threshold se necessário)
+            // Configuração do Fuse.js
             const fuse = new Fuse(listaDeVoluntarios, {
-                 keys: ['nome_normalizado', 'nome'], // Busca primeiro no nome normalizado
+                 keys: ['nome_normalizado', 'nome'],
                  includeScore: true,
-                 threshold: 0.35 // Mais restritivo para evitar falsos positivos
+                 threshold: 0.35 
              });
 
              const nomeNormalizadoBusca = normalizarString(nomeDigitado);
-            const resultados = fuse.search(nomeNormalizadoBusca); // Busca pelo nome normalizado
+            const resultados = fuse.search(nomeNormalizadoBusca);
 
-            let voluntarioParaRegistrar = { id: null, nome: nomeDigitado }; // Padrão: novo voluntário
+            let voluntarioParaRegistrar = { id: null, nome: nomeDigitado };
             let encontrado = false;
 
             if (resultados.length > 0) {
                 const melhorResultado = resultados[0].item;
-                 // Compara nomes normalizados para maior precisão
                 if (normalizarString(melhorResultado.nome) === nomeNormalizadoBusca) {
                      console.log("Voluntário encontrado por correspondência exata (normalizada):", melhorResultado.nome);
                      voluntarioParaRegistrar = melhorResultado;
                      encontrado = true;
-                } else if (resultados[0].score < 0.3) { // Se for muito parecido (score baixo)
+                } else if (resultados[0].score < 0.3) {
                     if (confirm(`Encontramos um nome parecido: "${melhorResultado.nome}".\n\nÉ você?`)) {
                         voluntarioParaRegistrar = melhorResultado;
                          encontrado = true;
                     }
-                    // Se não confirmar, continua como novo voluntário
                 }
             }
 
-            // Se não encontrou correspondência ou o usuário negou a sugestão
             if (!encontrado) {
+                // --- MODIFICAÇÃO AQUI ---
+                // 1. Normaliza o nome antes de salvar
                 const nomeNormalizado = normalizarString(voluntarioParaRegistrar.nome);
+
                 console.log(`Criando novo voluntário órfão: ${voluntarioParaRegistrar.nome} (Normalizado: ${nomeNormalizado})`);
+
                 const novoVoluntarioDoc = await addDoc(collection(db, "voluntarios"), {
                     nome: voluntarioParaRegistrar.nome,
-                    nome_normalizado: nomeNormalizado,
+                    nome_normalizado: nomeNormalizado, // 2. Adiciona o campo normalizado
                     statusVoluntario: 'ativo',
                     criadoEm: serverTimestamp()
+                    // O authUid fica ausente por padrão, que é o que queremos (órfão)
                 });
-                voluntarioParaRegistrar.id = novoVoluntarioDoc.id; // Pega o ID do novo documento
+                // --- FIM DA MODIFICAÇÃO ---
+                
+                voluntarioParaRegistrar.id = novoVoluntarioDoc.id;
             }
 
             await registrarPresencaComGeolocalizacao(voluntarioParaRegistrar, atividadesSelecionadas);
@@ -344,7 +380,7 @@ if (formPresencaRapida) {
         } catch (error) {
             console.error("ERRO CRÍTICO no registro rápido:", error);
             alert("Ocorreu um erro crítico. Verifique o console para mais detalhes.");
-            if(btnRegistrarPresenca) { // Reabilita o botão em caso de erro
+            if(btnRegistrarPresenca) {
                 btnRegistrarPresenca.disabled = false;
                 btnRegistrarPresenca.textContent = 'Registrar Presença';
             }
@@ -354,13 +390,22 @@ if (formPresencaRapida) {
 
 if (btnSairRapido && formPresencaRapida && atividadesWrapper && statusRapidoSection && registroRapidoSection && btnRegistrarPresenca) {
     btnSairRapido.addEventListener('click', () => {
-        formPresencaRapida.reset(); // Limpa o formulário
-        atividadesWrapper.style.display = 'none'; // Esconde atividades
-        statusRapidoSection.classList.add('hidden'); // Esconde status
-        registroRapidoSection.classList.remove('hidden'); // Mostra formulário
-        btnRegistrarPresenca.disabled = false; // Reabilita botão
+        // ### AJUSTE: Limpa o nome do localStorage ao Sair ###
+        try {
+            localStorage.removeItem(LOCAL_STORAGE_KEY_NOME);
+            console.log("Nome removido do localStorage.");
+        } catch (e) {
+            console.warn("Não foi possível limpar o nome do localStorage:", e);
+        }
+        // ### FIM DO AJUSTE ###
+
+        formPresencaRapida.reset(); // Limpa o formulário (incluindo o campo nome)
+        atividadesWrapper.style.display = 'none';
+        statusRapidoSection.classList.add('hidden');
+        registroRapidoSection.classList.remove('hidden');
+        btnRegistrarPresenca.disabled = false;
         btnRegistrarPresenca.textContent = 'Registrar Presença';
-        if (feedbackGeoRapido) feedbackGeoRapido.textContent = ''; // Limpa feedback geo
+        if (feedbackGeoRapido) feedbackGeoRapido.textContent = '';
     });
 }
 
