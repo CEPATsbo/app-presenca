@@ -24,20 +24,22 @@ const REGIAO = 'southamerica-east1';
 const OPCOES_FUNCAO = { region: REGIAO };
 const OPCOES_FUNCAO_SAOPAULO = { region: REGIAO, timeZone: 'America/Sao_Paulo' };
 
-const vapidPublicKey = defineString("VAPID_PUBLIC_KEY");
-const vapidPrivateKey = defineString("VAPID_PRIVATE_KEY");
 
 // --- FUNÇÕES AUXILIARES ---
 
 function configurarWebPush() {
     try {
-        const publicKey = vapidPublicKey.value();
-        const privateKey = vapidPrivateKey.value();
+        // ### AJUSTE: Lendo chaves do process.env ###
+        const publicKey = process.env.VAPID_PUBLIC_KEY;
+        const privateKey = process.env.VAPID_PRIVATE_KEY;
+        // ### FIM DO AJUSTE ###
+
         if (publicKey && privateKey) {
             webpush.setVapidDetails("mailto:cepaulodetarso.sbo@gmail.com", publicKey, privateKey);
+            console.log("Web Push configurado com sucesso."); // Log de sucesso
             return true;
         }
-        console.error("ERRO CRÍTICO: Chaves VAPID não encontradas nas variáveis de ambiente.");
+        console.error("ERRO CRÍTICO: Chaves VAPID (VAPID_PUBLIC_KEY ou VAPID_PRIVATE_KEY) não encontradas no process.env.");
         return false;
     } catch (error) {
         console.error("ERRO CRÍTICO ao configurar web-push:", error);
@@ -46,17 +48,39 @@ function configurarWebPush() {
 }
 
 async function enviarNotificacoesParaTodos(titulo, corpo) {
-    if (!configurarWebPush()) { return { successCount: 0, failureCount: 0, totalCount: 0 }; }
+    if (!configurarWebPush()) { 
+        console.error("Envio cancelado: Configuração do Web Push falhou.");
+        return { successCount: 0, failureCount: 0, totalCount: 0 }; 
+    }
     const inscricoesSnapshot = await db.collection('inscricoes').get();
-    if (inscricoesSnapshot.empty) { return { successCount: 0, totalCount: inscricoesSnapshot.size }; }
+    if (inscricoesSnapshot.empty) { 
+        console.log("Nenhuma inscrição encontrada para enviar notificações.");
+        return { successCount: 0, totalCount: 0, failureCount: 0 }; 
+    }
+    
     const payload = JSON.stringify({ title: titulo, body: corpo });
-    let successCount = 0; let failureCount = 0;
+    let successCount = 0; 
+    let failureCount = 0;
+    
     const sendPromises = inscricoesSnapshot.docs.map(doc => {
-        return webpush.sendNotification(doc.data(), payload)
-            .then(() => successCount++)
-            .catch(error => { failureCount++; if (error.statusCode === 410) { return doc.ref.delete(); } });
+        const subscriptionData = doc.data();
+        return webpush.sendNotification(subscriptionData, payload)
+            .then(() => {
+                successCount++;
+            })
+            .catch(error => { 
+                failureCount++;
+                console.warn(`Falha ao enviar para ${doc.id.substring(0, 10)}...:`, error.statusCode);
+                // Se a inscrição expirou ou é inválida (404 ou 410), remove do banco
+                if (error.statusCode === 410 || error.statusCode === 404) { 
+                    console.log(`Removendo inscrição expirada: ${doc.id}`);
+                    return doc.ref.delete(); 
+                }
+            });
     });
+    
     await Promise.all(sendPromises);
+    console.log(`Resultado do envio: ${successCount} sucessos, ${failureCount} falhas, de ${inscricoesSnapshot.size} total.`);
     return { successCount, failureCount, totalCount: inscricoesSnapshot.size };
 }
 

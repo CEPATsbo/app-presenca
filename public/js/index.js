@@ -163,7 +163,7 @@ async function registrarPresencaComGeolocalizacao(voluntarioParaRegistrar, ativi
 
 
 async function habilitarNotificacoes() {
-    const VAPID_PUBLIC_KEY = 'BMpfTCErYrAMkosCBVdmAg3-gAfv82Q6TTIg2amEmIST0_SipaUpq7AxDZ1VhiGfxilUzugQxrK92Buu6d9FM2Y';
+const VAPID_PUBLIC_KEY = 'BHvM-GJJ64ePBfttwFiCghI9wqLK6PjN0U2aIBhYAQPI5CdnOFswB4cejXp3AHhgw-I6rJBANaxlgvjTRn463L4';
 
     if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
         return alert("Seu navegador não suporta notificações push.");
