@@ -1,7 +1,5 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
-// ### AJUSTE: Importa sendPasswordResetEmail ###
 import { getAuth, signInWithEmailAndPassword, sendPasswordResetEmail } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-auth.js";
-// ### FIM DO AJUSTE ###
 import { getFirestore, collection, query, where, getDocs, serverTimestamp, setDoc, doc, orderBy, getDoc, addDoc } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
 import Fuse from 'https://cdn.jsdelivr.net/npm/fuse.js@7.0.0/dist/fuse.mjs';
 
@@ -16,7 +14,6 @@ const firebaseConfig = {
 const CASA_ESPIRITA_LAT = -22.75553;
 const CASA_ESPIRITA_LON = -47.36945;
 const RAIO_EM_METROS = 40;
-// ### AJUSTE: Chave para o localStorage ###
 const LOCAL_STORAGE_KEY_NOME = 'cepatPresencaNome';
 
 const app = initializeApp(firebaseConfig);
@@ -26,17 +23,12 @@ const db = getFirestore(app);
 // ===================================================================
 // --- FUNÇÃO DE NORMALIZAÇÃO ---
 // ===================================================================
-/**
- * FUNÇÃO DE NORMALIZAÇÃO (Remove acentos e põe em minúsculas)
- * @param {string} str A string para normalizar
- * @returns {string} A string normalizada
- */
 function normalizarString(str) {
-    if (!str) return ""; // Proteção contra valores nulos ou indefinidos
+    if (!str) return "";
     return str
-        .toLowerCase() // 1. Converte para minúsculas
-        .normalize("NFD") // 2. Separa acentos das letras
-        .replace(/[\u0300-\u036f]/g, ""); // 3. Remove os acentos
+        .toLowerCase()
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "");
 }
 // ===================================================================
 
@@ -55,9 +47,7 @@ const btnSairRapido = document.getElementById('btn-sair-rapido');
 const feedbackGeoRapido = document.getElementById('feedback-geolocalizacao-rapido');
 const btnRegistrarPresenca = document.getElementById('btn-registrar-presenca');
 const btnAtivarNotificacoes = document.getElementById('btn-ativar-notificacoes');
-// ### AJUSTE: Pega o link "Esqueci minha senha" ###
 const linkEsqueciSenha = document.getElementById('link-esqueci-senha');
-// ### FIM DO AJUSTE ###
 
 
 async function carregarMural() {
@@ -126,14 +116,12 @@ async function registrarPresencaComGeolocalizacao(voluntarioParaRegistrar, ativi
                         voluntarioId: voluntarioParaRegistrar.id
                     }, { merge: true });
 
-                    // ### AJUSTE: Salva o nome no localStorage após o sucesso ###
                     try {
                         localStorage.setItem(LOCAL_STORAGE_KEY_NOME, voluntarioParaRegistrar.nome);
                         console.log("Nome salvo no localStorage:", voluntarioParaRegistrar.nome);
                     } catch (e) {
                         console.warn("Não foi possível salvar o nome no localStorage:", e);
                     }
-                    // ### FIM DO AJUSTE ###
 
                     statusNome.textContent = voluntarioParaRegistrar.nome;
                     statusAtividades.textContent = atividadesSelecionadas.join(', ');
@@ -170,6 +158,7 @@ async function registrarPresencaComGeolocalizacao(voluntarioParaRegistrar, ativi
     );
 }
 
+
 async function habilitarNotificacoes() {
     const VAPID_PUBLIC_KEY = 'BMpfTCErYrAMkosCBVdmAg3-gAfv82Q6TTIg2amEmIST0_SipaUpq7AxDZ1VhiGfxilUzugQxrK92Buu6d9FM2Y';
 
@@ -184,7 +173,7 @@ async function habilitarNotificacoes() {
         }
 
         const registration = await navigator.serviceWorker.ready;
-        let subscription = await registration.pushManager.getSubscription(); // Verifica se já existe
+        let subscription = await registration.pushManager.getSubscription(); 
 
         if (!subscription) {
             subscription = await registration.pushManager.subscribe({
@@ -195,8 +184,7 @@ async function habilitarNotificacoes() {
              console.log("Usuário já inscrito para notificações.");
         }
         
-        // Usa endpoint como ID único (mais robusto)
-        const subscriptionId = btoa(subscription.endpoint).replace(/=/g, ''); // Base64 URL safe
+        const subscriptionId = btoa(subscription.endpoint).replace(/=/g, '');
         await setDoc(doc(db, "inscricoes", subscriptionId), subscription.toJSON());
 
         alert("Notificações ativadas com sucesso!");
@@ -213,9 +201,8 @@ async function habilitarNotificacoes() {
 
 carregarMural();
 
-// ### AJUSTE: Carrega o nome salvo ao iniciar a página ###
 (function carregarNomeSalvo() {
-    if (nomeInput) { // Verifica se o campo de nome existe na página
+    if (nomeInput) {
         try {
             const nomeSalvo = localStorage.getItem(LOCAL_STORAGE_KEY_NOME);
             if (nomeSalvo) {
@@ -223,12 +210,11 @@ carregarMural();
                 console.log("Nome carregado do localStorage:", nomeSalvo);
             }
         } catch (e) {
-            // Isso pode falhar em navegadores com 'localStorage' desabilitado ou em modo privado
             console.warn("Não foi possível ler o nome do localStorage:", e);
         }
     }
 })();
-// ### FIM DO AJUSTE ###
+
 
 if (formLogin) {
     formLogin.addEventListener('submit', (event) => {
@@ -241,26 +227,25 @@ if (formLogin) {
         if (!email || !senha) { return alert("Por favor, preencha email e senha."); }
 
         const btnEntrar = formLogin.querySelector('button[type="submit"]');
-        if(btnEntrar) btnEntrar.disabled = true; // Desabilita botão
+        if(btnEntrar) btnEntrar.disabled = true;
 
         signInWithEmailAndPassword(auth, email, senha)
-            .then(() => { window.location.href = '/meu-cepat.html'; }) // ATENÇÃO: Verifique se este é o destino correto
+            .then(() => { window.location.href = '/meu-cepat.html'; })
             .catch((error) => {
                 console.error("Erro de login:", error.code);
                 alert("Email ou senha incorretos. Tente novamente.");
-                if(btnEntrar) btnEntrar.disabled = false; // Reabilita em caso de erro
+                 if(btnEntrar) btnEntrar.disabled = false;
             });
     });
 }
 
-// ### AJUSTE: Listener para o link "Esqueci minha senha" ###
 if (linkEsqueciSenha) {
     linkEsqueciSenha.addEventListener('click', (event) => {
-        event.preventDefault(); // Impede a navegação para '#'
+        event.preventDefault(); 
 
         const email = prompt("Digite seu endereço de email cadastrado para enviarmos o link de redefinição de senha:");
 
-        if (email) { // Verifica se o usuário digitou algo
+        if (email) { 
              sendPasswordResetEmail(auth, email)
                 .then(() => {
                     alert("Email de redefinição de senha enviado com sucesso para " + email + ". Verifique sua caixa de entrada (e spam).");
@@ -275,13 +260,9 @@ if (linkEsqueciSenha) {
                     }
                     alert(mensagemErro);
                 });
-        } else {
-            // Opcional: Avisar se o usuário cancelou ou não digitou nada
-            // alert("Operação cancelada.");
         }
     });
 }
-// ### FIM DO AJUSTE ###
 
 
 if (formPresencaRapida) {
@@ -290,7 +271,7 @@ if (formPresencaRapida) {
         try {
             const q = query(collection(db, "atividades"), where("ativo", "==", true), orderBy("nome"));
             const snapshot = await getDocs(q);
-            atividadesContainer.innerHTML = ''; // Limpa "Carregando..."
+            atividadesContainer.innerHTML = ''; 
             if (snapshot.empty) {
                  atividadesContainer.innerHTML = '<p>Nenhuma atividade cadastrada.</p>';
                  return;
@@ -298,7 +279,6 @@ if (formPresencaRapida) {
             snapshot.forEach(doc => {
                 const atividade = doc.data().nome;
                 const div = document.createElement('div');
-                // Usa IDs únicos para labels e inputs
                 const inputId = `atividade-${doc.id}`;
                 div.innerHTML = `<input type="checkbox" name="atividade" value="${atividade}" id="${inputId}"> <label for="${inputId}">${atividade}</label>`;
                 atividadesContainer.appendChild(div);
@@ -329,7 +309,6 @@ if (formPresencaRapida) {
             const voluntariosSnapshot = await getDocs(query(collection(db, "voluntarios")));
             const listaDeVoluntarios = voluntariosSnapshot.docs.map(d => ({ id: d.id, ...d.data() }));
 
-            // Configuração do Fuse.js
             const fuse = new Fuse(listaDeVoluntarios, {
                  keys: ['nome_normalizado', 'nome'],
                  includeScore: true,
@@ -347,31 +326,28 @@ if (formPresencaRapida) {
                 if (normalizarString(melhorResultado.nome) === nomeNormalizadoBusca) {
                      console.log("Voluntário encontrado por correspondência exata (normalizada):", melhorResultado.nome);
                      voluntarioParaRegistrar = melhorResultado;
+                     // ### AJUSTE: Atualiza o campo de nome ###
+                     if(nomeInput) nomeInput.value = melhorResultado.nome;
                      encontrado = true;
                 } else if (resultados[0].score < 0.3) {
                     if (confirm(`Encontramos um nome parecido: "${melhorResultado.nome}".\n\nÉ você?`)) {
                         voluntarioParaRegistrar = melhorResultado;
+                        // ### AJUSTE: Atualiza o campo de nome ###
+                        if(nomeInput) nomeInput.value = melhorResultado.nome;
                          encontrado = true;
                     }
                 }
             }
 
             if (!encontrado) {
-                // --- MODIFICAÇÃO AQUI ---
-                // 1. Normaliza o nome antes de salvar
                 const nomeNormalizado = normalizarString(voluntarioParaRegistrar.nome);
-
                 console.log(`Criando novo voluntário órfão: ${voluntarioParaRegistrar.nome} (Normalizado: ${nomeNormalizado})`);
-
                 const novoVoluntarioDoc = await addDoc(collection(db, "voluntarios"), {
                     nome: voluntarioParaRegistrar.nome,
-                    nome_normalizado: nomeNormalizado, // 2. Adiciona o campo normalizado
+                    nome_normalizado: nomeNormalizado,
                     statusVoluntario: 'ativo',
                     criadoEm: serverTimestamp()
-                    // O authUid fica ausente por padrão, que é o que queremos (órfão)
                 });
-                // --- FIM DA MODIFICAÇÃO ---
-                
                 voluntarioParaRegistrar.id = novoVoluntarioDoc.id;
             }
 
@@ -390,16 +366,14 @@ if (formPresencaRapida) {
 
 if (btnSairRapido && formPresencaRapida && atividadesWrapper && statusRapidoSection && registroRapidoSection && btnRegistrarPresenca) {
     btnSairRapido.addEventListener('click', () => {
-        // ### AJUSTE: Limpa o nome do localStorage ao Sair ###
         try {
             localStorage.removeItem(LOCAL_STORAGE_KEY_NOME);
             console.log("Nome removido do localStorage.");
         } catch (e) {
             console.warn("Não foi possível limpar o nome do localStorage:", e);
         }
-        // ### FIM DO AJUSTE ###
 
-        formPresencaRapida.reset(); // Limpa o formulário (incluindo o campo nome)
+        formPresencaRapida.reset();
         atividadesWrapper.style.display = 'none';
         statusRapidoSection.classList.add('hidden');
         registroRapidoSection.classList.remove('hidden');
@@ -411,13 +385,12 @@ if (btnSairRapido && formPresencaRapida && atividadesWrapper && statusRapidoSect
 
 if (btnAtivarNotificacoes) {
     btnAtivarNotificacoes.addEventListener('click', habilitarNotificacoes);
-    // Opcional: Esconder o botão se o navegador não suportar ou se já tiver permissão
     if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
        btnAtivarNotificacoes.style.display = 'none';
     } else {
         navigator.permissions.query({name:'push', userVisibleOnly:true}).then(permissionStatus => {
              if (permissionStatus.state === 'granted') {
-                 btnAtivarNotificacoes.style.display = 'none'; // Já tem permissão
+                 btnAtivarNotificacoes.style.display = 'none';
              }
         });
     }
