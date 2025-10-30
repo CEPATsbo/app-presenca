@@ -118,8 +118,6 @@ async function registrarPresencaComGeolocalizacao(voluntarioParaRegistrar, ativi
                             voluntarioId: voluntarioParaRegistrar.id
                         }, { merge: true });
 
-                        // A linha de salvar no localStorage foi MOVIDA para antes desta função
-
                         statusNome.textContent = voluntarioParaRegistrar.nome;
                         statusAtividades.textContent = atividadesSelecionadas.join(', ');
                         feedbackGeoRapido.textContent = `Presença confirmada a ${distancia.toFixed(0)} metros.`;
@@ -163,7 +161,7 @@ async function registrarPresencaComGeolocalizacao(voluntarioParaRegistrar, ativi
 
 
 async function habilitarNotificacoes() {
-    // Esta é a chave VAPID que você tinha no seu arquivo (assumindo que seja a correta)
+    // Esta é a sua NOVA Chave Pública VAPID (do arquivo .env)
     const VAPID_PUBLIC_KEY = 'BHvM-GJJ64ePBfttwFiCghI9wqLK6PjN0U2aIBhYAQPI5CdnOFswB4cejXp3AHhgw-I6rJBANaxlgvjTRn463L4'; 
 
     if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
@@ -208,7 +206,6 @@ async function habilitarNotificacoes() {
 
 carregarMural();
 
-// Carrega o nome salvo ao iniciar a página
 (function carregarNomeSalvo() {
     if (nomeInput) {
         try {
@@ -342,7 +339,7 @@ if (formPresencaRapida) {
                         if(nomeInput) nomeInput.value = melhorResultado.nome;
                          encontrado = true;
                     } else {
-                        // ### AJUSTE: Se o usuário clicar em "Cancelar", para a execução ###
+                        // Se o usuário clicar em "Cancelar", para a execução
                         alert("Registro cancelado. Por favor, digite seu nome completo exatamente como no cadastro.");
                         return; // Impede que o código continue e salve o nome errado
                     }
@@ -361,14 +358,13 @@ if (formPresencaRapida) {
                 voluntarioParaRegistrar.id = novoVoluntarioDoc.id;
             }
 
-            // ### AJUSTE: Salva o nome (corrigido ou novo) no localStorage ANTES da geolocalização ###
+            // Salva o nome (corrigido ou novo) no localStorage ANTES da geolocalização
             try {
                 localStorage.setItem(LOCAL_STORAGE_KEY_NOME, voluntarioParaRegistrar.nome);
                 console.log("Nome salvo no localStorage (antes do geo):", voluntarioParaRegistrar.nome);
             } catch (e) {
                 console.warn("Não foi possível salvar o nome no localStorage:", e);
             }
-            // ### FIM DO AJUSTE ###
 
             await registrarPresencaComGeolocalizacao(voluntarioParaRegistrar, atividadesSelecionadas);
 
@@ -407,9 +403,21 @@ if (btnSairRapido && formPresencaRapida && atividadesWrapper && statusRapidoSect
     });
 }
 
+// ### AJUSTE FINAL: Lógica de verificação do botão de notificação ###
 if (btnAtivarNotificacoes) {
     btnAtivarNotificacoes.addEventListener('click', habilitarNotificacoes);
     
+    // Esta é a sua NOVA Chave Pública VAPID
+    const VAPID_PUBLIC_KEY_ATUAL = 'BHvM-GJJ64ePBfttwFiCghI9wqLK6PjN0U2aIBhYAQPI5CdnOFswB4cejXp3AHhgw-I6rJBANaxlgvjTRn463L4';
+
+    // Função auxiliar para converter ArrayBuffer para Base64URL
+    function arrayBufferToBase64Url(buffer) {
+        return btoa(String.fromCharCode.apply(null, new Uint8Array(buffer)))
+            .replace(/\+/g, '-')
+            .replace(/\//g, '_')
+            .replace(/=+$/, '');
+    }
+
     // Nova função auxiliar para verificar a inscrição E a permissão
     async function verificarInscricaoAtual() {
         if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
@@ -422,20 +430,30 @@ if (btnAtivarNotificacoes) {
             const subscription = await registration.pushManager.getSubscription();
             
             if (subscription) {
-                // O usuário tem uma inscrição ativa
-                console.log("Usuário já tem uma inscrição de notificação ativa.");
-                if (btnAtivarNotificacoes) btnAtivarNotificacoes.style.display = 'none';
+                // O usuário TEM uma inscrição. VERIFICA SE É A CORRETA.
+                const subKeyArrayBuffer = subscription.options.applicationServerKey;
+                const subKeyBase64Url = arrayBufferToBase64Url(subKeyArrayBuffer);
+                
+                if (subKeyBase64Url === VAPID_PUBLIC_KEY_ATUAL) {
+                    // É a chave correta! A inscrição está válida. ESCONDE o botão.
+                    console.log("Inscrição válida e atual encontrada.");
+                    if (btnAtivarNotificacoes) btnAtivarNotificacoes.style.display = 'none';
+                } else {
+                    // É uma chave ANTIGA/INVÁLIDA! MOSTRA o botão para o usuário corrigir.
+                    console.warn("Inscrição antiga (com VAPID key diferente) encontrada. Mostrando botão para re-inscrever.");
+                    if (btnAtivarNotificacoes) btnAtivarNotificacoes.style.display = 'block';
+                }
             } else {
-                // O usuário NÃO tem inscrição. Verifica a *permissão*
+                // O usuário NÃO tem inscrição. Verifica a *permissão* do navegador
                 const permissionStatus = await navigator.permissions.query({name:'push', userVisibleOnly:true});
                 if (permissionStatus.state === 'denied') {
-                    // Permissão foi negada, esconde o botão (não podemos pedir de novo)
+                    // Permissão foi negada, ESCONDE o botão.
                     if (btnAtivarNotificacoes) btnAtivarNotificacoes.style.display = 'none';
                     console.warn("Permissão de notificação foi negada pelo usuário.");
                 } else {
                     // Permissão é 'granted' (mas sem inscrição) ou 'prompt'
-                    // MOSTRA O BOTÃO para (re)inscrever
-                    if (btnAtivarNotificacoes) btnAtivarNotificacoes.style.display = 'block'; // Mostra o botão
+                    // MOSTRA O BOTÃO.
+                    if (btnAtivarNotificacoes) btnAtivarNotificacoes.style.display = 'block';
                     console.log("Usuário sem inscrição, botão de ativar visível.");
                 }
             }
@@ -448,3 +466,4 @@ if (btnAtivarNotificacoes) {
     // Chama a nova função de verificação ao carregar a página
     verificarInscricaoAtual();
 }
+// ### FIM DO AJUSTE ###
