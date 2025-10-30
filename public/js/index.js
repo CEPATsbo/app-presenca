@@ -118,7 +118,7 @@ async function registrarPresencaComGeolocalizacao(voluntarioParaRegistrar, ativi
                             voluntarioId: voluntarioParaRegistrar.id
                         }, { merge: true });
 
-                        // A linha de salvar no localStorage foi MOVIDA para antes desta função
+                        // A linha de salvar no localStorage foi MOVIDA para antes desta função (na lógica de submit)
 
                         statusNome.textContent = voluntarioParaRegistrar.nome;
                         statusAtividades.textContent = atividadesSelecionadas.join(', ');
@@ -388,7 +388,7 @@ if (formPresencaRapida) {
                  // Erro de geolocalização já tratado, não faz nada
             } else if (error && error.code && (error.code === error.PERMISSION_DENIED || error.code === error.POSITION_UNAVAILABLE || error.code === error.TIMEOUT)) {
                  // Erro de geolocalização já tratado, não faz nada
-            } else {
+            } else if (error) {
                  // Outro erro crítico (ex: falha ao criar voluntário)
                  alert("Ocorreu um erro crítico. Verifique o console para mais detalhes.");
             }
@@ -429,6 +429,7 @@ if (btnAtivarNotificacoes) {
 
     // Função auxiliar para converter ArrayBuffer para Base64URL
     function arrayBufferToBase64Url(buffer) {
+        if (!buffer) return null; // Proteção contra buffer nulo
         return btoa(String.fromCharCode.apply(null, new Uint8Array(buffer)))
             .replace(/\+/g, '-')
             .replace(/\//g, '_')
@@ -455,7 +456,7 @@ if (btnAtivarNotificacoes) {
                 if (!subKeyArrayBuffer || subKeyArrayBuffer.byteLength === 0) {
                     // Inscrição inválida/antiga sem chave
                     console.warn("Inscrição encontrada, mas é inválida (sem applicationServerKey). Mostrando botão para reinscrever.");
-                    if (btnAtivarNotificacoes) btnAtivarNotificacoes.style.display = 'block';
+                    if (btnAtivarNotificacoes) btnAtivarNotificacoes.style.display = 'block'; // MOSTRA o botão
                     return;
                 }
                 
@@ -468,7 +469,7 @@ if (btnAtivarNotificacoes) {
                 } else {
                     // É uma chave ANTIGA/INVÁLIDA! MOSTRA o botão para o usuário corrigir.
                     console.warn("Inscrição antiga (com VAPID key diferente) encontrada. Mostrando botão para re-inscrever.");
-                    if (btnAtivarNotificacoes) btnAtivarNotificacoes.style.display = 'block';
+                    if (btnAtivarNotificacoes) btnAtivarNotificacoes.style.display = 'block'; // MOSTRA o botão
                 }
             } else {
                 // O usuário NÃO tem inscrição. Verifica a *permissão* do navegador
@@ -480,7 +481,7 @@ if (btnAtivarNotificacoes) {
                 } else {
                     // Permissão é 'granted' (mas sem inscrição) ou 'prompt'
                     // MOSTRA O BOTÃO.
-                    if (btnAtivarNotificacoes) btnAtivarNotificacoes.style.display = 'block'; // Mostra o botão
+                    if (btnAtivarNotificacoes) btnAtivarNotificacoes.style.display = 'block'; // MOSTRA o botão
                     console.log("Usuário sem inscrição, botão de ativar visível.");
                 }
             }
