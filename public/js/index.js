@@ -401,15 +401,46 @@ if (btnSairRapido && formPresencaRapida && atividadesWrapper && statusRapidoSect
     });
 }
 
+// ### AJUSTE: Lógica de verificação do botão de notificação ###
 if (btnAtivarNotificacoes) {
     btnAtivarNotificacoes.addEventListener('click', habilitarNotificacoes);
-    if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
-       btnAtivarNotificacoes.style.display = 'none';
-    } else {
-        navigator.permissions.query({name:'push', userVisibleOnly:true}).then(permissionStatus => {
-             if (permissionStatus.state === 'granted') {
-                 btnAtivarNotificacoes.style.display = 'none';
-             }
-        });
+    
+    // Nova função auxiliar para verificar a inscrição E a permissão
+    async function verificarInscricaoAtual() {
+        if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
+            if (btnAtivarNotificacoes) btnAtivarNotificacoes.style.display = 'none';
+            return; // Navegador não suporta push
+        }
+
+        try {
+            const registration = await navigator.serviceWorker.ready;
+            const subscription = await registration.pushManager.getSubscription();
+            
+            if (subscription) {
+                // O usuário tem uma inscrição ativa
+                console.log("Usuário já tem uma inscrição de notificação ativa.");
+                if (btnAtivarNotificacoes) btnAtivarNotificacoes.style.display = 'none';
+            } else {
+                // O usuário NÃO tem inscrição. Verifica a *permissão*
+                const permissionStatus = await navigator.permissions.query({name:'push', userVisibleOnly:true});
+                if (permissionStatus.state === 'denied') {
+                    // Permissão foi negada, esconde o botão (não podemos pedir de novo)
+                    if (btnAtivarNotificacoes) btnAtivarNotificacoes.style.display = 'none';
+                    console.warn("Permissão de notificação foi negada pelo usuário.");
+                } else {
+                    // Permissão é 'granted' (mas sem inscrição) ou 'prompt'
+                    // MOSTRA O BOTÃO para (re)inscrever
+                    if (btnAtivarNotificacoes) btnAtivarNotificacoes.style.display = 'block';
+                    console.log("Usuário sem inscrição, botão de ativar visível.");
+                }
+            }
+        } catch (error) {
+            console.error("Erro ao verificar inscrição de push:", error);
+            if (btnAtivarNotificacoes) btnAtivarNotificacoes.style.display = 'none'; // Esconde por segurança
+        }
     }
+
+    // Chama a nova função de verificação ao carregar a página
+    verificarInscricaoAtual();
 }
+// ### FIM DO AJUSTE ###

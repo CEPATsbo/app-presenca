@@ -24,6 +24,8 @@ const REGIAO = 'southamerica-east1';
 const OPCOES_FUNCAO = { region: REGIAO };
 const OPCOES_FUNCAO_SAOPAULO = { region: REGIAO, timeZone: 'America/Sao_Paulo' };
 
+// ### AJUSTE: Removidas as consts defineString para VAPID ###
+// Elas serão lidas do process.env (arquivo .env.voluntarios-ativos-cepat)
 
 // --- FUNÇÕES AUXILIARES ---
 
