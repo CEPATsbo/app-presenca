@@ -81,7 +81,7 @@ function getDataDeHojeSP() {
 async function registrarPresencaComGeolocalizacao(voluntarioParaRegistrar, atividadesSelecionadas) {
     if (!btnRegistrarPresenca || !registroRapidoSection || !statusRapidoSection || !statusNome || !statusAtividades || !feedbackGeoRapido) {
         console.error("Elementos do DOM ausentes para registro de presença.");
-        return; // Retorna false para indicar falha (ou pode lançar erro)
+        return false; // Retorna falha
     }
     btnRegistrarPresenca.disabled = true;
     btnRegistrarPresenca.textContent = 'Verificando localização...';
@@ -118,7 +118,7 @@ async function registrarPresencaComGeolocalizacao(voluntarioParaRegistrar, ativi
                             voluntarioId: voluntarioParaRegistrar.id
                         }, { merge: true });
 
-                        // ### AJUSTE: Linha de salvar no localStorage MOVIDA daqui ###
+                        // A linha de salvar no localStorage foi MOVIDA para antes desta função
 
                         statusNome.textContent = voluntarioParaRegistrar.nome;
                         statusAtividades.textContent = atividadesSelecionadas.join(', ');
@@ -163,7 +163,8 @@ async function registrarPresencaComGeolocalizacao(voluntarioParaRegistrar, ativi
 
 
 async function habilitarNotificacoes() {
-const VAPID_PUBLIC_KEY = 'BHvM-GJJ64ePBfttwFiCghI9wqLK6PjN0U2aIBhYAQPI5CdnOFswB4cejXp3AHhgw-I6rJBANaxlgvjTRn463L4';
+    // Esta é a chave VAPID que você tinha no seu arquivo (assumindo que seja a correta)
+    const VAPID_PUBLIC_KEY = 'BHvM-GJJ64ePBfttwFiCghI9wqLK6PjN0U2aIBhYAQPI5CdnOFswB4cejXp3AHhgw-I6rJBANaxlgvjTRn463L4'; 
 
     if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
         return alert("Seu navegador não suporta notificações push.");
@@ -178,20 +179,23 @@ const VAPID_PUBLIC_KEY = 'BHvM-GJJ64ePBfttwFiCghI9wqLK6PjN0U2aIBhYAQPI5CdnOFswB4
         const registration = await navigator.serviceWorker.ready;
         let subscription = await registration.pushManager.getSubscription(); 
 
-        if (!subscription) {
-            subscription = await registration.pushManager.subscribe({
-                userVisibleOnly: true,
-                applicationServerKey: VAPID_PUBLIC_KEY
-            });
-        } else {
-             console.log("Usuário já inscrito para notificações.");
+        if (subscription) {
+             console.log("Inscrição antiga encontrada. Removendo...");
+             await subscription.unsubscribe();
+             console.log("Inscrição antiga removida.");
         }
+        
+        console.log("Criando nova inscrição com a chave VAPID atualizada...");
+        subscription = await registration.pushManager.subscribe({
+            userVisibleOnly: true,
+            applicationServerKey: VAPID_PUBLIC_KEY
+        });
         
         const subscriptionId = btoa(subscription.endpoint).replace(/=/g, '');
         await setDoc(doc(db, "inscricoes", subscriptionId), subscription.toJSON());
 
         alert("Notificações ativadas com sucesso!");
-        if(btnAtivarNotificacoes) btnAtivarNotificacoes.style.display = 'none';
+        if(btnAtivarNotificacoes) btnAtivarNotificacoes.style.display = 'none'; // Esconde o botão após sucesso
 
     } catch (error) {
         console.error("Erro ao se inscrever para notificações:", error);
@@ -204,6 +208,7 @@ const VAPID_PUBLIC_KEY = 'BHvM-GJJ64ePBfttwFiCghI9wqLK6PjN0U2aIBhYAQPI5CdnOFswB4
 
 carregarMural();
 
+// Carrega o nome salvo ao iniciar a página
 (function carregarNomeSalvo() {
     if (nomeInput) {
         try {
@@ -336,6 +341,10 @@ if (formPresencaRapida) {
                         voluntarioParaRegistrar = melhorResultado;
                         if(nomeInput) nomeInput.value = melhorResultado.nome;
                          encontrado = true;
+                    } else {
+                        // ### AJUSTE: Se o usuário clicar em "Cancelar", para a execução ###
+                        alert("Registro cancelado. Por favor, digite seu nome completo exatamente como no cadastro.");
+                        return; // Impede que o código continue e salve o nome errado
                     }
                 }
             }
@@ -361,20 +370,17 @@ if (formPresencaRapida) {
             }
             // ### FIM DO AJUSTE ###
 
-            // Agora, chama a função de geolocalização e espera por ela
             await registrarPresencaComGeolocalizacao(voluntarioParaRegistrar, atividadesSelecionadas);
 
         } catch (error) {
-            // Este catch agora pegará falhas do Fuse, criação de voluntário OU da geolocalização (rejeição da promessa)
             console.error("ERRO CRÍTICO no registro rápido:", error);
-            // Não exibe alerta duplicado se for erro de geo (pois registrarPresencaComGeolocalizacao já alerta)
-            if (error.message.includes("Fora da área") || error.code === error.PERMISSION_DENIED || error.code === error.POSITION_UNAVAILABLE || error.code === error.TIMEOUT) {
-                 // Erro de geolocalização já tratado com alerta, apenas reseta o botão
+            if (error.message.includes("Fora da área") || (error.code && (error.code === error.PERMISSION_DENIED || error.code === error.POSITION_UNAVAILABLE || error.code === error.TIMEOUT))) {
+                 // Erro de geolocalização já tratado, não mostra alerta duplicado
             } else {
                  alert("Ocorreu um erro crítico. Verifique o console para mais detalhes.");
             }
             
-            if(btnRegistrarPresenca) { // Garante que o botão seja reabilitado se a geo falhar
+            if(btnRegistrarPresenca) {
                 btnRegistrarPresenca.disabled = false;
                 btnRegistrarPresenca.textContent = 'Registrar Presença';
             }
@@ -401,7 +407,6 @@ if (btnSairRapido && formPresencaRapida && atividadesWrapper && statusRapidoSect
     });
 }
 
-// ### AJUSTE: Lógica de verificação do botão de notificação ###
 if (btnAtivarNotificacoes) {
     btnAtivarNotificacoes.addEventListener('click', habilitarNotificacoes);
     
@@ -430,7 +435,7 @@ if (btnAtivarNotificacoes) {
                 } else {
                     // Permissão é 'granted' (mas sem inscrição) ou 'prompt'
                     // MOSTRA O BOTÃO para (re)inscrever
-                    if (btnAtivarNotificacoes) btnAtivarNotificacoes.style.display = 'block';
+                    if (btnAtivarNotificacoes) btnAtivarNotificacoes.style.display = 'block'; // Mostra o botão
                     console.log("Usuário sem inscrição, botão de ativar visível.");
                 }
             }
@@ -443,4 +448,3 @@ if (btnAtivarNotificacoes) {
     // Chama a nova função de verificação ao carregar a página
     verificarInscricaoAtual();
 }
-// ### FIM DO AJUSTE ###
