@@ -50,7 +50,7 @@
         <div id="dashboard-content" style="display: none;">
             <div class="grid-kpi">
                 <div class="kpi-card"><p id="kpi-total" class="valor">0</p><p class="titulo">Atendimentos no Ano</p></div>
-                <div class="kpi-card"><p id="kpi-novos" class="valor">0</p><p class="titulo">Novos Assistidos</p></div>
+                <div class="kpi-card"><p id="kpi-novos" class="valor">0</p><p class="titulo">Novos Tratamentos</p></div>
                 <div class="kpi-card"><p id="kpi-altas" class="valor">0</p><p class="titulo">Altas Concedidas</p></div>
                 <div class="kpi-card"><p id="kpi-desistencias" class="valor">0</p><p class="titulo">Desistências (Faltas)</p></div>
                 <div class="kpi-card"><p id="kpi-eae" class="valor">0</p><p class="titulo">Encaminhados ao EAE</p></div>
@@ -109,7 +109,19 @@
                     return;
                 }
                 
-                const anosDisponiveis = [...new Set(todosTratamentos.map(t => t.dataInicio.toDate().getFullYear()))];
+                // ===================================================================
+                // INÍCIO DA CORREÇÃO 1: Filtrar tratamentos sem data de início
+                // ===================================================================
+                const tratamentosComData = todosTratamentos.filter(t => t.dataInicio); // Garante que dataInicio não é null
+                if (tratamentosComData.length === 0) {
+                     feedback.textContent = "Nenhum tratamento com data de início encontrado.";
+                     return;
+                }
+                const anosDisponiveis = [...new Set(tratamentosComData.map(t => t.dataInicio.toDate().getFullYear()))];
+                // ===================================================================
+                // FIM DA CORREÇÃO 1
+                // ===================================================================
+
                 anosDisponiveis.sort((a,b) => b - a);
 
                 anosDisponiveis.forEach(ano => {
@@ -119,9 +131,6 @@
                     filtroAno.appendChild(option);
                 });
 
-                // ===================================================================
-                // CORREÇÃO APLICADA AQUI
-                // ===================================================================
                 filtroAno.addEventListener('change', () => renderizarDados(filtroAno.value, todosTratamentos, todosAtendimentos));
                 renderizarDados(filtroAno.value, todosTratamentos, todosAtendimentos);
 
@@ -134,23 +143,29 @@
                 feedback.style.color = 'red';
             }
 
-            // ===================================================================
-            // CORREÇÃO APLICADA AQUI (NA ASSINATURA DA FUNÇÃO)
-            // ===================================================================
             function renderizarDados(anoSelecionado, todosTratamentos, todosAtendimentos) {
                 const ano = parseInt(anoSelecionado);
                 
-                const tratamentosDoAno = todosTratamentos.filter(t => t.dataInicio.toDate().getFullYear() === ano);
-                const atendimentosDoAno = todosAtendimentos.filter(a => a.dataAtendimento.toDate().getFullYear() === ano);
+                // ===================================================================
+                // INÍCIO DA CORREÇÃO 2 e 3: Filtrar datas nulas
+                // ===================================================================
+                // Filtra apenas tratamentos que TENHAM dataInicio e sejam do ano selecionado
+                const tratamentosDoAno = todosTratamentos.filter(t => t.dataInicio && t.dataInicio.toDate().getFullYear() === ano);
+                
+                // Filtra apenas atendimentos que TENHAM dataAtendimento e sejam do ano selecionado
+                const atendimentosDoAno = todosAtendimentos.filter(a => a.dataAtendimento && a.dataAtendimento.toDate().getFullYear() === ano);
+                // ===================================================================
+                // FIM DA CORREÇÃO 2 e 3
+                // ===================================================================
                 
                 const totalAtendimentos = atendimentosDoAno.filter(a => a.tipo !== 'falta').length;
-                const novosAssistidos = tratamentosDoAno.length;
+                const novosTratamentos = tratamentosDoAno.length; // Conta novos tratamentos
                 const altas = tratamentosDoAno.filter(t => t.status === 'concluido_com_alta').length;
                 const desistencias = tratamentosDoAno.filter(t => t.status === 'encerrado_por_falta').length;
                 const encaminhadosEAE = atendimentosDoAno.filter(a => a.encaminhamentos && a.encaminhamentos.includes('EAE')).length;
 
                 document.getElementById('kpi-total').textContent = totalAtendimentos;
-                document.getElementById('kpi-novos').textContent = novosAssistidos;
+                document.getElementById('kpi-novos').textContent = novosTratamentos; // KPI atualizado
                 document.getElementById('kpi-altas').textContent = altas;
                 document.getElementById('kpi-desistencias').textContent = desistencias;
                 document.getElementById('kpi-eae').textContent = encaminhadosEAE;
@@ -161,6 +176,7 @@
                     novos: Array(12).fill(0)
                 };
 
+                // dataAtendimento já foi validada pelo filtro 'atendimentosDoAno'
                 atendimentosDoAno.forEach(a => {
                     if(a.tipo !== 'falta') {
                         const mes = a.dataAtendimento.toDate().getMonth();
@@ -168,6 +184,7 @@
                     }
                 });
                 
+                // dataInicio já foi validada pelo filtro 'tratamentosDoAno'
                 tratamentosDoAno.forEach(t => {
                     const mes = t.dataInicio.toDate().getMonth();
                     dadosGrafico.novos[mes]++;
@@ -188,7 +205,7 @@
                             backgroundColor: 'rgba(54, 162, 235, 0.5)',
                             tension: 0.1
                         }, {
-                            label: 'Novos Assistidos',
+                            label: 'Novos Tratamentos', // Label do gráfico atualizado
                             data: dadosGrafico.novos,
                             borderColor: 'rgb(255, 99, 132)',
                             backgroundColor: 'rgba(255, 99, 132, 0.5)',
@@ -200,7 +217,7 @@
                             y: {
                                 beginAtZero: true,
                                 ticks: {
-                                    stepSize: 10 // Garante que a escala não quebre em números decimais
+                                    stepSize: 10
                                 }
                             }
                         }
