@@ -122,34 +122,34 @@
         <img src="/logo-cepat.png" alt="Logo CEPAT">
         <h1>Cantina Amor e Luz</h1>
     </header>
-    <div id="evento-info">Carregando cardápio...</div>
+    <div id="evento-info">Cardápio do Dia</div>
     <div id="cardapio-container">
         </div>
 
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
-        import { getFirestore, collection, query, where, onSnapshot, Timestamp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
+        import { getFirestore, collection, query, where, onSnapshot, orderBy } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
 
         const firebaseConfig = {
-        apiKey: "AIzaSyBV7RPjk3cFTqL-aIpflJcUojKg1ZXMLuU",
-        authDomain: "voluntarios-ativos---cepat.firebaseapp.com",
-        projectId: "voluntarios-ativos---cepat",
-        storageBucket: "voluntarios-ativos---cepat.firebasestorage.app",
-        messagingSenderId: "66122858261",
-        appId: "1:66122858261:web:7fa21f1805463b5c08331c"
-    };
+            apiKey: "AIzaSyBV7RPjk3cFTqL-aIpflJcUojKg1ZXMLuU",
+            authDomain: "voluntarios-ativos---cepat.firebaseapp.com",
+            projectId: "voluntarios-ativos---cepat",
+            storageBucket: "voluntarios-ativos---cepat.firebasestorage.app",
+            messagingSenderId: "66122858261",
+            appId: "1:66122858261:web:7fa21f1805463b5c08331c"
+        };
         initializeApp(firebaseConfig);
         const db = getFirestore();
 
-        const eventoInfoDiv = document.getElementById('evento-info');
         const cardapioContainer = document.getElementById('cardapio-container');
-        let eventoIdHoje = 'padrão'; // Começa com o padrão
-        let eventoTituloHoje = "Cardápio do Dia";
+        // As variáveis de evento não são mais necessárias
+        // let eventoIdHoje = 'padrão';
+        // let eventoTituloHoje = "Cardápio do Dia";
 
         function renderizarCardapio(itens) {
             cardapioContainer.innerHTML = '';
             if (itens.length === 0) {
-                cardapioContainer.innerHTML = '<p style="text-align:center; width:100%;">Nenhum item cadastrado para hoje.</p>';
+                cardapioContainer.innerHTML = '<p style="text-align:center; width:100%; font-size: 2vh;">Nenhum item disponível no cardápio de hoje.</p>';
                 return;
             }
 
@@ -161,6 +161,7 @@
                 return acc;
             }, {});
 
+            // A query já ordena por categoria, mas mantemos o .sort() para garantir
             Object.keys(porCategoria).sort().forEach(categoria => {
                 const coluna = document.createElement('div');
                 coluna.className = 'categoria-coluna';
@@ -173,6 +174,7 @@
                 const lista = document.createElement('div');
                 lista.className = 'itens-lista';
                 
+                // A query já ordena por nome, mas mantemos o .sort() para garantir
                 porCategoria[categoria].sort((a, b) => a.nome.localeCompare(b.nome)).forEach(item => {
                     const itemDiv = document.createElement('div');
                     itemDiv.className = 'item-cardapio';
@@ -191,46 +193,31 @@
         }
 
         function iniciarListenerCardapio() {
-            const idsParaBuscar = ['padrão', eventoIdHoje];
-            const q = query(collection(db, "cantina_itens"), where("eventoId", "in", idsParaBuscar));
+            // A query foi alterada para buscar itens marcados como 'disponivelHoje'
+            const q = query(
+                collection(db, "cantina_itens"), 
+                where("disponivelHoje", "==", true),
+                orderBy("categoria"), // Organiza por categoria
+                orderBy("nome")       // Depois por nome
+            );
             
             onSnapshot(q, (snapshot) => {
                 const itens = snapshot.docs.map(doc => doc.data());
                 renderizarCardapio(itens);
+            }, (error) => {
+                console.error("Erro ao buscar cardápio: ", error);
+                cardapioContainer.innerHTML = '<p style="text-align:center; width:100%;">Erro ao carregar o cardápio. Tente recarregar a página.</p>';
             });
         }
 
-        async function verificarEventoDoDia() {
-            const hojeInicio = new Date();
-            hojeInicio.setHours(0, 0, 0, 0);
-            const hojeFim = new Date();
-            hojeFim.setHours(23, 59, 59, 999);
-
-            const qEventos = query(
-                collection(db, "eventos"), 
-                where("dataInicio", ">=", Timestamp.fromDate(hojeInicio)),
-                where("dataInicio", "<=", Timestamp.fromDate(hojeFim))
-            );
-
-            onSnapshot(qEventos, (snapshot) => {
-                if (!snapshot.empty) {
-                    const eventoHoje = snapshot.docs[0];
-                    eventoIdHoje = eventoHoje.id;
-                    eventoTituloHoje = `Cardápio do Evento: ${eventoHoje.data().titulo}`;
-                } else {
-                    eventoIdHoje = 'padrão';
-                    eventoTituloHoje = "Cardápio do Dia";
-                }
-                eventoInfoDiv.textContent = eventoTituloHoje;
-                iniciarListenerCardapio();
-            });
-        }
+        // A função 'verificarEventoDoDia()' foi completamente removida.
         
-        verificarEventoDoDia();
+        // Inicia o listener do cardápio assim que a página carrega
+        iniciarListenerCardapio();
         
-        // Atualiza a busca do evento a cada 5 minutos
-        setInterval(verificarEventoDoDia, 1000 * 60 * 5);
-        // Recarrega a página inteira a cada 30 minutos
+        // A verificação de 5 minutos foi removida.
+        
+        // Mantém o recarregamento da página a cada 30 minutos
         setInterval(() => window.location.reload(), 1000 * 60 * 30);
     </script>
 </body>

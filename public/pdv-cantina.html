@@ -10,9 +10,20 @@
         .btn-voltar { background-color: #e9ecef; color: #495057; border: 1px solid #dee2e6; padding: 10px 20px; border-radius: 8px; font-weight: bold; font-size: 1em; text-decoration: none; }
         .container { background-color: white; padding: 40px; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.15); width: 100%; max-width: 1200px; margin-bottom: 30px; }
         h1, h2 { text-align: center; color: #333; margin: 0; }
-        .seletor-evento-container { text-align: center; margin-bottom: 30px; }
-        .seletor-evento-container select, .seletor-evento-container button { font-size: 1.2em; padding: 10px; border-radius: 8px; border: 1px solid #ccc; margin: 0 5px;}
-        .pdv-container { display: none; grid-template-columns: 2fr 1fr; gap: 30px; }
+        
+        /* O seletor de evento foi removido */
+        
+        .pdv-container { 
+            display: grid; /* Alterado de 'none' para 'grid' */
+            grid-template-columns: 2fr 1fr; 
+            gap: 30px; 
+        }
+        
+        /* Ocultar o PDV até que o JS o mostre, para evitar layout quebrado */
+        #pdv-container.hidden {
+            display: none;
+        }
+
         .menu-categorias { display: flex; flex-direction: column; gap: 20px; }
         .categoria-bloco h3 { background-color: #34495e; color: white; padding: 10px; margin: 0 0 10px 0; border-radius: 6px; }
         .itens-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; }
@@ -46,13 +57,8 @@
 
     <div id="main-content" class="container" style="display: none;">
         <h1>PDV Cantina "Amor e Luz"</h1>
-        <div id="seletor-evento-container" class="seletor-evento-container">
-            <select id="seletor-evento"></select>
-            <button id="btn-iniciar-pdv">Iniciar Vendas</button>
-        </div>
-
-        <div id="pdv-container" class="pdv-container">
-            <div id="menu-categorias" class="menu-categorias"></div>
+        
+        <div id="pdv-container" class="pdv-container hidden"> <div id="menu-categorias" class="menu-categorias"></div>
             <div class="carrinho-container">
                 <div id="painel-totais"></div>
                 <h2>Carrinho</h2>
@@ -110,8 +116,7 @@
             const functions = getFunctions(undefined, 'southamerica-east1');
             const registrarVendaCantina = httpsCallable(functions, 'registrarVendaCantina');
 
-            const seletorEvento = document.getElementById('seletor-evento');
-            const btnIniciarPDV = document.getElementById('btn-iniciar-pdv');
+            // O seletor de evento foi removido
             const pdvContainer = document.getElementById('pdv-container');
             const menuCategorias = document.getElementById('menu-categorias');
             const listaCarrinho = document.getElementById('lista-carrinho');
@@ -126,30 +131,12 @@
             const btnCancelarPendencia = document.getElementById('btn-cancelar-pendencia');
             
             let carrinho = [];
-            let cardapioDoEvento = [];
-            let eventoSelecionado = {};
+            let cardapioDoDia = []; // Renomeado de 'cardapioDoEvento'
             let unsubTotais = null;
 
-            const hoje = Timestamp.now();
-            // CORREÇÃO: A consulta ao Firestore foi simplificada para evitar o erro de múltiplos 'inequality'
-            const qEventos = query(collection(db, "eventos"), where("dataInicio", ">=", hoje), orderBy("dataInicio"));
+            // Lógica de carregar eventos e iniciar PDV removida
             
-            onSnapshot(qEventos, (snapshot) => {
-                seletorEvento.innerHTML = '<option value="padrão">Cardápio Padrão (Dias Normais)</option>';
-                
-                // CORREÇÃO: O filtro de "Feriado" agora é feito no navegador, de forma robusta
-                const eventosFiltrados = snapshot.docs.filter(doc => {
-                    const tipo = doc.data().tipo || ''; // Pega o tipo, ou uma string vazia se não existir
-                    return tipo.toLowerCase().trim() !== 'feriado'; // Converte para minúsculas e remove espaços antes de comparar
-                });
-
-                eventosFiltrados.forEach(doc => {
-                    const evento = doc.data();
-                    const dataFormatada = evento.dataInicio.toDate().toLocaleDateString('pt-BR');
-                    seletorEvento.innerHTML += `<option value="${doc.id}" data-titulo="${evento.titulo}">${evento.titulo} (${dataFormatada})</option>`;
-                });
-            });
-
+            // Carrega voluntários para o modal de pendência
             onSnapshot(query(collection(db, "voluntarios"), orderBy("nome")), (snapshot) => {
                 seletorVoluntario.innerHTML = '<option value="">Selecione o voluntário</option>';
                 snapshot.forEach(doc => {
@@ -157,27 +144,26 @@
                 });
             });
             
-            btnIniciarPDV.addEventListener('click', () => {
-                const selectedOption = seletorEvento.options[seletorEvento.selectedIndex];
-                eventoSelecionado = {
-                    id: selectedOption.value,
-                    titulo: selectedOption.value === 'padrão' ? 'Dia Normal' : selectedOption.dataset.titulo
-                };
-                document.getElementById('seletor-evento-container').style.display = 'none';
-                pdvContainer.style.display = 'grid';
-                
-                const qItens = query(collection(db, "cantina_itens"), where("eventoId", "==", eventoSelecionado.id));
-                onSnapshot(qItens, (snapshot) => {
-                    cardapioDoEvento = snapshot.docs.map(doc => ({id: doc.id, ...doc.data()}));
-                    renderizarMenu();
-                });
-
-                escutarTotaisDoEvento(eventoSelecionado.id);
+            // Carrega o menu do dia imediatamente
+            const qItens = query(
+                collection(db, "cantina_itens"), 
+                where("disponivelHoje", "==", true),
+                orderBy("categoria")
+            );
+            onSnapshot(qItens, (snapshot) => {
+                cardapioDoDia = snapshot.docs.map(doc => ({id: doc.id, ...doc.data()}));
+                renderizarMenu();
             });
+
+            // Mostra o PDV
+            pdvContainer.classList.remove('hidden');
+            
+            // Escuta os totais do DIA ATUAL
+            escutarTotaisDoDia();
 
             function renderizarMenu() {
                 menuCategorias.innerHTML = '';
-                const porCategoria = cardapioDoEvento.reduce((acc, item) => {
+                const porCategoria = cardapioDoDia.reduce((acc, item) => {
                     if (!acc[item.categoria]) acc[item.categoria] = [];
                     acc[item.categoria].push(item);
                     return acc;
@@ -188,7 +174,9 @@
                     bloco.innerHTML = `<h3>${categoria}</h3>`;
                     const grid = document.createElement('div');
                     grid.className = 'itens-grid';
-                    porCategoria[categoria].forEach(item => {
+                    
+                    // Ordena por nome dentro da categoria
+                    porCategoria[categoria].sort((a,b) => a.nome.localeCompare(b.nome)).forEach(item => {
                         const btn = document.createElement('button');
                         btn.className = 'item-btn';
                         btn.dataset.id = item.id;
@@ -244,9 +232,8 @@
                 if (carrinho.length === 0) return alert('O carrinho está vazio.');
                 const totalVenda = carrinho.reduce((acc, item) => acc + (item.preco * item.qtd), 0);
                 
+                // MUDANÇA CRÍTICA: eventoId e eventoTitulo foram removidos
                 const dadosVenda = {
-                    eventoId: eventoSelecionado.id,
-                    eventoTitulo: eventoSelecionado.titulo,
                     total: totalVenda,
                     itens: carrinho.map(i => ({itemId: i.id, nome: i.nome, qtd: i.qtd, precoUnitario: i.preco})),
                     tipoVenda: tipoVenda,
@@ -301,11 +288,30 @@
                 finalizarVenda('prazo', dadosComprador);
             });
 
-            function escutarTotaisDoEvento(eventoId) {
+            // Função renomeada e lógica de query alterada
+            function escutarTotaisDoDia() {
                 if (unsubTotais) unsubTotais(); 
 
-                const qVista = query(collection(db, "cantina_vendas_avista"), where("eventoId", "==", eventoId));
-                const qPrazo = query(collection(db, "contas_a_receber"), where("eventoId", "==", eventoId));
+                // Garante que o período de 24h seja no fuso local (São Paulo)
+                const hojeInicio = new Date();
+                hojeInicio.setHours(0, 0, 0, 0);
+                const hojeFim = new Date();
+                hojeFim.setHours(23, 59, 59, 999);
+
+                // Converte para Timestamps do Firestore para a query
+                const inicioTimestamp = Timestamp.fromDate(hojeInicio);
+                const fimTimestamp = Timestamp.fromDate(hojeFim);
+
+                const qVista = query(
+                    collection(db, "cantina_vendas_avista"), 
+                    where("registradoEm", ">=", inicioTimestamp),
+                    where("registradoEm", "<=", fimTimestamp)
+                );
+                const qPrazo = query(
+                    collection(db, "contas_a_receber"), 
+                    where("registradoEm", ">=", inicioTimestamp),
+                    where("registradoEm", "<=", fimTimestamp)
+                );
 
                 const unsubVista = onSnapshot(qVista, () => atualizarPainel());
                 const unsubPrazo = onSnapshot(qPrazo, () => atualizarPainel());
@@ -328,7 +334,7 @@
                             <p>Recebido (à vista): <strong>${totalVista.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</strong></p>
                             <p>Pendências (a receber): <strong>${totalPrazo.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</strong></p>
                             <hr>
-                            <p>Total Geral do Evento: <strong>${totalGeral.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</strong></p>
+                            <p>Total Geral do Dia: <strong>${totalGeral.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</strong></p>
                         </div>
                     `;
                 }

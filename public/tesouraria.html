@@ -71,13 +71,13 @@
         </div>
 
     <div id="relatorio-cantina" class="relatorio-container">
-        <h2>Relatórios da Cantina</h2>
-        <div class="seletor-bloco" style="margin: 0 auto 20px auto; text-align:center;">
-            <label for="seletor-evento-relatorio-cantina">Selecione o Evento para ver o Relatório</label>
-            <select id="seletor-evento-relatorio-cantina"></select>
-        </div>
-        <div id="resultado-relatorio-cantina"></div>
-    </div>
+        <h2>Relatórios da Cantina</h2>
+        <div class="seletor-bloco" style="margin: 0 auto 20px auto; text-align:center;">
+            <label for="seletor-mes-relatorio-cantina">Selecione o Mês para ver o Relatório</label>
+            <input type="month" id="seletor-mes-relatorio-cantina">
+        </div>
+        <div id="resultado-relatorio-cantina"></div>
+    </div>
     
     <div id="relatorio-biblioteca" class="relatorio-container">
         <h2>Relatórios da Biblioteca</h2>
@@ -666,111 +666,135 @@
                 carregarDadosDoPeriodo(true);
             });
 
-            // ===================================================================
-            // NOVA LÓGICA PARA OS RELATÓRIOS DA CANTINA
-            // ===================================================================
-            const seletorEventoRelatorioCantina = document.getElementById('seletor-evento-relatorio-cantina');
-            const resultadoRelatorioCantina = document.getElementById('resultado-relatorio-cantina');
-            const seletorMesRelatorioBiblioteca = document.getElementById('seletor-mes-relatorio-biblioteca');
-            const resultadoRelatorioBiblioteca = document.getElementById('resultado-relatorio-biblioteca');
+// ===================================================================
+            // LÓGICA UNIFICADA PARA OS RELATÓRIOS (CANTINA E BIBLIOTECA)
+            // ===================================================================
+            
+            // ### MUDANÇA AQUI: seletorEventoRelatorioCantina -> seletorMesRelatorioCantina ###
+            const seletorMesRelatorioCantina = document.getElementById('seletor-mes-relatorio-cantina');
+            const resultadoRelatorioCantina = document.getElementById('resultado-relatorio-cantina');
+            const seletorMesRelatorioBiblioteca = document.getElementById('seletor-mes-relatorio-biblioteca');
+            const resultadoRelatorioBiblioteca = document.getElementById('resultado-relatorio-biblioteca');
 
-            async function carregarEventosParaRelatorio() {
-                const qEventos = query(collection(db, "eventos"), orderBy("dataInicio", "desc"));
-                const snapshot = await getDocs(qEventos);
-                
-                let optionsHtml = '<option value="">Selecione um evento ou período</option><option value="padrão">Vendas de Dias Normais</option>';
-                snapshot.forEach(doc => {
-                    const evento = doc.data();
-                    const dataFormatada = evento.dataInicio.toDate().toLocaleDateString('pt-BR');
-                    optionsHtml += `<option value="${doc.id}">${evento.titulo} (${dataFormatada})</option>`;
-                });
-                seletorEventoRelatorioCantina.innerHTML = optionsHtml;
-            }
+            // ### MUDANÇA AQUI: Função carregarEventosParaRelatorio() removida ###
 
-            seletorEventoRelatorioCantina.addEventListener('change', (e) => {
-                carregarRelatorio(e.target.value, resultadoRelatorioCantina, 'cantina_vendas_avista', 'contas_a_receber');
-            });
-            seletorMesRelatorioBiblioteca.addEventListener('change', (e) => {
-                carregarRelatorio(e.target.value, resultadoRelatorioBiblioteca, 'biblioteca_vendas_avista', 'biblioteca_contas_a_receber', true);
-            });
+            // ### MUDANÇA AQUI: Listener alterado para o seletor de MÊS da cantina ###
+            seletorMesRelatorioCantina.addEventListener('change', (e) => {
+                carregarRelatorio(
+                    e.target.value, 
+                    resultadoRelatorioCantina, 
+                    'cantina_vendas_avista', 
+                    'contas_a_receber', 
+                    true // <-- Agora é mensal
+                );
+            });
+            
+            seletorMesRelatorioBiblioteca.addEventListener('change', (e) => {
+                carregarRelatorio(
+                    e.target.value, 
+                    resultadoRelatorioBiblioteca, 
+                    'biblioteca_vendas_avista', 
+                    'biblioteca_contas_a_receber', 
+                    true
+                );
+            });
 
-            async function carregarRelatorio(filtroId, resultadoDiv, colecaoVista, colecaoPrazo, isMensal = false) {
-                if (!filtroId) {
-                    resultadoDiv.innerHTML = '';
-                    return;
-                }
-                resultadoDiv.innerHTML = '<h3>Carregando relatório...</h3>';
+            async function carregarRelatorio(filtroId, resultadoDiv, colecaoVista, colecaoPrazo, isMensal = false) {
+                if (!filtroId) {
+                    resultadoDiv.innerHTML = '';
+                    return;
+                }
+                resultadoDiv.innerHTML = '<h3>Carregando relatório...</h3>';
 
-                let qVista, qPrazo;
+                let qVista, qPrazo;
 
-                if (isMensal) {
-                    const [ano, mes] = filtroId.split('-');
-                    const inicioMes = Timestamp.fromDate(new Date(ano, mes - 1, 1));
-                    const fimMes = Timestamp.fromDate(new Date(ano, mes, 0, 23, 59, 59));
-                    qVista = query(collection(db, colecaoVista), where("registradoEm", ">=", inicioMes), where("registradoEm", "<=", fimMes));
-                    qPrazo = query(collection(db, colecaoPrazo), where("registradoEm", ">=", inicioMes), where("registradoEm", "<=", fimMes), orderBy("registradoEm"));
-                } else {
-                    qVista = query(collection(db, colecaoVista), where("eventoId", "==", filtroId));
-                    qPrazo = query(collection(db, colecaoPrazo), where("eventoId", "==", filtroId), orderBy("registradoEm"));
-                }
+                if (isMensal) {
+                    const [ano, mes] = filtroId.split('-');
+                    
+                    // ### GARANTIA DE FUSO HORÁRIO DE SÃO PAULO ###
+                    // Cria datas de início e fim no fuso local (browser do usuário)
+                    const inicioMesDate = new Date(ano, mes - 1, 1, 0, 0, 0); // Dia 1, 00:00:00 (local)
+                    const fimMesDate = new Date(ano, mes, 0, 23, 59, 59); // Último dia do mês, 23:59:59 (local)
 
-                const [snapshotVista, snapshotPrazo] = await Promise.all([getDocs(qVista), getDocs(qPrazo)]);
-                
-                let totalVista = 0;
-                snapshotVista.forEach(doc => totalVista += doc.data().total);
+                    // Converte para Timestamp do Firestore para a query
+                    const inicioMes = Timestamp.fromDate(inicioMesDate);
+                    const fimMes = Timestamp.fromDate(fimMesDate);
+                    
+                   qVista = query(collection(db, colecaoVista), where("registradoEm", ">=", inicioMes), where("registradoEm", "<=", fimMes));
+                    qPrazo = query(collection(db, colecaoPrazo), where("registradoEm", ">=", inicioMes), where("registradoEm", "<=", fimMes), orderBy("registradoEm"));
+                } else {
+                    // Lógica antiga mantida para segurança, embora não seja mais usada pela Cantina
+                    qVista = query(collection(db, colecaoVista), where("eventoId", "==", filtroId));
+                    qPrazo = query(collection(db, colecaoPrazo), where("eventoId", "==", filtroId), orderBy("registradoEm"));
+                }
 
-                let pendenciasHtml = '';
-                if(snapshotPrazo.empty) {
-                    pendenciasHtml = `<tr><td colspan="4">Nenhuma pendência registrada para este período.</td></tr>`;
-                } else {
-                    snapshotPrazo.forEach(doc => {
-                        const pendencia = doc.data();
-                        const trClass = pendencia.status === 'pago' ? 'status-pago' : '';
-                        const comprador = pendencia.compradorNome || pendencia.comprador?.nome || 'Nome não registrado';
-                        pendenciasHtml += `
-                            <tr class="${trClass}">
-                                <td>${comprador}</td>
-                                <td>${new Date(pendencia.registradoEm.seconds * 1000).toLocaleDateString('pt-BR')}</td>
-                                <td>${Number(pendencia.total).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</td>
-                                <td>
-                                    ${pendencia.status !== 'pago' ? `<button class="btn-marcar-pago" data-id="${doc.id}" data-colecao="${colecaoPrazo}">Marcar como Recebido</button>` : 'Recebido'}
-                                </td>
-                            </tr>
-                        `;
-                    });
-                }
-                
-                resultadoDiv.innerHTML = `
-                    <div class="total-relatorio">Total de Vendas Recebidas (à vista): ${Number(totalVista).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</div>
-                    <h3>Contas a Receber (Fiado)</h3>
-                    <table class="tabela-relatorio">
-                        <thead><tr><th>Comprador</th><th>Data da Compra</th><th>Valor</th><th>Status</th></tr></thead>
-                        <tbody>${pendenciasHtml}</tbody>
-                    </table>
-                `;
-            }
+                const [snapshotVista, snapshotPrazo] = await Promise.all([getDocs(qVista), getDocs(qPrazo)]);
+                
+                let totalVista = 0;
+                snapshotVista.forEach(doc => totalVista += doc.data().total);
 
-            document.body.addEventListener('click', async (e) => {
-                if (e.target.classList.contains('btn-marcar-pago')) {
-                    const id = e.target.dataset.id;
-                    const colecao = e.target.dataset.colecao;
-                    if (confirm('Tem certeza que deseja marcar esta pendência como recebida? Esta ação não pode ser desfeita.')) {
-                        const docRef = doc(db, colecao, id);
-                        await updateDoc(docRef, { status: 'pago' });
-                        alert('Pendência marcada como recebida!');
-                        if(colecao.includes('cantina')) seletorEventoRelatorioCantina.dispatchEvent(new Event('change'));
-                        else seletorMesRelatorioBiblioteca.dispatchEvent(new Event('change'));
-                    }
-                }
-            });
+                let pendenciasHtml = '';
+                if(snapshotPrazo.empty) {
+                    pendenciasHtml = `<tr><td colspan="4">Nenhuma pendência registrada para este período.</td></tr>`;
+                } else {
+                    snapshotPrazo.forEach(doc => {
+                        const pendencia = doc.data();
+                        const trClass = pendencia.status === 'pago' ? 'status-pago' : '';
+                        const comprador = pendencia.compradorNome || pendencia.comprador?.nome || 'Nome não registrado';
+                        pendenciasHtml += `
+                            <tr class="${trClass}">
+                                <td>${comprador}</td>
+                                <td>${new Date(pendencia.registradoEm.seconds * 1000).toLocaleDateString('pt-BR')}</td>
+                                <td>${Number(pendencia.total).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</td>
+                                <td>
+                                    ${pendencia.status !== 'pago' ? `<button class="btn-marcar-pago" data-id="${doc.id}" data-colecao="${colecaoPrazo}">Marcar como Recebido</button>` : 'Recebido'}
+                                </td>
+                            </tr>
+                        `;
+                    });
+                }
+                
+                resultadoDiv.innerHTML = `
+                    <div class="total-relatorio">Total de Vendas Recebidas (à vista): ${Number(totalVista).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</div>
+              _     <h3>Contas a Receber (Fiado)</h3>
+                    <table class="tabela-relatorio">
+                        <thead><tr><th>Comprador</th><th>Data da Compra</th><th>Valor</th><th>Status</th></tr></thead>
+                        <tbody>${pendenciasHtml}</tbody>
+                    </table>
+                `;
+          _ }
 
-            carregarEventosParaRelatorio();
-            const hojeRelatorio = new Date();
-            const mesAtualRelatorio = (hojeRelatorio.getMonth() + 1).toString().padStart(2, '0');
-            const anoAtualRelatorio = hojeRelatorio.getFullYear();
-            seletorMesRelatorioBiblioteca.value = `${anoAtualRelatorio}-${mesAtualRelatorio}`;
-            seletorMesRelatorioBiblioteca.dispatchEvent(new Event('change'));
-        }
+            document.body.addEventListener('click', async (e) => {
+                if (e.target.classList.contains('btn-marcar-pago')) {
+                    const id = e.target.dataset.id;
+                    const colecao = e.target.dataset.colecao;
+                    if (confirm('Tem certeza que deseja marcar esta pendência como recebida? Esta ação não pode ser desfeita.')) {
+                        const docRef = doc(db, colecao, id);
+                        await updateDoc(docRef, { status: 'pago' });
+                        alert('Pendência marcada como recebida!');
+                        
+                        // ### MUDANÇA AQUI: Atualiza o seletor de MÊS da cantina ###
+                       if(colecao.includes('cantina')) seletorMesRelatorioCantina.dispatchEvent(new Event('change'));
+                        else seletorMesRelatorioBiblioteca.dispatchEvent(new Event('change'));
+                    }
+                }
+            });
+
+            // ### MUDANÇA AQUI: carregarEventosParaRelatorio() removido ###
+            
+            // Define o valor inicial dos seletores de Mês para o mês atual
+            const hojeRelatorio = new Date();
+            const mesAtualRelatorio = (hojeRelatorio.getMonth() + 1).toString().padStart(2, '0');
+            const anoAtualRelatorio = hojeRelatorio.getFullYear();
+            const valorMesAtual = `${anoAtualRelatorio}-${mesAtualRelatorio}`;
+            
+            seletorMesRelatorioBiblioteca.value = valorMesAtual;
+            seletorMesRelatorioBiblioteca.dispatchEvent(new Event('change'));
+            
+            // ### NOVO: Define o valor do seletor da cantina e dispara o evento ###
+            seletorMesRelatorioCantina.value = valorMesAtual;
+            seletorMesRelatorioCantina.dispatchEvent(new Event('change'));
+        }
     </script>
 </body>
 </html>

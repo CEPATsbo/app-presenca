@@ -568,29 +568,42 @@ exports.registrarLogDeAcesso = onCall(OPCOES_FUNCAO, async (request) => {
     }
 });
 
-exports.registrarVendaCantina = onCall(OPCOES_FUNCAO, async (request) => {
-    if (!request.auth) { throw new HttpsError('unauthenticated', 'A função deve ser chamada por um usuário autenticado.'); }
-    const permissoes = ['super-admin', 'diretor', 'tesoureiro', 'conselheiro', 'produtor-evento'];
-    if (!permissoes.includes(request.auth.token.role)) { throw new HttpsError('permission-denied', 'Permissão negada.'); }
-    const { eventoId, eventoTitulo, total, itens, tipoVenda, comprador } = request.data;
-    if (!eventoId || !eventoTitulo || total === undefined || !itens || !tipoVenda) { throw new HttpsError('invalid-argument', 'Dados da venda incompletos.'); }
-    if (tipoVenda === 'prazo' && !comprador) { throw new HttpsError('invalid-argument', 'Dados do comprador são obrigatórios para registrar pendência.'); }
-    const vendaData = { eventoId, eventoTitulo, total, itens, registradoPor: { uid: request.auth.uid, nome: request.auth.token.name || request.auth.token.email }, registradoEm: admin.firestore.FieldValue.serverTimestamp() };
-    try {
-        if (tipoVenda === 'vista') {
-            await db.collection('cantina_vendas_avista').add(vendaData);
-        } else if (tipoVenda === 'prazo') {
-            vendaData.compradorId = comprador.id; // Pode ser null se for externo
-            vendaData.compradorNome = comprador.nome;
-            vendaData.compradorTipo = comprador.tipo; // 'voluntario' ou 'externo'
-            vendaData.status = 'pendente'; // pendente, pago
-            await db.collection('contas_a_receber').add(vendaData);
-        }
-        return { success: true, message: 'Venda registrada com sucesso!' };
-    } catch (error) {
-        console.error("Erro ao registrar venda da cantina:", error);
-        throw new HttpsError('internal', 'Ocorreu um erro ao salvar a venda.');
-    }
+  exports.registrarVendaCantina = onCall(OPCOES_FUNCAO, async (request) => {
+    if (!request.auth) { throw new HttpsError('unauthenticated', 'A função deve ser chamada por um usuário autenticado.'); }
+    const permissoes = ['super-admin', 'diretor', 'tesoureiro', 'conselheiro', 'produtor-evento'];
+    if (!permissoes.includes(request.auth.token.role)) { throw new HttpsError('permission-denied', 'Permissão negada.'); }
+
+    // ### MUDANÇA AQUI: Removemos eventoId e eventoTitulo ###
+    const { total, itens, tipoVenda, comprador } = request.data;
+    
+    // ### MUDANÇA AQUI: A validação foi atualizada ###
+    if (total === undefined || !itens || !tipoVenda) { throw new HttpsError('invalid-argument', 'Dados da venda incompletos.'); }
+    
+    if (tipoVenda === 'prazo' && !comprador) { throw new HttpsError('invalid-argument', 'Dados do comprador são obrigatórios para registrar pendência.'); }
+    
+    // ### MUDANÇA AQUI: eventoId e eventoTitulo removidos do objeto de dados ###
+    const vendaData = { 
+        total, 
+        itens, 
+        registradoPor: { uid: request.auth.uid, nome: request.auth.token.name || request.auth.token.email }, 
+        registradoEm: admin.firestore.FieldValue.serverTimestamp() 
+    };
+
+    try {
+        if (tipoVenda === 'vista') {
+            await db.collection('cantina_vendas_avista').add(vendaData);
+        } else if (tipoVenda === 'prazo') {
+            vendaData.compradorId = comprador.id; // Pode ser null se for externo
+            vendaData.compradorNome = comprador.nome;
+            vendaData.compradorTipo = comprador.tipo; // 'voluntario' ou 'externo'
+            vendaData.status = 'pendente'; // pendente, pago
+            await db.collection('contas_a_receber').add(vendaData);
+        }
+        return { success: true, message: 'Venda registrada com sucesso!' };
+    } catch (error) {
+        console.error("Erro ao registrar venda da cantina:", error);
+        throw new HttpsError('internal', 'Ocorreu um erro ao salvar a venda.');
+    }
 });
 
 exports.buscarDadosLivroPorISBN = onCall(OPCOES_FUNCAO, async (request) => {

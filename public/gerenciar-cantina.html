@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Admin - Gerenciar Cantina</title>
+    <title>Admin - Gerenciar Cardápio da Cantina</title>
     <style>
         body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background-color: #f4f6f9; display: flex; flex-direction: column; align-items: center; margin: 0; padding: 20px; box-sizing: border-box; }
         .nav-voltar { max-width: 900px; width:100%; margin: 0 auto 30px auto; text-align: left; }
@@ -21,6 +21,16 @@
         table { width: 100%; border-collapse: collapse; margin-top: 30px; }
         th, td { padding: 12px 15px; border-bottom: 1px solid #eee; text-align: left; }
         th { background-color: #f8f9fa; }
+        
+        /* Estilos para o Checkbox de Disponível */
+        .disponivel-col { text-align: center; }
+        .switch { position: relative; display: inline-block; width: 50px; height: 28px; }
+        .switch input { opacity: 0; width: 0; height: 0; }
+        .slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: #ccc; transition: .4s; border-radius: 34px; }
+        .slider:before { position: absolute; content: ""; height: 20px; width: 20px; left: 4px; bottom: 4px; background-color: white; transition: .4s; border-radius: 50%; }
+        input:checked + .slider { background-color: #28a745; }
+        input:checked + .slider:before { transform: translateX(22px); }
+
         .actions-table button { margin-right: 5px; padding: 5px 10px; border-radius: 4px; cursor: pointer; border: 1px solid #ccc; }
         .btn-edit { background-color: #007bff; color: white; }
         .btn-delete { background-color: #dc3545; color: white; }
@@ -33,14 +43,11 @@
     <div id="acesso-negado" style="display: none;"><h1>Acesso Negado</h1></div>
 
     <div id="main-content" class="container" style="display: none;">
-        <h1>Gerenciar Cantina "Amor e Luz"</h1>
+        <h1>Gerenciar Cardápio "Amor e Luz"</h1>
         <form id="form-item-cantina">
+            <p style="text-align: center; margin-top: 0; color: #555;">Use este formulário para adicionar novos itens ao inventário da cantina.</p>
             <input type="hidden" id="itemId">
             <div class="form-grid">
-                <div class="form-item" style="grid-column: 1 / -1;">
-                    <label for="evento">Associar ao Evento (Opcional)</label>
-                    <select id="evento"></select>
-                </div>
                 <div class="form-item"><label for="nome">Nome do Item</label><input type="text" id="nome" required></div>
                 <div class="form-item"><label for="categoria">Categoria</label><select id="categoria" required><option value="Salgados">Salgados</option><option value="Doces">Doces</option><option value="Bebidas">Bebidas</option><option value="Outros">Outros</option></select></div>
                 <div class="form-item"><label for="preco">Preço (R$)</label><input type="number" id="preco" step="0.01" required></div>
@@ -52,27 +59,36 @@
             </div>
         </form>
         <hr style="margin: 40px 0;">
-        <h2>Cardápio Cadastrado</h2>
+        <h2>Inventário da Cantina (Cardápio Mestre)</h2>
+        <p style="text-align: center; margin-top: 0; color: #555;">Marque um item como "Disponível" para que ele apareça no cardápio do dia e no PDV.</p>
         <table id="tabela-itens">
-            <thead><tr><th>Item</th><th>Categoria</th><th>Preço</th><th>Evento Associado</th><th>Ações</th></tr></thead>
+            <thead>
+                <tr>
+                    <th>Item</th>
+                    <th>Categoria</th>
+                    <th>Preço</th>
+                    <th class="disponivel-col">Disponível Hoje?</th>
+                    <th>Ações</th>
+                </tr>
+            </thead>
             <tbody></tbody>
         </table>
     </div>
 
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
-        import { getFirestore, collection, onSnapshot, addDoc, doc, setDoc, getDoc, deleteDoc, query, orderBy, serverTimestamp, Timestamp, where } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
+        import { getFirestore, collection, onSnapshot, addDoc, doc, setDoc, getDoc, deleteDoc, query, orderBy, serverTimestamp, updateDoc } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
         import { getFunctions, httpsCallable } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-functions.js";
         import { protegerPagina } from '/auth.js';
 
         const firebaseConfig = {
-        apiKey: "AIzaSyBV7RPjk3cFTqL-aIpflJcUojKg1ZXMLuU",
-        authDomain: "voluntarios-ativos---cepat.firebaseapp.com",
-        projectId: "voluntarios-ativos---cepat",
-        storageBucket: "voluntarios-ativos---cepat.firebasestorage.app",
-        messagingSenderId: "66122858261",
-        appId: "1:66122858261:web:7fa21f1805463b5c08331c"
-    };
+            apiKey: "AIzaSyBV7RPjk3cFTqL-aIpflJcUojKg1ZXMLuU",
+            authDomain: "voluntarios-ativos---cepat.firebaseapp.com",
+            projectId: "voluntarios-ativos---cepat",
+            storageBucket: "voluntarios-ativos---cepat.firebasestorage.app",
+            messagingSenderId: "66122858261",
+            appId: "1:66122858261:web:7fa21f1805463b5c08331c"
+        };
         initializeApp(firebaseConfig);
 
         protegerPagina(['super-admin', 'diretor', 'tesoureiro', 'conselheiro', 'produtor-evento'])
@@ -87,45 +103,35 @@
             const registrarLogDeAcesso = httpsCallable(functions, 'registrarLogDeAcesso');
             const form = document.getElementById('form-item-cantina');
             const tabelaItens = document.getElementById('tabela-itens').querySelector('tbody');
-            const seletorEvento = document.getElementById('evento');
 
-            const carregarEventos = () => {
-                const hoje = Timestamp.now();
-                const qEventos = query(collection(db, "eventos"), where("dataInicio", ">=", hoje), orderBy("dataInicio"));
-                onSnapshot(qEventos, (snapshot) => {
-                    seletorEvento.innerHTML = '<option value="padrão">Cardápio Padrão (Dias Normais)</option>';
-                    const eventosFiltrados = snapshot.docs.filter(doc => (doc.data().tipo || '').toLowerCase().trim() !== 'feriado');
-                    eventosFiltrados.forEach(doc => {
-                        const evento = doc.data();
-                        const dataFormatada = evento.dataInicio.toDate().toLocaleDateString('pt-BR');
-                        seletorEvento.innerHTML += `<option value="${doc.id}" data-data="${dataFormatada}">${evento.titulo} (${dataFormatada})</option>`;
-                    });
-                });
-            };
+            // A função carregarEventos() foi removida.
 
             const carregarItens = () => {
-                const qItens = query(collection(db, "cantina_itens"), orderBy("criadoEm", "desc"));
+                // Query simplificada para buscar TODOS os itens, ordenados por categoria e nome
+                const qItens = query(
+                    collection(db, "cantina_itens"), 
+                    orderBy("categoria"), 
+                    orderBy("nome")
+                );
+
                 onSnapshot(qItens, (snapshot) => {
                     const itens = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-
-                    itens.sort((a, b) => {
-                        if (a.eventoId === 'padrão' && b.eventoId !== 'padrão') return -1;
-                        if (a.eventoId !== 'padrão' && b.eventoId === 'padrão') return 1;
-                        if (a.eventoData < b.eventoData) return -1;
-                        if (a.eventoData > b.eventoData) return 1;
-                        if (a.categoria < b.categoria) return -1;
-                        if (a.categoria > b.categoria) return 1;
-                        return a.nome.localeCompare(b.nome);
-                    });
 
                     tabelaItens.innerHTML = '';
                     itens.forEach(item => {
                         const tr = document.createElement('tr');
+                        const isDisponivel = item.disponivelHoje === true;
+                        
                         tr.innerHTML = `
                             <td><strong>${item.nome}</strong><br><small>${item.descricao || ''}</small></td>
                             <td>${item.categoria}</td>
                             <td>${Number(item.preco).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</td>
-                            <td>${item.eventoId === 'padrão' ? 'Cardápio Padrão' : `${item.eventoTitulo} (${item.eventoData})`}</td>
+                            <td class="disponivel-col">
+                                <label class="switch">
+                                    <input type="checkbox" class="toggle-disponivel" data-id="${item.id}" ${isDisponivel ? 'checked' : ''}>
+                                    <span class="slider"></span>
+                                </label>
+                            </td>
                             <td class="actions-table">
                                 <button class="btn-edit" data-id="${item.id}">Editar</button>
                                 <button class="btn-delete" data-id="${item.id}">Apagar</button>
@@ -141,24 +147,25 @@
 
             form.addEventListener('submit', async (e) => {
                 e.preventDefault();
-                const selectedOption = seletorEvento.options[seletorEvento.selectedIndex];
+                
+                // Lógica de evento removida
                 const item = {
                     nome: document.getElementById('nome').value,
                     categoria: document.getElementById('categoria').value,
                     preco: parseFloat(document.getElementById('preco').value),
                     descricao: document.getElementById('descricao').value,
-                    eventoId: selectedOption.value,
-                    eventoTitulo: selectedOption.value === 'padrão' ? 'Padrão' : selectedOption.text.split(' (')[0],
-                    eventoData: selectedOption.value === 'padrão' ? null : selectedOption.dataset.data,
                 };
                 const id = document.getElementById('itemId').value;
 
                 if (id) {
+                    // Se está editando, apenas atualiza os dados do item
                     await setDoc(doc(db, 'cantina_itens', id), item, { merge: true });
                     registrarLogDeAcesso({ acao: 'EDITOU_ITEM_CANTINA', detalhes: { itemId: id, nome: item.nome } });
                     alert('Item atualizado com sucesso!');
                 } else {
+                    // Se está criando, adiciona os campos de controle
                     item.criadoEm = serverTimestamp();
+                    item.disponivelHoje = false; // Por padrão, um item novo não está disponível
                     const docRef = await addDoc(collection(db, 'cantina_itens'), item);
                     registrarLogDeAcesso({ acao: 'CRIOU_ITEM_CANTINA', detalhes: { itemId: docRef.id, nome: item.nome } });
                     alert('Item salvo com sucesso!');
@@ -168,6 +175,27 @@
                 document.getElementById('btn-cancelar').style.display = 'none';
             });
             
+            // NOVO LISTENER: Para o clique no Checkbox "Disponível Hoje?"
+            tabelaItens.addEventListener('change', async (e) => {
+                if (e.target.classList.contains('toggle-disponivel')) {
+                    const id = e.target.dataset.id;
+                    const novoStatus = e.target.checked;
+                    
+                    const itemRef = doc(db, 'cantina_itens', id);
+                    try {
+                        await updateDoc(itemRef, {
+                            disponivelHoje: novoStatus
+                        });
+                        console.log(`Item ${id} atualizado para ${novoStatus}`);
+                    } catch (err) {
+                        console.error("Erro ao atualizar status do item: ", err);
+                        alert("Erro ao mudar o status do item.");
+                        // Reverte o checkbox em caso de falha
+                        e.target.checked = !novoStatus;
+                    }
+                }
+            });
+
             tabelaItens.addEventListener('click', async (e) => {
                 const target = e.target;
                 const id = target.dataset.id;
@@ -179,7 +207,7 @@
                     if (docSnap.exists()) {
                         const data = docSnap.data();
                         document.getElementById('itemId').value = id;
-                        document.getElementById('evento').value = data.eventoId;
+                        // Campo 'evento' removido
                         document.getElementById('nome').value = data.nome;
                         document.getElementById('categoria').value = data.categoria;
                         document.getElementById('preco').value = data.preco;
@@ -188,7 +216,7 @@
                         window.scrollTo({ top: 0, behavior: 'smooth' });
                     }
                 } else if (target.classList.contains('btn-delete')) {
-                    if (confirm('Tem certeza que deseja apagar este item?')) {
+                    if (confirm('Tem certeza que deseja apagar este item PERMANENTEMENTE do inventário?')) {
                         const docRef = doc(db, 'cantina_itens', id);
                         const docSnap = await getDoc(docRef);
                         const nomeItem = docSnap.exists() ? docSnap.data().nome : 'Item Desconhecido';
@@ -205,7 +233,7 @@
                 document.getElementById('btn-cancelar').style.display = 'none';
             });
 
-            carregarEventos();
+            // carregarEventos() foi removido daqui
             carregarItens();
         }
     </script>
