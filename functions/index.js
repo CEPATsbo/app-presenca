@@ -1118,7 +1118,8 @@ exports.gerarCronogramaAutomaticamente = onDocumentCreated({ ...OPCOES_FUNCAO, d
         const aulasSnapshot = await aulasGabaritoRef.orderBy('numeroDaAula').get();
         if (aulasSnapshot.empty) return null;
         let dataAtual = dataInicio.toDate();
-        while (dataAtual.getDay() !== diaDaSemana) { dataAtual.setDate(dataAtual.getDate() + 1); }
+        // LINHA NOVA (com getUTCDay):
+while (dataAtual.getUTCDay() !== diaDaSemana) { dataAtual.setDate(dataAtual.getDate() + 1); }
         const cronogramaRef = db.collection('turmas').doc(turmaId).collection('cronograma');
         const batch = db.batch();
         aulasSnapshot.forEach(doc => {

@@ -237,8 +237,8 @@ async function salvarTurma(event) {
     const facilitadoresIds = facilitadoresSelecionados.map(option => option.value);
 
     // Converte a data string para Timestamp do Firebase (interpretando como UTC 00:00)
-    const dataInicioTimestamp = Timestamp.fromDate(new Date(dataInicioValue + 'T00:00:00Z'));
-
+   // LINHA NOVA (SEM 'Z'):
+const dataInicioTimestamp = Timestamp.fromDate(new Date(dataInicioValue + 'T00:00:00'));
     try {
         await addDoc(collection(db, "turmas"), {
             nomeDaTurma: nomeDaTurma,
