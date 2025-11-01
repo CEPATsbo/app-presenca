@@ -1,0 +1,351 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Detalhes do Atendimento - Vinha de Luz</title>
+    <style>
+        /* Estilos baseados no Entrevista-ae.html para consistência */
+        :root { --cor-primaria: #8e44ad; --cor-borda: #ddd; --fundo-desabilitado: #e9ecef; } /* Cor VL */
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background-color: #f0f2f5; margin: 0; padding: 20px; }
+        .container { width: 100%; max-width: 900px; background-color: white; padding: 30px; border-radius: 12px; box-shadow: 0 6px 24px rgba(0,0,0,0.1); margin: auto; }
+        .nav-voltar { width: 100%; max-width: 900px; margin: auto; margin-bottom: 20px; }
+        .btn, .btn-voltar { background-color: var(--cor-primaria); color: white; border: none; padding: 12px 20px; border-radius: 8px; font-weight: bold; font-size: 1em; text-decoration: none; cursor: pointer; transition: background-color 0.3s; }
+        .btn:disabled { background-color: #ccc; cursor: not-allowed; }
+        .btn-voltar { background-color: #6c757d; }
+        .btn-success { background-color: #28a745; }
+        .btn-secondary { background-color: #6c757d; }
+        h1, h3 { color: #333; text-align: center; }
+        fieldset { border: 1px solid var(--cor-borda); border-radius: 8px; padding: 20px; margin-bottom: 20px; }
+        legend { font-weight: bold; font-size: 1.2em; color: var(--cor-primaria); padding: 0 10px; }
+        .form-item { display: flex; flex-direction: column; }
+        .form-item label { margin-bottom: 5px; font-weight: bold; color: #555; }
+        .form-item input, .form-item select, .form-item textarea, .form-item .readonly-input { padding: 10px; border-radius: 6px; border: 1px solid #ccc; font-size: 1em; width: 100%; box-sizing: border-box; }
+        .form-item .readonly-input { background-color: var(--fundo-desabilitado); }
+        .form-item input:disabled, .form-item select:disabled, .form-item textarea:disabled { background-color: var(--fundo-desabilitado); cursor: not-allowed; }
+        .form-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; align-items: end; }
+        .erro { color: #dc3545; font-weight: bold; text-align: center; }
+        .hidden { display: none; }
+        .data-aviso { font-weight: bold; color: var(--cor-primaria); }
+        /* Estilos do cabeçalho do formulário */
+        .info-header { background-color: #f8f9fa; padding: 15px; border-radius: 6px; margin-bottom: 20px; }
+        .info-grid { display: flex; justify-content: space-around; align-items: center; flex-wrap: wrap; gap: 10px; }
+        .info-item { text-align: center; }
+        .info-item label { font-size: 0.9em; color: #555; margin-bottom: 4px; display: block; }
+        .info-item span { font-weight: bold; font-size: 1.1em; color: #333; }
+    </style>
+</head>
+<body>
+    <nav class="nav-voltar"><a href="#" id="btn-voltar-fecha" class="btn-voltar">⬅ Voltar para o Arquivo VL (Fecha Aba)</a></nav>
+    <div id="acesso-negado" class="container hidden"><h1>Acesso Negado</h1></div>
+
+    <div id="main-content" class="container">
+        <h1>Detalhes do Atendimento - Vinha de Luz</h1>
+        <div id="formulario-container">
+            <p>Carregando dados do atendimento...</p>
+        </div>
+    </div>
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
+        import { getFirestore, collection, doc, getDoc, updateDoc, query, where, Timestamp, getDocs, writeBatch, serverTimestamp, limit, addDoc, increment } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
+        import { getAuth } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-auth.js";
+        import { protegerPagina } from '/auth.js';
+
+        const firebaseConfig = {
+            apiKey: "AIzaSyBV7RPjk3cFTqL-aIpflJcUojKg1ZXMLuU",
+            authDomain: "voluntarios-ativos---cepat.firebaseapp.com",
+            projectId: "voluntarios-ativos---cepat",
+            storageBucket: "voluntarios-ativos---cepat.firebasestorage.app",
+            messagingSenderId: "66122858261",
+            appId: "1:66122858261:web:7fa21f1805463b5c08331c"
+        };
+        // app já inicializado pelo auth.js
+        const auth = getAuth();
+
+        protegerPagina(['entrevistador', 'tesoureiro', 'conselheiro', 'diretor', 'super-admin', 'recepcionista', 'irradiador']).then(user => {
+            inicializarPagina(user);
+        }).catch(err => {
+            document.getElementById('acesso-negado').classList.remove('hidden');
+            document.getElementById('main-content').classList.add('hidden');
+        });
+
+        function inicializarPagina(user) {
+            const db = getFirestore();
+            const tratamentosRef = collection(db, 'tratamentos_vl');
+            const atendimentosRef = collection(db, 'atendimentos_vl');
+            const logAuditoriaRef = collection(db, 'log_auditoria');
+
+            const formularioContainer = document.getElementById('formulario-container');
+            const params = new URLSearchParams(window.location.search);
+            const atendimentoIdParaEditar = params.get('atendimentoId');
+
+            const btnVoltarFecha = document.getElementById('btn-voltar-fecha');
+            if(btnVoltarFecha) {
+                btnVoltarFecha.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    window.close();
+                    setTimeout(() => { window.location.href = '/arquivo-geral-vl.html'; }, 300);
+                });
+            }
+
+            if (atendimentoIdParaEditar) {
+                carregarFormularioParaEdicao(atendimentoIdParaEditar);
+            } else {
+                formularioContainer.innerHTML = `<p class="erro">Nenhum atendimento selecionado.</p>`;
+            }
+
+            async function registrarLog(acao, detalhes) {
+                try {
+                    await addDoc(logAuditoriaRef, {
+                        timestamp: serverTimestamp(),
+                        autor: { uid: user.uid, nome: user.displayName || 'Usuário do Sistema' },
+                        acao: acao,
+                        detalhes: detalhes
+                    });
+                } catch (error) { console.error("Erro ao registrar log:", error); }
+            }
+
+            function manipularEstadoFormulario(travado) {
+                const form = formularioContainer.querySelector('fieldset');
+                if (!form) return;
+                
+                // Trava/Destrava campos editáveis
+                form.querySelectorAll('#atendente-nome, #atendimento-notas, #btn-marcar-retorno').forEach(el => {
+                    if (el) el.disabled = travado;
+                });
+
+                const btnSalvar = document.getElementById('btn-salvar-atendimento');
+                if(btnSalvar) btnSalvar.style.display = travado ? 'none' : 'block';
+
+                const btnHabilitarExistente = document.getElementById('btn-habilitar-edicao');
+                if(btnHabilitarExistente) btnHabilitarExistente.remove();
+                if (travado) {
+                    const btnHabilitar = document.createElement('button');
+                    btnHabilitar.id = 'btn-habilitar-edicao';
+                    btnHabilitar.className = 'btn btn-secondary';
+                    btnHabilitar.style.width = '100%';
+                    btnHabilitar.style.marginTop = '10px';
+                    btnHabilitar.innerHTML = '🔒 Habilitar Edição';
+                    btnHabilitar.type = 'button';
+                    btnHabilitar.onclick = () => { if (confirm('Tem certeza?')) { manipularEstadoFormulario(false); } };
+                    form.appendChild(btnHabilitar);
+                }
+            }
+
+            async function carregarFormularioParaEdicao(atendimentoId) {
+                const atendimentoDocRef = doc(db, 'atendimentos_vl', atendimentoId);
+                const atendimentoDoc = await getDoc(atendimentoDocRef);
+                if (!atendimentoDoc.exists()) { formularioContainer.innerHTML = `<p class="erro">Atendimento não encontrado.</p>`; return; }
+                
+                const atendimento = { id: atendimentoDoc.id, ...atendimentoDoc.data() };
+                if (!atendimento.tratamentoId) { formularioContainer.innerHTML = `<p class="erro">Atendimento sem tratamento vinculado.</p>`; return; }
+                
+                const assistidoDoc = await getDoc(doc(db, 'assistidos', atendimento.assistidoId));
+                const tratamentoDoc = await getDoc(doc(db, 'tratamentos_vl', atendimento.tratamentoId));
+                
+                if (!assistidoDoc.exists() || !tratamentoDoc.exists()) { formularioContainer.innerHTML = `<p class="erro">Dados do assistido ou tratamento não encontrados.</p>`; return; }
+                
+                const assistido = assistidoDoc.data();
+                const tratamento = tratamentoDoc.data();
+                
+                const formHtml = criarFormulario(atendimento, assistido, tratamento);
+                formularioContainer.innerHTML = formHtml;
+                preencherFormulario(atendimento, user);
+                
+                const travar = atendimento.detalhes_preenchidos === true;
+                manipularEstadoFormulario(travar);
+
+                document.getElementById('btn-salvar-atendimento')?.addEventListener('click', () => salvarAtendimentoVL(atendimento, atendimentoDocRef, tratamentoDoc.ref, tratamento));
+                
+                // Listener para o novo botão de Retorno
+                document.getElementById('btn-marcar-retorno')?.addEventListener('click', () => marcarNovoRetorno(atendimento, tratamentoDoc.ref, tratamento));
+            }
+            
+            // --- NOVA FUNÇÃO ---
+            // Esta função será chamada se o assistido veio hoje E já tem um tratamento VL ativo
+            async function marcarNovoRetorno(atendimentoAnterior, tratamentoDocRef, tratamento) {
+                const btn = document.getElementById('btn-marcar-retorno');
+                btn.disabled = true;
+
+                const totalPermitido = (tratamento.retornos_solicitados || 0) + 1;
+                const realizados = tratamento.atendimentos_realizados || 0;
+
+                if (realizados >= totalPermitido) {
+                    alert(`Este assistido já completou os ${totalPermitido} atendimentos solicitados.`);
+                    btn.disabled = false;
+                    return;
+                }
+                
+                // Checar se já marcou retorno hoje
+                const hojeInicio = new Date();
+                hojeInicio.setHours(0, 0, 0, 0);
+                const qCheckHoje = query(atendimentosRef, 
+                    where("tratamentoId", "==", atendimentoAnterior.tratamentoId),
+                    where("dataAtendimento", ">=", Timestamp.fromDate(hojeInicio))
+                );
+                const snapshotHoje = await getDocs(qCheckHoje);
+                if (!snapshotHoje.empty) {
+                    alert('Este assistido já registrou um retorno hoje.');
+                    btn.disabled = false;
+                    return;
+                }
+
+                if (!confirm(`Confirmar novo retorno (Atendimento ${realizados + 1} de ${totalPermitido})?`)) {
+                    btn.disabled = false;
+                    return;
+                }
+
+                try {
+                    const batch = writeBatch(db);
+                    const dataAtual = serverTimestamp();
+                    
+                    // 1. Cria o novo atendimento
+                    batch.set(doc(atendimentosRef), {
+                        assistidoId: tratamento.assistidoId,
+                        tratamentoId: tratamentoDocRef.id,
+                        dataAtendimento: dataAtual,
+                        semana: realizados + 1, // Próximo número de atendimento
+                        notas: 'Retorno registrado pela recepção/atendente.',
+                        atendente: user.displayName,
+                        detalhes_preenchidos: false // Fica pendente para edição
+                    });
+                    
+                    // 2. Atualiza a contagem no tratamento
+                    batch.update(tratamentoDocRef, { 
+                        atendimentos_realizados: increment(1),
+                        // Se for o último, encerra o tratamento
+                        status: (realizados + 1) === totalPermitido ? 'concluido' : 'ativo'
+                    });
+                    
+                    await batch.commit();
+                    
+                    alert(`Retorno ${realizados + 1} registrado com sucesso!`);
+                    if ((realizados + 1) === totalPermitido) {
+                        alert('Este foi o último retorno. O tratamento foi marcado como "concluído".');
+                    }
+                    
+                    await registrarLog('Registro Retorno (VL)', { assistidoId: tratamento.assistidoId, tratamentoId: tratamentoDocRef.id, atendimentoNum: realizados + 1 });
+                    
+                    // Recarrega a página para refletir as novas informações (ou atualiza a UI)
+                    location.reload();
+
+                } catch (error) {
+                    console.error("Erro ao marcar retorno:", error);
+                    alert("Falha ao registrar retorno: " + error.message);
+                    btn.disabled = false;
+                }
+            }
+            // --- FIM DA NOVA FUNÇÃO ---
+
+
+            async function salvarAtendimentoVL(atendimento, atendimentoDocRef, tratamentoDocRef, tratamento) {
+                const btn = document.getElementById('btn-salvar-atendimento');
+                const atendenteNome = document.getElementById('atendente-nome').value.trim();
+                const atendimentoNotas = document.getElementById('atendimento-notas').value.trim();
+
+                if (!atendenteNome || !atendimentoNotas) {
+                    alert('Os campos "Atendente" e "Notas do Atendimento" são obrigatórios.');
+                    return;
+                }
+                
+                btn.disabled = true; btn.textContent = 'Salvando...';
+                try {
+                    const dadosParaAtualizar = {
+                        atendente: atendenteNome,
+                        notas: atendimentoNotas,
+                        detalhes_preenchidos: true // Marca como preenchido
+                    };
+                    
+                    await updateDoc(atendimentoDocRef, dadosParaAtualizar);
+                    
+                    await registrarLog('Preenchimento Atendimento (VL)', {
+                        assistidoId: atendimento.assistidoId,
+                        atendimentoId: atendimento.id,
+                        semana: atendimento.semana
+                    });
+                    
+                    alert('Atendimento salvo com sucesso!');
+                    manipularEstadoFormulario(true); // Trava o formulário
+                    
+                } catch (error) {
+                    console.error("Erro ao salvar atendimento:", error);
+                    alert("Falha ao salvar. Tente novamente.");
+                    btn.disabled = false; btn.textContent = 'Salvar Alterações';
+                }
+            }
+
+            function preencherFormulario(atendimento, user) {
+                const atendenteInput = document.getElementById('atendente-nome');
+                const notasInput = document.getElementById('atendimento-notas');
+                
+                // Se foi preenchido, usa os dados salvos
+                if (atendimento.detalhes_preenchidos) {
+                    atendenteInput.value = atendimento.atendente || '';
+                    notasInput.value = atendimento.notas || '';
+                } else {
+                    // Se é a primeira vez (criado pela recepção), sugere o usuário atual
+                    // e mantém as notas da recepção (se houver)
+                    atendenteInput.value = user.displayName || '';
+                    notasInput.value = atendimento.notas || '';
+                }
+            }
+
+            function criarFormulario(atendimento, assistido, tratamento) {
+                const dataAtendimento = atendimento.dataAtendimento
+                    ? atendimento.dataAtendimento.toDate().toLocaleDateString('pt-br')
+                    : "Data Pendente";
+                
+                const atendimentoNum = atendimento.semana || '?';
+                const totalAtendimentos = (tratamento.retornos_solicitados || 0) + 1;
+                const statusTratamento = tratamento.status || 'N/A';
+                
+                // Botão de retorno só aparece se o tratamento estiver ativo E
+                // se o atendimento que estamos vendo FOR o último realizado E
+                // se ainda houver retornos pendentes.
+                let botaoRetornoHtml = '';
+                const hoje = new Date().toLocaleDateString('pt-br');
+                // Verifica se este atendimento NÃO é de hoje (para evitar registrar retorno duplicado no mesmo dia)
+                const naoEhDeHoje = dataAtendimento !== hoje;
+                
+                if (statusTratamento === 'ativo' && atendimentoNum === tratamento.atendimentos_realizados && atendimentoNum < totalAtendimentos && naoEhDeHoje) {
+                    botaoRetornoHtml = `<button id="btn-marcar-retorno" type="button" class="btn btn-success" style="width: 100%; margin-top: 15px;">Registrar Próximo Retorno (Hoje)</button>`;
+                } else if (statusTratamento === 'concluido') {
+                    botaoRetornoHtml = `<p style="text-align:center; font-weight:bold; color:#28a745; margin-top:15px;">Tratamento concluído.</p>`;
+                }
+
+
+                return `<fieldset>
+                            <legend>Detalhes do Atendimento (VL)</legend>
+                            
+                            <div class="info-header">
+                                <div class="info-grid">
+                                    <div class="info-item">
+                                        <label>Assistido</label>
+                                        <span>${assistido.nome}</span>
+                                    </div>
+                                    <div class="info-item">
+                                        <label>Data deste Atendimento</label>
+                                        <span>${dataAtendimento}</span>
+                                    </div>
+                                    <div class="info-item">
+                                        <label>Contagem (Atendimento / Total)</label>
+                                        <span>${atendimentoNum} / ${totalAtendimentos}</span>
+                                    </div>
+                                </div>
+                                ${botaoRetornoHtml}
+                            </div>
+                            
+                            <div class="form-grid">
+                                <div class="form-item"><label for="atendente-nome">Atendente:</label><input type="text" id="atendente-nome"></div>
+                            </div>
+                            <div class="form-item" style="margin-top: 15px;"><label for="atendimento-notas">Notas do Atendimento:</label><textarea id="atendimento-notas" rows="8"></textarea></div>
+                            
+                            <button id="btn-salvar-atendimento" type="button" class="btn btn-primary" style="width: 100%; margin-top: 20px;">Salvar Alterações</button>
+                        </fieldset>`;
+            }
+
+        } // Fim da função inicializarPagina
+    </script>
+</body>
+</html>
