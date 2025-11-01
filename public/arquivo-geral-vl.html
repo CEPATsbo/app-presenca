@@ -1,0 +1,309 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Arquivo Geral - Vinha de Luz</title>
+    <style>
+        :root { --cor-primaria: #8e44ad; --cor-borda: #ddd; --fundo-selecionado: #e9ecef; } /* Cor VL */
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background-color: #f4f6f9; margin: 0; padding: 20px; }
+        .container { width: 100%; max-width: 1400px; margin: 0 auto; background-color: #fff; padding: 30px; border-radius: 12px; box-shadow: 0 6px 24px rgba(0,0,0,0.1); }
+        .nav-voltar { margin-bottom: 20px; }
+        .btn, .btn-voltar, .btn-editar { background-color: var(--cor-primaria); color: white; border: none; padding: 12px 20px; border-radius: 8px; font-weight: bold; text-decoration: none; display: inline-block; cursor: pointer; }
+        .btn-voltar { background-color: #6c757d; }
+        .hidden { display: none; }
+        
+        .filtros-container { display: flex; flex-direction: column; gap: 15px; margin-bottom: 20px; }
+        .alfabeto-filtro { display: flex; flex-wrap: wrap; justify-content: center; gap: 5px; }
+        .alfabeto-filtro button { font-size: 0.9em; width: 35px; height: 35px; border: 1px solid #ccc; background-color: #fff; border-radius: 50%; cursor: pointer; transition: background-color 0.2s, color 0.2s; }
+        .alfabeto-filtro button.ativo { background-color: var(--cor-primaria); color: white; border-color: var(--cor-primaria); }
+        #campo-busca { width: 100%; padding: 12px; font-size: 1.1em; border: 1px solid #ccc; border-radius: 8px; box-sizing: border-box; }
+
+        .main-grid { display: grid; grid-template-columns: 350px 1fr; gap: 30px; min-height: 60vh; }
+        .lista-assistidos-col { border-right: 1px solid var(--cor-borda); padding-right: 20px; }
+        #lista-assistidos { list-style-type: none; padding: 0; margin: 0; max-height: 60vh; overflow-y: auto; }
+        #lista-assistidos li { padding: 15px; border-bottom: 1px solid #eee; cursor: pointer; font-weight: 500; display: flex; align-items: center; gap: 8px; }
+        #lista-assistidos li:hover { background-color: var(--fundo-selecionado); }
+        #lista-assistidos li.selecionado { background-color: var(--cor-primaria); color: white; font-weight: bold; }
+        
+        .detalhes-assistido-col h2 { text-align: center; margin-top: 0; }
+        #historico-container { max-height: 60vh; overflow-y: auto; }
+        .ciclo-tratamento { border: 1px solid var(--cor-borda); border-radius: 8px; margin-bottom: 20px; }
+        .ciclo-header { background-color: #f8f9fa; padding: 15px; border-bottom: 1px solid var(--cor-borda); font-weight: bold; display: flex; justify-content: space-between; flex-wrap: wrap; gap: 15px;}
+        .ciclo-header .status-ativo { color: #28a745; }
+        .ciclo-header .status-concluido { color: #6c757d; }
+        .atendimentos-lista { list-style-type: none; padding: 0; margin: 0; }
+        .atendimentos-lista li { display: flex; justify-content: space-between; align-items: center; padding: 12px 15px; border-bottom: 1px solid #eee; }
+        .atendimentos-lista li:last-child { border-bottom: none; }
+        .atendimento-info { display: flex; align-items: center; gap: 10px; }
+        .btn-editar { background-color: #17a2b8; padding: 6px 12px; border-radius: 6px; font-size: 0.9em; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <nav class="nav-voltar"><a href="/dashboard-vl.html" class="btn-voltar">⬅ Voltar para o Dashboard VL</a></nav>
+        <div id="acesso-negado" class="hidden"><h1>Acesso Negado</h1></div>
+
+        <div id="main-content">
+            <header>
+                <h1 style="text-align: center;">Arquivo Geral - Vinha de Luz</h1>
+            </header>
+            <section class="filtros-container">
+                <div id="alfabeto-filtro" class="alfabeto-filtro"></div>
+                <input type="search" id="campo-busca" placeholder="🔎 Buscar assistido por nome...">
+            </section>
+            <main class="main-grid">
+                <div class="lista-assistidos-col">
+                    <h2 style="margin-top:0;">Assistidos</h2>
+                    <ul id="lista-assistidos"><p>Carregando assistidos...</p></ul>
+                </div>
+                <div class="detalhes-assistido-col">
+                    <div id="detalhes-assistido">
+                        <p style="text-align: center; color: #666; margin-top: 50px;">Selecione um assistido na lista à esquerda para ver seu histórico.</p>
+                    </div>
+                </div>
+            </main>
+        </div>
+    </div>
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
+        import { getFirestore, collection, doc, getDoc, query, where, getDocs, orderBy, Timestamp, addDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
+        import { protegerPagina } from '/auth.js';
+
+        const firebaseConfig = {
+            apiKey: "AIzaSyBV7RPjk3cFTqL-aIpflJcUojKg1ZXMLuU",
+            authDomain: "voluntarios-ativos---cepat.firebaseapp.com",
+            projectId: "voluntarios-ativos---cepat",
+            storageBucket: "voluntarios-ativos---cepat.firebasestorage.app",
+            messagingSenderId: "66122858261",
+            appId: "1:66122858261:web:7fa21f1805463b5c08331c"
+        };
+        initializeApp(firebaseConfig);
+
+        protegerPagina(['entrevistador', 'tesoureiro', 'conselheiro', 'diretor', 'super-admin', 'recepcionista', 'irradiador']).then(user => {
+            document.getElementById('main-content').classList.remove('hidden');
+            inicializarPagina(user);
+        }).catch(err => {
+            document.getElementById('acesso-negado').classList.remove('hidden');
+        });
+
+        function inicializarPagina(user) {
+            const db = getFirestore();
+            const assistidosRef = collection(db, 'assistidos');
+            const tratamentosRef = collection(db, 'tratamentos_vl'); // <-- MODIFICADO
+            const atendimentosRef = collection(db, 'atendimentos_vl'); // <-- MODIFICADO
+            const logAuditoriaRef = collection(db, 'log_auditoria');
+
+            let assistidoAtualmenteSelecionado = null;
+            let debounceTimer;
+
+            const ui = {
+                alfabetoFiltro: document.getElementById('alfabeto-filtro'),
+                campoBusca: document.getElementById('campo-busca'),
+                listaAssistidos: document.getElementById('lista-assistidos'),
+                detalhesAssistido: document.getElementById('detalhes-assistido'),
+            };
+
+            async function registrarLog(acao, detalhes) {
+                try {
+                    await addDoc(logAuditoriaRef, {
+                        timestamp: serverTimestamp(),
+                        autor: { uid: user.uid, nome: user.displayName || 'Usuário do Sistema' },
+                        acao: acao,
+                        detalhes: detalhes
+                    });
+                } catch (error) { console.error("Erro ao registrar log:", error); }
+            }
+
+            function gerarBotoesAlfabeto() {
+                const alfabeto = "ABCDEFGHIJKLMNOPQRSTUVWXYZ".split('');
+                alfabeto.forEach(letra => {
+                    const btn = document.createElement('button');
+                    btn.textContent = letra;
+                    btn.dataset.letra = letra;
+                    ui.alfabetoFiltro.appendChild(btn);
+                });
+                const btnTodos = document.createElement('button');
+                btnTodos.textContent = 'Todos';
+                btnTodos.dataset.letra = '';
+                btnTodos.classList.add('ativo');
+                ui.alfabetoFiltro.appendChild(btnTodos);
+            }
+
+            async function carregarAssistidos(filtroLetra = '', termoBusca = '') {
+                ui.listaAssistidos.innerHTML = '<p>Buscando...</p>';
+                let q;
+                
+                // Por enquanto, a lista padrão (sem filtro/busca) carrega todos.
+                // Diferente do AE, não vamos filtrar por 'ativo' ou 'pendente' por padrão.
+                if (termoBusca) {
+                    const termo = termoBusca.toLowerCase();
+                    q = query(assistidosRef, where('nome_lower', '>=', termo), where('nome_lower', '<=', termo + '\uf8ff'), orderBy('nome_lower'));
+                } else if (filtroLetra) {
+                    const proximaLetra = String.fromCharCode(filtroLetra.charCodeAt(0) + 1);
+                    q = query(assistidosRef, where('nome', '>=', filtroLetra), where('nome', '<', proximaLetra), orderBy('nome'));
+                } else {
+                    // Carrega todos os assistidos ordenados por nome
+                    q = query(assistidosRef, orderBy('nome'));
+                }
+                
+                try {
+                    const snapshot = await getDocs(q);
+                    const assistidos = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                    renderizarListaAssistidos(assistidos);
+                    
+                    const params = new URLSearchParams(window.location.search);
+                    const assistidoIdUrl = params.get('assistidoId');
+                    if (assistidoIdUrl) {
+                        const assistidoParaMostrar = assistidos.find(a => a.id === assistidoIdUrl);
+                        if (assistidoParaMostrar) {
+                            const liCorrespondente = ui.listaAssistidos.querySelector(`[data-assistido-id="${assistidoIdUrl}"]`);
+                            if (liCorrespondente) liCorrespondente.classList.add('selecionado');
+                            mostrarDetalhes(assistidoParaMostrar, user);
+                        } else {
+                             // Carrega individualmente se não estiver na lista (ex: filtrado)
+                            const docRef = doc(db, 'assistidos', assistidoIdUrl);
+                            const docSnap = await getDoc(docRef);
+                            if (docSnap.exists()) {
+                                mostrarDetalhes({ id: docSnap.id, ...docSnap.data() }, user);
+                            }
+                        }
+                    }
+                } catch (error) {
+                     console.error("Erro ao carregar assistidos:", error);
+                     ui.listaAssistidos.innerHTML = '<p style="color:red;">Erro ao carregar lista.</p>';
+                }
+            }
+
+            function renderizarListaAssistidos(assistidos) {
+                ui.listaAssistidos.innerHTML = '';
+                if (assistidos.length === 0) {
+                    ui.listaAssistidos.innerHTML = '<p>Nenhum assistido encontrado.</p>';
+                    return;
+                }
+                assistidos.forEach(assistido => {
+                    const li = document.createElement('li');
+                    li.textContent = assistido.nome; // Não precisamos do ícone 📝 por enquanto
+                    li.dataset.assistidoId = assistido.id;
+                    li.addEventListener('click', () => {
+                        document.querySelectorAll('#lista-assistidos li').forEach(el => el.classList.remove('selecionado'));
+                        li.classList.add('selecionado');
+                        mostrarDetalhes(assistido, user);
+                    });
+                    ui.listaAssistidos.appendChild(li);
+                });
+            }
+
+            async function mostrarDetalhes(assistido, user) {
+                assistidoAtualmenteSelecionado = assistido;
+                ui.detalhesAssistido.innerHTML = `<h2>Histórico de ${assistido.nome}</h2><p>Carregando histórico...</p>`;
+                
+                await registrarLog('Visualização de Histórico (VL)', {
+                    assistidoId: assistido.id,
+                    assistidoNome: assistido.nome
+                });
+                
+                const qTratamentos = query(tratamentosRef, where('assistidoId', '==', assistido.id), orderBy('dataInicio', 'desc'));
+                const tratamentosSnapshot = await getDocs(qTratamentos);
+                const ciclos = tratamentosSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                
+                const qAtendimentos = query(atendimentosRef, where('assistidoId', '==', assistido.id), orderBy('dataAtendimento', 'desc'));
+                const atendimentosSnapshot = await getDocs(qAtendimentos);
+                const todosAtendimentos = atendimentosSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+
+                renderizarHistorico(assistido, ciclos, todosAtendimentos, user);
+            }
+            
+            function renderizarHistorico(assistido, ciclos, todosAtendimentos, user) {
+                const dnFormatado = assistido.dn ? new Date(assistido.dn + 'T12:00:00').toLocaleDateString('pt-br') : 'Não informado';
+                let html = `<h2>Histórico de ${assistido.nome}</h2>`;
+                html += `<p><strong>DN:</strong> ${dnFormatado} | <strong>Telefone:</strong> ${assistido.telefone || 'Não informado'}</p>`;
+                html += '<div id="historico-container">';
+
+                if (ciclos.length === 0) {
+                     html += '<p>Nenhum atendimento do Vinha de Luz registrado para este assistido.</p>';
+                }
+
+                ciclos.forEach(ciclo => {
+                    const dataInicio = ciclo.dataInicio ? ciclo.dataInicio.toDate().toLocaleDateString('pt-br') : 'N/A';
+                    const statusClasse = ciclo.status === 'ativo' ? 'status-ativo' : 'status-concluido';
+                    const retornos = ciclo.retornos_solicitados || 0;
+                    const realizados = ciclo.atendimentos_realizados || 0;
+
+                    html += `<div class="ciclo-tratamento">
+                                <div class="ciclo-header">
+                                    <span>Início: ${dataInicio} | Status: <span class="${statusClasse}">${ciclo.status.replace(/_/g, ' ')}</span></span>
+                                    <span>Retornos: ${realizados} / ${retornos + 1}</span>
+                                </div>
+                                <ul class="atendimentos-lista">`;
+                    
+                    const atendimentosDoCiclo = todosAtendimentos.filter(a => a.tratamentoId === ciclo.id);
+                    
+                    if (atendimentosDoCiclo.length === 0) {
+                        html += '<li>Nenhum atendimento registrado para este ciclo.</li>';
+                    } else {
+                        atendimentosDoCiclo.sort((a, b) => a.dataAtendimento?.toMillis() - b.dataAtendimento?.toMillis()).forEach(a => {
+                            html += renderizarItemAtendimento(a); // Simplificado
+                        });
+                    }
+                    html += `</ul></div>`;
+                });
+
+                html += '</div>';
+                ui.detalhesAssistido.innerHTML = html;
+            }
+
+            function renderizarItemAtendimento(a) {
+                const dataAtendimento = a.dataAtendimento ? a.dataAtendimento.toDate().toLocaleDateString('pt-br') : "N/A";
+                const atendimentoNum = `Atendimento ${a.semana || '?'}`;
+                
+                // Botão "Ver / Editar" que aponta para a futura página de edição
+                const botaoEditarHtml = `<a href="/atendimento-vl.html?atendimentoId=${a.id}" target="_blank" class="btn btn-editar">Ver / Editar</a>`;
+                
+                return `<li>
+                            <div class="atendimento-info">
+                                <span><strong>${dataAtendimento}</strong> - ${atendimentoNum}</span>
+                            </div>
+                            ${botaoEditarHtml}
+                        </li>`;
+            }
+
+            ui.alfabetoFiltro.addEventListener('click', (e) => {
+                if (e.target.tagName === 'BUTTON') {
+                    document.querySelectorAll('#alfabeto-filtro button').forEach(btn => btn.classList.remove('ativo'));
+                    e.target.classList.add('ativo');
+                    ui.campoBusca.value = '';
+                    assistidoAtualmenteSelecionado = null;
+                    ui.detalhesAssistido.innerHTML = `<p style="text-align: center; color: #666; margin-top: 50px;">Selecione um assistido...</p>`;
+                    carregarAssistidos(e.target.dataset.letra, '');
+                }
+            });
+
+            ui.campoBusca.addEventListener('input', (e) => {
+                clearTimeout(debounceTimer);
+                debounceTimer = setTimeout(() => {
+                    const termoBusca = e.target.value;
+                    document.querySelectorAll('#alfabeto-filtro button').forEach(btn => btn.classList.remove('ativo'));
+                    if (!termoBusca) {
+                        const btnTodos = ui.alfabetoFiltro.querySelector('button[data-letra=""]');
+                        if(btnTodos) btnTodos.classList.add('ativo');
+                    }
+                    assistidoAtualmenteSelecionado = null;
+                    ui.detalhesAssistido.innerHTML = `<p style="text-align: center; color: #666; margin-top: 50px;">Selecione um assistido...</p>`;
+                    carregarAssistidos('', termoBusca);
+                }, 500);
+            });
+
+            window.addEventListener('focus', () => {
+                if (assistidoAtualmenteSelecionado) {
+                    mostrarDetalhes(assistidoAtualmenteSelecionado, user);
+                }
+            });
+
+            gerarBotoesAlfabeto();
+            carregarAssistidos(); // Carrega a lista padrão inicial (todos)
+        }
+    </script>
+</body>
+</html>
