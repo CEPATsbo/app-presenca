@@ -7,7 +7,7 @@
     <style>
         :root { --cor-primaria: #8e44ad; --cor-borda: #ddd; --fundo-selecionado: #e9ecef; } /* Cor VL */
         body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background-color: #f4f6f9; margin: 0; padding: 20px; }
-        .container { width: 100%; max-width: 1400px; margin: 0 auto; background-color: #fff; padding: 30px; border-radius: 12px; box-shadow: 0 6px 24px rgba(0,0,0,0.1); }
+        .container { width: 100%; max-width: 1400px; margin: 0 auto; background-color: #fff; padding: 30px; border-radius: 12px; box-shadow: 0 6px 24px rgba(0,0,0,0.1); box-sizing: border-box; /* Adicionado para padding */ }
         .nav-voltar { margin-bottom: 20px; }
         .btn, .btn-voltar, .btn-editar, .btn-acao { background-color: var(--cor-primaria); color: white; border: none; padding: 12px 20px; border-radius: 8px; font-weight: bold; text-decoration: none; display: inline-block; cursor: pointer; }
         .btn-voltar { background-color: #6c757d; }
@@ -38,6 +38,35 @@
         .atendimentos-lista li:last-child { border-bottom: none; }
         .atendimento-info { display: flex; align-items: center; gap: 10px; }
         .btn-editar { background-color: #17a2b8; padding: 6px 12px; border-radius: 6px; font-size: 0.9em; }
+
+        /* =================================================================== */
+        /* INÍCIO DA MODIFICAÇÃO CSS: Layout Responsivo */
+        /* =================================================================== */
+        @media (max-width: 768px) {
+            body { padding: 10px; }
+            .container { padding: 20px; }
+            /* Empilha as colunas em telas pequenas */
+            .main-grid {
+                grid-template-columns: 1fr; /* 1 coluna */
+                gap: 20px;
+            }
+            .lista-assistidos-col {
+                border-right: none; /* Remove a borda lateral */
+                padding-right: 0;
+                border-bottom: 1px solid var(--cor-borda); /* Adiciona borda inferior */
+                padding-bottom: 20px;
+            }
+            /* Ajusta a altura da lista e do histórico para evitar rolagem dupla */
+            #lista-assistidos {
+                max-height: 40vh; /* Altura máxima para a lista */
+            }
+            #historico-container {
+                max-height: 60vh; /* Altura máxima para o histórico */
+            }
+        }
+        /* =================================================================== */
+        /* FIM DA MODIFICAÇÃO CSS */
+        /* =================================================================== */
     </style>
 </head>
 <body>
@@ -55,7 +84,8 @@
             </section>
             <main class="main-grid">
                 <div class="lista-assistidos-col">
-                    <h2 style="margin-top:0;">Assistidos (Vinha de Luz)</h2> <ul id="lista-assistidos"><p>Carregando assistidos...</p></ul>
+                    <h2 style="margin-top:0;">Assistidos (Vinha de Luz)</h2>
+                    <ul id="lista-assistidos"><p>Carregando assistidos...</p></ul>
                 </div>
                 <div class="detalhes-assistido-col">
                     <div id="detalhes-assistido">
@@ -68,9 +98,7 @@
 
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
-        // ===================================================================
         // MODIFICAÇÃO: Adicionado 'documentId' para a query 'in'
-        // ===================================================================
         import { getFirestore, collection, doc, getDoc, query, where, getDocs, orderBy, Timestamp, addDoc, serverTimestamp, documentId } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
         import { protegerPagina } from '/auth.js';
 
@@ -134,9 +162,6 @@
                 ui.alfabetoFiltro.appendChild(btnTodos);
             }
 
-            // ===================================================================
-            // INÍCIO DA MODIFICAÇÃO: Lógica de carregar assistidos
-            // ===================================================================
             async function carregarAssistidos(filtroLetra = '', termoBusca = '') {
                 ui.listaAssistidos.innerHTML = '<p>Buscando...</p>';
                 let assistidosParaExibir = [];
@@ -158,39 +183,30 @@
 
                     // CASO B: Visão padrão (sem filtro/busca) - mostra SÓ quem está no VL
                     } else {
-                        // 1. Busca todos os tratamentos_vl
                         const qTratamentosVl = query(tratamentosRef); // Aponta para 'tratamentos_vl'
                         const tratamentosSnapshot = await getDocs(qTratamentosVl);
-                        
-                        // 2. Pega os IDs de assistidos únicos que estão no VL
                         const idsAssistidosVL = new Set(tratamentosSnapshot.docs.map(doc => doc.data().assistidoId));
                         
                         if (idsAssistidosVL.size > 0) {
                             const idsArray = Array.from(idsAssistidosVL);
                             
-                            // Limite do Firestore para query 'in' é 30
                             const MAX_IDS_PER_QUERY = 30;
                             if (idsArray.length > MAX_IDS_PER_QUERY) {
                                 console.warn(`Lista de assistidos do VL (${idsArray.length}) excede o limite de ${MAX_IDS_PER_QUERY}. Exibindo apenas os primeiros ${MAX_IDS_PER_QUERY}.`);
-                                idsArray.splice(MAX_IDS_PER_QUERY); // Limita para evitar erro
+                                idsArray.splice(MAX_IDS_PER_QUERY);
                             }
 
-                            // 3. Busca os detalhes (nome, etc.) desses assistidos na coleção 'assistidos'
                             const qAssistidosFiltrados = query(assistidosRef, where(documentId(), 'in', idsArray));
                             const assistidosSnapshot = await getDocs(qAssistidosFiltrados);
                             assistidosParaExibir = assistidosSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-
-                            // 4. Ordena alfabeticamente
                             assistidosParaExibir.sort((a, b) => a.nome.localeCompare(b.nome));
                         } else {
                             assistidosParaExibir = []; // Nenhum tratamento VL encontrado
                         }
                     }
 
-                    // 5. Renderiza a lista (sem ícones de pendência por enquanto)
                     renderizarListaAssistidos(assistidosParaExibir);
                     
-                    // 6. Lógica para selecionar assistido da URL (se houver)
                     const params = new URLSearchParams(window.location.search);
                     const assistidoIdUrl = params.get('assistidoId');
                     if (assistidoIdUrl) {
@@ -200,13 +216,10 @@
                             if (liCorrespondente) liCorrespondente.classList.add('selecionado');
                             mostrarDetalhes(assistidoParaMostrar, user);
                         } else {
-                             // Se o assistido da URL não está na lista padrão (ex: ainda não começou VL mas foi linkado)
-                             // ou se o filtro/busca o escondeu, carrega individualmente.
                             const docRef = doc(db, 'assistidos', assistidoIdUrl);
                             const docSnap = await getDoc(docRef);
                             if (docSnap.exists()) {
                                 const tempAssistido = { id: docSnap.id, ...docSnap.data() };
-                                // Adiciona temporariamente à lista para seleção visual
                                 renderizarListaAssistidos([tempAssistido, ...assistidosParaExibir].sort((a,b)=>a.nome.localeCompare(b.nome)));
                                 const liCorrespondente = ui.listaAssistidos.querySelector(`[data-assistido-id="${assistidoIdUrl}"]`);
                                 if (liCorrespondente) liCorrespondente.classList.add('selecionado');
@@ -220,7 +233,7 @@
                 } catch (error) {
                      console.error("Erro ao carregar assistidos:", error);
                      ui.listaAssistidos.innerHTML = '<p style="color:red;">Erro ao carregar lista.</p>';
-                     if (error.code === 'failed-precondition' || error.message.includes("index")) {
+                     if (error.code === 'failed-precondition' || (error.message && error.message.includes("index"))) {
                          alert("Erro: O Firestore precisa de um índice para esta consulta. Verifique o console (F12) para o link de criação do índice.");
                      }
                 }
@@ -234,7 +247,7 @@
                 }
                 assistidos.forEach(assistido => {
                     const li = document.createElement('li');
-                    li.textContent = assistido.nome; // Sem ícone de pendência por enquanto
+                    li.textContent = assistido.nome;
                     li.dataset.assistidoId = assistido.id;
                     li.addEventListener('click', () => {
                         document.querySelectorAll('#lista-assistidos li').forEach(el => el.classList.remove('selecionado'));
@@ -244,9 +257,6 @@
                     ui.listaAssistidos.appendChild(li);
                 });
             }
-            // ===================================================================
-            // FIM DA MODIFICAÇÃO
-            // ===================================================================
 
             async function mostrarDetalhes(assistido, user) {
                 assistidoAtualmenteSelecionado = assistido;
@@ -297,7 +307,7 @@
                         html += '<li>Nenhum atendimento registrado para este ciclo.</li>';
                     } else {
                         atendimentosDoCiclo.sort((a, b) => a.dataAtendimento?.toMillis() - b.dataAtendimento?.toMillis()).forEach(a => {
-                            html += renderizarItemAtendimento(a); // Simplificado
+                            html += renderizarItemAtendimento(a);
                         });
                     }
                     html += `</ul></div>`;
@@ -305,17 +315,17 @@
 
                 html += '</div>';
                 ui.detalhesAssistido.innerHTML = html;
-                
-                // Esta função (prepararReavaliacao) não existe neste arquivo, removendo a chamada
-                // ciclos.forEach(ciclo => { const btn = document.getElementById(`btn-preparar-${ciclo.id}`); if (btn) { btn.addEventListener('click', () => prepararReavaliacao(ciclo, user)); } });
             }
 
+            // ===================================================================
+            // INÍCIO DA MODIFICAÇÃO JAVASCRIPT: renderizarItemAtendimento (remoção do target="_blank")
+            // ===================================================================
             function renderizarItemAtendimento(a) {
                 const dataAtendimento = a.dataAtendimento ? a.dataAtendimento.toDate().toLocaleDateString('pt-br') : "N/A";
                 const atendimentoNum = `Atendimento ${a.semana || '?'}`;
                 
-                // Botão "Ver / Editar" que aponta para a futura página de edição
-                const botaoEditarHtml = `<a href="/atendimento-vl.html?atendimentoId=${a.id}" target="_blank" class="btn btn-editar">Ver / Editar</a>`;
+                // target="_blank" REMOVIDO DA LINHA ABAIXO:
+                const botaoEditarHtml = `<a href="/atendimento-vl.html?atendimentoId=${a.id}" class="btn btn-editar">Ver / Editar</a>`;
                 
                 return `<li>
                             <div class="atendimento-info">
@@ -324,6 +334,9 @@
                             ${botaoEditarHtml}
                         </li>`;
             }
+            // ===================================================================
+            // FIM DA MODIFICAÇÃO JAVASCRIPT
+            // ===================================================================
 
             ui.alfabetoFiltro.addEventListener('click', (e) => {
                 if (e.target.tagName === 'BUTTON') {
@@ -358,7 +371,7 @@
             });
 
             gerarBotoesAlfabeto();
-            carregarAssistidos(); // Carrega a lista padrão inicial (filtrada)
+            carregarAssistidos();
         }
     </script>
 </body>

@@ -36,7 +36,7 @@
     </style>
 </head>
 <body>
-    <nav class="nav-voltar"><a href="#" id="btn-voltar-fecha" class="btn-voltar">⬅ Voltar para o Arquivo VL (Fecha Aba)</a></nav>
+    <nav class="nav-voltar"><a href="/arquivo-geral-vl.html" class="btn-voltar">⬅ Voltar para o Arquivo VL</a></nav>
     <div id="acesso-negado" class="container hidden"><h1>Acesso Negado</h1></div>
 
     <div id="main-content" class="container">
@@ -60,7 +60,7 @@
             messagingSenderId: "66122858261",
             appId: "1:66122858261:web:7fa21f1805463b5c08331c"
         };
-        // app já inicializado pelo auth.js
+        // initializeApp(firebaseConfig); // REMOVIDO (auth.js já inicializa)
         const auth = getAuth();
 
         protegerPagina(['entrevistador', 'tesoureiro', 'conselheiro', 'diretor', 'super-admin', 'recepcionista', 'irradiador']).then(user => {
@@ -80,14 +80,14 @@
             const params = new URLSearchParams(window.location.search);
             const atendimentoIdParaEditar = params.get('atendimentoId');
 
-            const btnVoltarFecha = document.getElementById('btn-voltar-fecha');
-            if(btnVoltarFecha) {
-                btnVoltarFecha.addEventListener('click', (e) => {
-                    e.preventDefault();
-                    window.close();
-                    setTimeout(() => { window.location.href = '/arquivo-geral-vl.html'; }, 300);
-                });
-            }
+            // ===================================================================
+            // INÍCIO DA MODIFICAÇÃO JAVASCRIPT: Remoção do listener 'btn-voltar-fecha'
+            // ===================================================================
+            // const btnVoltarFecha = document.getElementById('btn-voltar-fecha');
+            // if(btnVoltarFecha) { ... } // Bloco inteiro removido
+            // ===================================================================
+            // FIM DA MODIFICAÇÃO
+            // ===================================================================
 
             if (atendimentoIdParaEditar) {
                 carregarFormularioParaEdicao(atendimentoIdParaEditar);
@@ -110,7 +110,6 @@
                 const form = formularioContainer.querySelector('fieldset');
                 if (!form) return;
                 
-                // Trava/Destrava campos editáveis
                 form.querySelectorAll('#atendente-nome, #atendimento-notas, #btn-marcar-retorno').forEach(el => {
                     if (el) el.disabled = travado;
                 });
@@ -157,13 +156,9 @@
                 manipularEstadoFormulario(travar);
 
                 document.getElementById('btn-salvar-atendimento')?.addEventListener('click', () => salvarAtendimentoVL(atendimento, atendimentoDocRef, tratamentoDoc.ref, tratamento));
-                
-                // Listener para o novo botão de Retorno
                 document.getElementById('btn-marcar-retorno')?.addEventListener('click', () => marcarNovoRetorno(atendimento, tratamentoDoc.ref, tratamento));
             }
             
-            // --- NOVA FUNÇÃO ---
-            // Esta função será chamada se o assistido veio hoje E já tem um tratamento VL ativo
             async function marcarNovoRetorno(atendimentoAnterior, tratamentoDocRef, tratamento) {
                 const btn = document.getElementById('btn-marcar-retorno');
                 btn.disabled = true;
@@ -177,7 +172,6 @@
                     return;
                 }
                 
-                // Checar se já marcou retorno hoje
                 const hojeInicio = new Date();
                 hojeInicio.setHours(0, 0, 0, 0);
                 const qCheckHoje = query(atendimentosRef, 
@@ -200,21 +194,18 @@
                     const batch = writeBatch(db);
                     const dataAtual = serverTimestamp();
                     
-                    // 1. Cria o novo atendimento
                     batch.set(doc(atendimentosRef), {
                         assistidoId: tratamento.assistidoId,
                         tratamentoId: tratamentoDocRef.id,
                         dataAtendimento: dataAtual,
-                        semana: realizados + 1, // Próximo número de atendimento
+                        semana: realizados + 1,
                         notas: 'Retorno registrado pela recepção/atendente.',
                         atendente: user.displayName,
-                        detalhes_preenchidos: false // Fica pendente para edição
+                        detalhes_preenchidos: false
                     });
                     
-                    // 2. Atualiza a contagem no tratamento
                     batch.update(tratamentoDocRef, { 
                         atendimentos_realizados: increment(1),
-                        // Se for o último, encerra o tratamento
                         status: (realizados + 1) === totalPermitido ? 'concluido' : 'ativo'
                     });
                     
@@ -227,7 +218,6 @@
                     
                     await registrarLog('Registro Retorno (VL)', { assistidoId: tratamento.assistidoId, tratamentoId: tratamentoDocRef.id, atendimentoNum: realizados + 1 });
                     
-                    // Recarrega a página para refletir as novas informações (ou atualiza a UI)
                     location.reload();
 
                 } catch (error) {
@@ -236,7 +226,6 @@
                     btn.disabled = false;
                 }
             }
-            // --- FIM DA NOVA FUNÇÃO ---
 
 
             async function salvarAtendimentoVL(atendimento, atendimentoDocRef, tratamentoDocRef, tratamento) {
@@ -254,7 +243,7 @@
                     const dadosParaAtualizar = {
                         atendente: atendenteNome,
                         notas: atendimentoNotas,
-                        detalhes_preenchidos: true // Marca como preenchido
+                        detalhes_preenchidos: true
                     };
                     
                     await updateDoc(atendimentoDocRef, dadosParaAtualizar);
@@ -266,7 +255,7 @@
                     });
                     
                     alert('Atendimento salvo com sucesso!');
-                    manipularEstadoFormulario(true); // Trava o formulário
+                    manipularEstadoFormulario(true);
                     
                 } catch (error) {
                     console.error("Erro ao salvar atendimento:", error);
@@ -279,13 +268,10 @@
                 const atendenteInput = document.getElementById('atendente-nome');
                 const notasInput = document.getElementById('atendimento-notas');
                 
-                // Se foi preenchido, usa os dados salvos
                 if (atendimento.detalhes_preenchidos) {
                     atendenteInput.value = atendimento.atendente || '';
                     notasInput.value = atendimento.notas || '';
                 } else {
-                    // Se é a primeira vez (criado pela recepção), sugere o usuário atual
-                    // e mantém as notas da recepção (se houver)
                     atendenteInput.value = user.displayName || '';
                     notasInput.value = atendimento.notas || '';
                 }
@@ -300,12 +286,8 @@
                 const totalAtendimentos = (tratamento.retornos_solicitados || 0) + 1;
                 const statusTratamento = tratamento.status || 'N/A';
                 
-                // Botão de retorno só aparece se o tratamento estiver ativo E
-                // se o atendimento que estamos vendo FOR o último realizado E
-                // se ainda houver retornos pendentes.
                 let botaoRetornoHtml = '';
                 const hoje = new Date().toLocaleDateString('pt-br');
-                // Verifica se este atendimento NÃO é de hoje (para evitar registrar retorno duplicado no mesmo dia)
                 const naoEhDeHoje = dataAtendimento !== hoje;
                 
                 if (statusTratamento === 'ativo' && atendimentoNum === tratamento.atendimentos_realizados && atendimentoNum < totalAtendimentos && naoEhDeHoje) {
