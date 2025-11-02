@@ -62,7 +62,7 @@
     </style>
 </head>
 <body>
-    <nav class="nav-voltar"><a href="#" id="btn-voltar-fecha" class="btn-voltar">⬅ Voltar para o Painel AE (Fecha Aba)</a></nav>
+    <nav class="nav-voltar"><a href="/arquivo-geral-ae.html" class="btn-voltar">⬅ Voltar para o Painel AE</a></nav>
     <div id="acesso-negado" class="container hidden"><h1>Acesso Negado</h1></div>
 
     <div id="main-content" class="container">
@@ -87,8 +87,14 @@
             messagingSenderId: "66122858261",
             appId: "1:66122858261:web:7fa21f1805463b5c08331c"
         };
+        // ===================================================================
+        // INÍCIO DA MODIFICAÇÃO (Remoção do initializeApp duplicado)
+        // ===================================================================
         // initializeApp(firebaseConfig); // REMOVIDO para corrigir 'duplicate-app'
         const auth = getAuth(); // auth.js já inicializa
+        // ===================================================================
+        // FIM DA MODIFICAÇÃO
+        // ===================================================================
 
         protegerPagina(['entrevistador', 'tesoureiro', 'conselheiro', 'diretor', 'super-admin']).then(user => {
             inicializarPagina(user);
@@ -108,18 +114,15 @@
             const params = new URLSearchParams(window.location.search);
             const atendimentoIdParaEditar = params.get('atendimentoId');
 
-            const btnVoltarFecha = document.getElementById('btn-voltar-fecha');
-            if(btnVoltarFecha) {
-                btnVoltarFecha.addEventListener('click', (e) => {
-                    e.preventDefault();
-                    // console.log('Tentando fechar a janela...'); // Log de debug (opcional)
-                    window.close();
-                    setTimeout(() => {
-                        // console.log('window.close() pode ter falhado. Redirecionando...'); // Log de debug (opcional)
-                        window.location.href = '/arquivo-geral-ae.html';
-                    }, 300);
-                });
-            }
+            // ===================================================================
+            // INÍCIO DA MODIFICAÇÃO (Remoção do listener 'btn-voltar-fecha')
+            // ===================================================================
+            // const btnVoltarFecha = document.getElementById('btn-voltar-fecha');
+            // if(btnVoltarFecha) { ... } // Bloco inteiro removido
+            // ===================================================================
+            // FIM DA MODIFICAÇÃO
+            // ===================================================================
+
 
             if (atendimentoIdParaEditar) {
                 carregarFormularioParaEdicao(atendimentoIdParaEditar);
@@ -153,6 +156,8 @@
                 form.querySelectorAll('.checkboxes input[type="checkbox"]').forEach(checkbox => {
                     checkbox.disabled = travado;
                 });
+                // const selectBox = form.querySelector('.select-box'); // Lógica do select-box removida
+                // if (selectBox) { ... }
 
                 const colegiadoSection = form.querySelector('.colegiado-section');
                 if (colegiadoSection) {
@@ -161,6 +166,7 @@
                      form.querySelectorAll('.checkboxes input[type="checkbox"]').forEach(checkbox => {
                          checkbox.disabled = (travado || decisaoSalva);
                      });
+                     // if (selectBox) { ... } // Lógica do select-box removida
                 }
 
                 const btnSalvar = document.getElementById('btn-salvar-entrevista');
@@ -202,6 +208,8 @@
                 document.getElementById('btn-salvar-decisao')?.addEventListener('click', () => salvarDecisaoColegiado(atendimento, atendimentoDocRef));
                 document.getElementById('btn-salvar-entrevista')?.addEventListener('click', () => salvarEntrevistaCompleta(atendimento, atendimentoDocRef));
                 document.getElementById('btn-dar-alta')?.addEventListener('click', () => darAlta(atendimento, atendimentoDocRef));
+                
+                // Lógica de listeners do selectBox removida
             }
 
 
@@ -263,6 +271,7 @@
                     const dadosParaAtualizar = {
                         entrevistador: entrevistadorNome,
                         notas: entrevistaNotas,
+                        // horarioInicio e horarioFim REMOVIDOS
                         evolucao: document.querySelector('input[name="evolucao"]:checked')?.value || null,
                         colegiadoNotas: document.getElementById('colegiado-notas')?.value.trim() || null,
                         encaminhamentos: Array.from(document.querySelectorAll('.checkboxes input:checked')).map(cb => cb.value),
@@ -290,6 +299,7 @@
                     }
                 }
                 if (document.getElementById('entrevista-notas')) { document.getElementById('entrevista-notas').value = atendimento.notas || ''; }
+                // campos horarioInicio/Fim removidos
                 if (document.querySelector('input[name="evolucao"]')) {
                     const evolucaoSalva = atendimento.evolucao || 'na_mesma';
                     const evolucaoRadio = document.querySelector(`input[name="evolucao"][value="${evolucaoSalva}"]`);
@@ -304,12 +314,15 @@
                     }
                 }
                  if (document.getElementById('colegiado-notas')) { document.getElementById('colegiado-notas').value = atendimento.colegiadoNotas || ''; }
+                 
+                 // --- MODIFICAÇÃO JAVASCRIPT: Preencher checkboxes (lógica do select-box removida) ---
                  if (atendimento.encaminhamentos && atendimento.encaminhamentos.length > 0) {
                      atendimento.encaminhamentos.forEach(val => {
                          const checkbox = document.querySelector(`.checkboxes input[value="${val}"]`);
                          if (checkbox) checkbox.checked = true;
                      });
                  }
+                 // --- FIM DA MODIFICAÇÃO ---
             }
 
             const gerarOpcoesPasse = (selecionado = '') => {
@@ -320,7 +333,7 @@
             };
 
             // ===================================================================
-            // INÍCIO DA MODIFICAÇÃO JAVASCRIPT: Função criarFormulario (HTML dos checkboxes)
+            // INÍCIO DA MODIFICAÇÃO JAVASCRIPT: Função criarFormulario (HTML)
             // ===================================================================
             function criarFormulario(atendimento) {
                 const semanaNum = atendimento.semana;
@@ -339,6 +352,7 @@
 
                 let acompanhamentoHtml = '';
                 if (!isInicioRealDeTratamento) {
+                    // --- MODIFICAÇÃO HTML: Campos de Início e Fim REMOVIDOS daqui ---
                     acompanhamentoHtml = `<hr><h5>Detalhes do Passe</h5><div class="form-grid">
                             <div class="form-item"><label for="retorno-passe">Passe:</label><input type="text" id="retorno-passe" class="readonly-input" value="${passeDe || 'N/A'}" readonly></div>
                         </div>
@@ -355,8 +369,8 @@
                          if (atendimento.tipo === 'alta_programada' || atendimento.tipo === 'alta') { statusColegiadoHtml = `<p class="status-alta">ALTA PROGRAMADA. Aguardando presença para encerrar.</p>`; }
                          else if (atendimento.passePara) { statusColegiadoHtml = `<p class="status-novo-ciclo">NOVO CICLO (${atendimento.passePara}) PROGRAMADO. Aguardando presença para iniciar.</p>`; }
                     }
-                    
-                    // --- HTML MODIFICADO: Remove .multiselect e .select-box, remove comentário errado ---
+
+                    // --- MODIFICAÇÃO HTML: Remove .multiselect e .select-box, exibe .checkboxes diretamente ---
                     colegiadoHtml = `<hr><div class="${classeColegiado}"><h5>Colegiado</h5>
                             <div class="form-grid">
                                <div class="form-item"><label for="colegiado-de">DE (Passe Anterior):</label><select id="colegiado-de" class="readonly-input" disabled>${gerarOpcoesPasse(passeDe)}</select></div>
