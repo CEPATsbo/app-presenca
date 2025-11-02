@@ -7,7 +7,7 @@
     <style>
         :root { --cor-primaria: #007bff; --cor-borda: #ddd; --fundo-selecionado: #e9ecef; }
         body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background-color: #f4f6f9; margin: 0; padding: 20px; }
-        .container { width: 100%; max-width: 1400px; margin: 0 auto; background-color: #fff; padding: 30px; border-radius: 12px; box-shadow: 0 6px 24px rgba(0,0,0,0.1); }
+        .container { width: 100%; max-width: 1400px; margin: 0 auto; background-color: #fff; padding: 30px; border-radius: 12px; box-shadow: 0 6px 24px rgba(0,0,0,0.1); box-sizing: border-box; /* Adicionado para padding */ }
         .nav-voltar { margin-bottom: 20px; }
         .btn, .btn-voltar, .btn-editar, .btn-acao { background-color: var(--cor-primaria); color: white; border: none; padding: 12px 20px; border-radius: 8px; font-weight: bold; text-decoration: none; display: inline-block; cursor: pointer; }
         .btn-voltar { background-color: #6c757d; }
@@ -22,30 +22,14 @@
 
         .main-grid { display: grid; grid-template-columns: 350px 1fr; gap: 30px; min-height: 60vh; }
         .lista-assistidos-col { border-right: 1px solid var(--cor-borda); padding-right: 20px; }
-        /* --- NOVO: Estilo para o cabeçalho da lista --- */
-        .lista-assistidos-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 10px; /* Ajuste conforme necessário */
-        }
-        .lista-assistidos-header h2 {
-             margin: 0; /* Remove margem padrão do h2 */
-        }
-        /* --- NOVO: Estilo para o botão de atualizar --- */
-        #btn-atualizar-lista {
-            font-size: 0.8em;
-            padding: 5px 10px;
-            background-color: #6c757d;
-            border-radius: 6px;
-        }
-
-        #lista-assistidos { list-style-type: none; padding: 0; margin: 0; max-height: calc(60vh - 50px); /* Ajusta altura para caber botão */ overflow-y: auto; }
+        .lista-assistidos-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+        .lista-assistidos-header h2 { margin: 0; }
+        #btn-atualizar-lista { font-size: 0.8em; padding: 5px 10px; background-color: #6c757d; border-radius: 6px; }
+        #lista-assistidos { list-style-type: none; padding: 0; margin: 0; max-height: calc(60vh - 50px); overflow-y: auto; }
         #lista-assistidos li { padding: 15px; border-bottom: 1px solid #eee; cursor: pointer; font-weight: 500; display: flex; align-items: center; gap: 8px; }
         #lista-assistidos li:hover { background-color: var(--fundo-selecionado); }
         #lista-assistidos li.selecionado { background-color: var(--cor-primaria); color: white; font-weight: bold; }
-        .icone-pendente { color: #ffc107; font-weight: bold; font-size: 1.1em; /* Ajuste o tamanho se necessário */ }
-
+        .icone-pendente { color: #ffc107; font-weight: bold; font-size: 1.1em; }
 
         .detalhes-assistido-col h2 { text-align: center; margin-top: 0; }
         #historico-container { max-height: 60vh; overflow-y: auto; }
@@ -58,6 +42,36 @@
         .atendimentos-lista li:last-child { border-bottom: none; }
         .atendimento-info { display: flex; align-items: center; gap: 10px; }
         .btn-editar { background-color: #17a2b8; padding: 6px 12px; border-radius: 6px; font-size: 0.9em; }
+
+        /* =================================================================== */
+        /* INÍCIO DA MODIFICAÇÃO CSS: Layout Responsivo */
+        /* =================================================================== */
+        @media (max-width: 768px) {
+            body { padding: 10px; }
+            .container { padding: 20px; }
+            /* Empilha as colunas em telas pequenas */
+            .main-grid {
+                grid-template-columns: 1fr; /* 1 coluna */
+                gap: 20px;
+            }
+            .lista-assistidos-col {
+                border-right: none; /* Remove a borda lateral */
+                padding-right: 0;
+                border-bottom: 1px solid var(--cor-borda); /* Adiciona borda inferior */
+                padding-bottom: 20px;
+            }
+            /* Ajusta a altura da lista e do histórico para evitar rolagem dupla */
+            #lista-assistidos {
+                max-height: 40vh; /* Altura máxima para a lista */
+            }
+            #historico-container {
+                max-height: 60vh; /* Altura máxima para o histórico */
+            }
+        }
+        /* =================================================================== */
+        /* FIM DA MODIFICAÇÃO CSS */
+        /* =================================================================== */
+
     </style>
 </head>
 <body>
@@ -92,7 +106,6 @@
 
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
-        // Importar 'documentId' para a query 'in'
         import { getFirestore, collection, doc, getDoc, query, where, getDocs, orderBy, Timestamp, addDoc, serverTimestamp, documentId } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
         import { protegerPagina } from '/auth.js';
 
@@ -122,7 +135,6 @@
 
             let assistidoAtualmenteSelecionado = null;
             let debounceTimer;
-            // Armazena os IDs dos assistidos com pendências
             let assistidosComPendencias = new Set();
 
             const ui = {
@@ -130,7 +142,6 @@
                 campoBusca: document.getElementById('campo-busca'),
                 listaAssistidos: document.getElementById('lista-assistidos'),
                 detalhesAssistido: document.getElementById('detalhes-assistido'),
-                // --- NOVO: Referência ao botão ---
                 btnAtualizarLista: document.getElementById('btn-atualizar-lista')
             };
 
@@ -142,9 +153,7 @@
                         acao: acao,
                         detalhes: detalhes
                     });
-                } catch (error) {
-                    console.error("Erro ao registrar log:", error);
-                }
+                } catch (error) { console.error("Erro ao registrar log:", error); }
             }
 
             function gerarBotoesAlfabeto() {
@@ -158,11 +167,11 @@
                 const btnTodos = document.createElement('button');
                 btnTodos.textContent = 'Todos';
                 btnTodos.dataset.letra = '';
-                btnTodos.classList.add('ativo'); // Botão "Todos" começa ativo
+                btnTodos.classList.add('ativo');
                 ui.alfabetoFiltro.appendChild(btnTodos);
             }
 
-             async function prepararReavaliacao(ciclo, user) {
+            async function prepararReavaliacao(ciclo, user) {
                 if (!confirm(`Preparar a 5ª Semana (Reavaliação) para o ciclo iniciado em ${ciclo.dataInicio.toDate().toLocaleDateString('pt-br')}?`)) {
                     return;
                 }
@@ -173,7 +182,7 @@
                     const docRef = await addDoc(atendimentosRef, novoAtendimento);
                     registrarLog('Preparação de Reavaliação (AE)', { assistidoId: ciclo.assistidoId, tratamentoId: ciclo.id, atendimentoId: docRef.id });
                     alert('Placeholder da 5ª Semana criado. Você já pode registrar a decisão do colegiado.');
-                    mostrarDetalhes(assistidoAtualmenteSelecionado, user); // Recarrega
+                    mostrarDetalhes(assistidoAtualmenteSelecionado, user);
                 } catch (error) {
                     console.error("Erro ao preparar reavaliação:", error); alert("Falha ao criar o registro da 5ª semana.");
                     btn.disabled = false; btn.textContent = 'Preparar Reavaliação (5ª Semana)';
@@ -212,6 +221,9 @@
                 ciclos.forEach(ciclo => { const btn = document.getElementById(`btn-preparar-${ciclo.id}`); if (btn) { btn.addEventListener('click', () => prepararReavaliacao(ciclo, user)); } });
             }
 
+            // ===================================================================
+            // INÍCIO DA MODIFICAÇÃO JAVASCRIPT: renderizarItemAtendimento (remoção do target="_blank")
+            // ===================================================================
             function renderizarItemAtendimento(a, passe_ciclo_atual) {
                 const dataAtendimento = a.dataAtendimento ? a.dataAtendimento.toDate().toLocaleDateString('pt-br') : "Aguardando Presença";
                 let tipoAtendimento = a.tipo?.replace(/_/g, ' ') || 'N/A';
@@ -228,12 +240,16 @@
                 if (precisaEntrevista) {
                     if (a.semana === 5 && a.decisao_pre_registrada === true && a.dataAtendimento === null) { iconeHtml = '<span>🔵</span>'; tipoAtendimento = "Reavaliação (Decisão Pronta)"; }
                     else if (a.detalhes_preenchidos === true) { iconeHtml = '<span>✅</span>'; }
-                    else { iconeHtml = '<span>📝</span>'; } // Pendente
-                    botaoEditarHtml = `<a href="/entrevista-ae.html?atendimentoId=${a.id}" target="_blank" class="btn btn-editar">Ver / Editar</a>`;
+                    else { iconeHtml = '<span>📝</span>'; }
+                    // target="_blank" REMOVIDO DA LINHA ABAIXO:
+                    botaoEditarHtml = `<a href="/entrevista-ae.html?atendimentoId=${a.id}" class="btn btn-editar">Ver / Editar</a>`;
                 }
                 let estiloItem = ''; if (a.dataAtendimento === null && a.semana === 5) { estiloItem = 'style="background-color: #fffbe6;"'; }
                 return `<li ${estiloItem}><div class="atendimento-info">${iconeHtml}<span><strong>${dataAtendimento}</strong> - ${tipoAtendimento} ${infoExtra}</span></div>${botaoEditarHtml}</li>`;
             }
+            // ===================================================================
+            // FIM DA MODIFICAÇÃO JAVASCRIPT
+            // ===================================================================
 
             async function carregarAssistidos(filtroLetra = '', termoBusca = '') {
                 ui.listaAssistidos.innerHTML = '<p>Buscando...</p>';
@@ -241,38 +257,29 @@
                 const isVisaoPadrao = !filtroLetra && !termoBusca;
 
                 try {
-                    // 1. Buscar SEMPRE os IDs com pendências (para o ícone)
                     const qPendingInterviews = query(atendimentosRef,
                         where("detalhes_preenchidos", "==", false),
                         where("entrevistador", "==", "Aguardando Detalhes")
-                        // NOTA: Pode precisar de índice! Verifique o console.
                     );
                     const pendingSnapshot = await getDocs(qPendingInterviews);
                     assistidosComPendencias = new Set(pendingSnapshot.docs.map(doc => doc.data().assistidoId));
-                    // console.log(`Encontrados ${assistidosComPendencias.size} assistidos com pendências.`); // Log de debug (opcional)
 
-                    // 2. Lógica de busca principal
-                    if (!isVisaoPadrao) { // Filtro ou Busca Ativos
+                    if (!isVisaoPadrao) {
                         let q;
                         if (termoBusca) {
                             const termo = termoBusca.toLowerCase();
                             q = query(assistidosRef, where('nome_lower', '>=', termo), where('nome_lower', '<=', termo + '\uf8ff'), orderBy('nome_lower'));
-                        } else { // filtroLetra
+                        } else {
                             const proximaLetra = String.fromCharCode(filtroLetra.charCodeAt(0) + 1);
                             q = query(assistidosRef, where('nome', '>=', filtroLetra), where('nome', '<', proximaLetra), orderBy('nome'));
                         }
                         const snapshot = await getDocs(q);
                         assistidosParaExibir = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-                        // console.log(`Busca/Filtro: Exibindo ${assistidosParaExibir.length} assistidos.`); // Log de debug (opcional)
-
-                    } else { // Visão Padrão (Ativos + Pendentes)
+                    } else {
                         const qActiveTreatments = query(tratamentosRef, where('status', '==', 'ativo'));
                         const activeSnapshot = await getDocs(qActiveTreatments);
                         const activeAssistidoIds = new Set(activeSnapshot.docs.map(doc => doc.data().assistidoId));
-                        // console.log(`Encontrados ${activeAssistidoIds.size} assistidos com tratamentos ativos.`); // Log de debug (opcional)
-
                         const idsParaMostrar = new Set([...activeAssistidoIds, ...assistidosComPendencias]);
-                        // console.log(`Total de IDs únicos para mostrar (Ativos OU Pendentes): ${idsParaMostrar.size}`); // Log de debug (opcional)
 
                         if (idsParaMostrar.size > 0) {
                             const idsArray = Array.from(idsParaMostrar);
@@ -281,22 +288,17 @@
                                 console.warn(`A lista de assistidos ativos/pendentes (${idsArray.length}) excede o limite de ${MAX_IDS_PER_QUERY} do Firestore. Exibindo apenas os primeiros ${MAX_IDS_PER_QUERY}.`);
                                 idsArray.splice(MAX_IDS_PER_QUERY);
                             }
-                            // Usar documentId() importado
                             const qDefault = query(assistidosRef, where(documentId(), 'in', idsArray));
                             const defaultSnapshot = await getDocs(qDefault);
                             assistidosParaExibir = defaultSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
                             assistidosParaExibir.sort((a, b) => a.nome.localeCompare(b.nome));
-                            // console.log(`Visão Padrão: Exibindo ${assistidosParaExibir.length} assistidos (Ativos ou Pendentes).`); // Log de debug (opcional)
                         } else {
-                             // console.log("Nenhum assistido ativo ou com pendências encontrado."); // Log de debug (opcional)
                              assistidosParaExibir = [];
                         }
                     }
 
-                    // 3. Renderiza a lista
                     renderizarListaAssistidos(assistidosParaExibir, assistidosComPendencias);
 
-                    // 4. Seleciona assistido da URL ou limpa detalhes
                     const params = new URLSearchParams(window.location.search);
                     const assistidoIdUrl = params.get('assistidoId');
                     if (assistidoIdUrl) {
@@ -313,7 +315,6 @@
                             const docSnap = await getDoc(docRef);
                             if (docSnap.exists()) {
                                 const tempAssistido = { id: docSnap.id, ...docSnap.data() };
-                                // Temporariamente adiciona à lista para seleção visual
                                 renderizarListaAssistidos([tempAssistido, ...assistidosParaExibir].sort((a,b)=>a.nome.localeCompare(b.nome)), assistidosComPendencias);
                                 const liCorrespondente = ui.listaAssistidos.querySelector(`[data-assistido-id="${assistidoIdUrl}"]`);
                                 if (liCorrespondente) liCorrespondente.classList.add('selecionado');
@@ -331,11 +332,8 @@
                     ui.listaAssistidos.innerHTML = '<p style="color: red;">Erro ao carregar lista.</p>';
                     if (error.code === 'failed-precondition') {
                          alert("Erro: O Firestore precisa de um índice para esta consulta. Verifique o console (F12) para o link de criação do índice ou detalhes.");
-                         // Tenta extrair e logar o link do índice
                          const urlMatch = error.message.match(/https?:\/\/[^\s]+/);
-                         if(urlMatch && urlMatch[0]){
-                             console.error("Link para criar índice (copie e cole no navegador):", urlMatch[0]);
-                         }
+                         if(urlMatch && urlMatch[0]){ console.error("Link para criar índice (copie e cole no navegador):", urlMatch[0]); }
                      }
                 }
             }
@@ -349,49 +347,33 @@
                 assistidos.forEach(assistido => {
                     const li = document.createElement('li');
                     let liContent = '';
-                    if (pendingAssistidoIds.has(assistido.id)) {
-                        liContent += '<span class="icone-pendente">📝</span>'; // Ícone antes do nome
-                    }
-                    liContent += assistido.nome; // Nome
-
+                    if (pendingAssistidoIds.has(assistido.id)) { liContent += '<span class="icone-pendente">📝</span>'; }
+                    liContent += assistido.nome;
                     li.innerHTML = liContent;
                     li.dataset.assistidoId = assistido.id;
-
-                    if(assistidoAtualmenteSelecionado && assistido.id === assistidoAtualmenteSelecionado.id){
-                        li.classList.add('selecionado');
-                    }
-
+                    if(assistidoAtualmenteSelecionado && assistido.id === assistidoAtualmenteSelecionado.id){ li.classList.add('selecionado'); }
                     li.addEventListener('click', () => {
                         document.querySelectorAll('#lista-assistidos li').forEach(el => el.classList.remove('selecionado'));
                         li.classList.add('selecionado');
-                        mostrarDetalhes(assistido, user); // Chama a função definida neste escopo
+                        mostrarDetalhes(assistido, user);
                     });
                     ui.listaAssistidos.appendChild(li);
                 });
             }
 
             async function mostrarDetalhes(assistido, user) {
-                assistidoAtualmenteSelecionado = assistido; // Atualiza a variável global
+                assistidoAtualmenteSelecionado = assistido;
                 ui.detalhesAssistido.innerHTML = `<h2>Histórico de ${assistido.nome}</h2><p>Carregando histórico...</p>`;
-
-                await registrarLog('Visualização de Histórico (AE)', {
-                    assistidoId: assistido.id,
-                    assistidoNome: assistido.nome
-                });
-
+                await registrarLog('Visualização de Histórico (AE)', { assistidoId: assistido.id, assistidoNome: assistido.nome });
                 const qTratamentos = query(tratamentosRef, where('assistidoId', '==', assistido.id), orderBy('dataInicio', 'desc'));
                 const tratamentosSnapshot = await getDocs(qTratamentos);
                 const ciclos = tratamentosSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-
                 const qAtendimentos = query(atendimentosRef, where('assistidoId', '==', assistido.id), orderBy('dataAtendimento', 'desc'));
                 const atendimentosSnapshot = await getDocs(qAtendimentos);
                 const todosAtendimentos = atendimentosSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-
-                renderizarHistorico(assistido, ciclos, todosAtendimentos, user); // Chama a função que monta o HTML do histórico
+                renderizarHistorico(assistido, ciclos, todosAtendimentos, user);
             }
 
-
-            // --- Listener para filtro de letra ---
             ui.alfabetoFiltro.addEventListener('click', (e) => {
                 if (e.target.tagName === 'BUTTON') {
                     const letraSelecionada = e.target.dataset.letra;
@@ -404,52 +386,34 @@
                 }
             });
 
-            // --- Listener para campo de busca ---
             ui.campoBusca.addEventListener('input', (e) => {
                 clearTimeout(debounceTimer);
                 debounceTimer = setTimeout(() => {
                     const termoBusca = e.target.value;
                     document.querySelectorAll('#alfabeto-filtro button').forEach(btn => btn.classList.remove('ativo'));
-                    // Se a busca for limpa, ativa o botão "Todos" e carrega a lista padrão
-                    if (!termoBusca) {
-                        const btnTodos = ui.alfabetoFiltro.querySelector('button[data-letra=""]');
-                        if(btnTodos) btnTodos.classList.add('ativo');
-                    }
+                    if (!termoBusca) { const btnTodos = ui.alfabetoFiltro.querySelector('button[data-letra=""]'); if(btnTodos) btnTodos.classList.add('ativo'); }
                     assistidoAtualmenteSelecionado = null;
                     ui.detalhesAssistido.innerHTML = `<p style="text-align: center; color: #666; margin-top: 50px;">Carregando lista...</p>`;
-                    carregarAssistidos('', termoBusca); // Passa '' como filtroLetra
+                    carregarAssistidos('', termoBusca);
                 }, 500);
             });
 
-            // --- Listener para o botão Atualizar Lista ---
             ui.btnAtualizarLista.addEventListener('click', () => {
-                console.log("Botão Atualizar clicado."); // Log para debug
-                // Descobre qual filtro está ativo (letra ou busca)
                 const filtroLetraAtivo = ui.alfabetoFiltro.querySelector('button.ativo')?.dataset.letra || '';
                 const termoBuscaAtivo = ui.campoBusca.value;
-
-                // Mostra feedback visual
                 ui.listaAssistidos.innerHTML = '<p>Atualizando lista...</p>';
-                if (!assistidoAtualmenteSelecionado) { // Só limpa detalhes se nenhum estiver selecionado
-                     ui.detalhesAssistido.innerHTML = `<p style="text-align: center; color: #666; margin-top: 50px;">Selecione um assistido...</p>`;
-                }
-
-                // Chama carregarAssistidos com os filtros/busca atuais
+                if (!assistidoAtualmenteSelecionado) { ui.detalhesAssistido.innerHTML = `<p style="text-align: center; color: #666; margin-top: 50px;">Selecione um assistido...</p>`; }
                 carregarAssistidos(filtroLetraAtivo, termoBuscaAtivo);
             });
 
-            // --- Listener para recarregar histórico AO VOLTAR PARA A ABA ---
             window.addEventListener('focus', () => {
                 if (assistidoAtualmenteSelecionado) {
-                    console.log("Janela focada, recarregando detalhes..."); // Log para debug
-                    // Recarrega apenas os detalhes do assistido selecionado
                     mostrarDetalhes(assistidoAtualmenteSelecionado, user);
                 }
             });
 
-            // --- Inicialização ---
             gerarBotoesAlfabeto();
-            carregarAssistidos(); // Carga inicial
+            carregarAssistidos();
         }
     </script>
 </body>
