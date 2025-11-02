@@ -39,52 +39,38 @@
         .atendimento-info { display: flex; align-items: center; gap: 10px; }
         .btn-editar { background-color: #17a2b8; padding: 6px 12px; border-radius: 6px; font-size: 0.9em; }
 
-        /* =================================================================== */
-        /* INÍCIO DA MODIFICAÇÃO CSS: Layout Responsivo */
-        /* =================================================================== */
         @media (max-width: 768px) {
             body { padding: 10px; }
             .container { padding: 20px; }
-            /* Empilha as colunas em telas pequenas */
             .main-grid {
-                grid-template-columns: 1fr; /* 1 coluna */
+                grid-template-columns: 1fr;
                 gap: 20px;
             }
             .lista-assistidos-col {
-                border-right: none; /* Remove a borda lateral */
+                border-right: none;
                 padding-right: 0;
-                border-bottom: 1px solid var(--cor-borda); /* Adiciona borda inferior */
+                border-bottom: 1px solid var(--cor-borda);
                 padding-bottom: 20px;
             }
-            /* Ajusta a altura da lista e do histórico para evitar rolagem dupla */
             #lista-assistidos {
-                max-height: 40vh; /* Altura máxima para a lista */
+                max-height: 40vh;
             }
             #historico-container {
-                max-height: 60vh; /* Altura máxima para o histórico */
+                max-height: 60vh;
             }
         }
-        /* =================================================================== */
-        /* FIM DA MODIFICAÇÃO CSS */
-        /* =================================================================== */
 
-        /* =================================================================== */
-        /* INÍCIO DA ADIÇÃO CSS: Link para Prontuário Unificado */
-        /* =================================================================== */
         .prontuario-link { 
             font-size: 0.8em; 
             text-decoration: none; 
             margin-left: 10px; 
             color: #6c757d; 
             font-weight: normal;
-            display: inline-block; /* Para alinhar melhor */
+            display: inline-block;
         }
         .prontuario-link:hover { 
             color: var(--cor-primaria); /* Roxo do VL */
         }
-        /* =================================================================== */
-        /* FIM DA ADIÇÃO CSS */
-        /* =================================================================== */
     </style>
 </head>
 <body>
@@ -116,8 +102,15 @@
 
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
-        // MODIFICAÇÃO: Adicionado 'documentId' para a query 'in'
-        import { getFirestore, collection, doc, getDoc, query, where, getDocs, orderBy, Timestamp, addDoc, serverTimestamp, documentId } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
+        
+        // ===================================================================
+        // INÍCIO DA MODIFICAÇÃO JAVASCRIPT: Importa o setDoc
+        // ===================================================================
+        import { getFirestore, collection, doc, getDoc, query, where, getDocs, orderBy, Timestamp, addDoc, serverTimestamp, documentId, setDoc } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
+        // ===================================================================
+        // FIM DA MODIFICAÇÃO JAVASCRIPT
+        // ===================================================================
+        
         import { protegerPagina } from '/auth.js';
 
         const firebaseConfig = {
@@ -154,16 +147,28 @@
                 detalhesAssistido: document.getElementById('detalhes-assistido'),
             };
 
+            // ===================================================================
+            // INÍCIO DA MODIFICAÇÃO JAVASCRIPT: Função registrarLog (Bug Fix)
+            // ===================================================================
             async function registrarLog(acao, detalhes) {
                 try {
-                    await addDoc(logAuditoriaRef, {
+                    // 1. Cria uma referência para um NOVO documento com ID automático
+                    const newLogRef = doc(logAuditoriaRef); 
+                    
+                    // 2. Salva os dados usando setDoc
+                    await setDoc(newLogRef, { 
                         timestamp: serverTimestamp(),
                         autor: { uid: user.uid, nome: user.displayName || 'Usuário do Sistema' },
                         acao: acao,
                         detalhes: detalhes
                     });
-                } catch (error) { console.error("Erro ao registrar log:", error); }
+                } catch (error) { 
+                    console.error("Erro ao registrar log (com setDoc):", error); 
+                }
             }
+            // ===================================================================
+            // FIM DA MODIFICAÇÃO JAVASCRIPT
+            // ===================================================================
 
             function gerarBotoesAlfabeto() {
                 const alfabeto = "ABCDEFGHIJKLMNOPQRSTUVWXYZ".split('');
@@ -299,14 +304,8 @@
             function renderizarHistorico(assistido, ciclos, todosAtendimentos, user) {
                 const dnFormatado = assistido.dn ? new Date(assistido.dn + 'T12:00:00').toLocaleDateString('pt-br') : 'Não informado';
                 
-                // ===================================================================
-                // INÍCIO DA MODIFICAÇÃO JAVASCRIPT: Adiciona link do Prontuário
-                // ===================================================================
                 let linkProntuario = `<a href="/perfil-assistido.html?id=${assistido.id}" class="prontuario-link" title="Ver Prontuário Unificado 📜">Ver Prontuário Completo</a>`;
                 let html = `<h2>Histórico de ${assistido.nome} ${linkProntuario}</h2>`;
-                // ===================================================================
-                // FIM DA MODIFICAÇÃO JAVASCRIPT
-                // ===================================================================
 
                 html += `<p><strong>DN:</strong> ${dnFormatado} | <strong>Telefone:</strong> ${assistido.telefone || 'Não informado'}</p>`;
                 html += '<div id="historico-container">';
@@ -344,14 +343,10 @@
                 ui.detalhesAssistido.innerHTML = html;
             }
 
-            // ===================================================================
-            // INÍCIO DA MODIFICAÇÃO JAVASCRIPT: renderizarItemAtendimento (remoção do target="_blank")
-            // ===================================================================
             function renderizarItemAtendimento(a) {
                 const dataAtendimento = a.dataAtendimento ? a.dataAtendimento.toDate().toLocaleDateString('pt-br') : "N/A";
                 const atendimentoNum = `Atendimento ${a.semana || '?'}`;
                 
-                // target="_blank" REMOVIDO DA LINHA ABAIXO:
                 const botaoEditarHtml = `<a href="/atendimento-vl.html?atendimentoId=${a.id}" class="btn btn-editar">Ver / Editar</a>`;
                 
                 return `<li>
@@ -361,9 +356,6 @@
                             ${botaoEditarHtml}
                         </li>`;
             }
-            // ===================================================================
-            // FIM DA MODIFICAÇÃO JAVASCRIPT
-            // ===================================================================
 
             ui.alfabetoFiltro.addEventListener('click', (e) => {
                 if (e.target.tagName === 'BUTTON') {

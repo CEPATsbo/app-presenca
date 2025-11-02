@@ -105,8 +105,13 @@
     </div>
 
     <script type="module">
-        // Importa o necessário do Firestore
-        import { getFirestore, collection, doc, getDoc, query, where, getDocs, orderBy, Timestamp, serverTimestamp, addDoc } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
+        // ===================================================================
+        // INÍCIO DA MODIFICAÇÃO JAVASCRIPT: Importa o setDoc
+        // ===================================================================
+        import { getFirestore, collection, doc, getDoc, query, where, getDocs, orderBy, Timestamp, serverTimestamp, addDoc, setDoc } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
+        // ===================================================================
+        // FIM DA MODIFICAÇÃO JAVASCRIPT
+        // ===================================================================
         
         // Importa nosso módulo de autenticação
         import { protegerPagina } from '/auth.js';
@@ -150,17 +155,28 @@
                 return;
             }
 
-            // Função para registrar log
+            // ===================================================================
+            // INÍCIO DA MODIFICAÇÃO JAVASCRIPT: Função registrarLog (Bug Fix)
+            // ===================================================================
             async function registrarLog(acao, detalhes) {
                 try {
-                    await addDoc(logAuditoriaRef, {
+                    // 1. Cria uma referência para um NOVO documento com ID automático
+                    const newLogRef = doc(logAuditoriaRef); 
+                    
+                    // 2. Salva os dados usando setDoc
+                    await setDoc(newLogRef, { 
                         timestamp: serverTimestamp(),
                         autor: { uid: user.uid, nome: user.displayName || 'Usuário do Sistema' },
                         acao: acao,
                         detalhes: detalhes
                     });
-                } catch (error) { console.error("Erro ao registrar log:", error); }
+                } catch (error) { 
+                    console.error("Erro ao registrar log (com setDoc):", error); 
+                }
             }
+            // ===================================================================
+            // FIM DA MODIFICAÇÃO JAVASCRIPT
+            // ===================================================================
             
             // Função para formatar data (evita erros com Timestamps nulos)
             function formatarData(timestamp, textoPadrao = "N/A") {
@@ -349,7 +365,7 @@
             }
 
             // Inicia o carregamento
-            carregarProntuario();
+            carregarProntuário();
         }
     </script>
 </body>

@@ -124,7 +124,7 @@
 
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
-        import { getFirestore, collection, doc, getDoc, query, where, getDocs, orderBy, Timestamp, addDoc, serverTimestamp, documentId } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
+        import { getFirestore, collection, doc, getDoc, query, where, getDocs, orderBy, Timestamp, addDoc, serverTimestamp, documentId, setDoc } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
         import { protegerPagina } from '/auth.js';
 
         const firebaseConfig = {
@@ -165,13 +165,19 @@
 
             async function registrarLog(acao, detalhes) {
                 try {
-                    await addDoc(logAuditoriaRef, {
+                    // 1. Cria uma referência para um NOVO documento com ID automático
+                    const newLogRef = doc(logAuditoriaRef); 
+                    
+                    // 2. Salva os dados usando setDoc, que não tem esse bug de colisão
+                    await setDoc(newLogRef, { 
                         timestamp: serverTimestamp(),
                         autor: { uid: user.uid, nome: user.displayName || 'Usuário do Sistema' },
                         acao: acao,
                         detalhes: detalhes
                     });
-                } catch (error) { console.error("Erro ao registrar log:", error); }
+                } catch (error) { 
+                    console.error("Erro ao registrar log (com setDoc):", error); 
+                }
             }
 
             function gerarBotoesAlfabeto() {
