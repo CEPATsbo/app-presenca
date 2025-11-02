@@ -55,27 +55,106 @@
             visibility: visible;
         }
         .semestre h2 { background-color: #34495e; color: white; padding: 1vh; border-radius: 8px; font-size: 3vh; text-align: center; margin-bottom: 2vh; }
-        .timeline { display: grid; position: relative; padding: 14vh 0; box-sizing: border-box; flex-grow: 1; }
-        .timeline-axis { position: absolute; top: 50%; left: 0; right: 0; height: 6px; background-color: #7f8c8d; transform: translateY(-50%); z-index: 1; }
+        
+        /* --- NOVOS ESTILOS DA TIMELINE (Baseado na Imagem) --- */
+        .timeline { 
+            display: grid; 
+            position: relative; 
+            padding: 14vh 0; /* Espaço para os nós acima/abaixo */
+            box-sizing: border-box; 
+            flex-grow: 1; 
+        }
+        .timeline-axis { 
+            position: absolute; 
+            top: 50%; 
+            left: 0; 
+            right: 0; 
+            height: 10px; /* Linha central mais grossa */
+            background-color: #0d47a1; /* Cor azul escura da inspiração */
+            border-radius: 5px;
+            transform: translateY(-50%); 
+            z-index: 1; 
+        }
         .month-grid-container { display: contents; }
-        .month { text-align: center; font-weight: bold; color: #34495e; position: relative; border-right: 1px dotted #ccc; display: flex; justify-content: center; align-items: center;}
+        .month { 
+            text-align: center; 
+            font-weight: bold; 
+            color: #34495e; 
+            position: relative; 
+            border-right: 1px dotted #ccc; 
+            display: flex; 
+            justify-content: center; 
+            align-items: center;
+        }
         .month:last-child { border-right: none; }
         .month::before { content: ''; position: absolute; top: 50%; left: 0; width: 2px; height: 20px; background-color: #bdc3c7; transform: translateY(-50%); }
         .month:first-child::before { display: none; }
         .month-label { background-color: #f4f6f9; padding: 0 15px; font-size: 2.2vh; z-index: 2; }
         
-        .event-node { grid-row: 1; position: relative; width: 14vw; max-width: 180px; z-index: 5; display: flex; flex-direction: column; align-items: center; }
-        .event-node .details { order: 1; font-size: 1.6vh; background: #fff; color: #333; padding: 0.8vh 0.8vw; border-radius: 6px; line-height: 1.3; text-align: center; border: 1px solid #ddd; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
-        .event-node .diamond { order: 2; width: 2.2vh; height: 2.2vh; transform: rotate(45deg); margin: 0.5vh auto; border: 0.3vh solid #f4f6f9; box-shadow: 0 0 0 2px #2E7D32; background-color: #2E7D32; }
-        .event-node .line { order: 3; width: 3px; background-color: #2E7D32; }
-        .event-node .details strong { display: block; font-size: 1em; font-weight: bold; }
+        .event-node { 
+            grid-row: 1; 
+            position: relative; 
+            width: 14vw; 
+            max-width: 180px; 
+            z-index: 5; 
+            display: flex; 
+            flex-direction: column; 
+            align-items: center; 
+        }
         
+        /* Caixa de detalhes atualizada */
+        .event-node .details { 
+            order: 1; 
+            font-size: 1.6vh; 
+            background: #fff; 
+            color: #333; 
+            padding: 1vh 1vw; /* Mais padding */
+            border-radius: 8px; /* Mais arredondado */
+            line-height: 1.4; 
+            text-align: center; 
+            border: 1px solid #ddd; 
+            box-shadow: 0 4px 8px rgba(0,0,0,0.1); /* Sombra mais suave */
+            min-width: 150px;
+        }
+        
+        /* O NOVO NÓ CIRCULAR (substitui o .diamond) */
+        .event-node .node-circle {
+            order: 2;
+            width: 24px;
+            height: 24px;
+            background-color: #0d47a1; /* Cor do nó */
+            border: 4px solid #f4f6f9; /* Espaço em branco interno */
+            border-radius: 50%;
+            box-shadow: 0 0 0 4px #0d47a1; /* Anel externo */
+            z-index: 5;
+            margin: 0.5vh auto;
+        }
+        
+        /* Linha de conexão atualizada */
+        .event-node .line { 
+            order: 3; 
+            width: 4px; /* Mais grossa */
+            background-color: #0d47a1; /* Cor da linha */
+        }
+
+        .event-node .details strong { display: block; font-size: 1.1em; font-weight: bold; }
+        
+        /* Lógica de posição (Top/Bottom) mantida */
         .event-node[data-position="top"] { align-self: end; padding-bottom: 1vh; }
         .event-node[data-position="bottom"] { align-self: start; padding-top: 1vh; flex-direction: column-reverse; }
 
+        /* Estilos de cancelado atualizados para o novo nó */
         .event-node.cancelado { opacity: 0.6; }
         .event-node.cancelado .details { text-decoration: line-through; background-color: #e9ecef; }
-        .event-node.cancelado .diamond, .event-node.cancelado .line { background-color: #777; box-shadow: 0 0 0 2px #777; }
+        .event-node.cancelado .node-circle { 
+            background-color: #777; 
+            box-shadow: 0 0 0 4px #777; 
+        }
+        .event-node.cancelado .line { 
+            background-color: #777; 
+        }
+        
+        /* --- FIM DOS NOVOS ESTILOS --- */
         
         .tooltip-text { visibility: hidden; width: 180px; background-color: #333; color: #fff; text-align: center; border-radius: 6px; padding: 8px; position: absolute; z-index: 100; bottom: 125%; left: 50%; transform: translateX(-50%); opacity: 0; transition: opacity 0.3s; pointer-events: none; }
         .event-node:hover .tooltip-text { visibility: visible; opacity: 1; }
@@ -120,30 +199,79 @@
             const loadingMessage = document.getElementById('loading-message');
             if(loadingMessage) loadingMessage.remove();
             
-            const anoAtual = new Date().getFullYear();
-            const semestres = {
-                1: { de: new Date(anoAtual, 0, 1), ate: new Date(anoAtual, 5, 30, 23, 59, 59), eventos: [] },
-                2: { de: new Date(anoAtual, 6, 1), ate: new Date(anoAtual, 11, 31, 23, 59, 59), eventos: [] }
-            };
+            // ### INÍCIO DA NOVA LÓGICA DE SEMESTRE ###
+            
+            const hoje = new Date();
+            const anoAtual = hoje.getFullYear();
+            const mesAtual = hoje.getMonth(); // 0-11 (0 = Jan, 5 = Jun, 6 = Jul)
 
+            let semestres = {};
+
+            if (mesAtual < 6) { // Estamos no S1 (Jan-Jun)
+                semestres = {
+                    atual: { 
+                        id: 's1',
+                        nome: `1º SEMESTRE ${anoAtual}`,
+                        de: new Date(anoAtual, 0, 1), // Jan 1
+                        ate: new Date(anoAtual, 5, 30, 23, 59, 59), // Jun 30
+                        eventos: [] 
+                    },
+                    futuro: { 
+                        id: 's2',
+                        nome: `2º SEMESTRE ${anoAtual}`,
+                        de: new Date(anoAtual, 6, 1), // Jul 1
+                        ate: new Date(anoAtual, 11, 31, 23, 59, 59), // Dec 31
+                        eventos: [] 
+                    }
+                };
+            } else { // Estamos no S2 (Jul-Dez)
+                semestres = {
+                    atual: { 
+                        id: 's2',
+                        nome: `2º SEMESTRE ${anoAtual}`,
+                        de: new Date(anoAtual, 6, 1), // Jul 1
+                        ate: new Date(anoAtual, 11, 31, 23, 59, 59), // Dec 31
+                        eventos: [] 
+                    },
+                    futuro: { 
+                        id: 's1-prox',
+                        nome: `1º SEMESTRE ${anoAtual + 1}`, // Ano que vem
+                        de: new Date(anoAtual + 1, 0, 1), // Jan 1 (próximo ano)
+                        ate: new Date(anoAtual + 1, 5, 30, 23, 59, 59), // Jun 30 (próximo ano)
+                        eventos: [] 
+                    }
+                };
+            }
+
+            // Filtra os eventos nos semestres corretos
             eventos.forEach(e => {
                 const dataEvento = e.dataInicio.toDate();
-                if(dataEvento.getFullYear() !== anoAtual) return;
-                const mes = dataEvento.getUTCMonth();
-                if(mes < 6) semestres[1].eventos.push(e);
-                else semestres[2].eventos.push(e);
+                
+                // Checa semestre atual
+                if (dataEvento >= semestres.atual.de && dataEvento <= semestres.atual.ate) {
+                    semestres.atual.eventos.push(e);
+                } 
+                // Checa semestre futuro
+                else if (dataEvento >= semestres.futuro.de && dataEvento <= semestres.futuro.ate) {
+                    semestres.futuro.eventos.push(e);
+                }
             });
 
-            for (const s in semestres) {
-                const semestre = semestres[s];
+            // ### FIM DA NOVA LÓGICA DE SEMESTRE ###
+
+            // Loop de renderização alterado para ['atual', 'futuro']
+            ['atual', 'futuro'].forEach(semestreKey => {
+                const semestre = semestres[semestreKey];
+                
                 const semestreDiv = document.createElement('div');
                 semestreDiv.className = 'semestre';
-                semestreDiv.id = `semestre-${s}`;
-                semestreDiv.innerHTML = `<h2>${s}º SEMESTRE</h2><div class="timeline" id="timeline-${s}"></div><div class="feriados-lista" id="feriados-${s}"></div>`;
+                semestreDiv.id = `semestre-${semestre.id}`;
+                // Usa o nome dinâmico do semestre
+                semestreDiv.innerHTML = `<h2>${semestre.nome}</h2><div class="timeline" id="timeline-${semestre.id}"></div><div class="feriados-lista" id="feriados-${semestre.id}"></div>`;
                 container.appendChild(semestreDiv);
                 
-                const timeline = document.getElementById(`timeline-${s}`);
-                const feriadosLista = document.getElementById(`feriados-${s}`);
+                const timeline = document.getElementById(`timeline-${semestre.id}`);
+                const feriadosLista = document.getElementById(`feriados-${semestre.id}`);
                 
                 const totalDiasSemestre = Math.round((semestre.ate - semestre.de) / (1000 * 60 * 60 * 24));
                 timeline.style.gridTemplateColumns = `repeat(${totalDiasSemestre}, 1fr)`;
@@ -151,9 +279,12 @@
                 const monthGridContainer = timeline.querySelector('.month-grid-container');
                 
                 let diaCount = 1;
+                // Loop de Mês agora usa o ano do semestre
+                const anoDoSemestre = semestre.de.getFullYear(); 
                 for(let mesIndex = semestre.de.getMonth(); mesIndex <= semestre.ate.getMonth(); mesIndex++) {
-                    const mesNome = new Date(anoAtual, mesIndex).toLocaleString('pt-BR', { month: 'long' }).toUpperCase();
-                    const diasNoMes = new Date(anoAtual, mesIndex + 1, 0).getDate();
+                    const mesNome = new Date(anoDoSemestre, mesIndex).toLocaleString('pt-BR', { month: 'long' }).toUpperCase();
+                    const diasNoMes = new Date(anoDoSemestre, mesIndex + 1, 0).getDate();
+                    
                     const monthDiv = document.createElement('div');
                     monthDiv.className = 'month';
                     monthDiv.style.gridColumn = `${diaCount} / span ${diasNoMes}`;
@@ -204,12 +335,13 @@
                     const alturaLinha = 3 + (nivel * alturaBase);
                     
                     let nodeHTML;
+                    // ### MUDANÇA AQUI: .diamond -> .node-circle ###
                     if (posicao === 'top') {
                         node.style.paddingBottom = `${alturaLinha}vh`;
-                        nodeHTML = `<div class="details"></div><div class="diamond"></div><div class="line" style="height: ${alturaLinha}vh;"></div>`;
+                        nodeHTML = `<div class="details"></div><div class="node-circle"></div><div class="line" style="height: ${alturaLinha}vh;"></div>`;
                     } else {
                         node.style.paddingTop = `${alturaLinha}vh`;
-                        nodeHTML = `<div class="line" style="height: ${alturaLinha}vh;"></div><div class="diamond"></div><div class="details"></div>`;
+                        nodeHTML = `<div class="line" style="height: ${alturaLinha}vh;"></div><div class="node-circle"></div><div class="details"></div>`;
                     }
                     node.innerHTML = nodeHTML;
 
@@ -233,23 +365,64 @@
                 } else {
                      feriadosLista.style.display = 'none';
                 }
-            }
+            });
             iniciarCarrosselTV();
         }
 
         function iniciarCarrosselTV() {
             const semestres = document.querySelectorAll('.semestre');
             if (semestres.length === 0) return;
+            
+            // Determina qual semestre mostrar primeiro (o "atual")
+            const hoje = new Date();
+            const mesAtual = hoje.getMonth();
+            let semestreAtivo;
+            
+            if (mesAtual < 6) {
+                semestreAtivo = document.getElementById('semestre-s1');
+            } else {
+                semestreAtivo = document.getElementById('semestre-s2');
+            }
 
-            // Garante que apenas um semestre esteja ativo se houver apenas um com eventos
+            // Se o semestre ativo não tiver eventos, tenta mostrar o outro
+            if (semestreAtivo && !semestreAtivo.querySelector('.event-node')) {
+                const outroSemestre = Array.from(semestres).find(s => s !== semestreAtivo);
+                // Se o outro semestre existir E tiver eventos, torna ele o ativo
+                if (outroSemestre && outroSemestre.querySelector('.event-node')) {
+                    semestreAtivo = outroSemestre;
+                }
+                // Se o "ativo" original não tem eventos, e o "outro" também não,
+                // ele (semestreAtivo) será ativado e mostrará a msg "Nenhum evento".
+            }
+
+            // Pega todos os semestres que têm eventos
             const semestresComEventos = Array.from(semestres).filter(s => s.querySelector('.event-node'));
+            
+            if (semestresComEventos.length === 0) {
+                // Se NENHUM semestre tem eventos, apenas mostra o primeiro (que é o "atual")
+                if(semestreAtivo) semestreAtivo.classList.add('active');
+                return;
+            }
+            
+            // Garante que o semestre "ativo" (com ou sem eventos) seja o primeiro a ser exibido
+            if (semestreAtivo) {
+                 semestreAtivo.classList.add('active');
+            } else if (semestresComEventos.length > 0) {
+                // Fallback: se o semestreAtivo for nulo, mostra o primeiro que tiver eventos
+                semestresComEventos[0].classList.add('active');
+            } else {
+                // Fallback 2: se ninguém tem evento, mostra o primeiro semestre da lista
+                semestres[0].classList.add('active');
+            }
+
+            // Se SÓ houver eventos em um dos semestres, não gira o carrossel
             if (semestresComEventos.length <= 1) {
-                if (semestresComEventos.length === 1) semestresComEventos[0].classList.add('active');
                 return;
             }
 
-            let index = 0;
-            semestresComEventos[index].classList.add('active');
+            // Gira o carrossel apenas entre os semestres que TÊM eventos
+            let index = semestresComEventos.findIndex(s => s.classList.contains('active'));
+            if (index === -1) index = 0; // Fallback
 
             setInterval(() => {
                 semestresComEventos[index].classList.remove('active');
