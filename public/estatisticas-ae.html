@@ -17,26 +17,19 @@
         .filtro-item { display: flex; flex-direction: column; }
         .filtro-item label { font-size: 0.9em; color: #555; margin-bottom: 5px; }
         .filtro-item select { padding: 10px; border-radius: 6px; border: 1px solid #ccc; font-size: 1em; }
-        
-        /* --- MODIFICADO: Grid de KPIs com mais colunas --- */
         .grid-kpi { 
             display: grid; 
-            /* Ajustado para minmax(150px, 1fr) para caber mais cards */
             grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); 
-            gap: 15px; /* Gap menor */
+            gap: 15px; 
             margin-bottom: 30px; 
         }
         .kpi-card { background-color: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); text-align: center; }
-        .kpi-card .valor { font-size: 2.2em; /* Fonte ligeiramente menor */ font-weight: bold; color: #007bff; margin: 0; }
-        .kpi-card .titulo { font-size: 0.9em; /* Fonte ligeiramente menor */ color: #555; margin: 5px 0 0 0; }
-        /* --- NOVO: Cor específica para VL --- */
+        .kpi-card .valor { font-size: 2.2em; font-weight: bold; color: #007bff; margin: 0; }
+        .kpi-card .titulo { font-size: 0.9em; color: #555; margin: 5px 0 0 0; }
         .kpi-card .valor-vl { color: #8e44ad; } 
-
         .chart-card { background-color: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
         .chart-card h2 { margin-top: 0; }
         #feedback { text-align: center; padding: 50px; font-size: 1.2em; color: #666; }
-
-        /* --- NOVO: Tabela de Passes --- */
         .tabela-passes {
             width: 100%;
             border-collapse: collapse;
@@ -90,6 +83,7 @@
                 <div class="kpi-card"><p id="kpi-extensoes" class="valor">0</p><p class="titulo">Extensões de Ciclo (AE)</p></div>
                 <div class="kpi-card"><p id="kpi-eae" class="valor">0</p><p class="titulo">Encaminhados ao EAE</p></div>
             </div>
+
             <div class="chart-card" style="margin-bottom: 30px;">
                 <h2>Evolução Mensal (AE vs VL)</h2>
                 <canvas id="grafico-principal"></canvas>
@@ -124,7 +118,7 @@
                     </tbody>
                 </table>
             </div>
-            </div>
+        </div>
     </div>
 
     <script type="module">
@@ -154,7 +148,6 @@
         async function inicializar() {
             const db = getFirestore();
             
-            // --- MODIFICADO: Busca coleções AE e VL separadamente ---
             const tratamentosAERef = collection(db, "tratamentos_ae");
             const atendimentosAERef = collection(db, "atendimentos_ae");
             const tratamentosVLRef = collection(db, "tratamentos_vl");
@@ -166,7 +159,6 @@
             let graficoPrincipal;
             
             try {
-                // --- MODIFICADO: Busca em 4 coleções ---
                 const [
                     snapshotTratamentosAE, 
                     snapshotAtendimentosAE,
@@ -179,13 +171,11 @@
                     getDocs(atendimentosVLRef)
                 ]);
 
-                // --- MODIFICADO: Separa os dados ---
                 const todosTratamentosAE = snapshotTratamentosAE.docs.map(doc => doc.data());
                 const todosAtendimentosAE = snapshotAtendimentosAE.docs.map(doc => doc.data());
                 const todosTratamentosVL = snapshotTratamentosVL.docs.map(doc => doc.data());
                 const todosAtendimentosVL = snapshotAtendimentosVL.docs.map(doc => doc.data());
                 
-                // Combina tratamentos Apenas para popular o filtro de anos
                 const todosTratamentos = [...todosTratamentosAE, ...todosTratamentosVL];
                 
                 if (todosTratamentos.length === 0) {
@@ -207,7 +197,6 @@
                     filtroAno.appendChild(option);
                 });
 
-                // --- MODIFICADO: Passa os dados separados para o renderizador ---
                 filtroAno.addEventListener('change', () => renderizarDados(
                     filtroAno.value, 
                     todosTratamentosAE, todosAtendimentosAE, 
@@ -228,48 +217,33 @@
                 feedback.style.color = 'red';
             }
 
-            // ===================================================================
-            // INÍCIO DA MODIFICAÇÃO: Função renderizarDados
-            // ===================================================================
             function renderizarDados(anoSelecionado, todosTratamentosAE, todosAtendimentosAE, todosTratamentosVL, todosAtendimentosVL) {
                 const ano = parseInt(anoSelecionado);
                 
-                // 1. Filtra dados do AE por ano
                 const tratamentosAEDoAno = todosTratamentosAE.filter(t => t.dataInicio && t.dataInicio.toDate().getFullYear() === ano);
                 const atendimentosAEDoAno = todosAtendimentosAE.filter(a => a.dataAtendimento && a.dataAtendimento.toDate().getFullYear() === ano);
-                
-                // 2. Filtra dados do VL por ano
                 const tratamentosVLDoAno = todosTratamentosVL.filter(t => t.dataInicio && t.dataInicio.toDate().getFullYear() === ano);
                 const atendimentosVLDoAno = todosAtendimentosVL.filter(a => a.dataAtendimento && a.dataAtendimento.toDate().getFullYear() === ano);
 
-                
-                // 3. Calcula KPIs do AE
                 const totalAtendimentosAE = atendimentosAEDoAno.filter(a => a.tipo !== 'falta').length;
                 const novosTratamentosAE = tratamentosAEDoAno.length;
                 const altasAE = tratamentosAEDoAno.filter(t => t.status === 'concluido_com_alta').length;
                 const desistenciasAE = tratamentosAEDoAno.filter(t => t.status === 'encerrado_por_falta').length;
                 const encaminhadosEAE = atendimentosAEDoAno.filter(a => a.encaminhamentos && a.encaminhamentos.includes('EAE')).length;
-                // NOVO KPI: Extensões de Ciclo (AE)
                 const extensoesAE = tratamentosAEDoAno.filter(t => t.status === 'concluido_por_reavaliacao').length;
 
-                // 4. Calcula KPIs do VL
                 const totalAtendimentosVL = atendimentosVLDoAno.filter(a => a.tipo !== 'falta').length;
                 const novosTratamentosVL = tratamentosVLDoAno.length;
 
-                // 5. Calcula KPIs de Passes (AE)
                 const contagemPasses = { P1: 0, P2: 0, P3A: 0, P3B: 0, P4A: 0, P4B: 0, CH: 0, Avulso: 0 };
                 atendimentosAEDoAno.forEach(a => {
-                    if (a.tipo === 'avulso') {
-                        contagemPasses['Avulso']++;
-                    } else if (a.tipo !== 'falta' && a.passeRecomendado) {
+                    if (a.tipo === 'avulso') { contagemPasses['Avulso']++; }
+                    else if (a.tipo !== 'falta' && a.passeRecomendado) {
                         const passe = a.passeRecomendado;
-                        if (contagemPasses.hasOwnProperty(passe)) {
-                            contagemPasses[passe]++;
-                        }
+                        if (contagemPasses.hasOwnProperty(passe)) { contagemPasses[passe]++; }
                     }
                 });
 
-                // 6. Atualiza a UI (KPIs)
                 document.getElementById('kpi-total-ae').textContent = totalAtendimentosAE;
                 document.getElementById('kpi-novos-ae').textContent = novosTratamentosAE;
                 document.getElementById('kpi-total-vl').textContent = totalAtendimentosVL;
@@ -279,7 +253,6 @@
                 document.getElementById('kpi-extensoes').textContent = extensoesAE;
                 document.getElementById('kpi-eae').textContent = encaminhadosEAE;
                 
-                // 7. Atualiza a UI (Tabela de Passes)
                 document.getElementById('kpi-passe-p1').textContent = contagemPasses.P1;
                 document.getElementById('kpi-passe-p2').textContent = contagemPasses.P2;
                 document.getElementById('kpi-passe-p3a').textContent = contagemPasses.P3A;
@@ -290,7 +263,6 @@
                 document.getElementById('kpi-passe-avulso').textContent = contagemPasses.Avulso;
 
 
-                // 8. Prepara dados do Gráfico
                 const meses = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
                 const dadosGrafico = {
                     atendimentosAE: Array(12).fill(0),
@@ -299,28 +271,22 @@
                     novosVL: Array(12).fill(0)
                 };
 
-                atendimentosAEDoAno.forEach(a => {
-                    if(a.tipo !== 'falta') { dadosGrafico.atendimentosAE[a.dataAtendimento.toDate().getMonth()]++; }
-                });
-                tratamentosAEDoAno.forEach(t => {
-                    dadosGrafico.novosAE[t.dataInicio.toDate().getMonth()]++;
-                });
-                atendimentosVLDoAno.forEach(a => {
-                    if(a.tipo !== 'falta') { dadosGrafico.atendimentosVL[a.dataAtendimento.toDate().getMonth()]++; }
-                });
-                tratamentosVLDoAno.forEach(t => {
-                    dadosGrafico.novosVL[t.dataInicio.toDate().getMonth()]++;
-                });
+                atendimentosAEDoAno.forEach(a => { if(a.tipo !== 'falta') { dadosGrafico.atendimentosAE[a.dataAtendimento.toDate().getMonth()]++; } });
+                tratamentosAEDoAno.forEach(t => { dadosGrafico.novosAE[t.dataInicio.toDate().getMonth()]++; });
+                atendimentosVLDoAno.forEach(a => { if(a.tipo !== 'falta') { dadosGrafico.atendimentosVL[a.dataAtendimento.toDate().getMonth()]++; } });
+                tratamentosVLDoAno.forEach(t => { dadosGrafico.novosVL[t.dataInicio.toDate().getMonth()]++; });
                 
-                // Combina os totais (para as linhas que você já tinha)
                 const atendimentosTotais = dadosGrafico.atendimentosAE.map((val, i) => val + dadosGrafico.atendimentosVL[i]);
                 const novosTotais = dadosGrafico.novosAE.map((val, i) => val + dadosGrafico.novosVL[i]);
 
-                // 9. Renderiza o Gráfico
                 const ctx = document.getElementById('grafico-principal').getContext('2d');
                 if (graficoPrincipal) {
                     graficoPrincipal.destroy();
                 }
+                
+                // ===================================================================
+                // INÍCIO DA MODIFICAÇÃO: Cor do Gráfico
+                // ===================================================================
                 graficoPrincipal = new Chart(ctx, {
                     type: 'line',
                     data: {
@@ -335,7 +301,7 @@
                         }, {
                             label: 'Total Novos Trat. (AE+VL)',
                             data: novosTotais,
-                            borderColor: 'rgb(255, 99, 132)', // Vermelho
+                            borderColor: 'rgb(255, 99, 132)', // Rosa/Vermelho claro
                             backgroundColor: 'rgba(255, 99, 132, 0.1)',
                             fill: false, tension: 0.1, borderWidth: 3
                         }, {
@@ -343,12 +309,12 @@
                             data: dadosGrafico.atendimentosAE,
                             borderColor: 'rgb(75, 192, 192)', // Verde-água
                             backgroundColor: 'rgba(75, 192, 192, 0.1)',
-                            fill: false, tension: 0.1, borderWidth: 1, borderDash: [5, 5] // Linha tracejada
+                            fill: false, tension: 0.1, borderWidth: 1, borderDash: [5, 5]
                         }, {
                             label: 'Novos Trat. (AE)',
                             data: dadosGrafico.novosAE,
-                            borderColor: 'rgb(255, 159, 64)', // Laranja
-                            backgroundColor: 'rgba(255, 159, 64, 0.1)',
+                            borderColor: 'rgb(220, 20, 60)', // Vermelho Intenso (NOVA COR)
+                            backgroundColor: 'rgba(220, 20, 60, 0.1)', // (NOVA COR)
                             fill: false, tension: 0.1, borderWidth: 1, borderDash: [5, 5]
                         }, {
                             label: 'Atendimentos (VL)',
@@ -359,7 +325,7 @@
                         }, {
                             label: 'Novos Trat. (VL)',
                             data: dadosGrafico.novosVL,
-                            borderColor: 'rgb(255, 205, 86)', // Amarelo
+                            borderColor: 'rgb(255, 205, 86)', // Amarelo (Mantido)
                             backgroundColor: 'rgba(255, 205, 86, 0.1)',
                             fill: false, tension: 0.1, borderWidth: 1, borderDash: [5, 5]
                         }]
@@ -368,10 +334,10 @@
                         scales: { y: { beginAtZero: true, ticks: { stepSize: 10 } } }
                     }
                 });
+                // ===================================================================
+                // FIM DA MODIFICAÇÃO
+                // ===================================================================
             }
-            // ===================================================================
-            // FIM DA MODIFICAÇÃO
-            // ===================================================================
         }
     </script>
 </body>
