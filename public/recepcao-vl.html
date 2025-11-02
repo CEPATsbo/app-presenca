@@ -48,16 +48,11 @@
             <fieldset id="fs-novo-atendimento">
                 <legend>Novo Atendimento (VL)</legend>
                 <div class="form-grid">
-                    <div class="form-item">
-                        <label for="retornos-solicitados">Retornos Solicitados:</label>
-                        <select id="retornos-solicitados">
-                            <option value="0">0 (Atendimento Único)</option>
-                            <option value="1">1 Retorno</option>
-                            <option value="2">2 Retornos</option>
-                            <option value="3">3 Retornos</option>
-                        </select>
+                    <div class="form-item form-grid-full">
+                        <label>Confirmar Primeiro Atendimento:</label>
+                        <p style="font-size: 0.9em; margin-top: 5px;">Ao clicar, o 1º atendimento será registrado e o assistido será encaminhado para a fila.</p>
                     </div>
-                    <button id="btn-registrar-atendimento" type="button" class="btn btn-success">Registrar Atendimento</button>
+                    <button id="btn-registrar-atendimento" type="button" class="btn btn-success form-grid-full">Registrar 1º Atendimento</button>
                 </div>
             </fieldset>
         </form>
@@ -66,7 +61,7 @@
 
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
-        import { getFirestore, collection, addDoc, doc, getDoc, serverTimestamp, query, where, limit, getDocs, Timestamp, writeBatch } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
+        import { getFirestore, collection, addDoc, doc, getDoc, serverTimestamp, query, where, limit, getDocs, Timestamp, writeBatch, setDoc } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
         import { protegerPagina } from '/auth.js';
         
         const firebaseConfig = {
@@ -79,7 +74,7 @@
         };
         initializeApp(firebaseConfig);
         
-        protegerPagina(['recepcionista', 'diretor', 'conselheiro', 'tesoureiro', 'entrevistador', 'super-admin']).then(user => {
+        protegerPagina(['recepcionista', 'diretor', 'tesoureiro', 'entrevistador', 'conselheiro', 'super-admin']).then(user => {
             document.getElementById('main-content').classList.remove('hidden');
             inicializarPagina(user);
         }).catch(err => { 
@@ -90,9 +85,17 @@
         function inicializarPagina(user) {
             const db = getFirestore();
             const assistidosRef = collection(db, 'assistidos');
-            const tratamentosVlRef = collection(db, 'tratamentos_vl'); // Nova Coleção
-            const atendimentosVlRef = collection(db, 'atendimentos_vl'); // Nova Coleção
+            const tratamentosVlRef = collection(db, 'tratamentos_vl');
+            const atendimentosVlRef = collection(db, 'atendimentos_vl');
             const logAuditoriaRef = collection(db, 'log_auditoria');
+            
+            // ===================================================================
+            // INÍCIO DA MODIFICAÇÃO JAVASCRIPT: 1. Adiciona ref da Fila
+            // ===================================================================
+            const filaVlRef = collection(db, 'fila_atendimento_vl');
+            // ===================================================================
+            // FIM DA MODIFICAÇÃO JAVASCRIPT
+            // ===================================================================
 
             let assistidoSelecionado = null;
 
@@ -101,20 +104,21 @@
                 telefoneInput: document.getElementById('telefone'),
                 dnInput: document.getElementById('dn'),
                 searchResults: document.getElementById('search-results'),
-                selectRetornos: document.getElementById('retornos-solicitados'),
                 btnRegistrar: document.getElementById('btn-registrar-atendimento'),
                 btnLimpar: document.getElementById('btn-limpar'),
             };
 
+            // Função de Log Corrigida (com setDoc)
             async function registrarLog(acao, detalhes) {
                 try {
-                    await addDoc(logAuditoriaRef, {
+                    const newLogRef = doc(logAuditoriaRef); 
+                    await setDoc(newLogRef, { 
                         timestamp: serverTimestamp(),
                         autor: { uid: user.uid, nome: user.displayName || 'Usuário do Sistema' },
                         acao: acao,
                         detalhes: detalhes
                     });
-                } catch (error) { console.error("Erro ao registrar log:", error); }
+                } catch (error) { console.error("Erro ao registrar log (com setDoc):", error); }
             }
             
             const capitalizarNome = (nome) => {
@@ -209,7 +213,7 @@
                 
                 try {
                     const { id: assistidoId, nome: nomeAssistido } = await criarNovoAssistidoSeNaoExistir();
-                    const retornosSolicitados = parseInt(ui.selectRetornos.value, 10);
+                    const retornosSolicitados = 0; // Definido como 0. Será atualizado pelo colegiado.
                     const dataAtual = serverTimestamp();
                     
                     const batch = writeBatch(db);
@@ -220,31 +224,57 @@
                         assistidoId: assistidoId,
                         dataInicio: dataAtual,
                         status: 'ativo',
-                        retornos_solicitados: retornosSolicitados,
+                        retornos_solicitados: retornosSolicitados, // Fica 0
                         atendimentos_realizados: 1, // Este é o primeiro
                         criadoPor: { uid: user.uid, nome: user.displayName }
                     });
 
+                    // ===================================================================
+                    // INÍCIO DA MODIFICAÇÃO JAVASCRIPT: 2. Cria Ref do Atendimento
+                    // ===================================================================
                     // 2. Cria o primeiro Atendimento (VL)
-                    batch.set(doc(atendimentosVlRef), {
+                    const novoAtendimentoRef = doc(atendimentosVlRef); // Cria a Ref primeiro
+                    batch.set(novoAtendimentoRef, { // Usa a Ref
                         assistidoId: assistidoId,
                         tratamentoId: novoTratamentoRef.id,
                         dataAtendimento: dataAtual,
-                        semana: 1, // ou "contagem_atendimento: 1"
+                        semana: 1, 
                         notas: 'Primeiro atendimento registrado pela recepção.',
-                        atendente: user.displayName
+                        atendente: user.displayName,
+                        detalhes_preenchidos: false 
                     });
+                    
+                    // 3. ADICIONA NA FILA (VL)
+                    const novoItemFilaRef = doc(filaVlRef);
+                    batch.set(novoItemFilaRef, {
+                        assistidoId: assistidoId,
+                        nomeAssistido: nomeAssistido,
+                        atendimentoId: novoAtendimentoRef.id, // Linka ao atendimento
+                        status: 'Aguardando',
+                        tipoTrabalho: 'Passes VL', // Trabalho padrão
+                        timestamp: dataAtual // Para ordenação
+                    });
+                    // ===================================================================
+                    // FIM DA MODIFICAÇÃO JAVASCRIPT
+                    // ===================================================================
                     
                     await batch.commit();
                     
-                    alert(`Atendimento do Vinha de Luz para ${nomeAssistido} registrado com sucesso! (${retornosSolicitados} retornos)`);
+                    // ===================================================================
+                    // INÍCIO DA MODIFICAÇÃO JAVASCRIPT: 4. Alerta e Log
+                    // ===================================================================
+                    alert(`Primeiro atendimento para ${nomeAssistido} registrado e encaminhado para a fila!`);
 
-                    registrarLog('Registro Atendimento (VL)', {
+                    registrarLog('Registro Atendimento (VL) e Fila', {
                         assistidoId: assistidoId,
                         assistidoNome: nomeAssistido,
                         tratamentoId: novoTratamentoRef.id,
-                        retornos: retornosSolicitados
+                        atendimentoId: novoAtendimentoRef.id, // Adiciona o ID do atendimento
+                        retornos: "Aguardando definição do colegiado"
                     });
+                    // ===================================================================
+                    // FIM DA MODIFICAÇÃO JAVASCRIPT
+                    // ===================================================================
                     
                     resetarFormularioBusca();
 

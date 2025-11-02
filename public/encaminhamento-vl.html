@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Encaminhamento - Vinha de Luz</title>
+    <style>
+        :root { --cor-primaria: #8e44ad; --cor-borda: #ddd; } /* Cor VL */
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background-color: #f4f6f9; margin: 0; padding: 20px; }
+        .container { width: 100%; max-width: 1200px; margin: 0 auto; }
+        .nav-voltar { margin-bottom: 20px; }
+        .btn, .btn-voltar, .btn-acao { background-color: var(--cor-primaria); color: white; border: none; padding: 10px 16px; border-radius: 8px; font-weight: bold; text-decoration: none; display: inline-block; cursor: pointer; transition: background-color 0.2s; }
+        .btn:disabled { background-color: #ccc; cursor: not-allowed; }
+        .btn-voltar { background-color: #6c757d; }
+        h1 { color: #333; text-align: center; }
+        .hidden { display: none; }
+        
+        .grid-container {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+        }
+        .coluna { background-color: #fff; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.08); padding: 20px; }
+        .coluna h2 { color: var(--cor-primaria); margin-top: 0; border-bottom: 2px solid var(--cor-borda); padding-bottom: 10px; }
+        
+        .lista-fila { list-style-type: none; padding: 0; margin: 0; max-height: 60vh; overflow-y: auto; }
+        .fila-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 15px;
+            border: 1px solid var(--cor-borda);
+            border-radius: 8px;
+            margin-bottom: 10px;
+            background-color: #fdfdfd;
+        }
+        .fila-item-nome { font-size: 1.2em; font-weight: 500; }
+        .fila-item-acoes { display: flex; gap: 8px; }
+        
+        .btn-chamar { background-color: #28a745; }
+        .btn-confirmar { background-color: #007bff; }
+        .btn-remover { background-color: #dc3545; }
+        
+        .lista-vazia { text-align: center; color: #777; padding: 20px; }
+
+        @media (max-width: 768px) {
+            .grid-container { grid-template-columns: 1fr; }
+            .lista-fila { max-height: 40vh; }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <nav class="nav-voltar"><a href="/dashboard-vl.html" class="btn-voltar">⬅ Voltar para o Dashboard VL</a></nav>
+        <div id="acesso-negado" class="container hidden"><h1>Acesso Negado</h1></div>
+
+        <div id="main-content" class="hidden">
+            <h1 style="color: var(--cor-primaria);">Encaminhamento - Vinha de Luz</h1>
+            <div id="main-grid" class="grid-container">
+                <div class="coluna">
+                    <h2>Fila de Espera</h2>
+                    <ul id="lista-aguardando" class="lista-fila">
+                        <p class="lista-vazia">Carregando...</p>
+                    </ul>
+                </div>
+                <div class="coluna">
+                    <h2>Chamados Recentemente</h2>
+                    <ul id="lista-chamados" class="lista-fila">
+                        <p class="lista-vazia">Ninguém foi chamado.</p>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
+        // Importa tudo que precisamos
+        import { 
+            getFirestore, collection, doc, serverTimestamp, query, where, orderBy, 
+            onSnapshot, updateDoc, setDoc 
+        } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
+        import { protegerPagina } from '/auth.js';
+        
+        const firebaseConfig = {
+            apiKey: "AIzaSyBV7RPjk3cFTqL-aIpflJcUojKg1ZXMLuU",
+            authDomain: "voluntarios-ativos---cepat.firebaseapp.com",
+            projectId: "voluntarios-ativos---cepat",
+            storageBucket: "voluntarios-ativos---cepat.firebasestorage.app",
+            messagingSenderId: "66122858261",
+            appId: "1:66122858261:web:7fa21f1805463b5c08331c"
+        };
+        initializeApp(firebaseConfig);
+        
+        // Permissões da Recepção VL
+        protegerPagina(['recepcionista', 'diretor', 'tesoureiro', 'entrevistador', 'super-admin']).then(user => {
+            document.getElementById('main-content').classList.remove('hidden');
+            inicializarPagina(user);
+        }).catch(err => { 
+            document.getElementById('acesso-negado').classList.remove('hidden');
+            document.getElementById('main-content').classList.add('hidden');
+        });
+
+        function inicializarPagina(user) {
+            const db = getFirestore();
+            const filaVlRef = collection(db, 'fila_atendimento_vl');
+            const logAuditoriaRef = collection(db, 'log_auditoria');
+            
+            const ui = {
+                listaAguardando: document.getElementById('lista-aguardando'),
+                listaChamados: document.getElementById('lista-chamados'),
+                mainGrid: document.getElementById('main-grid')
+            };
+
+            // Função de Log Corrigida
+            async function registrarLog(acao, detalhes) {
+                try {
+                    const newLogRef = doc(logAuditoriaRef); 
+                    await setDoc(newLogRef, { 
+                        timestamp: serverTimestamp(),
+                        autor: { uid: user.uid, nome: user.displayName || 'Usuário do Sistema' },
+                        acao: acao,
+                        detalhes: detalhes
+                    });
+                } catch (error) { console.error("Erro ao registrar log (com setDoc):", error); }
+            }
+
+            // --- AÇÕES ---
+            async function handleChamar(id, nome) {
+                try {
+                    const itemRef = doc(filaVlRef, id);
+                    await updateDoc(itemRef, {
+                        status: 'Chamado',
+                        chamadoEm: serverTimestamp()
+                    });
+                    registrarLog('Chamada Fila VL', { assistidoId: id, assistidoNome: nome });
+                } catch (error) {
+                    console.error("Erro ao chamar:", error);
+                    alert("Falha ao chamar assistido.");
+                }
+            }
+
+            async function handleConfirmar(id, nome) {
+                try {
+                    const itemRef = doc(filaVlRef, id);
+                    await updateDoc(itemRef, {
+                        status: 'Atendido' // Isso remove da fila
+                    });
+                    registrarLog('Confirmação Atendimento VL', { assistidoId: id, assistidoNome: nome });
+                } catch (error) {
+                    console.error("Erro ao confirmar:", error);
+                    alert("Falha ao confirmar atendimento.");
+                }
+            }
+
+            async function handleRemover(id, nome) {
+                if (!confirm(`Remover ${nome} da fila (marcar como ausente)?`)) return;
+                try {
+                    const itemRef = doc(filaVlRef, id);
+                    await updateDoc(itemRef, {
+                        status: 'Ausente' // Remove da fila, mas mantém registro
+                    });
+                    registrarLog('Remoção Fila VL (Ausente)', { assistidoId: id, assistidoNome: nome });
+                } catch (error) {
+                    console.error("Erro ao remover:", error);
+                    alert("Falha ao remover assistido.");
+                }
+            }
+
+            // --- RENDERIZAÇÃO ---
+            function renderizarListas(docs) {
+                let htmlAguardando = '';
+                let htmlChamados = '';
+
+                docs.forEach(doc => {
+                    const item = { id: doc.id, ...doc.data() };
+                    
+                    if (item.status === 'Aguardando') {
+                        htmlAguardando += `
+                            <li class="fila-item">
+                                <span class="fila-item-nome">${item.nomeAssistido}</span>
+                                <div class="fila-item-acoes">
+                                    <button class="btn btn-acao btn-chamar" data-id="${item.id}" data-nome="${item.nomeAssistido}">Chamar</button>
+                                </div>
+                            </li>`;
+                    } 
+                    else if (item.status === 'Chamado') {
+                        htmlChamados += `
+                            <li class="fila-item">
+                                <span class="fila-item-nome">${item.nomeAssistido}</span>
+                                <div class="fila-item-acoes">
+                                    <button class="btn btn-acao btn-confirmar" data-id="${item.id}" data-nome="${item.nomeAssistido}">Confirmar</button>
+                                    <button class="btn btn-acao btn-remover" data-id="${item.id}" data-nome="${item.nomeAssistido}">Ausente</button>
+                                </div>
+                            </li>`;
+                    }
+                });
+
+                ui.listaAguardando.innerHTML = htmlAguardando || '<p class="lista-vazia">Ninguém na fila de espera.</p>';
+                ui.listaChamados.innerHTML = htmlChamados || '<p class="lista-vazia">Ninguém foi chamado.</p>';
+            }
+
+            // --- LISTENER PRINCIPAL (EM TEMPO REAL) ---
+            function escutarFila() {
+                const q = query(
+                    filaVlRef, 
+                    where('status', 'in', ['Aguardando', 'Chamado']), 
+                    orderBy('timestamp')
+                );
+
+                onSnapshot(q, (snapshot) => {
+                    renderizarListas(snapshot.docs);
+                }, (error) => {
+                    console.error("Erro ao escutar a fila:", error);
+                    ui.listaAguardando.innerHTML = '<p class="lista-vazia erro">Erro ao carregar a fila.</p>';
+                    // AVISO IMPORTANTE:
+                    if (error.code === 'failed-precondition') {
+                        alert("ERRO: O Firestore precisa de um índice para esta consulta. Verifique o console (F12) para o link de criação do índice.");
+                        console.error("Link para criar índice (copie e cole no navegador):", error.message.match(/https?:\/\/[^\s]+/)?.[0]);
+                    }
+                });
+            }
+
+            // --- INICIALIZAÇÃO DOS BOTÕES ---
+            ui.mainGrid.addEventListener('click', (e) => {
+                const target = e.target;
+                const id = target.dataset.id;
+                const nome = target.dataset.nome;
+
+                if (!id) return;
+
+                if (target.classList.contains('btn-chamar')) {
+                    handleChamar(id, nome);
+                } else if (target.classList.contains('btn-confirmar')) {
+                    handleConfirmar(id, nome);
+                } else if (target.classList.contains('btn-remover')) {
+                    handleRemover(id, nome);
+                }
+            });
+
+            // Inicia o listener
+            escutarFila();
+        }
+    </script>
+</body>
+</html>
