@@ -76,17 +76,13 @@
             <a href="javascript:history.back()" class="btn-voltar">⬅ Voltar</a>
         </nav>
         
-        <div id="acesso-negado" class="hidden"><h1>Acesso Negado</h1></div>
-
-        <div id="main-content" class="hidden">
-            <h1 id="header-nome">Prontuário Unificado</h1>
+        <div id="main-content" class="hidden"> <h1 id="header-nome">Prontuário Unificado</h1>
             
             <div id="loading" style="text-align: center; font-size: 1.2em; margin: 40px;">
                 <p>Carregando prontuário completo...</p>
             </div>
             
-            <div id="prontuario-content" class="prontuario-grid hidden">
-                <div id="card-pessoal" class="card card-pessoal">
+            <div id="prontuario-content" class="prontuario-grid hidden"> <div id="card-pessoal" class="card card-pessoal">
                     </div>
 
                 <div id="card-ae" class="card">
@@ -105,30 +101,26 @@
     </div>
 
     <script type="module">
-        // ===================================================================
-        // INÍCIO DA MODIFICAÇÃO JAVASCRIPT: Importa o setDoc
-        // ===================================================================
         import { getFirestore, collection, doc, getDoc, query, where, getDocs, orderBy, Timestamp, serverTimestamp, addDoc, setDoc } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
-        // ===================================================================
-        // FIM DA MODIFICAÇÃO JAVASCRIPT
-        // ===================================================================
         
-        // Importa nosso módulo de autenticação
         import { protegerPagina } from '/auth.js';
 
-        // O auth.js já inicializa o Firebase, então não precisamos do initializeApp(config) aqui.
-
-        // Protege a página com as mesmas permissões dos arquivos
-        protegerPagina(['entrevistador', 'tesoureiro', 'diretor', 'super-admin']).then(user => {
-            const db = getFirestore(); // Pega a instância do DB após a autenticação
-            document.getElementById('main-content').classList.remove('hidden');
+        // Acesso restrito apenas aos 4 cargos definidos
+        const rolesPermitidas = [
+            'entrevistador', 'tesoureiro', 'diretor', 'super-admin'
+        ];
+        
+        protegerPagina(rolesPermitidas).then(user => {
+            const db = getFirestore(); 
+            document.getElementById('main-content').classList.remove('hidden'); // Mostra o conteúdo principal
             inicializarPagina(user, db);
         }).catch(err => {
-            // document.getElementById('acesso-negado').classList.remove('hidden'); // Deixa o auth.js gerenciar o "Acesso Negado"
+            // Se 'protegerPagina' falhar, ele já exibe "Acesso Negado".
+            // O 'main-content' continuará escondido.
+            console.error(err);
         });
 
         function inicializarPagina(user, db) {
-            // Referências de Coleções
             const assistidosRef = collection(db, 'assistidos');
             const tratamentosAeRef = collection(db, 'tratamentos_ae');
             const atendimentosAeRef = collection(db, 'atendimentos_ae');
@@ -136,7 +128,6 @@
             const atendimentosVlRef = collection(db, 'atendimentos_vl');
             const logAuditoriaRef = collection(db, 'log_auditoria');
 
-            // Elementos da UI
             const ui = {
                 loading: document.getElementById('loading'),
                 prontuarioContent: document.getElementById('prontuario-content'),
@@ -146,7 +137,6 @@
                 cardVL: document.getElementById('historico-container-vl')
             };
 
-            // Pega o ID da URL
             const params = new URLSearchParams(window.location.search);
             const assistidoId = params.get('id');
 
@@ -155,15 +145,10 @@
                 return;
             }
 
-            // ===================================================================
-            // INÍCIO DA MODIFICAÇÃO JAVASCRIPT: Função registrarLog (Bug Fix)
-            // ===================================================================
+            // Função de Log Corrigida
             async function registrarLog(acao, detalhes) {
                 try {
-                    // 1. Cria uma referência para um NOVO documento com ID automático
                     const newLogRef = doc(logAuditoriaRef); 
-                    
-                    // 2. Salva os dados usando setDoc
                     await setDoc(newLogRef, { 
                         timestamp: serverTimestamp(),
                         autor: { uid: user.uid, nome: user.displayName || 'Usuário do Sistema' },
@@ -174,11 +159,7 @@
                     console.error("Erro ao registrar log (com setDoc):", error); 
                 }
             }
-            // ===================================================================
-            // FIM DA MODIFICAÇÃO JAVASCRIPT
-            // ===================================================================
             
-            // Função para formatar data (evita erros com Timestamps nulos)
             function formatarData(timestamp, textoPadrao = "N/A") {
                 if (timestamp && typeof timestamp.toDate === 'function') {
                     return timestamp.toDate().toLocaleDateString('pt-br');
@@ -186,13 +167,15 @@
                 return textoPadrao;
             }
 
-            // Carrega todos os dados do prontuário
             async function carregarProntuario() {
                 try {
-                    // 1. Registrar Log
                     await registrarLog('Visualização Prontuário Unificado', { assistidoId });
 
-                    // 2. Buscar todos os dados em paralelo
+                    // ===================================================================
+                    // INÍCIO DA MODIFICAÇÃO JAVASCRIPT: Ajuste nas Consultas
+                    // ===================================================================
+                    // Adicionamos 'orderBy' nas consultas de atendimentos para
+                    // corresponder aos arquivos originais.
                     const [
                         assistidoSnap,
                         tratamentosAeSnap,
@@ -202,40 +185,44 @@
                     ] = await Promise.all([
                         getDoc(doc(assistidosRef, assistidoId)),
                         getDocs(query(tratamentosAeRef, where('assistidoId', '==', assistidoId), orderBy('dataInicio', 'desc'))),
-                        getDocs(query(atendimentosAeRef, where('assistidoId', '==', assistidoId))),
+                        getDocs(query(atendimentosAeRef, where('assistidoId', '==', assistidoId), orderBy('dataAtendimento', 'desc'))),
                         getDocs(query(tratamentosVlRef, where('assistidoId', '==', assistidoId), orderBy('dataInicio', 'desc'))),
-                        getDocs(query(atendimentosVlRef, where('assistidoId', '==', assistidoId)))
+                        getDocs(query(atendimentosVlRef, where('assistidoId', '==', assistidoId), orderBy('dataAtendimento', 'desc')))
                     ]);
+                    // ===================================================================
+                    // FIM DA MODIFICAÇÃO JAVASCRIPT
+                    // ===================================================================
 
-                    // 3. Verificar se o assistido existe
                     if (!assistidoSnap.exists()) {
                         ui.loading.innerHTML = `<p class="erro">Assistido com ID ${assistidoId} não encontrado.</p>`;
                         return;
                     }
 
-                    // 4. Processar os dados
                     const assistido = assistidoSnap.data();
                     const ciclosAE = tratamentosAeSnap.docs.map(d => ({ id: d.id, ...d.data() }));
                     const atendimentosAE = atendimentosAeSnap.docs.map(d => ({ id: d.id, ...d.data() }));
                     const ciclosVL = tratamentosVlSnap.docs.map(d => ({ id: d.id, ...d.data() }));
                     const atendimentosVL = atendimentosVlSnap.docs.map(d => ({ id: d.id, ...d.data() }));
 
-                    // 5. Renderizar os cards
                     renderizarDadosPessoais(assistido);
                     renderizarHistoricoAE(ciclosAE, atendimentosAE);
                     renderizarHistoricoVL(ciclosVL, atendimentosVL);
                     
-                    // 6. Mostrar conteúdo
+                    // Mostrar conteúdo
                     ui.loading.classList.add('hidden');
                     ui.prontuarioContent.classList.remove('hidden');
 
                 } catch (error) {
-                    console.error("Erro ao carregar prontuário:", error);
-                    ui.loading.innerHTML = `<p class="erro">Falha ao carregar dados. Tente novamente.</p>`;
+                    console.error("ERRO AO CARREGAR PRONTUÁRIO:", error);
+                    ui.loading.innerHTML = `<p class="erro">Falha ao carregar dados. Verifique o console (F12) para mais detalhes.</p>`;
+                    
+                    // Se o erro for de índice, ele aparecerá no console com um link.
+                    if (error.code === 'failed-precondition') {
+                         ui.loading.innerHTML += `<br><strong style="font-size: 0.9em;">O Firestore precisa de um índice. Copie o link do console (F12) para criar.</strong>`;
+                    }
                 }
             }
 
-            // Renderiza o Card de Dados Pessoais
             function renderizarDadosPessoais(assistido) {
                 const dnFormatado = assistido.dn ? new Date(assistido.dn + 'T12:00:00').toLocaleDateString('pt-br') : 'Não informado';
                 ui.headerNome.textContent = `Prontuário Unificado de ${assistido.nome}`;
@@ -260,7 +247,6 @@
                 `;
             }
 
-            // Renderiza o Card da Assistência Espiritual
             function renderizarHistoricoAE(ciclos, todosAtendimentos) {
                 let html = '';
                 if (ciclos.length > 0) {
@@ -269,9 +255,9 @@
                         const statusClasse = ciclo.status === 'ativo' ? 'status-ativo' : 'status-concluido';
                         html += `<div class="ciclo-tratamento"><div class="ciclo-header"><span>Início: ${dataInicio} | Passe: ${ciclo.passe_ciclo_atual || 'N/A'}</span><span class="${statusClasse}">${ciclo.status.replace(/_/g, ' ')}</span></div><ul class="atendimentos-lista">`;
                         
+                        // Não precisamos mais do .sort() aqui, pois o Firestore já está ordenando
                         const atendimentosDoCiclo = todosAtendimentos
-                            .filter(a => a.tratamentoId === ciclo.id)
-                            .sort((a, b) => a.dataAtendimento?.toMillis() - b.dataAtendimento?.toMillis());
+                            .filter(a => a.tratamentoId === ciclo.id);
 
                         if (atendimentosDoCiclo.length === 0) { html += '<li>Nenhum atendimento registrado.</li>'; }
                         else { atendimentosDoCiclo.forEach(a => { html += renderizarItemAtendimentoAE(a, ciclo.passe_ciclo_atual); }); }
@@ -280,8 +266,8 @@
                     });
                 }
                 
-                const passesAvulsos = todosAtendimentos.filter(a => a.tipo === 'avulso')
-                    .sort((a, b) => a.dataAtendimento?.toMillis() - b.dataAtendimento?.toMillis());
+                // Não precisamos mais do .sort() aqui
+                const passesAvulsos = todosAtendimentos.filter(a => a.tipo === 'avulso');
                 
                 if (passesAvulsos.length > 0) {
                     html += `<div class="ciclo-tratamento"><div class="ciclo-header"><span>Passes Avulsos</span></div><ul class="atendimentos-lista">`;
@@ -293,7 +279,6 @@
                 ui.cardAE.innerHTML = html;
             }
             
-            // Renderiza o Card do Vinha de Luz
             function renderizarHistoricoVL(ciclos, todosAtendimentos) {
                 let html = '';
                 if (ciclos.length > 0) {
@@ -305,9 +290,9 @@
 
                         html += `<div class="ciclo-tratamento"><div class="ciclo-header"><span>Início: ${dataInicio} | Status: <span class="${statusClasse}">${ciclo.status.replace(/_/g, ' ')}</span></span><span>Retornos: ${realizados} / ${retornos + 1}</span></div><ul class="atendimentos-lista">`;
 
+                        // Não precisamos mais do .sort() aqui
                         const atendimentosDoCiclo = todosAtendimentos
-                            .filter(a => a.tratamentoId === ciclo.id)
-                            .sort((a, b) => a.dataAtendimento?.toMillis() - b.dataAtendimento?.toMillis());
+                            .filter(a => a.tratamentoId === ciclo.id);
 
                         if (atendimentosDoCiclo.length === 0) { html += '<li>Nenhum atendimento registrado.</li>'; }
                         else { atendimentosDoCiclo.forEach(a => { html += renderizarItemAtendimentoVL(a); }); }
@@ -320,9 +305,6 @@
                 ui.cardVL.innerHTML = html;
             }
 
-            // --- Funções Auxiliares (Copiadas dos arquivos originais para manter links) ---
-
-            // Copiado de 'arquivo-geral-ae.html'
             function renderizarItemAtendimentoAE(a, passe_ciclo_atual) {
                 const dataAtendimento = formatarData(a.dataAtendimento, "Aguardando Presença");
                 let tipoAtendimento = a.tipo?.replace(/_/g, ' ') || 'N/A';
@@ -341,7 +323,6 @@
                     if (a.semana === 5 && a.decisao_pre_registrada === true && a.dataAtendimento === null) { iconeHtml = '<span>🔵</span>'; tipoAtendimento = "Reavaliação (Decisão Pronta)"; }
                     else if (a.detalhes_preenchidos === true) { iconeHtml = '<span>✅</span>'; }
                     else { iconeHtml = '<span>📝</span>'; }
-                    // Link para a página de edição da AE
                     botaoEditarHtml = `<a href="/entrevista-ae.html?atendimentoId=${a.id}" class="btn btn-editar">Ver / Editar</a>`;
                 }
                 
@@ -349,11 +330,9 @@
                 return `<li ${estiloItem}><div class="atendimento-info">${iconeHtml}<span><strong>${dataAtendimento}</strong> - ${tipoAtendimento} ${infoExtra}</span></div>${botaoEditarHtml}</li>`;
             }
 
-            // Copiado de 'arquivo-geral-vl.html'
             function renderizarItemAtendimentoVL(a) {
                 const dataAtendimento = formatarData(a.dataAtendimento);
                 const atendimentoNum = `Atendimento ${a.semana || '?'}`;
-                // Link para a página de edição do VL
                 const botaoEditarHtml = `<a href="/atendimento-vl.html?atendimentoId=${a.id}" class="btn btn-editar">Ver / Editar</a>`;
                 
                 return `<li>
@@ -365,7 +344,7 @@
             }
 
             // Inicia o carregamento
-            carregarProntuário();
+            carregarProntuario();
         }
     </script>
 </body>
