@@ -79,7 +79,7 @@
         
         initializeApp(firebaseConfig);
 
-        protegerPagina(['super-admin', 'tesoureiro', 'conselheiro', 'recepcionista', 'bibliotecario', 'irradiador', 'produtor-evento', 'diretor', 'entrevistador']).then(user => {
+        protegerPagina(['super-admin', 'diretor', 'tesoureiro', 'conselheiro', 'entrevistador', 'recepcionista', 'irradiador', 'secretario-escola', 'dirigente-escola', 'produtor-evento', 'bibliotecario']).then(user => {
             document.getElementById('main-content').style.display = 'block';
             inicializar();
         }).catch(error => {
@@ -88,143 +88,166 @@
         });
 
         async function inicializar() {
-            const db = getFirestore();
-            const tratamentosRef = collection(db, "tratamentos_ae");
-            const atendimentosRef = collection(db, "atendimentos_ae");
-
-            const filtroAno = document.getElementById('filtro-ano');
-            const feedback = document.getElementById('feedback');
-            const dashboardContent = document.getElementById('dashboard-content');
-            let graficoPrincipal;
+            const db = getFirestore();
             
-            try {
-                const snapshotTratamentos = await getDocs(tratamentosRef);
-                const todosTratamentos = snapshotTratamentos.docs.map(doc => doc.data());
+            // ### MUDANÇA AQUI: Adicionadas coleções _vl ###
+            const tratamentosAERef = collection(db, "tratamentos_ae");
+            const atendimentosAERef = collection(db, "atendimentos_ae");
+            const tratamentosVLRef = collection(db, "tratamentos_vl");
+            const atendimentosVLRef = collection(db, "atendimentos_vl");
 
-                const snapshotAtendimentos = await getDocs(atendimentosRef);
-                const todosAtendimentos = snapshotAtendimentos.docs.map(doc => doc.data());
-                
-                if (todosTratamentos.length === 0) {
-                    feedback.textContent = "Nenhum dado de tratamento encontrado para gerar estatísticas.";
-                    return;
-                }
-                
-                // ===================================================================
-                // INÍCIO DA CORREÇÃO 1: Filtrar tratamentos sem data de início
-                // ===================================================================
-                const tratamentosComData = todosTratamentos.filter(t => t.dataInicio); // Garante que dataInicio não é null
-                if (tratamentosComData.length === 0) {
-                     feedback.textContent = "Nenhum tratamento com data de início encontrado.";
-                     return;
-                }
-                const anosDisponiveis = [...new Set(tratamentosComData.map(t => t.dataInicio.toDate().getFullYear()))];
-                // ===================================================================
-                // FIM DA CORREÇÃO 1
-                // ===================================================================
+            const filtroAno = document.getElementById('filtro-ano');
+            const feedback = document.getElementById('feedback');
+            const dashboardContent = document.getElementById('dashboard-content');
+            let graficoPrincipal;
+            
+            try {
+                // ### MUDANÇA AQUI: Busca em 4 coleções ###
+                const [
+                    snapshotTratamentosAE, 
+                    snapshotAtendimentosAE,
+                    snapshotTratamentosVL,
+                    snapshotAtendimentosVL
+                ] = await Promise.all([
+                    getDocs(tratamentosAERef),
+                    getDocs(atendimentosAERef),
+                    getDocs(tratamentosVLRef),
+                    getDocs(atendimentosVLRef)
+                ]);
 
-                anosDisponiveis.sort((a,b) => b - a);
+                // ### MUDANÇA AQUI: Combina os resultados de AE e VL ###
+                const todosTratamentos = [
+                    ...snapshotTratamentosAE.docs.map(doc => doc.data()),
+                    ...snapshotTratamentosVL.docs.map(doc => doc.data())
+                ];
 
-                anosDisponiveis.forEach(ano => {
-                    const option = document.createElement('option');
-                    option.value = ano;
-                    option.textContent = ano;
-                    filtroAno.appendChild(option);
-                });
+                const todosAtendimentos = [
+                    ...snapshotAtendimentosAE.docs.map(doc => doc.data()),
+                    ...snapshotAtendimentosVL.docs.map(doc => doc.data())
+                ];
+                
+                if (todosTratamentos.length === 0) {
+                    feedback.textContent = "Nenhum dado de tratamento (AE ou VL) encontrado para gerar estatísticas.";
+                    return;
+                }
+                
+                // ===================================================================
+                // INÍCIO DA CORREÇÃO 1: Filtrar tratamentos sem data de início
+                // ===================================================================
+                const tratamentosComData = todosTratamentos.filter(t => t.dataInicio); // Garante que dataInicio não é null
+                if (tratamentosComData.length === 0) {
+                     feedback.textContent = "Nenhum tratamento com data de início encontrado.";
+                     return;
+                }
+                const anosDisponiveis = [...new Set(tratamentosComData.map(t => t.dataInicio.toDate().getFullYear()))];
+                // ===================================================================
+                // FIM DA CORREÇÃO 1
+                // ===================================================================
 
-                filtroAno.addEventListener('change', () => renderizarDados(filtroAno.value, todosTratamentos, todosAtendimentos));
-                renderizarDados(filtroAno.value, todosTratamentos, todosAtendimentos);
+                anosDisponiveis.sort((a,b) => b - a);
 
-                feedback.style.display = 'none';
-                dashboardContent.style.display = 'block';
+                anosDisponiveis.forEach(ano => {
+                    const option = document.createElement('option');
+                    option.value = ano;
+                    option.textContent = ano;
+                    filtroAno.appendChild(option);
+                });
 
-            } catch (error) {
-                console.error("Erro ao carregar dados:", error);
-                feedback.textContent = "Ocorreu um erro ao carregar os dados. Tente novamente mais tarde.";
-                feedback.style.color = 'red';
-            }
+                filtroAno.addEventListener('change', () => renderizarDados(filtroAno.value, todosTratamentos, todosAtendimentos));
+                renderizarDados(filtroAno.value, todosTratamentos, todosAtendimentos);
 
-            function renderizarDados(anoSelecionado, todosTratamentos, todosAtendimentos) {
-                const ano = parseInt(anoSelecionado);
-                
-                // ===================================================================
-                // INÍCIO DA CORREÇÃO 2 e 3: Filtrar datas nulas
-                // ===================================================================
-                // Filtra apenas tratamentos que TENHAM dataInicio e sejam do ano selecionado
-                const tratamentosDoAno = todosTratamentos.filter(t => t.dataInicio && t.dataInicio.toDate().getFullYear() === ano);
-                
-                // Filtra apenas atendimentos que TENHAM dataAtendimento e sejam do ano selecionado
-                const atendimentosDoAno = todosAtendimentos.filter(a => a.dataAtendimento && a.dataAtendimento.toDate().getFullYear() === ano);
-                // ===================================================================
-                // FIM DA CORREÇÃO 2 e 3
-                // ===================================================================
-                
-                const totalAtendimentos = atendimentosDoAno.filter(a => a.tipo !== 'falta').length;
-                const novosTratamentos = tratamentosDoAno.length; // Conta novos tratamentos
-                const altas = tratamentosDoAno.filter(t => t.status === 'concluido_com_alta').length;
-                const desistencias = tratamentosDoAno.filter(t => t.status === 'encerrado_por_falta').length;
-                const encaminhadosEAE = atendimentosDoAno.filter(a => a.encaminhamentos && a.encaminhamentos.includes('EAE')).length;
+                feedback.style.display = 'none';
+                dashboardContent.style.display = 'block';
 
-                document.getElementById('kpi-total').textContent = totalAtendimentos;
-                document.getElementById('kpi-novos').textContent = novosTratamentos; // KPI atualizado
-                document.getElementById('kpi-altas').textContent = altas;
-                document.getElementById('kpi-desistencias').textContent = desistencias;
-                document.getElementById('kpi-eae').textContent = encaminhadosEAE;
+            } catch (error) {
+                console.error("Erro ao carregar dados:", error);
+                feedback.textContent = "Ocorreu um erro ao carregar os dados. Tente novamente mais tarde.";
+                feedback.style.color = 'red';
+            }
 
-                const meses = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
-                const dadosGrafico = {
-                    atendimentos: Array(12).fill(0),
-                    novos: Array(12).fill(0)
-                };
+            function renderizarDados(anoSelecionado, todosTratamentos, todosAtendimentos) {
+                const ano = parseInt(anoSelecionado);
+                
+                // ===================================================================
+                // INÍCIO DA CORREÇÃO 2 e 3: Filtrar datas nulas
+                // ===================================================================
+                // Filtra apenas tratamentos que TENHAM dataInicio e sejam do ano selecionado
+                const tratamentosDoAno = todosTratamentos.filter(t => t.dataInicio && t.dataInicio.toDate().getFullYear() === ano);
+                
+                // Filtra apenas atendimentos que TENHAM dataAtendimento e sejam do ano selecionado
+                const atendimentosDoAno = todosAtendimentos.filter(a => a.dataAtendimento && a.dataAtendimento.toDate().getFullYear() === ano);
+                // ===================================================================
+                // FIM DA CORREÇÃO 2 e 3
+                // ===================================================================
+                
+                // O restante da lógica permanece idêntico, pois agora opera nos dados combinados
+                const totalAtendimentos = atendimentosDoAno.filter(a => a.tipo !== 'falta').length;
+                const novosTratamentos = tratamentosDoAno.length; // Conta novos tratamentos
+                const altas = tratamentosDoAno.filter(t => t.status === 'concluido_com_alta').length;
+                const desistencias = tratamentosDoAno.filter(t => t.status === 'encerrado_por_falta').length;
+                const encaminhadosEAE = atendimentosDoAno.filter(a => a.encaminhamentos && a.encaminhamentos.includes('EAE')).length;
 
-                // dataAtendimento já foi validada pelo filtro 'atendimentosDoAno'
-                atendimentosDoAno.forEach(a => {
-                    if(a.tipo !== 'falta') {
-                        const mes = a.dataAtendimento.toDate().getMonth();
-                        dadosGrafico.atendimentos[mes]++;
-                    }
-                });
-                
-                // dataInicio já foi validada pelo filtro 'tratamentosDoAno'
-                tratamentosDoAno.forEach(t => {
-                    const mes = t.dataInicio.toDate().getMonth();
-                    dadosGrafico.novos[mes]++;
-                });
+                document.getElementById('kpi-total').textContent = totalAtendimentos;
+                document.getElementById('kpi-novos').textContent = novosTratamentos; // KPI atualizado
+                document.getElementById('kpi-altas').textContent = altas;
+                document.getElementById('kpi-desistencias').textContent = desistencias;
+                document.getElementById('kpi-eae').textContent = encaminhadosEAE;
 
-                const ctx = document.getElementById('grafico-principal').getContext('2d');
-                if (graficoPrincipal) {
-                    graficoPrincipal.destroy();
-                }
-                graficoPrincipal = new Chart(ctx, {
-                    type: 'line',
-                    data: {
-                        labels: meses,
-                        datasets: [{
-                            label: 'Total de Atendimentos',
-                            data: dadosGrafico.atendimentos,
-                            borderColor: 'rgb(54, 162, 235)',
-                            backgroundColor: 'rgba(54, 162, 235, 0.5)',
-                            tension: 0.1
-                        }, {
-                            label: 'Novos Tratamentos', // Label do gráfico atualizado
-                            data: dadosGrafico.novos,
-                            borderColor: 'rgb(255, 99, 132)',
-                            backgroundColor: 'rgba(255, 99, 132, 0.5)',
-                            tension: 0.1
-                        }]
-                    },
-                    options: {
-                        scales: {
-                            y: {
-                                beginAtZero: true,
-                                ticks: {
-                                    stepSize: 10
-                                }
-                            }
-                        }
-                    }
-                });
-            }
-        }
+                const meses = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
+                const dadosGrafico = {
+                    atendimentos: Array(12).fill(0),
+                    novos: Array(12).fill(0)
+                };
+
+                // dataAtendimento já foi validada pelo filtro 'atendimentosDoAno'
+                atendimentosDoAno.forEach(a => {
+                    if(a.tipo !== 'falta') {
+                        const mes = a.dataAtendimento.toDate().getMonth();
+                        dadosGrafico.atendimentos[mes]++;
+                    }
+                });
+                
+                // dataInicio já foi validada pelo filtro 'tratamentosDoAno'
+                tratamentosDoAno.forEach(t => {
+                    const mes = t.dataInicio.toDate().getMonth();
+                    dadosGrafico.novos[mes]++;
+                });
+
+                const ctx = document.getElementById('grafico-principal').getContext('2d');
+                if (graficoPrincipal) {
+                    graficoPrincipal.destroy();
+                }
+                graficoPrincipal = new Chart(ctx, {
+                    type: 'line',
+                    data: {
+                        labels: meses,
+                        datasets: [{
+                            label: 'Total de Atendimentos (AE + VL)', // Título atualizado
+                            data: dadosGrafico.atendimentos,
+                            borderColor: 'rgb(54, 162, 235)',
+                            backgroundColor: 'rgba(54, 162, 235, 0.5)',
+                            tension: 0.1
+                        }, {
+                            label: 'Novos Tratamentos (AE + VL)', // Título atualizado
+                            data: dadosGrafico.novos,
+                            borderColor: 'rgb(255, 99, 132)',
+                            backgroundColor: 'rgba(255, 99, 132, 0.5)',
+                            tension: 0.1
+                        }]
+                    },
+                    options: {
+                        scales: {
+                            y: {
+                                beginAtZero: true,
+                                ticks: {
+                                    stepSize: 10
+                                }
+                            }
+                        }
+                    }
+                });
+            }
+        }
     </script>
 </body>
 </html>
