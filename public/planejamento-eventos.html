@@ -22,6 +22,7 @@
         .btn { padding: 12px 25px; border: none; border-radius: 6px; font-size: 1em; font-weight: bold; cursor: pointer; }
         .btn-primary { background-color: #007bff; color: white; }
         .btn-secondary { background-color: #6c757d; color: white; }
+        .btn-success { background-color: #28a745; color: white; }
         
         #lista-eventos-gerenciamento table { width: 100%; border-collapse: collapse; margin-top: 20px; }
         #lista-eventos-gerenciamento th, #lista-eventos-gerenciamento td { padding: 12px; border-bottom: 1px solid #eee; text-align: left; }
@@ -30,35 +31,157 @@
         .btn-edit { background-color: #1976d2; color: white; border-color: #1976d2;}
         .btn-cancel { background-color: #c62828; color: white; border-color: #c62828;}
         .status-cancelado td { text-decoration: line-through; color: #999; }
+        .header-gestao-eventos { display: flex; justify-content: space-between; align-items: center; }
         
-        /* Estilos do Cronograma Visual */
+        /* --- ESTILOS DA TIMELINE (COPIADO DA TV) --- */
         #cronograma-visual { padding: 40px 0; overflow-x: auto; }
         .semestre { margin-bottom: 60px; }
         .semestre h2 { background-color: #34495e; color: white; padding: 10px; border-radius: 8px; font-size: 1.5em; }
-        .timeline { display: grid; position: relative; padding: 150px 0; }
-        .timeline-axis { position: absolute; top: 50%; left: 0; right: 0; height: 6px; background-color: #7f8c8d; transform: translateY(-50%); z-index: 1; }
+        .timeline { 
+            display: grid; 
+            position: relative; 
+            padding: 150px 0; /* Espaço para nós */
+        }
+        .timeline-axis { 
+            position: absolute; 
+            top: 50%; 
+            left: 0; 
+            right: 0; 
+            height: 10px; /* Linha central grossa */
+            background-color: #0d47a1; /* Azul escuro */
+            border-radius: 5px;
+            transform: translateY(-50%); 
+            z-index: 1; 
+        }
         .month-grid-container { display: contents; }
-        .month { text-align: center; font-weight: bold; color: #34495e; position: relative; border-right: 1px dotted #ccc; display: flex; justify-content: center; align-items: center;}
+        .month { 
+            text-align: center; 
+            font-weight: bold; 
+            color: #34495e; 
+            position: relative; 
+            border-right: 1px dotted #ccc; 
+            display: flex; 
+            justify-content: center; 
+            align-items: center;
+        }
         .month:last-child { border-right: none; }
-        .month-label { background-color: #f0f2f5; padding: 0 15px; font-size: 1.2em; z-index: 2; }
+        .month-label { 
+            background-color: #f0f2f5; 
+            padding: 0 15px; 
+            font-size: 1.2em; 
+            z-index: 2; 
+        }
         
-        .event-node { grid-row: 1; position: relative; width: 130px; z-index: 5; display: flex; flex-direction: column; align-items: center; }
-        .event-node .details { order: 1; font-size: 0.85em; background: #fff; padding: 5px 8px; border-radius: 4px; box-shadow: 0 2px 5px rgba(0,0,0,0.15); line-height: 1.4; text-align: center; }
-        .event-node .diamond { order: 2; width: 20px; height: 20px; transform: rotate(45deg); margin: 0 auto; border: 3px solid white; box-shadow: 0 0 0 2px #2E7D32; background-color: #2E7D32; }
-        .event-node .line { order: 3; width: 2px; background-color: #2E7D32; }
+        .event-node { 
+            grid-row: 1; 
+            position: relative; 
+            width: 130px; 
+            z-index: 5; 
+            display: flex; 
+            flex-direction: column; 
+            align-items: center; 
+        }
+        .event-node .details { 
+            order: 1; 
+            font-size: 0.85em; 
+            background: #fff; 
+            padding: 8px 10px; /* Ajustado */
+            border-radius: 8px; /* Ajustado */
+            box-shadow: 0 4px 8px rgba(0,0,0,0.1); /* Ajustado */
+            line-height: 1.4; 
+            text-align: center;
+            border: 1px solid #ddd;
+            min-width: 120px;
+        }
+        /* NOVO NÓ CIRCULAR */
+        .event-node .node-circle {
+            order: 2;
+            width: 20px; /* Tamanho do nó no admin */
+            height: 20px;
+            background-color: #0d47a1; /* Cor do nó */
+            border: 3px solid #f0f2f5; /* Espaço interno (usa cor de fundo) */
+            border-radius: 50%;
+            box-shadow: 0 0 0 3px #0d47a1; /* Anel externo */
+            z-index: 5;
+            margin: 5px auto;
+        }
+        .event-node .line { 
+            order: 3; 
+            width: 3px; /* Linha de conexão */
+            background-color: #0d47a1; 
+        }
         .event-node .details strong { display: block; font-size: 1.1em; }
         
         .event-node[data-position="top"] { align-self: end; padding-bottom: 10px; }
         .event-node[data-position="bottom"] { align-self: start; padding-top: 10px; flex-direction: column-reverse; }
 
         .event-node.cancelado { opacity: 0.6; }
-        .event-node.cancelado .details { text-decoration: line-through; }
-        .event-node.cancelado .diamond, .event-node.cancelado .line { background-color: #a4b0be; box-shadow: 0 0 0 2px #a4b0be; }
+        .event-node.cancelado .details { text-decoration: line-through; background-color: #e9ecef; }
+        .event-node.cancelado .node-circle { 
+            background-color: #777; 
+            box-shadow: 0 0 0 3px #777; 
+        }
+        .event-node.cancelado .line { 
+            background-color: #777; 
+        }
         
         .tooltip-text { visibility: hidden; width: 180px; background-color: #333; color: #fff; text-align: center; border-radius: 6px; padding: 8px; position: absolute; z-index: 100; bottom: 125%; left: 50%; transform: translateX(-50%); opacity: 0; transition: opacity 0.3s; pointer-events: none; }
         .event-node:hover .tooltip-text { visibility: visible; opacity: 1; }
 
         .feriados-lista { margin-top: 20px; padding-top: 15px; text-align: center; font-size: 0.9em; color: #555; border-top: 1px dashed #ccc; }
+        
+        /* --- ESTILOS DO NOVO MODAL DE FERIADOS --- */
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.6);
+            display: none; /* Começa oculto */
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+        }
+        .modal-content {
+            background: white;
+            padding: 30px;
+            border-radius: 12px;
+            width: 90%;
+            max-width: 600px;
+            box-shadow: 0 5px 25px rgba(0,0,0,0.2);
+        }
+        .modal-content h3 {
+            margin-top: 0;
+            color: #34495e;
+        }
+        #lista-feriados-importar {
+            max-height: 40vh;
+            overflow-y: auto;
+            border: 1px solid #eee;
+            border-radius: 8px;
+            padding: 15px;
+            background: #f9f9f9;
+        }
+        #lista-feriados-importar label {
+            display: block;
+            margin-bottom: 12px;
+            font-size: 1.1em;
+            cursor: pointer;
+        }
+        #lista-feriados-importar input {
+            margin-right: 12px;
+            width: 18px;
+            height: 18px;
+            vertical-align: middle;
+        }
+        .modal-actions {
+            margin-top: 25px;
+            display: flex;
+            justify-content: flex-end;
+            gap: 15px;
+        }
+        /* --- FIM DOS ESTILOS DO MODAL --- */
     </style>
 </head>
 <body>
@@ -84,7 +207,10 @@
             </form>
         </div>
         <div class="card">
-            <h2>Eventos Cadastrados</h2>
+            <div class="header-gestao-eventos">
+                <h2>Eventos Cadastrados</h2>
+                <button id="btn-carregar-feriados" class="btn-success">Importar Feriados Nacionais</button>
+            </div>
             <div id="lista-eventos-gerenciamento"></div>
         </div>
         <div class="card">
@@ -93,6 +219,19 @@
                 <button id="btn-gerar-pdf" class="btn-secondary">Gerar PDF</button>
             </div>
             <div id="cronograma-visual"></div>
+        </div>
+    </div>
+
+    <div id="modal-feriados" class="modal-overlay">
+        <div class="modal-content">
+            <h3>Importar Feriados Nacionais</h3>
+            <p id="modal-feriados-status">Buscando feriados... (Isso pode levar um momento)</p>
+            <div id="lista-feriados-importar">
+                </div>
+            <div class="modal-actions">
+                <button id="btn-modal-cancelar" class="btn-secondary">Cancelar</button>
+                <button id="btn-modal-importar" class="btn-primary" disabled>Importar Selecionados</button>
+            </div>
         </div>
     </div>
 
@@ -124,10 +263,11 @@
         function inicializarPagina(user) {
             const db = getFirestore();
             const eventosCollection = collection(db, 'eventos');
-            const logAuditoriaCollection = collection(db, 'log_auditoria'); // Adicionado para logs
+            const logAuditoriaCollection = collection(db, 'log_auditoria'); 
             const form = document.getElementById('form-evento');
             const btnCancelarEdicao = document.getElementById('btn-cancelar-edicao');
             let editandoId = null;
+            let eventosAtuais = []; // Cache local dos eventos
 
             async function registrarLog(acao, detalhes) {
                 if (!user) return;
@@ -144,18 +284,24 @@
             }
 
             onSnapshot(query(eventosCollection, orderBy("dataInicio", "asc")), (snapshot) => {
-                const eventos = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-                renderizarListaGerenciamento(eventos);
-                renderizarCronograma(eventos);
+                eventosAtuais = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })); // Atualiza o cache
+                renderizarListaGerenciamento(eventosAtuais);
+                renderizarCronograma(eventosAtuais);
             });
 
             form.addEventListener('submit', async (e) => {
                 e.preventDefault();
+                
+                // Correção de Fuso Horário (UTC 12:00)
+                const dataInicioInput = document.getElementById('dataInicio').value;
+                const dataFimInput = document.getElementById('dataFim').value;
+
                 const evento = {
                     titulo: document.getElementById('titulo').value,
                     detalhes: document.getElementById('detalhes').value,
-                    dataInicio: Timestamp.fromDate(new Date(document.getElementById('dataInicio').value + 'T12:00:00Z')),
-                    dataFim: document.getElementById('dataFim').value ? Timestamp.fromDate(new Date(document.getElementById('dataFim').value + 'T12:00:00Z')) : null,
+                    // Salva a data como se fosse meio-dia UTC para evitar problemas de fuso
+                    dataInicio: Timestamp.fromDate(new Date(dataInicioInput + 'T12:00:00Z')),
+                    dataFim: dataFimInput ? Timestamp.fromDate(new Date(dataFimInput + 'T12:00:00Z')) : null,
                     tipo: document.getElementById('tipo').value,
                     status: 'ativo'
                 };
@@ -199,6 +345,7 @@
                         const data = docSnap.data();
                         document.getElementById('titulo').value = data.titulo;
                         document.getElementById('detalhes').value = data.detalhes || '';
+                        // Converte Timestamp do UTC 12:00 de volta para YYYY-MM-DD
                         document.getElementById('dataInicio').value = data.dataInicio.toDate().toISOString().split('T')[0];
                         document.getElementById('dataFim').value = data.dataFim ? data.dataFim.toDate().toISOString().split('T')[0] : '';
                         document.getElementById('tipo').value = data.tipo;
@@ -250,14 +397,20 @@
                 const table = document.createElement('table');
                 table.innerHTML = `<thead><tr><th>Data</th><th>Evento</th><th>Tipo</th><th>Status</th><th>Ações</th></tr></thead><tbody></tbody>`;
                 const tbody = table.querySelector('tbody');
+                
+                // Exibe em ordem reversa (mais novos primeiro)
                 [...eventos].reverse().forEach(evento => {
                     const tr = document.createElement('tr');
                     tr.className = evento.status === 'cancelado' ? 'status-cancelado' : '';
+                    
                     const hoje = new Date();
-                    hoje.setHours(0,0,0,0);
-                    const eventoPassou = evento.dataInicio.toDate() < hoje;
+                    hoje.setUTCHours(0,0,0,0); // Comparação em UTC
+                    const dataEvento = evento.dataInicio.toDate();
+                    
+                    const eventoPassou = dataEvento < hoje;
+                    
                     tr.innerHTML = `
-                        <td>${evento.dataInicio.toDate().toLocaleDateString('pt-BR')}</td>
+                        <td>${dataEvento.toLocaleDateString('pt-BR', {timeZone: 'UTC'})}</td>
                         <td>${evento.titulo}</td>
                         <td>${evento.tipo}</td>
                         <td>${evento.status}</td>
@@ -272,6 +425,7 @@
                 container.appendChild(table);
             }
 
+            // ### FUNÇÃO renderizarCronograma ATUALIZADA (ESTÉTICA) ###
             function renderizarCronograma(eventos) {
                 const container = document.getElementById('cronograma-visual');
                 container.innerHTML = '';
@@ -285,7 +439,7 @@
                 eventos.forEach(e => {
                     const dataEvento = e.dataInicio.toDate();
                     if(dataEvento.getFullYear() !== anoAtual) return;
-                    const mes = dataEvento.getUTCMonth();
+                    const mes = dataEvento.getUTCMonth(); // 0-11
                     if(mes < 6) semestres[1].eventos.push(e);
                     else semestres[2].eventos.push(e);
                 });
@@ -350,12 +504,13 @@
                         const alturaLinha = 30 + (nivel * alturaBase);
                         
                         let nodeHTML;
+                        // ### MUDANÇA ESTÉTICA AQUI: .diamond -> .node-circle ###
                         if (posicao === 'top') {
                             node.style.paddingBottom = `${alturaLinha}px`;
-                            nodeHTML = `<div class="details"></div><div class="diamond"></div><div class="line" style="height: ${alturaLinha}px;"></div>`;
+                            nodeHTML = `<div class="details"></div><div class="node-circle"></div><div class="line" style="height: ${alturaLinha}px;"></div>`;
                         } else {
                             node.style.paddingTop = `${alturaLinha}px`;
-                            nodeHTML = `<div class="line" style="height: ${alturaLinha}px;"></div><div class="diamond"></div><div class="details"></div>`;
+                            nodeHTML = `<div class="line" style="height: ${alturaLinha}px;"></div><div class="node-circle"></div><div class="details"></div>`;
                         }
                         node.innerHTML = nodeHTML;
 
@@ -382,7 +537,124 @@
                     }
                 }
             }
+
+            // ### INÍCIO DA NOVA LÓGICA DE IMPORTAÇÃO DE FERIADOS ###
+            
+            const modalFeriados = document.getElementById('modal-feriados');
+            const btnCarregarFeriados = document.getElementById('btn-carregar-feriados');
+            const btnModalCancelar = document.getElementById('btn-modal-cancelar');
+            const btnModalImportar = document.getElementById('btn-modal-importar');
+            const listaFeriadosImportar = document.getElementById('lista-feriados-importar');
+            const modalFeriadosStatus = document.getElementById('modal-feriados-status');
+            
+            let feriadosParaImportar = [];
+
+            btnCarregarFeriados.addEventListener('click', async () => {
+                modalFeriados.style.display = 'flex';
+                modalFeriadosStatus.textContent = 'Buscando feriados... (Isso pode levar um momento)';
+                btnModalImportar.disabled = true;
+                listaFeriadosImportar.innerHTML = '';
+                feriadosParaImportar = [];
+                
+                try {
+                    const anoAtual = new Date().getFullYear();
+                    const anoSeguinte = anoAtual + 1;
+                    
+                    // Busca feriados do ano atual e do próximo
+                    const [respAtual, respSeguinte] = await Promise.all([
+                        fetch(`https://brasilapi.com.br/api/feriados/v1/${anoAtual}`),
+                        fetch(`https://brasilapi.com.br/api/feriados/v1/${anoSeguinte}`)
+                    ]);
+                    
+                    const feriadosApiAtual = await respAtual.json();
+                    const feriadosApiSeguinte = await respSeguinte.json();
+                    
+                    const todosFeriadosApi = [...feriadosApiAtual, ...feriadosApiSeguinte];
+                    
+                    // Filtra apenas feriados nacionais que ainda não estão no DB
+                    const feriadosJaCadastrados = new Set(
+                        eventosAtuais
+                            .filter(e => e.tipo === 'feriado')
+                            .map(e => e.dataInicio.toDate().toISOString().split('T')[0])
+                    );
+
+                    feriadosParaImportar = todosFeriadosApi
+                        .filter(f => f.type === 'national' && !feriadosJaCadastrados.has(f.date));
+
+                    abrirModalFeriados(feriadosParaImportar);
+
+                } catch (error) {
+                    console.error("Erro ao buscar feriados:", error);
+                    modalFeriadosStatus.textContent = "Erro ao buscar feriados. Tente novamente.";
+                }
+            });
+
+            function abrirModalFeriados(feriados) {
+                if (feriados.length === 0) {
+                    modalFeriadosStatus.textContent = `Nenhum novo feriado nacional encontrado para ${new Date().getFullYear()} ou ${new Date().getFullYear() + 1}.`;
+                    return;
+                }
+
+                modalFeriadosStatus.textContent = `Selecione os feriados que deseja importar:`;
+                btnModalImportar.disabled = false;
+                
+                feriados.forEach(feriado => {
+                    const dataFormatada = new Date(feriado.date + 'T12:00:00Z').toLocaleDateString('pt-BR', {day: '2-digit', month: '2-digit', year: 'numeric', timeZone: 'UTC'});
+                    const id = `feriado-${feriado.date}`;
+                    listaFeriadosImportar.innerHTML += `
+                        <div>
+                            <label for="${id}">
+                                <input type="checkbox" id="${id}" value="${feriado.date}" data-nome="${feriado.name}" checked>
+                                <strong>${feriado.name}</strong> (${dataFormatada})
+                            </label>
+                        </div>
+                    `;
+                });
+            }
+
+            btnModalCancelar.addEventListener('click', () => {
+                modalFeriados.style.display = 'none';
+            });
+
+            btnModalImportar.addEventListener('click', async () => {
+                const checkboxes = listaFeriadosImportar.querySelectorAll('input[type="checkbox"]:checked');
+                if (checkboxes.length === 0) {
+                    alert("Nenhum feriado selecionado.");
+                    return;
+                }
+
+                btnModalImportar.disabled = true;
+                btnModalImportar.textContent = 'Importando...';
+                
+                const promessas = [];
+                checkboxes.forEach(cb => {
+                    const novoFeriado = {
+                        titulo: cb.dataset.nome,
+                        detalhes: "Feriado Nacional",
+                        dataInicio: Timestamp.fromDate(new Date(cb.value + 'T12:00:00Z')), // Salva em UTC
+                        dataFim: null,
+                        tipo: 'feriado',
+                        status: 'ativo',
+                        criadoEm: serverTimestamp(),
+                        criadoPor: "Importação Automática"
+                    };
+                    promessas.push(addDoc(eventosCollection, novoFeriado));
+                });
+
+                try {
+                    await Promise.all(promessas);
+                    await registrarLog("IMPORTACAO_FERIADOS", { quantidade: promessas.length });
+                    alert(`${promessas.length} feriado(s) importado(s) com sucesso!`);
+                    modalFeriados.style.display = 'none';
+                } catch (error) {
+                    console.error("Erro ao salvar feriados:", error);
+                    alert("Ocorreu um erro ao salvar os feriados.");
+                    btnModalImportar.disabled = false;
+                    btnModalImportar.textContent = 'Importar Selecionados';
+                }
+            });
+            // ### FIM DA NOVA LÓGICA DE IMPORTAÇÃO DE FERIADOS ###
         }
     </script>
 </body>
-</html> 
+</html>
