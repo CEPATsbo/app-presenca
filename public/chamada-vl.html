@@ -69,6 +69,7 @@
         } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
         import { protegerPagina } from '/auth.js';
         
+        // Configuração do Firebase
         const firebaseConfig = {
             apiKey: "AIzaSyBV7RPjk3cFTqL-aIpflJcUojKg1ZXMLuU",
             authDomain: "voluntarios-ativos---cepat.firebaseapp.com",
@@ -77,27 +78,19 @@
             messagingSenderId: "66122858261",
             appId: "1:66122858261:web:7fa21f1805463b5c08331c"
         };
+        // O auth.js já inicializa o app, então esta linha foi removida
+        // initializeApp(firebaseConfig); 
         
-        // ===================================================================
-        // INÍCIO DA MODIFICAÇÃO JAVASCRIPT: Linha Removida
-        // =O `auth.js` já inicializa o app.
-        // ===================================================================
-        // initializeApp(firebaseConfig); // <-- LINHA REMOVIDA
-        // ===================================================================
-        // FIM DA MODIFICAÇÃO JAVASCRIPT
-        // ===================================================================
-        
-        // Permissões de operador (atendente/recepção)
+        // Permissões
         protegerPagina(['recepcionista', 'diretor', 'tesoureiro', 'entrevistador', 'super-admin']).then(user => {
             document.getElementById('main-content').classList.remove('hidden');
             inicializarPagina(user);
         }).catch(err => { 
-            // document.getElementById('acesso-negado').classList.remove('hidden'); // Deixa o auth.js cuidar disso
             console.error(err);
         });
 
         function inicializarPagina(user) {
-            const db = getFirestore(); // Pega o DB que o auth.js inicializou
+            const db = getFirestore();
             const filaVlRef = collection(db, 'fila_atendimento_vl');
             const atendimentosVlRef = collection(db, 'atendimentos_vl');
             const logAuditoriaRef = collection(db, 'log_auditoria');
@@ -108,7 +101,7 @@
                 listaEspera: document.getElementById('lista-espera')
             };
             
-            let proximoAssistido = null; // Guarda o objeto do próximo assistido
+            let proximoAssistido = null;
 
             // Função de Log Corrigida
             async function registrarLog(acao, detalhes) {
@@ -130,12 +123,11 @@
                 ui.btnChamar.disabled = true;
                 ui.btnChamar.textContent = 'Chamando...';
 
-                const assistido = proximoAssistido; // Pega o assistido que estava em espera
+                const assistido = proximoAssistido;
                 
                 try {
                     const batch = writeBatch(db);
                     
-                    // 1. Atualiza a Fila para "Chamado" (ativa a TV)
                     const filaRef = doc(filaVlRef, assistido.id);
                     batch.update(filaRef, {
                         status: 'Chamado',
@@ -143,7 +135,6 @@
                         atendente: { uid: user.uid, nome: user.displayName }
                     });
                     
-                    // 2. Atualiza o Atendimento com o nome do atendente
                     const atendimentoRef = doc(atendimentosVlRef, assistido.atendimentoId);
                     batch.update(atendimentoRef, {
                         atendente: user.displayName
@@ -158,44 +149,50 @@
                         atendimentoId: assistido.atendimentoId
                     });
 
-                    // 3. Após 10s, move para "Atendido" (limpa a TV)
                     setTimeout(async () => {
                         try {
                             await updateDoc(filaRef, { status: 'Atendido' });
                         } catch (err) {
                             console.error("Erro ao mover para 'Atendido':", err);
                         }
-                    }, 10000); // 10 segundos
+                    }, 10000); 
 
                 } catch (error) {
                     console.error("Erro ao chamar próximo:", error);
                     alert("Falha ao chamar assistido.");
-                    ui.btnChamar.disabled = false; // Reabilita em caso de erro
+                    ui.btnChamar.disabled = false;
                     ui.btnChamar.textContent = 'Chamar Próximo';
                 }
             }
 
-            // --- RENDERIZAÇÃO ---
-            function renderizarFila(docs) {
-                if (docs.empty) {
+            // ===================================================================
+            // INÍCIO DA MODIFICAÇÃO JAVASCRIPT: renderizarFila (Bug Fix)
+            // ===================================================================
+            function renderizarFila(snapshot) { // O argumento é o snapshot
+                if (snapshot.empty) { // Usamos a propriedade .empty do snapshot
                     proximoAssistido = null;
                     ui.proximoNome.textContent = '-- Fila Vazia --';
                     ui.listaEspera.innerHTML = '<p class="lista-vazia">Ninguém na fila de espera.</p>';
                     ui.btnChamar.disabled = true;
                 } else {
-                    const primeiro = docs[0].data();
-                    proximoAssistido = { id: docs[0].id, ...primeiro };
+                    // 1. Pegamos o array de documentos de dentro do snapshot
+                    const docs = snapshot.docs;
+                    
+                    // 2. Pegamos o primeiro documento do array
+                    const primeiroDoc = docs[0];
+                    const primeiro = primeiroDoc.data(); // Agora sim, .data()
+                    proximoAssistido = { id: primeiroDoc.id, ...primeiro };
                     
                     ui.proximoNome.textContent = primeiro.nomeAssistido;
                     ui.btnChamar.disabled = false;
                     ui.btnChamar.textContent = 'Chamar Próximo';
 
-                    // Renderiza o resto da fila
-                    const restoDaFila = docs.slice(1);
+                    // 3. Renderiza o resto da fila (usando o array 'docs')
+                    const restoDaFila = docs.slice(1); // .slice() funciona em arrays
                     if (restoDaFila.length > 0) {
                         let htmlLista = '';
-                        restoDaFila.forEach(doc => {
-                            htmlLista += `<li>${doc.data().nomeAssistido}</li>`;
+                        restoDaFila.forEach(doc => { // 'doc' aqui é um DocumentSnapshot
+                            htmlLista += `<li>${doc.data().nomeAssistido}</li>`; // .data()
                         });
                         ui.listaEspera.innerHTML = htmlLista;
                     } else {
@@ -203,6 +200,9 @@
                     }
                 }
             }
+            // ===================================================================
+            // FIM DA MODIFICAÇÃO JAVASCRIPT
+            // ===================================================================
 
             // --- LISTENER PRINCIPAL (EM TEMPO REAL) ---
             function escutarFila() {
@@ -213,7 +213,7 @@
                 );
 
                 onSnapshot(q, (snapshot) => {
-                    renderizarFila(snapshot);
+                    renderizarFila(snapshot); // Passa o snapshot inteiro
                 }, (error) => {
                     console.error("Erro ao escutar a fila:", error);
                     ui.listaEspera.innerHTML = '<p class="lista-vazia erro">Erro ao carregar a fila.</p>';
