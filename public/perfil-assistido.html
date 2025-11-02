@@ -1,0 +1,356 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Prontuário Unificado do Assistido</title>
+    <style>
+        :root {
+            --cor-primaria: #34495e; /* Um cinza-azulado neutro */
+            --cor-ae: #007bff;
+            --cor-vl: #8e44ad;
+            --cor-borda: #ddd;
+            --fundo-selecionado: #e9ecef;
+        }
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background-color: #f4f6f9; margin: 0; padding: 20px; }
+        .container { width: 100%; max-width: 1200px; margin: 0 auto; box-sizing: border-box; }
+        
+        .nav-voltar { margin-bottom: 20px; }
+        .btn-voltar { background-color: #6c757d; color: white; border: none; padding: 12px 20px; border-radius: 8px; font-weight: bold; text-decoration: none; display: inline-block; cursor: pointer; }
+        
+        h1 { text-align: center; color: var(--cor-primaria); }
+        .hidden { display: none; }
+        .erro { color: #dc3545; font-weight: bold; text-align: center; }
+
+        .prontuario-grid {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 25px;
+        }
+
+        .card {
+            background-color: #fff;
+            padding: 25px;
+            border-radius: 12px;
+            box-shadow: 0 6px 24px rgba(0,0,0,0.08);
+        }
+        
+        .card-pessoal .info-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+        }
+        .info-item { background-color: #f8f9fa; padding: 15px; border-radius: 8px; }
+        .info-item label { font-size: 0.9em; color: #555; display: block; margin-bottom: 4px; }
+        .info-item span { font-weight: bold; font-size: 1.1em; color: #333; }
+
+        /* Estilos de Histórico (Copiados dos arquivos 'arquivo-geral-') */
+        .card h2 {
+            margin-top: 0;
+            padding-bottom: 10px;
+            border-bottom: 2px solid var(--cor-borda);
+        }
+        #card-ae h2 { color: var(--cor-ae); }
+        #card-vl h2 { color: var(--cor-vl); }
+
+        .historico-container { max-height: 500px; overflow-y: auto; padding-right: 10px; }
+        .ciclo-tratamento { border: 1px solid var(--cor-borda); border-radius: 8px; margin-bottom: 20px; }
+        .ciclo-header { background-color: #f8f9fa; padding: 15px; border-bottom: 1px solid var(--cor-borda); font-weight: bold; display: flex; justify-content: space-between; flex-wrap: wrap; }
+        .ciclo-header .status-ativo { color: #28a745; }
+        .ciclo-header .status-concluido { color: #6c757d; }
+        .atendimentos-lista { list-style-type: none; padding: 0; margin: 0; }
+        .atendimentos-lista li { display: flex; justify-content: space-between; align-items: center; padding: 12px 15px; border-bottom: 1px solid #eee; }
+        .atendimentos-lista li:last-child { border-bottom: none; }
+        .atendimento-info { display: flex; align-items: center; gap: 10px; }
+        .btn, .btn-editar { background-color: #17a2b8; color: white; border: none; padding: 6px 12px; border-radius: 6px; font-size: 0.9em; text-decoration: none; }
+
+        @media (max-width: 768px) {
+            body { padding: 10px; }
+        }
+
+    </style>
+</head>
+<body>
+    <div class="container">
+        <nav class="nav-voltar">
+            <a href="javascript:history.back()" class="btn-voltar">⬅ Voltar</a>
+        </nav>
+        
+        <div id="acesso-negado" class="hidden"><h1>Acesso Negado</h1></div>
+
+        <div id="main-content" class="hidden">
+            <h1 id="header-nome">Prontuário Unificado</h1>
+            
+            <div id="loading" style="text-align: center; font-size: 1.2em; margin: 40px;">
+                <p>Carregando prontuário completo...</p>
+            </div>
+            
+            <div id="prontuario-content" class="prontuario-grid hidden">
+                <div id="card-pessoal" class="card card-pessoal">
+                    </div>
+
+                <div id="card-ae" class="card">
+                    <h2>Histórico - Assistência Espiritual (AE)</h2>
+                    <div id="historico-container-ae" class="historico-container">
+                        </div>
+                </div>
+
+                <div id="card-vl" class="card">
+                    <h2>Histórico - Vinha de Luz (VL)</h2>
+                    <div id="historico-container-vl" class="historico-container">
+                        </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script type="module">
+        // Importa o necessário do Firestore
+        import { getFirestore, collection, doc, getDoc, query, where, getDocs, orderBy, Timestamp, serverTimestamp, addDoc } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
+        
+        // Importa nosso módulo de autenticação
+        import { protegerPagina } from '/auth.js';
+
+        // O auth.js já inicializa o Firebase, então não precisamos do initializeApp(config) aqui.
+
+        // Protege a página com as mesmas permissões dos arquivos
+        protegerPagina(['entrevistador', 'tesoureiro', 'conselheiro', 'diretor', 'super-admin']).then(user => {
+            const db = getFirestore(); // Pega a instância do DB após a autenticação
+            document.getElementById('main-content').classList.remove('hidden');
+            inicializarPagina(user, db);
+        }).catch(err => {
+            document.getElementById('acesso-negado').classList.remove('hidden');
+        });
+
+        function inicializarPagina(user, db) {
+            // Referências de Coleções
+            const assistidosRef = collection(db, 'assistidos');
+            const tratamentosAeRef = collection(db, 'tratamentos_ae');
+            const atendimentosAeRef = collection(db, 'atendimentos_ae');
+            const tratamentosVlRef = collection(db, 'tratamentos_vl');
+            const atendimentosVlRef = collection(db, 'atendimentos_vl');
+            const logAuditoriaRef = collection(db, 'log_auditoria');
+
+            // Elementos da UI
+            const ui = {
+                loading: document.getElementById('loading'),
+                prontuarioContent: document.getElementById('prontuario-content'),
+                headerNome: document.getElementById('header-nome'),
+                cardPessoal: document.getElementById('card-pessoal'),
+                cardAE: document.getElementById('historico-container-ae'),
+                cardVL: document.getElementById('historico-container-vl')
+            };
+
+            // Pega o ID da URL
+            const params = new URLSearchParams(window.location.search);
+            const assistidoId = params.get('id');
+
+            if (!assistidoId) {
+                ui.loading.innerHTML = `<p class="erro">Erro: ID do assistido não fornecido na URL.</p>`;
+                return;
+            }
+
+            // Função para registrar log
+            async function registrarLog(acao, detalhes) {
+                try {
+                    await addDoc(logAuditoriaRef, {
+                        timestamp: serverTimestamp(),
+                        autor: { uid: user.uid, nome: user.displayName || 'Usuário do Sistema' },
+                        acao: acao,
+                        detalhes: detalhes
+                    });
+                } catch (error) { console.error("Erro ao registrar log:", error); }
+            }
+            
+            // Função para formatar data (evita erros com Timestamps nulos)
+            function formatarData(timestamp, textoPadrao = "N/A") {
+                if (timestamp && typeof timestamp.toDate === 'function') {
+                    return timestamp.toDate().toLocaleDateString('pt-br');
+                }
+                return textoPadrao;
+            }
+
+            // Carrega todos os dados do prontuário
+            async function carregarProntuario() {
+                try {
+                    // 1. Registrar Log
+                    await registrarLog('Visualização Prontuário Unificado', { assistidoId });
+
+                    // 2. Buscar todos os dados em paralelo
+                    const [
+                        assistidoSnap,
+                        tratamentosAeSnap,
+                        atendimentosAeSnap,
+                        tratamentosVlSnap,
+                        atendimentosVlSnap
+                    ] = await Promise.all([
+                        getDoc(doc(assistidosRef, assistidoId)),
+                        getDocs(query(tratamentosAeRef, where('assistidoId', '==', assistidoId), orderBy('dataInicio', 'desc'))),
+                        getDocs(query(atendimentosAeRef, where('assistidoId', '==', assistidoId))),
+                        getDocs(query(tratamentosVlRef, where('assistidoId', '==', assistidoId), orderBy('dataInicio', 'desc'))),
+                        getDocs(query(atendimentosVlRef, where('assistidoId', '==', assistidoId)))
+                    ]);
+
+                    // 3. Verificar se o assistido existe
+                    if (!assistidoSnap.exists()) {
+                        ui.loading.innerHTML = `<p class="erro">Assistido com ID ${assistidoId} não encontrado.</p>`;
+                        return;
+                    }
+
+                    // 4. Processar os dados
+                    const assistido = assistidoSnap.data();
+                    const ciclosAE = tratamentosAeSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+                    const atendimentosAE = atendimentosAeSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+                    const ciclosVL = tratamentosVlSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+                    const atendimentosVL = atendimentosVlSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+
+                    // 5. Renderizar os cards
+                    renderizarDadosPessoais(assistido);
+                    renderizarHistoricoAE(ciclosAE, atendimentosAE);
+                    renderizarHistoricoVL(ciclosVL, atendimentosVL);
+                    
+                    // 6. Mostrar conteúdo
+                    ui.loading.classList.add('hidden');
+                    ui.prontuarioContent.classList.remove('hidden');
+
+                } catch (error) {
+                    console.error("Erro ao carregar prontuário:", error);
+                    ui.loading.innerHTML = `<p class="erro">Falha ao carregar dados. Tente novamente.</p>`;
+                }
+            }
+
+            // Renderiza o Card de Dados Pessoais
+            function renderizarDadosPessoais(assistido) {
+                const dnFormatado = assistido.dn ? new Date(assistido.dn + 'T12:00:00').toLocaleDateString('pt-br') : 'Não informado';
+                ui.headerNome.textContent = `Prontuário Unificado de ${assistido.nome}`;
+                document.title = `Prontuário - ${assistido.nome}`;
+                
+                ui.cardPessoal.innerHTML = `
+                    <h2>Dados Pessoais</h2>
+                    <div class="info-grid">
+                        <div class="info-item">
+                            <label>Nome Completo</label>
+                            <span>${assistido.nome}</span>
+                        </div>
+                        <div class="info-item">
+                            <label>Data de Nascimento</label>
+                            <span>${dnFormatado}</span>
+                        </div>
+                        <div class="info-item">
+                            <label>Telefone</label>
+                            <span>${assistido.telefone || 'Não informado'}</span>
+                        </div>
+                    </div>
+                `;
+            }
+
+            // Renderiza o Card da Assistência Espiritual
+            function renderizarHistoricoAE(ciclos, todosAtendimentos) {
+                let html = '';
+                if (ciclos.length > 0) {
+                    ciclos.forEach(ciclo => {
+                        const dataInicio = formatarData(ciclo.dataInicio);
+                        const statusClasse = ciclo.status === 'ativo' ? 'status-ativo' : 'status-concluido';
+                        html += `<div class="ciclo-tratamento"><div class="ciclo-header"><span>Início: ${dataInicio} | Passe: ${ciclo.passe_ciclo_atual || 'N/A'}</span><span class="${statusClasse}">${ciclo.status.replace(/_/g, ' ')}</span></div><ul class="atendimentos-lista">`;
+                        
+                        const atendimentosDoCiclo = todosAtendimentos
+                            .filter(a => a.tratamentoId === ciclo.id)
+                            .sort((a, b) => a.dataAtendimento?.toMillis() - b.dataAtendimento?.toMillis());
+
+                        if (atendimentosDoCiclo.length === 0) { html += '<li>Nenhum atendimento registrado.</li>'; }
+                        else { atendimentosDoCiclo.forEach(a => { html += renderizarItemAtendimentoAE(a, ciclo.passe_ciclo_atual); }); }
+                        
+                        html += `</ul></div>`;
+                    });
+                }
+                
+                const passesAvulsos = todosAtendimentos.filter(a => a.tipo === 'avulso')
+                    .sort((a, b) => a.dataAtendimento?.toMillis() - b.dataAtendimento?.toMillis());
+                
+                if (passesAvulsos.length > 0) {
+                    html += `<div class="ciclo-tratamento"><div class="ciclo-header"><span>Passes Avulsos</span></div><ul class="atendimentos-lista">`;
+                    passesAvulsos.forEach(a => { html += renderizarItemAtendimentoAE(a, null); });
+                    html += `</ul></div>`;
+                }
+                
+                if (html === '') { html = '<p>Nenhum histórico encontrado na Assistência Espiritual.</p>'; }
+                ui.cardAE.innerHTML = html;
+            }
+            
+            // Renderiza o Card do Vinha de Luz
+            function renderizarHistoricoVL(ciclos, todosAtendimentos) {
+                let html = '';
+                if (ciclos.length > 0) {
+                    ciclos.forEach(ciclo => {
+                        const dataInicio = formatarData(ciclo.dataInicio);
+                        const statusClasse = ciclo.status === 'ativo' ? 'status-ativo' : 'status-concluido';
+                        const retornos = ciclo.retornos_solicitados || 0;
+                        const realizados = ciclo.atendimentos_realizados || 0;
+
+                        html += `<div class="ciclo-tratamento"><div class="ciclo-header"><span>Início: ${dataInicio} | Status: <span class="${statusClasse}">${ciclo.status.replace(/_/g, ' ')}</span></span><span>Retornos: ${realizados} / ${retornos + 1}</span></div><ul class="atendimentos-lista">`;
+
+                        const atendimentosDoCiclo = todosAtendimentos
+                            .filter(a => a.tratamentoId === ciclo.id)
+                            .sort((a, b) => a.dataAtendimento?.toMillis() - b.dataAtendimento?.toMillis());
+
+                        if (atendimentosDoCiclo.length === 0) { html += '<li>Nenhum atendimento registrado.</li>'; }
+                        else { atendimentosDoCiclo.forEach(a => { html += renderizarItemAtendimentoVL(a); }); }
+
+                        html += `</ul></div>`;
+                    });
+                }
+                
+                if (html === '') { html = '<p>Nenhum histórico encontrado no Vinha de Luz.</p>'; }
+                ui.cardVL.innerHTML = html;
+            }
+
+            // --- Funções Auxiliares (Copiadas dos arquivos originais para manter links) ---
+
+            // Copiado de 'arquivo-geral-ae.html'
+            function renderizarItemAtendimentoAE(a, passe_ciclo_atual) {
+                const dataAtendimento = formatarData(a.dataAtendimento, "Aguardando Presença");
+                let tipoAtendimento = a.tipo?.replace(/_/g, ' ') || 'N/A';
+                let infoExtra = ''; let botaoEditarHtml = ''; let iconeHtml = ''; let precisaEntrevista = false;
+                
+                if (a.tipo !== 'falta' && a.tipo !== 'avulso') {
+                    const semanaNum = a.semana || 0;
+                    if ([1, 4, 5].includes(semanaNum)) { precisaEntrevista = true; }
+                    if (['P3A', 'P3B'].includes(passe_ciclo_atual) && [2, 3].includes(semanaNum)) { precisaEntrevista = true; }
+                }
+                if (a.tipo === 'avulso') { tipoAtendimento = 'Passe Avulso'; infoExtra = `(${a.passeRecomendado})`; }
+                else if (a.tipo === 'falta') { tipoAtendimento = 'Falta'; infoExtra = ''; }
+                else { tipoAtendimento = `Semana ${a.semana || '?'}`; infoExtra = `(${a.passeRecomendado})`; }
+
+                if (precisaEntrevista) {
+                    if (a.semana === 5 && a.decisao_pre_registrada === true && a.dataAtendimento === null) { iconeHtml = '<span>🔵</span>'; tipoAtendimento = "Reavaliação (Decisão Pronta)"; }
+                    else if (a.detalhes_preenchidos === true) { iconeHtml = '<span>✅</span>'; }
+                    else { iconeHtml = '<span>📝</span>'; }
+                    // Link para a página de edição da AE
+                    botaoEditarHtml = `<a href="/entrevista-ae.html?atendimentoId=${a.id}" class="btn btn-editar">Ver / Editar</a>`;
+                }
+                
+                let estiloItem = ''; if (a.dataAtendimento === null && a.semana === 5) { estiloItem = 'style="background-color: #fffbe6;"'; }
+                return `<li ${estiloItem}><div class="atendimento-info">${iconeHtml}<span><strong>${dataAtendimento}</strong> - ${tipoAtendimento} ${infoExtra}</span></div>${botaoEditarHtml}</li>`;
+            }
+
+            // Copiado de 'arquivo-geral-vl.html'
+            function renderizarItemAtendimentoVL(a) {
+                const dataAtendimento = formatarData(a.dataAtendimento);
+                const atendimentoNum = `Atendimento ${a.semana || '?'}`;
+                // Link para a página de edição do VL
+                const botaoEditarHtml = `<a href="/atendimento-vl.html?atendimentoId=${a.id}" class="btn btn-editar">Ver / Editar</a>`;
+                
+                return `<li>
+                            <div class="atendimento-info">
+                                <span><strong>${dataAtendimento}</strong> - ${atendimentoNum}</span>
+                            </div>
+                            ${botaoEditarHtml}
+                        </li>`;
+            }
+
+            // Inicia o carregamento
+            carregarProntuario();
+        }
+    </script>
+</body>
+</html>

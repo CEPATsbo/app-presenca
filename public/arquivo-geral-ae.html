@@ -72,6 +72,24 @@
         /* FIM DA MODIFICAÇÃO CSS */
         /* =================================================================== */
 
+        /* =================================================================== */
+        /* INÍCIO DA ADIÇÃO CSS: Link para Prontuário Unificado */
+        /* =================================================================== */
+        .prontuario-link { 
+            font-size: 0.8em; 
+            text-decoration: none; 
+            margin-left: 10px; 
+            color: #6c757d; 
+            font-weight: normal;
+            display: inline-block; /* Para alinhar melhor */
+        }
+        .prontuario-link:hover { 
+            color: var(--cor-primaria); /* Azul da AE */
+        }
+        /* =================================================================== */
+        /* FIM DA ADIÇÃO CSS */
+        /* =================================================================== */
+
     </style>
 </head>
 <body>
@@ -191,7 +209,16 @@
 
             function renderizarHistorico(assistido, ciclos, todosAtendimentos, user) {
                 const dnFormatado = assistido.dn ? new Date(assistido.dn + 'T12:00:00').toLocaleDateString('pt-br') : 'Não informado';
-                let html = `<h2>Histórico de ${assistido.nome}</h2>`;
+                
+                // ===================================================================
+                // INÍCIO DA MODIFICAÇÃO JAVASCRIPT: Adiciona link do Prontuário
+                // ===================================================================
+                let linkProntuario = `<a href="/perfil-assistido.html?id=${assistido.id}" class="prontuario-link" title="Ver Prontuário Unificado 📜">Ver Prontuário Completo</a>`;
+                let html = `<h2>Histórico de ${assistido.nome} ${linkProntuario}</h2>`;
+                // ===================================================================
+                // FIM DA MODIFICAÇÃO JAVASCRIPT
+                // ===================================================================
+                
                 html += `<p><strong>DN:</strong> ${dnFormatado} | <strong>Telefone:</strong> ${assistido.telefone || 'Não informado'}</p>`;
                 html += '<div id="historico-container">';
                 if (ciclos.length > 0) {
