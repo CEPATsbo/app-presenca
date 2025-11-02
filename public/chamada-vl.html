@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Chamada - Vinha de Luz</title>
+    <style>
+        :root { --cor-primaria: #8e44ad; --cor-borda: #ddd; }
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background-color: #f4f6f9; margin: 0; padding: 20px; }
+        .container { width: 100%; max-width: 800px; margin: 0 auto; }
+        .nav-voltar { margin-bottom: 20px; }
+        .btn, .btn-voltar, .btn-chamar { background-color: var(--cor-primaria); color: white; border: none; padding: 12px 20px; border-radius: 8px; font-weight: bold; text-decoration: none; display: inline-block; cursor: pointer; transition: background-color 0.2s; }
+        .btn-voltar { background-color: #6c757d; }
+        .btn-chamar { background-color: #28a745; width: 100%; padding: 25px; font-size: 1.8em; text-transform: uppercase; }
+        .btn:disabled, .btn-chamar:disabled { background-color: #ccc; cursor: not-allowed; }
+        
+        h1, h2 { color: #333; text-align: center; }
+        .hidden { display: none; }
+        .erro { color: #dc3545; font-weight: bold; text-align: center; }
+
+        .card { background-color: #fff; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.08); padding: 25px; margin-bottom: 20px; }
+        .card h2 { margin-top: 0; color: var(--cor-primaria); }
+        
+        #proximo-nome {
+            font-size: 2.5em;
+            font-weight: bold;
+            color: #333;
+            text-align: center;
+            margin-bottom: 20px;
+            padding: 20px;
+            background-color: #f8f9fa;
+            border-radius: 8px;
+            min-height: 50px;
+        }
+
+        .lista-espera { list-style-type: decimal; padding-left: 30px; margin: 0; max-height: 40vh; overflow-y: auto; }
+        .lista-espera li { font-size: 1.2em; padding: 10px 0; border-bottom: 1px solid #eee; }
+        .lista-vazia { text-align: center; color: #777; padding: 20px; font-style: italic; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <nav class="nav-voltar"><a href="/dashboard-vl.html" class="btn-voltar">⬅ Voltar para o Dashboard VL</a></nav>
+        <div id="acesso-negado" class="container hidden"><h1>Acesso Negado</h1></div>
+
+        <div id="main-content" class="hidden">
+            <h1>Chamada - Vinha de Luz</h1>
+
+            <div class="card">
+                <h2>Próximo Assistido</h2>
+                <div id="proximo-nome">-- Fila Vazia --</div>
+                <button id="btn-chamar-proximo" class="btn-chamar" disabled>Chamar Próximo</button>
+            </div>
+
+            <div class="card">
+                <h2>Fila de Espera</h2>
+                <ul id="lista-espera" class="lista-espera">
+                    <p class="lista-vazia">Carregando fila...</p>
+                </ul>
+            </div>
+        </div>
+    </div>
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
+        import { 
+            getFirestore, collection, doc, serverTimestamp, query, where, orderBy, 
+            onSnapshot, updateDoc, setDoc, writeBatch
+        } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
+        import { protegerPagina } from '/auth.js';
+        
+        const firebaseConfig = {
+            apiKey: "AIzaSyBV7RPjk3cFTqL-aIpflJcUojKg1ZXMLuU",
+            authDomain: "voluntarios-ativos---cepat.firebaseapp.com",
+            projectId: "voluntarios-ativos---cepat",
+            storageBucket: "voluntarios-ativos---cepat.firebasestorage.app",
+            messagingSenderId: "66122858261",
+            appId: "1:66122858261:web:7fa21f1805463b5c08331c"
+        };
+        
+        // ===================================================================
+        // INÍCIO DA MODIFICAÇÃO JAVASCRIPT: Linha Removida
+        // =O `auth.js` já inicializa o app.
+        // ===================================================================
+        // initializeApp(firebaseConfig); // <-- LINHA REMOVIDA
+        // ===================================================================
+        // FIM DA MODIFICAÇÃO JAVASCRIPT
+        // ===================================================================
+        
+        // Permissões de operador (atendente/recepção)
+        protegerPagina(['recepcionista', 'diretor', 'tesoureiro', 'entrevistador', 'super-admin']).then(user => {
+            document.getElementById('main-content').classList.remove('hidden');
+            inicializarPagina(user);
+        }).catch(err => { 
+            // document.getElementById('acesso-negado').classList.remove('hidden'); // Deixa o auth.js cuidar disso
+            console.error(err);
+        });
+
+        function inicializarPagina(user) {
+            const db = getFirestore(); // Pega o DB que o auth.js inicializou
+            const filaVlRef = collection(db, 'fila_atendimento_vl');
+            const atendimentosVlRef = collection(db, 'atendimentos_vl');
+            const logAuditoriaRef = collection(db, 'log_auditoria');
+            
+            const ui = {
+                proximoNome: document.getElementById('proximo-nome'),
+                btnChamar: document.getElementById('btn-chamar-proximo'),
+                listaEspera: document.getElementById('lista-espera')
+            };
+            
+            let proximoAssistido = null; // Guarda o objeto do próximo assistido
+
+            // Função de Log Corrigida
+            async function registrarLog(acao, detalhes) {
+                try {
+                    const newLogRef = doc(logAuditoriaRef); 
+                    await setDoc(newLogRef, { 
+                        timestamp: serverTimestamp(),
+                        autor: { uid: user.uid, nome: user.displayName || 'Usuário do Sistema' },
+                        acao: acao,
+                        detalhes: detalhes
+                    });
+                } catch (error) { console.error("Erro ao registrar log (com setDoc):", error); }
+            }
+            
+            // --- AÇÃO ---
+            async function chamarProximo() {
+                if (!proximoAssistido) return;
+
+                ui.btnChamar.disabled = true;
+                ui.btnChamar.textContent = 'Chamando...';
+
+                const assistido = proximoAssistido; // Pega o assistido que estava em espera
+                
+                try {
+                    const batch = writeBatch(db);
+                    
+                    // 1. Atualiza a Fila para "Chamado" (ativa a TV)
+                    const filaRef = doc(filaVlRef, assistido.id);
+                    batch.update(filaRef, {
+                        status: 'Chamado',
+                        chamadoEm: serverTimestamp(),
+                        atendente: { uid: user.uid, nome: user.displayName }
+                    });
+                    
+                    // 2. Atualiza o Atendimento com o nome do atendente
+                    const atendimentoRef = doc(atendimentosVlRef, assistido.atendimentoId);
+                    batch.update(atendimentoRef, {
+                        atendente: user.displayName
+                    });
+                    
+                    await batch.commit();
+                    
+                    registrarLog('Chamada Atendente VL', { 
+                        assistidoId: assistido.assistidoId, 
+                        assistidoNome: assistido.nomeAssistido,
+                        filaId: assistido.id,
+                        atendimentoId: assistido.atendimentoId
+                    });
+
+                    // 3. Após 10s, move para "Atendido" (limpa a TV)
+                    setTimeout(async () => {
+                        try {
+                            await updateDoc(filaRef, { status: 'Atendido' });
+                        } catch (err) {
+                            console.error("Erro ao mover para 'Atendido':", err);
+                        }
+                    }, 10000); // 10 segundos
+
+                } catch (error) {
+                    console.error("Erro ao chamar próximo:", error);
+                    alert("Falha ao chamar assistido.");
+                    ui.btnChamar.disabled = false; // Reabilita em caso de erro
+                    ui.btnChamar.textContent = 'Chamar Próximo';
+                }
+            }
+
+            // --- RENDERIZAÇÃO ---
+            function renderizarFila(docs) {
+                if (docs.empty) {
+                    proximoAssistido = null;
+                    ui.proximoNome.textContent = '-- Fila Vazia --';
+                    ui.listaEspera.innerHTML = '<p class="lista-vazia">Ninguém na fila de espera.</p>';
+                    ui.btnChamar.disabled = true;
+                } else {
+                    const primeiro = docs[0].data();
+                    proximoAssistido = { id: docs[0].id, ...primeiro };
+                    
+                    ui.proximoNome.textContent = primeiro.nomeAssistido;
+                    ui.btnChamar.disabled = false;
+                    ui.btnChamar.textContent = 'Chamar Próximo';
+
+                    // Renderiza o resto da fila
+                    const restoDaFila = docs.slice(1);
+                    if (restoDaFila.length > 0) {
+                        let htmlLista = '';
+                        restoDaFila.forEach(doc => {
+                            htmlLista += `<li>${doc.data().nomeAssistido}</li>`;
+                        });
+                        ui.listaEspera.innerHTML = htmlLista;
+                    } else {
+                        ui.listaEspera.innerHTML = '<p class="lista-vazia">Ninguém mais na espera.</p>';
+                    }
+                }
+            }
+
+            // --- LISTENER PRINCIPAL (EM TEMPO REAL) ---
+            function escutarFila() {
+                const q = query(
+                    filaVlRef, 
+                    where('status', '==', 'Aguardando'), 
+                    orderBy('timestamp')
+                );
+
+                onSnapshot(q, (snapshot) => {
+                    renderizarFila(snapshot);
+                }, (error) => {
+                    console.error("Erro ao escutar a fila:", error);
+                    ui.listaEspera.innerHTML = '<p class="lista-vazia erro">Erro ao carregar a fila.</p>';
+                    ui.proximoNome.textContent = "Erro";
+                    
+                    if (error.code === 'failed-precondition') {
+                        alert("ERRO: O Firestore precisa de um índice para esta consulta. Verifique o console (F12) para o link de criação do índice.");
+                        console.error("Link para criar índice (copie e cole no navegador):", error.message.match(/httpsS?:\/\/[^\s]+/)?.[0]);
+                    }
+                });
+            }
+            
+            // --- INICIALIZAÇÃO ---
+            ui.btnChamar.addEventListener('click', chamarProximo);
+            escutarFila();
+        }
+    </script>
+</body>
+</html>
