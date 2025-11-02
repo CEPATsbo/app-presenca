@@ -23,6 +23,7 @@
         .btn-primary { background-color: #007bff; color: white; }
         .btn-secondary { background-color: #6c757d; color: white; }
         .btn-success { background-color: #28a745; color: white; }
+        .btn-success:disabled { background-color: #6c757d; opacity: 0.7; cursor: not-allowed; }
         
         #lista-eventos-gerenciamento table { width: 100%; border-collapse: collapse; margin-top: 20px; }
         #lista-eventos-gerenciamento th, #lista-eventos-gerenciamento td { padding: 12px; border-bottom: 1px solid #eee; text-align: left; }
@@ -130,58 +131,7 @@
 
         .feriados-lista { margin-top: 20px; padding-top: 15px; text-align: center; font-size: 0.9em; color: #555; border-top: 1px dashed #ccc; }
         
-        /* --- ESTILOS DO NOVO MODAL DE FERIADOS --- */
-        .modal-overlay {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: rgba(0, 0, 0, 0.6);
-            display: none; /* Começa oculto */
-            justify-content: center;
-            align-items: center;
-            z-index: 1000;
-        }
-        .modal-content {
-            background: white;
-            padding: 30px;
-            border-radius: 12px;
-            width: 90%;
-            max-width: 600px;
-            box-shadow: 0 5px 25px rgba(0,0,0,0.2);
-        }
-        .modal-content h3 {
-            margin-top: 0;
-            color: #34495e;
-        }
-        #lista-feriados-importar {
-            max-height: 40vh;
-            overflow-y: auto;
-            border: 1px solid #eee;
-            border-radius: 8px;
-            padding: 15px;
-            background: #f9f9f9;
-        }
-        #lista-feriados-importar label {
-            display: block;
-            margin-bottom: 12px;
-            font-size: 1.1em;
-            cursor: pointer;
-        }
-        #lista-feriados-importar input {
-            margin-right: 12px;
-            width: 18px;
-            height: 18px;
-            vertical-align: middle;
-        }
-        .modal-actions {
-            margin-top: 25px;
-            display: flex;
-            justify-content: flex-end;
-            gap: 15px;
-        }
-        /* --- FIM DOS ESTILOS DO MODAL --- */
+        /* O MODAL DE FERIADOS FOI REMOVIDO */
     </style>
 </head>
 <body>
@@ -222,22 +172,11 @@
         </div>
     </div>
 
-    <div id="modal-feriados" class="modal-overlay">
-        <div class="modal-content">
-            <h3>Importar Feriados Nacionais</h3>
-            <p id="modal-feriados-status">Buscando feriados... (Isso pode levar um momento)</p>
-            <div id="lista-feriados-importar">
-                </div>
-            <div class="modal-actions">
-                <button id="btn-modal-cancelar" class="btn-secondary">Cancelar</button>
-                <button id="btn-modal-importar" class="btn-primary" disabled>Importar Selecionados</button>
-            </div>
-        </div>
-    </div>
-
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
         import { getFirestore, collection, onSnapshot, addDoc, doc, setDoc, query, orderBy, serverTimestamp, Timestamp, getDoc, updateDoc } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
+        // ### NOVO: IMPORTAR FUNÇÕES ###
+        import { getFunctions, httpsCallable } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-functions.js";
         import { protegerPagina } from '/auth.js';
 
         const firebaseConfig = {
@@ -248,26 +187,31 @@
             messagingSenderId: "66122858261",
             appId: "1:66122858261:web:7fa21f1805463b5c08331c"
         };
-        initializeApp(firebaseConfig);
+        const app = initializeApp(firebaseConfig);
 
         protegerPagina(['super-admin', 'diretor', 'tesoureiro', 'conselheiro', 'produtor-evento'])
             .then(user => {
                 document.getElementById('main-content').style.display = 'block';
-                inicializarPagina(user);
+                // Passa o app do Firebase para inicializar o Functions
+                inicializarPagina(user, app); 
             })
             .catch(error => {
                 document.getElementById('acesso-negado').style.display = 'block';
                 console.error(error.message);
             });
 
-        function inicializarPagina(user) {
-            const db = getFirestore();
+        function inicializarPagina(user, firebaseApp) { // Recebe o firebaseApp
+            const db = getFirestore(firebaseApp);
+            // ### NOVO: INICIALIZA AS FUNÇÕES ###
+            const functions = getFunctions(firebaseApp, 'southamerica-east1');
+            const importarFeriadosNacionais = httpsCallable(functions, 'importarFeriadosNacionais');
+
             const eventosCollection = collection(db, 'eventos');
             const logAuditoriaCollection = collection(db, 'log_auditoria'); 
             const form = document.getElementById('form-evento');
             const btnCancelarEdicao = document.getElementById('btn-cancelar-edicao');
             let editandoId = null;
-            let eventosAtuais = []; // Cache local dos eventos
+            let eventosAtuais = []; 
 
             async function registrarLog(acao, detalhes) {
                 if (!user) return;
@@ -284,22 +228,19 @@
             }
 
             onSnapshot(query(eventosCollection, orderBy("dataInicio", "asc")), (snapshot) => {
-                eventosAtuais = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })); // Atualiza o cache
+                eventosAtuais = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })); 
                 renderizarListaGerenciamento(eventosAtuais);
                 renderizarCronograma(eventosAtuais);
             });
 
             form.addEventListener('submit', async (e) => {
                 e.preventDefault();
-                
-                // Correção de Fuso Horário (UTC 12:00)
                 const dataInicioInput = document.getElementById('dataInicio').value;
                 const dataFimInput = document.getElementById('dataFim').value;
 
                 const evento = {
                     titulo: document.getElementById('titulo').value,
                     detalhes: document.getElementById('detalhes').value,
-                    // Salva a data como se fosse meio-dia UTC para evitar problemas de fuso
                     dataInicio: Timestamp.fromDate(new Date(dataInicioInput + 'T12:00:00Z')),
                     dataFim: dataFimInput ? Timestamp.fromDate(new Date(dataFimInput + 'T12:00:00Z')) : null,
                     tipo: document.getElementById('tipo').value,
@@ -345,7 +286,6 @@
                         const data = docSnap.data();
                         document.getElementById('titulo').value = data.titulo;
                         document.getElementById('detalhes').value = data.detalhes || '';
-                        // Converte Timestamp do UTC 12:00 de volta para YYYY-MM-DD
                         document.getElementById('dataInicio').value = data.dataInicio.toDate().toISOString().split('T')[0];
                         document.getElementById('dataFim').value = data.dataFim ? data.dataFim.toDate().toISOString().split('T')[0] : '';
                         document.getElementById('tipo').value = data.tipo;
@@ -398,13 +338,12 @@
                 table.innerHTML = `<thead><tr><th>Data</th><th>Evento</th><th>Tipo</th><th>Status</th><th>Ações</th></tr></thead><tbody></tbody>`;
                 const tbody = table.querySelector('tbody');
                 
-                // Exibe em ordem reversa (mais novos primeiro)
                 [...eventos].reverse().forEach(evento => {
                     const tr = document.createElement('tr');
                     tr.className = evento.status === 'cancelado' ? 'status-cancelado' : '';
                     
                     const hoje = new Date();
-                    hoje.setUTCHours(0,0,0,0); // Comparação em UTC
+                    hoje.setUTCHours(0,0,0,0); 
                     const dataEvento = evento.dataInicio.toDate();
                     
                     const eventoPassou = dataEvento < hoje;
@@ -425,7 +364,6 @@
                 container.appendChild(table);
             }
 
-            // ### FUNÇÃO renderizarCronograma ATUALIZADA (ESTÉTICA) ###
             function renderizarCronograma(eventos) {
                 const container = document.getElementById('cronograma-visual');
                 container.innerHTML = '';
@@ -439,7 +377,7 @@
                 eventos.forEach(e => {
                     const dataEvento = e.dataInicio.toDate();
                     if(dataEvento.getFullYear() !== anoAtual) return;
-                    const mes = dataEvento.getUTCMonth(); // 0-11
+                    const mes = dataEvento.getUTCMonth(); 
                     if(mes < 6) semestres[1].eventos.push(e);
                     else semestres[2].eventos.push(e);
                 });
@@ -504,7 +442,7 @@
                         const alturaLinha = 30 + (nivel * alturaBase);
                         
                         let nodeHTML;
-                        // ### MUDANÇA ESTÉTICA AQUI: .diamond -> .node-circle ###
+                        // ### ATUALIZAÇÃO ESTÉTICA AQUI ###
                         if (posicao === 'top') {
                             node.style.paddingBottom = `${alturaLinha}px`;
                             nodeHTML = `<div class="details"></div><div class="node-circle"></div><div class="line" style="height: ${alturaLinha}px;"></div>`;
@@ -538,122 +476,34 @@
                 }
             }
 
-            // ### INÍCIO DA NOVA LÓGICA DE IMPORTAÇÃO DE FERIADOS ###
+            // ### INÍCIO DA NOVA LÓGICA (SIMPLIFICADA) DE IMPORTAÇÃO ###
             
-            const modalFeriados = document.getElementById('modal-feriados');
             const btnCarregarFeriados = document.getElementById('btn-carregar-feriados');
-            const btnModalCancelar = document.getElementById('btn-modal-cancelar');
-            const btnModalImportar = document.getElementById('btn-modal-importar');
-            const listaFeriadosImportar = document.getElementById('lista-feriados-importar');
-            const modalFeriadosStatus = document.getElementById('modal-feriados-status');
             
-            let feriadosParaImportar = [];
-
             btnCarregarFeriados.addEventListener('click', async () => {
-                modalFeriados.style.display = 'flex';
-                modalFeriadosStatus.textContent = 'Buscando feriados... (Isso pode levar um momento)';
-                btnModalImportar.disabled = true;
-                listaFeriadosImportar.innerHTML = '';
-                feriadosParaImportar = [];
-                
-                try {
-                    const anoAtual = new Date().getFullYear();
-                    const anoSeguinte = anoAtual + 1;
-                    
-                    // Busca feriados do ano atual e do próximo
-                    const [respAtual, respSeguinte] = await Promise.all([
-                        fetch(`https://brasilapi.com.br/api/feriados/v1/${anoAtual}`),
-                        fetch(`https://brasilapi.com.br/api/feriados/v1/${anoSeguinte}`)
-                    ]);
-                    
-                    const feriadosApiAtual = await respAtual.json();
-                    const feriadosApiSeguinte = await respSeguinte.json();
-                    
-                    const todosFeriadosApi = [...feriadosApiAtual, ...feriadosApiSeguinte];
-                    
-                    // Filtra apenas feriados nacionais que ainda não estão no DB
-                    const feriadosJaCadastrados = new Set(
-                        eventosAtuais
-                            .filter(e => e.tipo === 'feriado')
-                            .map(e => e.dataInicio.toDate().toISOString().split('T')[0])
-                    );
-
-                    feriadosParaImportar = todosFeriadosApi
-                        .filter(f => f.type === 'national' && !feriadosJaCadastrados.has(f.date));
-
-                    abrirModalFeriados(feriadosParaImportar);
-
-                } catch (error) {
-                    console.error("Erro ao buscar feriados:", error);
-                    modalFeriadosStatus.textContent = "Erro ao buscar feriados. Tente novamente.";
-                }
-            });
-
-            function abrirModalFeriados(feriados) {
-                if (feriados.length === 0) {
-                    modalFeriadosStatus.textContent = `Nenhum novo feriado nacional encontrado para ${new Date().getFullYear()} ou ${new Date().getFullYear() + 1}.`;
+                if (!confirm("Isso buscará e salvará os feriados nacionais do ano atual e do próximo ano. Deseja continuar?")) {
                     return;
                 }
 
-                modalFeriadosStatus.textContent = `Selecione os feriados que deseja importar:`;
-                btnModalImportar.disabled = false;
+                btnCarregarFeriados.disabled = true;
+                btnCarregarFeriados.textContent = 'Importando...';
                 
-                feriados.forEach(feriado => {
-                    const dataFormatada = new Date(feriado.date + 'T12:00:00Z').toLocaleDateString('pt-BR', {day: '2-digit', month: '2-digit', year: 'numeric', timeZone: 'UTC'});
-                    const id = `feriado-${feriado.date}`;
-                    listaFeriadosImportar.innerHTML += `
-                        <div>
-                            <label for="${id}">
-                                <input type="checkbox" id="${id}" value="${feriado.date}" data-nome="${feriado.name}" checked>
-                                <strong>${feriado.name}</strong> (${dataFormatada})
-                            </label>
-                        </div>
-                    `;
-                });
-            }
-
-            btnModalCancelar.addEventListener('click', () => {
-                modalFeriados.style.display = 'none';
-            });
-
-            btnModalImportar.addEventListener('click', async () => {
-                const checkboxes = listaFeriadosImportar.querySelectorAll('input[type="checkbox"]:checked');
-                if (checkboxes.length === 0) {
-                    alert("Nenhum feriado selecionado.");
-                    return;
-                }
-
-                btnModalImportar.disabled = true;
-                btnModalImportar.textContent = 'Importando...';
-                
-                const promessas = [];
-                checkboxes.forEach(cb => {
-                    const novoFeriado = {
-                        titulo: cb.dataset.nome,
-                        detalhes: "Feriado Nacional",
-                        dataInicio: Timestamp.fromDate(new Date(cb.value + 'T12:00:00Z')), // Salva em UTC
-                        dataFim: null,
-                        tipo: 'feriado',
-                        status: 'ativo',
-                        criadoEm: serverTimestamp(),
-                        criadoPor: user.displayName || user.email
-                    };
-                    promessas.push(addDoc(eventosCollection, novoFeriado));
-                });
-
                 try {
-                    await Promise.all(promessas);
-                    await registrarLog("IMPORTACAO_FERIADOS", { quantidade: promessas.length });
-                    alert(`${promessas.length} feriado(s) importado(s) com sucesso!`);
-                    modalFeriados.style.display = 'none';
+                    // Chama a Cloud Function que faz todo o trabalho
+                    const result = await importarFeriadosNacionais();
+                    
+                    // Exibe a mensagem de sucesso (ex: "8 feriados importados")
+                    alert(result.data.message); 
+                    
                 } catch (error) {
-                    console.error("Erro ao salvar feriados:", error);
-                    alert("Ocorreu um erro ao salvar os feriados.");
-                    btnModalImportar.disabled = false;
-                    btnModalImportar.textContent = 'Importar Selecionados';
+                    console.error("Erro ao chamar a função importarFeriadosNacionais:", error);
+                    alert(`Ocorreu um erro: ${error.message}`);
+                } finally {
+                    btnCarregarFeriados.disabled = false;
+                    btnCarregarFeriados.textContent = 'Importar Feriados Nacionais';
                 }
             });
-            // ### FIM DA NOVA LÓGICA DE IMPORTAÇÃO DE FERIADOS ###
+            // ### FIM DA NOVA LÓGICA DE IMPORTAÇÃO ###
         }
     </script>
 </body>

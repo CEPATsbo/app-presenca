@@ -1557,3 +1557,80 @@ exports.promoverAlunoParaVoluntario = onCall(OPCOES_FUNCAO, async (request) => {
         throw new HttpsError('internal', 'Ocorreu um erro interno ao processar a promoção.');
     }
 });
+
+exports.importarFeriadosNacionais = onCall(OPCOES_FUNCAO, async (request) => {
+    // 1. Segurança: Ver se o usuário está logado e tem permissão para *chamar* a função
+    if (!request.auth) {
+        throw new HttpsError('unauthenticated', 'A função deve ser chamada por um usuário autenticado.');
+    }
+    const permissoes = ['super-admin', 'diretor', 'tesoureiro', 'conselheiro', 'produtor-evento'];
+    const userRole = request.auth.token.role;
+    if (!permissoes.includes(userRole)) {
+        throw new HttpsError('permission-denied', 'Você não tem permissão para executar esta ação.');
+    }
+
+    console.log(`Iniciando importação de feriados a pedido de: ${request.auth.token.name}`);
+
+    try {
+        const anoAtual = new Date().getFullYear();
+        const anoSeguinte = anoAtual + 1;
+        const eventosRef = db.collection('eventos');
+
+        // 2. Buscar feriados na API (Ano atual e próximo)
+        const [respAtual, respSeguinte] = await Promise.all([
+            axios.get(`https://brasilapi.com.br/api/feriados/v1/${anoAtual}`),
+            axios.get(`https://brasilapi.com.br/api/feriados/v1/${anoSeguinte}`)
+        ]);
+        
+        const feriadosApi = [...respAtual.data, ...respSeguinte.data]
+                            .filter(f => f.type === 'national'); // Apenas nacionais
+
+        // 3. Buscar feriados JÁ CADASTRADOS no seu Firestore
+        const snapshotExistentes = await eventosRef.where('tipo', '==', 'feriado').get();
+        const datasExistentes = new Set();
+        snapshotExistentes.forEach(doc => {
+            // Converte o Timestamp para o formato 'YYYY-MM-DD' em UTC para comparação
+            const dataStr = doc.data().dataInicio.toDate().toISOString().split('T')[0];
+            datasExistentes.add(dataStr);
+        });
+
+        // 4. Filtrar: Pegar apenas os feriados da API que NÃO existem no seu DB
+        const feriadosParaImportar = feriadosApi.filter(f => !datasExistentes.has(f.date));
+
+        if (feriadosParaImportar.length === 0) {
+            console.log("Nenhum feriado novo encontrado para importar.");
+            return { success: true, message: `Nenhum feriado nacional novo encontrado para ${anoAtual} ou ${anoSeguinte}. O banco de dados já está atualizado.` };
+        }
+
+        // 5. Preparar e salvar os novos feriados em lote
+        const batch = db.batch();
+        feriadosParaImportar.forEach(feriado => {
+            const novoFeriadoRef = eventosRef.doc(); // Cria uma nova referência de documento
+            const novoFeriado = {
+                titulo: feriado.name,
+                detalhes: "Feriado Nacional",
+                // Salva no fuso UTC (meio-dia) como já fazemos
+                dataInicio: admin.firestore.Timestamp.fromDate(new Date(feriado.date + 'T12:00:00Z')), 
+                dataFim: null,
+                tipo: 'feriado',
+                status: 'ativo',
+                criadoEm: admin.firestore.FieldValue.serverTimestamp(),
+                // Usa o nome do USUÁRIO QUE CLICOU no botão
+                criadoPor: request.auth.token.name || request.auth.token.email
+            };
+            batch.set(novoFeriadoRef, novoFeriado);
+        });
+
+        await batch.commit();
+
+        console.log(`Sucesso: ${feriadosParaImportar.length} feriados importados.`);
+        return { success: true, message: `Sucesso! ${feriadosParaImportar.length} novos feriados nacionais foram importados.` };
+
+    } catch (error) {
+        console.error("Erro CRÍTICO ao importar feriados:", error);
+        if (error instanceof HttpsError) {
+            throw error;
+        }
+        throw new HttpsError('internal', 'Ocorreu um erro no servidor ao buscar ou salvar os feriados.');
+    }
+});
