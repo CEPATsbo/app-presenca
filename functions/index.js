@@ -1307,24 +1307,18 @@ exports.recalcularCronogramaCompleto = onDocumentWritten({ ...OPCOES_FUNCAO, doc
     }
     return null; // Encerra a função
 });
+
 // ==========================================================
 // ## FIM DA FUNÇÃO recalcularCronogramaCompleto CORRIGIDA ##
 // ==========================================================
-/**
- * ROBÔ 4: Calcula a frequência e as médias de um aluno.
- * GATILHO: Escrita em 'frequencias' de uma turma.
- */
-// VERSÃO NOVA E CORRIGIDA
+// VERSÃO NOVA E CORRIGIDA (COM JUSTIFICADO E ABONO DE AULA EXTRA)
 exports.calcularFrequencia = onDocumentWritten({ ...OPCOES_FUNCAO, document: 'turmas/{turmaId}/frequencias/{frequenciaId}' }, async (event) => {
     const turmaId = event.params.turmaId;
-    // Pega os dados do documento que foi escrito (criado ou atualizado)
     const dadosFrequencia = event.data.after.exists ? event.data.after.data() : event.data.before.data();
-   
-    // ### CORREÇÃO 1: Usar os DOIS IDs ###
+    
     const participanteId = dadosFrequencia.participanteId;     // ID do Voluntário (ex: xYz987)
     const participanteDocId = dadosFrequencia.participanteDocId; // ID do Documento na subcoleção (ex: aBc123)
 
-    // Se não tiver os IDs (ex: exclusão), não faz nada
     if (!participanteId || !participanteDocId) {
         console.log("IDs de participante não encontrados no gatilho de frequência.");
         return null;
@@ -1339,51 +1333,79 @@ exports.calcularFrequencia = onDocumentWritten({ ...OPCOES_FUNCAO, document: 'tu
         
         const cronogramaRef = turmaRef.collection('cronograma');
         
-        // ### CORREÇÃO 2: Lógica do "Total de Aulas" ###
-        // Busca apenas aulas marcadas como 'realizada'
+        // 1. Busca todas as aulas que já foram marcadas como 'realizada'
         const aulasRealizadasSnapshot = await cronogramaRef.where('status', '==', 'realizada').get();
         
-        let totalAulasDadas = 0;
-        const idsAulasDadas = [];
+        const idsAulasRegularesDadas = [];
+        const idsAulasExtrasDadas = [];
         
         aulasRealizadasSnapshot.forEach(doc => {
             const aula = doc.data();
-            // Ignora aulas extras (não contam para frequência)
-            if (aula.isExtra !== true) {
-                totalAulasDadas++;
-                idsAulasDadas.push(doc.id);
+            if (aula.isExtra === true) {
+                // Lista de Aulas EXTRAS que foram dadas
+                idsAulasExtrasDadas.push(doc.id);
+            } else {
+                // Lista de Aulas REGULARES que foram dadas
+                idsAulasRegularesDadas.push(doc.id);
             }
         });
 
-        // ### USA O 'participanteRef' CORRETO ###
-        // Aponta para o documento do participante na subcoleção
+        // O denominador da frequência são apenas as aulas regulares
+        const totalAulasDadas = idsAulasRegularesDadas.length;
+        
         const participanteRef = turmaRef.collection('participantes').doc(participanteDocId); 
         
-        // Se não houver aulas dadas ainda, zera a frequência e sai
         if (totalAulasDadas === 0) {
+            // Se nenhuma aula regular foi dada, zera a frequência e sai
             await participanteRef.set({ avaliacoes: { [anoAtual]: { notaFrequencia: 0 } } }, { merge: true });
             console.log(`Total de aulas dadas é 0 para ${participanteDocId}. Frequência definida como 0.`);
             return null;
         }
         
-        // Busca as presenças DO ALUNO (usando o ID de voluntário, que está correto)
+        // 2. Busca TODAS as frequências do aluno (presente, ausente, justificado)
         const frequenciasRef = turmaRef.collection('frequencias');
-        const presencasSnapshot = await frequenciasRef
-            .where('participanteId', '==', participanteId) // (ex: xYz987)
-            .where('status', '==', 'presente')
+        const frequenciasSnapshot = await frequenciasRef
+            .where('participanteId', '==', participanteId)
             .get();
         
-        // Filtra as presenças para contar apenas as aulas que já foram dadas (e não são extras)
         let presencasValidas = 0;
-        presencasSnapshot.forEach(doc => {
-            if (idsAulasDadas.includes(doc.data().aulaId)) {
-                presencasValidas++;
+        let abonosExtras = 0;
+
+        frequenciasSnapshot.forEach(doc => {
+            const freq = doc.data();
+            const aulaId = freq.aulaId;
+            const status = freq.status;
+
+            // ### MUDANÇA 1: "Justificado" (J) conta como presença ###
+            // Se a aula for REGULAR...
+            if (idsAulasRegularesDadas.includes(aulaId)) {
+                // ...e o status for 'presente' OU 'justificado'
+                if (status === 'presente' || status === 'justificado') {
+                    presencasValidas++;
+                }
+            }
+
+            // ### MUDANÇA 2: Presença em Aula EXTRA abona falta ###
+            // Se a aula for EXTRA...
+            if (idsAulasExtrasDadas.includes(aulaId)) {
+                // ...e o status for 'presente' (justificado em extra não abona)
+                if (status === 'presente') {
+                    abonosExtras++;
+                }
             }
         });
         
-        const porcentagemFrequencia = Math.round((presencasValidas / totalAulasDadas) * 100);
+        // 3. Cálculo Final da Frequência
+        let presencasEfetivas = presencasValidas + abonosExtras;
         
-        // Pega os dados atuais de notas para não apagá-los
+        // Limita o total de presenças ao total de aulas (para não dar > 100%)
+        if (presencasEfetivas > totalAulasDadas) {
+            presencasEfetivas = totalAulasDadas;
+        }
+        
+        const porcentagemFrequencia = Math.round((presencasEfetivas / totalAulasDadas) * 100);
+        
+        // 4. Recálculo das Médias da EAE (como antes)
         const participanteSnap = await participanteRef.get();
         if(!participanteSnap.exists) {
             console.error(`Falha CRÍTICA: Documento do participante ${participanteDocId} não encontrado para atualização.`);
@@ -1394,14 +1416,13 @@ exports.calcularFrequencia = onDocumentWritten({ ...OPCOES_FUNCAO, document: 'tu
         const avaliacoes = dadosParticipante.avaliacoes || {};
         const avaliacaoDoAno = avaliacoes[anoAtual] || {};
 
-        // Recalcula as médias da EAE junto com a frequência
         const notaFreqConvertida = porcentagemFrequencia >= 80 ? 10 : (porcentagemFrequencia >= 60 ? 5 : 1);
-        const mediaAT = (notaFreqConvertida + (avaliacaoDoAno.notaCadernoTemas || 0)) / 2;
+        const mediaAT = (notaFreqConvertida + (avaliacaoDoAno.notaCadernoTemas || 0)) / 2;
         const mediaRI = ((avaliacaoDoAno.notaCadernetaPessoal || 0) + (avaliacaoDoAno.notaTrabalhos || 0) + (avaliacaoDoAno.notaExameEspiritual || 0)) / 3;
         const mediaFinal = (mediaAT + mediaRI) / 2;
         const statusAprovacao = (mediaFinal >= 5 && mediaRI >= 6) ? "Aprovado" : "Reprovado";
 
-        // Atualiza o documento do participante com os novos valores
+        // 5. Atualiza o documento do participante
         await participanteRef.update({
             [`avaliacoes.${anoAtual}.notaFrequencia`]: porcentagemFrequencia,
             [`avaliacoes.${anoAtual}.mediaAT`]: parseFloat(mediaAT.toFixed(1)),
@@ -1410,7 +1431,7 @@ exports.calcularFrequencia = onDocumentWritten({ ...OPCOES_FUNCAO, document: 'tu
             [`avaliacoes.${anoAtual}.statusAprovacao`]: statusAprovacao
         });
         
-        console.log(`Frequência de ${participanteDocId} atualizada para ${porcentagemFrequencia}% (${presencasValidas}/${totalAulasDadas})`);
+        console.log(`Frequência de ${participanteDocId} atualizada para ${porcentagemFrequencia}% (${presencasEfetivas} efetivas / ${totalAulasDadas} aulas dadas)`);
         
     } catch (error) {
         console.error(`Erro ao calcular frequência para turma ${turmaId}, participante ${participanteDocId}:`, error);
