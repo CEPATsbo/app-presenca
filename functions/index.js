@@ -1686,4 +1686,86 @@ exports.importarFeriadosNacionais = onCall(OPCOES_FUNCAO, async (request) => {
         }
         throw new HttpsError('internal', 'Ocorreu um erro no servidor ao buscar ou salvar os feriados.');
     }
+
+// ===================================================================
+// ## INÍCIO: FUNÇÕES PARA O "CEPAT - AO VIVO" ##
+// ===================================================================
+
+/**
+ * GATILHO (Trigger): Atualiza a contagem da Fila VL em tempo real.
+ * Acionado sempre que um documento é escrito (criado, mudado, deletado) 
+ * na fila do VL.
+ */
+exports.atualizarContagemFilaVL = onDocumentWritten({ ...OPCOES_FUNCAO, document: 'fila_atendimento_vl/{docId}' }, async (event) => {
+    
+    // 1. Define a consulta: Contar quantos na fila estão "Aguardando"
+    const q_fila_vl = db.collection('fila_atendimento_vl').where('status', '==', 'Aguardando');
+    
+    // 2. Executa a contagem (usando a sintaxe do Admin SDK)
+    const snapshot = await q_fila_vl.count().get();
+    const count = snapshot.data().count;
+
+    // 3. Atualiza o "Placar"
+    const placarRef = db.doc('estatisticas/ao-vivo');
+    
+    console.log(`Gatilho Fila VL: Contagem atualizada para ${count}`);
+    
+    // Usa .set() com { merge: true } para criar o documento se não existir
+    // ou apenas atualizar este campo se já existir.
+    return placarRef.set({
+        total_fila_vl: count
+    }, { merge: true });
+});
+
+
+/**
+ * AGENDADA (Scheduled): Recalcula os totais estratégicos a cada 10 minutos.
+ * Roda automaticamente e atualiza os totais "frios" 
+ * (Assistidos, Ativos VL) para garantir que o placar esteja sempre correto.
+ */
+exports.recontarTotaisEstatisticos = onSchedule({ ...OPCOES_FUNCAO_SAOPAULO, schedule: 'every 10 minutes' }, async (event) => {
+    
+    console.log("Iniciando recontagem agendada dos totais...");
+
+    try {
+        // 1. Define as consultas de contagem
+        const q_assistidos = db.collection('assistidos');
+        const q_ativos_vl = db.collection('tratamentos_vl').where('status', '==', 'ativo');
+        
+        // 2. Cria as "promessas" de contagem
+        const assistidosPromise = q_assistidos.count().get();
+        const ativosVlPromise = q_ativos_vl.count().get();
+        
+        // 3. Executa todas as contagens em paralelo
+        const [assistidosSnap, ativosVlSnap] = await Promise.all([
+            assistidosPromise,
+            ativosVlPromise
+        ]);
+
+        // 4. Extrai os números
+        const total_assistidos = assistidosSnap.data().count;
+        const total_ativos_vl = ativosVlSnap.data().count;
+
+        // 5. Atualiza o "Placar" com todos os dados de uma vez
+        const placarRef = db.doc('estatisticas/ao-vivo');
+        
+        await placarRef.set({
+            total_assistidos: total_assistidos,
+            total_ativos_vl: total_ativos_vl,
+            ultimaAtualizacao: admin.firestore.FieldValue.serverTimestamp() // Adiciona um carimbo de data/hora
+        }, { merge: true }); // Merge: true para não apagar a contagem da fila
+
+        console.log(`Recontagem concluída: Assistidos=${total_assistidos}, Ativos VL=${total_ativos_vl}`);
+        return null;
+
+    } catch (error) {
+        console.error("Erro na recontagem agendada:", error);
+        return null;
+    }
+});
+
+// ===================================================================
+// ## FIM: FUNÇÕES PARA O "CEPAT - AO VIVO" ##
+// ===================================================================
+
 });
