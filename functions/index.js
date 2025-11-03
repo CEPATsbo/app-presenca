@@ -1314,76 +1314,108 @@ exports.recalcularCronogramaCompleto = onDocumentWritten({ ...OPCOES_FUNCAO, doc
  * ROBÔ 4: Calcula a frequência e as médias de um aluno.
  * GATILHO: Escrita em 'frequencias' de uma turma.
  */
+// VERSÃO NOVA E CORRIGIDA
 exports.calcularFrequencia = onDocumentWritten({ ...OPCOES_FUNCAO, document: 'turmas/{turmaId}/frequencias/{frequenciaId}' }, async (event) => {
-    // Sua função original 'calcularFrequencia' já estava correta e em v2.
-    // Cole o corpo da sua função aqui.
-    const turmaId = event.params.turmaId;
-    const dadosFrequencia = event.data.after.exists ? event.data.after.data() : event.data.before.data();
-    const participanteId = dadosFrequencia.participanteId;
+    const turmaId = event.params.turmaId;
+    // Pega os dados do documento que foi escrito (criado ou atualizado)
+    const dadosFrequencia = event.data.after.exists ? event.data.after.data() : event.data.before.data();
+   
+    // ### CORREÇÃO 1: Usar os DOIS IDs ###
+    const participanteId = dadosFrequencia.participanteId;     // ID do Voluntário (ex: xYz987)
+    const participanteDocId = dadosFrequencia.participanteDocId; // ID do Documento na subcoleção (ex: aBc123)
 
-    if (!participanteId) { return null; }
-    try {
-        const turmaRef = db.collection('turmas').doc(turmaId);
-        const turmaSnap = await turmaRef.get();
-        if (!turmaSnap.exists) { return null; }
-        const turmaData = turmaSnap.data();
-        const anoAtual = turmaData.anoAtual || 1;
-        const hoje = new Date();
-        const cronogramaRef = turmaRef.collection('cronograma');
-        
-        const aulasPassadasSnapshot = await cronogramaRef.where('dataAgendada', '<=', hoje).get();
-        let totalAulasDadas = 0;
-        const idsAulasDadas = [];
-        aulasPassadasSnapshot.forEach(doc => {
-            const aula = doc.data();
-            if (aula.isExtra !== true && aula.status !== 'recesso') {
-                totalAulasDadas++;
-                idsAulasDadas.push(doc.id);
-            }
-        });
+    // Se não tiver os IDs (ex: exclusão), não faz nada
+    if (!participanteId || !participanteDocId) {
+        console.log("IDs de participante não encontrados no gatilho de frequência.");
+        return null;
+    }
 
-        if (totalAulasDadas === 0) {
-            const participanteRef = turmaRef.collection('participantes').doc(participanteId);
-            await participanteRef.set({ avaliacoes: { [anoAtual]: { notaFrequencia: 0 } } }, { merge: true });
-            return null;
-        }
-        
-        const frequenciasRef = turmaRef.collection('frequencias');
-        const presencasSnapshot = await frequenciasRef.where('participanteId', '==', participanteId).where('status', '==', 'presente').get();
-        
-        let presencasValidas = 0;
-        presencasSnapshot.forEach(doc => {
-            if (idsAulasDadas.includes(doc.data().aulaId)) {
-                presencasValidas++;
-            }
-        });
-        const porcentagemFrequencia = Math.round((presencasValidas / totalAulasDadas) * 100);
-        
-        const participanteRef = turmaRef.collection('participantes').doc(participanteId);
-        const participanteSnap = await participanteRef.get();
-        if(!participanteSnap.exists) return null;
-        
-        const dadosParticipante = participanteSnap.data();
-        const avaliacoes = dadosParticipante.avaliacoes || {};
-        const avaliacaoDoAno = avaliacoes[anoAtual] || {};
+    try {
+        const turmaRef = db.collection('turmas').doc(turmaId);
+        const turmaSnap = await turmaRef.get();
+        if (!turmaSnap.exists) { return null; }
+        const turmaData = turmaSnap.data();
+        const anoAtual = turmaData.anoAtual || 1;
+        
+        const cronogramaRef = turmaRef.collection('cronograma');
+        
+        // ### CORREÇÃO 2: Lógica do "Total de Aulas" ###
+        // Busca apenas aulas marcadas como 'realizada'
+        const aulasRealizadasSnapshot = await cronogramaRef.where('status', '==', 'realizada').get();
+        
+        let totalAulasDadas = 0;
+        const idsAulasDadas = [];
+        
+        aulasRealizadasSnapshot.forEach(doc => {
+            const aula = doc.data();
+            // Ignora aulas extras (não contam para frequência)
+            if (aula.isExtra !== true) {
+                totalAulasDadas++;
+                idsAulasDadas.push(doc.id);
+            }
+        });
 
-        const notaFreqConvertida = porcentagemFrequencia >= 80 ? 10 : (porcentagemFrequencia >= 60 ? 5 : 1);
-        const mediaAT = (notaFreqConvertida + (avaliacaoDoAno.notaCadernoTemas || 0)) / 2;
-        const mediaRI = ((avaliacaoDoAno.notaCadernetaPessoal || 0) + (avaliacaoDoAno.notaTrabalhos || 0) + (avaliacaoDoAno.notaExameEspiritual || 0)) / 3;
-        const mediaFinal = (mediaAT + mediaRI) / 2;
-        const statusAprovacao = (mediaFinal >= 5 && mediaRI >= 6) ? "Aprovado" : "Reprovado";
+        // ### USA O 'participanteRef' CORRETO ###
+        // Aponta para o documento do participante na subcoleção
+        const participanteRef = turmaRef.collection('participantes').doc(participanteDocId); 
+        
+        // Se não houver aulas dadas ainda, zera a frequência e sai
+        if (totalAulasDadas === 0) {
+            await participanteRef.set({ avaliacoes: { [anoAtual]: { notaFrequencia: 0 } } }, { merge: true });
+            console.log(`Total de aulas dadas é 0 para ${participanteDocId}. Frequência definida como 0.`);
+            return null;
+        }
+        
+        // Busca as presenças DO ALUNO (usando o ID de voluntário, que está correto)
+        const frequenciasRef = turmaRef.collection('frequencias');
+        const presencasSnapshot = await frequenciasRef
+            .where('participanteId', '==', participanteId) // (ex: xYz987)
+            .where('status', '==', 'presente')
+            .get();
+        
+        // Filtra as presenças para contar apenas as aulas que já foram dadas (e não são extras)
+        let presencasValidas = 0;
+        presencasSnapshot.forEach(doc => {
+            if (idsAulasDadas.includes(doc.data().aulaId)) {
+                presencasValidas++;
+            }
+        });
+        
+        const porcentagemFrequencia = Math.round((presencasValidas / totalAulasDadas) * 100);
+        
+        // Pega os dados atuais de notas para não apagá-los
+        const participanteSnap = await participanteRef.get();
+        if(!participanteSnap.exists) {
+            console.error(`Falha CRÍTICA: Documento do participante ${participanteDocId} não encontrado para atualização.`);
+            return null;
+        }
+        
+        const dadosParticipante = participanteSnap.data();
+        const avaliacoes = dadosParticipante.avaliacoes || {};
+        const avaliacaoDoAno = avaliacoes[anoAtual] || {};
 
-        await participanteRef.update({
-            [`avaliacoes.${anoAtual}.notaFrequencia`]: porcentagemFrequencia,
-            [`avaliacoes.${anoAtual}.mediaAT`]: mediaAT,
-            [`avaliacoes.${anoAtual}.mediaRI`]: mediaRI,
-            [`avaliacoes.${anoAtual}.mediaFinal`]: mediaFinal,
-            [`avaliacoes.${anoAtual}.statusAprovacao`]: statusAprovacao
-        });
-    } catch (error) {
-        console.error(`Erro ao calcular frequência para turma ${turmaId}:`, error);
-    }
-    return null;
+        // Recalcula as médias da EAE junto com a frequência
+        const notaFreqConvertida = porcentagemFrequencia >= 80 ? 10 : (porcentagemFrequencia >= 60 ? 5 : 1);
+        const mediaAT = (notaFreqConvertida + (avaliacaoDoAno.notaCadernoTemas || 0)) / 2;
+        const mediaRI = ((avaliacaoDoAno.notaCadernetaPessoal || 0) + (avaliacaoDoAno.notaTrabalhos || 0) + (avaliacaoDoAno.notaExameEspiritual || 0)) / 3;
+        const mediaFinal = (mediaAT + mediaRI) / 2;
+        const statusAprovacao = (mediaFinal >= 5 && mediaRI >= 6) ? "Aprovado" : "Reprovado";
+
+        // Atualiza o documento do participante com os novos valores
+        await participanteRef.update({
+            [`avaliacoes.${anoAtual}.notaFrequencia`]: porcentagemFrequencia,
+            [`avaliacoes.${anoAtual}.mediaAT`]: parseFloat(mediaAT.toFixed(1)),
+            [`avaliacoes.${anoAtual}.mediaRI`]: parseFloat(mediaRI.toFixed(1)),
+            [`avaliacoes.${anoAtual}.mediaFinal`]: parseFloat(mediaFinal.toFixed(1)),
+            [`avaliacoes.${anoAtual}.statusAprovacao`]: statusAprovacao
+        });
+        
+        console.log(`Frequência de ${participanteDocId} atualizada para ${porcentagemFrequencia}% (${presencasValidas}/${totalAulasDadas})`);
+        
+    } catch (error) {
+        console.error(`Erro ao calcular frequência para turma ${turmaId}, participante ${participanteDocId}:`, error);
+    }
+    return null;
 });
 
 // ==========================================================
