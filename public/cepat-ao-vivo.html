@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CEPAT - Ao Vivo</title>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background-color: #f4f6f9; margin: 0; padding: 20px; }
+        .container { width: 100%; max-width: 1200px; margin: 0 auto; }
+        .nav-voltar { margin-bottom: 20px; }
+        .btn-voltar { background-color: #6c757d; color: white; border: none; padding: 12px 20px; border-radius: 8px; font-weight: bold; text-decoration: none; display: inline-block; cursor: pointer; }
+        h1 { text-align: center; color: #34495e; margin-bottom: 10px; }
+        p.subtitulo { text-align: center; color: #555; margin-top: 0; margin-bottom: 30px; }
+        .hidden { display: none; }
+        
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 20px;
+        }
+        
+        .card-stat {
+            background-color: #fff;
+            border-radius: 12px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.07);
+            padding: 25px;
+            border-top: 5px solid;
+            position: relative; 
+            min-height: 120px;
+        }
+        .card-stat h2 {
+            margin: 0 0 10px 0;
+            font-size: 1.2em;
+            color: #555;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        .card-stat .stat-numero {
+            font-size: 3.5em;
+            font-weight: bold;
+            color: #333;
+        }
+        .card-stat .stat-legenda {
+            font-size: 0.9em;
+            color: #777;
+            margin-top: 5px;
+        }
+        .card-stat.erro .stat-numero {
+            color: #dc3545;
+            font-size: 1.5em;
+            font-weight: normal;
+        }
+
+        /* Cores dos Sinais Vitais */
+        #card-fila-ae { border-top-color: #007bff; } /* Azul AE */
+        #card-fila-ae .stat-numero { color: #007bff; }
+        #card-fila-vl { border-top-color: #8e44ad; } /* Roxo VL */
+        #card-fila-vl .stat-numero { color: #8e44ad; }
+        
+        /* Cores da Visão Geral */
+        #card-assistidos { border-top-color: #6c757d; }
+        #card-ativos-ae { border-top-color: #17a2b8; }
+        #card-ativos-vl { border-top-color: #6610f2; }
+        #card-turmas { border-top-color: #fd7e14; } /* Laranja Educacional */
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <nav class="nav-voltar">
+            <a href="/meu-cepat.html" class="btn-voltar">⬅ Voltar ao Meu CEPAT</a>
+        </nav>
+        
+        <div id="acesso-negado" class="hidden">
+            <h1 style="color: #dc3545;">Acesso Negado</h1>
+            <p>Você precisa estar logado para ver esta página.</p>
+        </div>
+
+        <div id="main-content" class="hidden">
+            <h1>CEPAT - Ao Vivo</h1>
+            <p class="subtitulo">Sinais vitais da casa em tempo real.</p>
+
+            <h3 style="color: #333; border-bottom: 2px solid #ccc; padding-bottom: 5px;">Tempo Real (Atualizado ao vivo)</h3>
+            <div class="stats-grid">
+                <div class="card-stat" id="card-fila-ae">
+                    <h2>Na Fila (Entrevista AE)</h2>
+                    <div class="stat-numero" id="count-fila-ae">...</div>
+                    <div class="stat-legenda">Pessoas aguardando entrevista</div>
+                </div>
+                
+                <div class="card-stat" id="card-fila-vl">
+                    <h2>Na Fila (Espera VL)</h2>
+                    <div class="stat-numero" id="count-fila-vl">...</div>
+                    <div class="stat-legenda">Pessoas aguardando passe VL</div>
+                </div>
+            </div>
+
+            <h3 style="color: #333; border-bottom: 2px solid #ccc; padding-bottom: 5px; margin-top: 40px;">Visão Geral (Atualizado a cada 10 min)</h3>
+            <div class="stats-grid">
+                <div class="card-stat" id="card-assistidos">
+                    <h2>Assistidos Cadastrados</h2>
+                    <div class="stat-numero" id="count-assistidos">...</div>
+                    <div class="stat-legenda">Total de pessoas no sistema</div>
+                </div>
+                
+                <div class="card-stat" id="card-ativos-ae">
+                    <h2>Em Tratamento (AE)</h2>
+                    <div class="stat-numero" id="count-ativos-ae">...</div>
+                    <div class="stat-legenda">Tratamentos ativos na A. Espiritual</div>
+                </div>
+
+                <div class="card-stat" id="card-ativos-vl">
+                    <h2>Em Tratamento (VL)</h2>
+                    <div class="stat-numero" id="count-ativos-vl">...</div>
+                    <div class="stat-legenda">Tratamentos ativos no Vinha de Luz</div>
+                </div>
+
+                <div class="card-stat" id="card-turmas">
+                    <h2>Turmas Ativas</h2>
+                    <div class="stat-numero" id="count-turmas">...</div>
+                    <div class="stat-legenda">Grupos de estudo em andamento</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
+        import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-auth.js";
+        import { 
+            getFirestore, collection, query, where, onSnapshot, getCountFromServer, doc 
+        } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
+
+        const firebaseConfig = {
+            apiKey: "AIzaSyBV7RPjk3cFTqL-aIpflJcUojKg1ZXMLuU",
+            authDomain: "voluntarios-ativos---cepat.firebaseapp.com",
+            projectId: "voluntarios-ativos---cepat",
+            storageBucket: "voluntarios-ativos---cepat.firebasestorage.app",
+            messagingSenderId: "66122858261",
+            appId: "1:66122858261:web:7fa21f1805463b5c08331c"
+        };
+        
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+        const db = getFirestore(app);
+
+        // Elementos da UI para os números
+        const ui = {
+            filaAE: document.getElementById('count-fila-ae'),
+            cardFilaAE: document.getElementById('card-fila-ae'),
+            filaVL: document.getElementById('count-fila-vl'),
+            cardFilaVL: document.getElementById('card-fila-vl'),
+            assistidos: document.getElementById('count-assistidos'),
+            cardAssistidos: document.getElementById('card-assistidos'),
+            ativosAE: document.getElementById('count-ativos-ae'),
+            cardAtivosAE: document.getElementById('card-ativos-ae'),
+            ativosVL: document.getElementById('count-ativos-vl'),
+            cardAtivosVL: document.getElementById('card-ativos-vl'),
+            turmas: document.getElementById('count-turmas'),
+            cardTurmas: document.getElementById('card-turmas')
+        };
+
+        // Verifica se o usuário está logado
+        onAuthStateChanged(auth, (user) => {
+            if (user) {
+                // Usuário está logado (qualquer cargo)
+                document.getElementById('main-content').classList.remove('hidden');
+                carregarDadosPublicos();
+                carregarPlacarProtegido();
+            } else {
+                // Usuário não está logado
+                document.getElementById('acesso-negado').classList.remove('hidden');
+            }
+        });
+
+        // --- DADOS PÚBLICOS (Conforme suas regras) ---
+        function carregarDadosPublicos() {
+            
+            // 1. Fila AE (Tempo Real)
+            try {
+                // Sua regra "allow read: if true" permite esta consulta
+                const q_ae = query(collection(db, 'fila_atendimento_ae'), where('status', '==', 'Aguardando Entrevista'));
+                onSnapshot(q_ae, (snapshot) => {
+                    ui.filaAE.textContent = snapshot.size;
+                }, (error) => {
+                    console.error("Erro ao ler fila AE:", error);
+                    ui.filaAE.textContent = "Erro"; ui.cardFilaAE.classList.add('erro');
+                });
+            } catch (e) { console.error("Erro na consulta Fila AE:", e); ui.filaAE.textContent = "Erro"; ui.cardFilaAE.classList.add('erro'); }
+            
+            // 2. Ativos AE (Contagem)
+            (async () => {
+                try {
+                    // Sua regra "allow read: if request.auth != null" permite esta consulta
+                    const q_ativos_ae = query(collection(db, 'tratamentos_ae'), where('status', '==', 'ativo'));
+                    const snap_ativos_ae = await getCountFromServer(q_ativos_ae);
+                    ui.ativosAE.textContent = snap_ativos_ae.data().count;
+                } catch (e) {
+                    console.error("Erro ao contar Ativos AE:", e);
+                    ui.ativosAE.textContent = "Erro"; ui.cardAtivosAE.classList.add('erro');
+                }
+            })();
+
+            // 3. Turmas Ativas (Contagem)
+            (async () => {
+                try {
+                    // Sua regra "allow read: if request.auth != null" permite esta consulta
+                    const q_turmas = query(collection(db, 'turmas'), where('status', '==', 'Ativa'));
+                    const snap_turmas = await getCountFromServer(q_turmas);
+                    ui.turmas.textContent = snap_turmas.data().count;
+                } catch (e) {
+                    console.error("Erro ao contar Turmas Ativas:", e);
+                    ui.turmas.textContent = "Erro"; ui.cardTurmas.classList.add('erro');
+                }
+            })();
+        }
+
+        // --- DADOS PROTEGIDOS (Lendo do "Placar") ---
+        function carregarPlacarProtegido() {
+            // A "Etapa 2" (firestore.rules) permite que todos leiam este documento
+            const placarRef = doc(db, 'estatisticas', 'ao-vivo');
+
+            onSnapshot(placarRef, (docSnap) => {
+                if (docSnap.exists()) {
+                    const data = docSnap.data();
+                    
+                    // 4. Fila VL (Placar) - em tempo real
+                    ui.filaVL.textContent = data.total_fila_vl !== undefined ? data.total_fila_vl : "0";
+                    
+                    // 5. Total Assistidos (Placar) - a cada 10 min
+                    ui.assistidos.textContent = data.total_assistidos !== undefined ? data.total_assistidos : "0";
+                    
+                    // 6. Ativos VL (Placar) - a cada 10 min
+                    ui.ativosVL.textContent = data.total_ativos_vl !== undefined ? data.total_ativos_vl : "0";
+                    
+                } else {
+                    // Se o placar ainda não foi criado pelo backend
+                    console.warn("Documento 'estatisticas/ao-vivo' não encontrado. Aguardando gatilho do backend...");
+                    ui.filaVL.textContent = "0";
+                    ui.assistidos.textContent = "0";
+                    ui.ativosVL.textContent = "0";
+                }
+            }, (error) => {
+                console.error("Erro ao ler o Placar (estatisticas/ao-vivo):", error);
+                ui.filaVL.textContent = "Erro"; ui.cardFilaVL.classList.add('erro');
+                ui.assistidos.textContent = "Erro"; ui.cardAssistidos.classList.add('erro');
+                ui.ativosVL.textContent = "Erro"; ui.cardAtivosVL.classList.add('erro');
+            });
+        }
+    </script>
+
+</body>
+</html>

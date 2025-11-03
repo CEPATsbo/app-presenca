@@ -1687,8 +1687,10 @@ exports.importarFeriadosNacionais = onCall(OPCOES_FUNCAO, async (request) => {
         throw new HttpsError('internal', 'Ocorreu um erro no servidor ao buscar ou salvar os feriados.');
     }
 
+    });
+
 // ===================================================================
-// ## INÍCIO: FUNÇÕES PARA O "CEPAT - AO VIVO" ##
+// ## INÍCIO: FUNÇÕES PARA O PORTAL "CEPAT - AO VIVO" ##
 // ===================================================================
 
 /**
@@ -1765,7 +1767,5 @@ exports.recontarTotaisEstatisticos = onSchedule({ ...OPCOES_FUNCAO_SAOPAULO, sch
 });
 
 // ===================================================================
-// ## FIM: FUNÇÕES PARA O "CEPAT - AO VIVO" ##
+// ## FIM: FUNÇÕES PARA O PORTAL "CEPAT - AO VIVO" ##
 // ===================================================================
-
-});
