@@ -48,7 +48,16 @@
 
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
-        import { getFirestore, collection, doc, getDoc, updateDoc, query, where, Timestamp, getDocs, writeBatch, serverTimestamp, limit, addDoc, increment } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
+        // ===================================================================
+        // INÍCIO DA MODIFICAÇÃO JAVASCRIPT: 1. Importa setDoc
+        // ===================================================================
+        import { 
+            getFirestore, collection, doc, getDoc, updateDoc, query, where, Timestamp, 
+            getDocs, writeBatch, serverTimestamp, limit, addDoc, increment, setDoc 
+        } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
+        // ===================================================================
+        // FIM DA MODIFICAÇÃO JAVASCRIPT
+        // ===================================================================
         import { getAuth } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-auth.js";
         import { protegerPagina } from '/auth.js';
 
@@ -63,7 +72,14 @@
         // initializeApp(firebaseConfig); // REMOVIDO (auth.js já inicializa)
         const auth = getAuth();
 
-        protegerPagina(['entrevistador', 'tesoureiro', 'conselheiro', 'diretor', 'super-admin', 'recepcionista', 'irradiador']).then(user => {
+        // ===================================================================
+        // INÍCIO DA MODIFICAÇÃO JAVASCRIPT: 2. Ajuste de Permissões
+        // ===================================================================
+        // Permissões de Atendente/Recepção/Gestão. Remove 'conselheiro' e 'irradiador'.
+        protegerPagina(['entrevistador', 'tesoureiro', 'diretor', 'super-admin']).then(user => {
+        // ===================================================================
+        // FIM DA MODIFICAÇÃO JAVASCRIPT
+        // ===================================================================
             inicializarPagina(user);
         }).catch(err => {
             document.getElementById('acesso-negado').classList.remove('hidden');
@@ -80,37 +96,41 @@
             const params = new URLSearchParams(window.location.search);
             const atendimentoIdParaEditar = params.get('atendimentoId');
 
-            // ===================================================================
-            // INÍCIO DA MODIFICAÇÃO JAVASCRIPT: Remoção do listener 'btn-voltar-fecha'
-            // ===================================================================
-            // const btnVoltarFecha = document.getElementById('btn-voltar-fecha');
-            // if(btnVoltarFecha) { ... } // Bloco inteiro removido
-            // ===================================================================
-            // FIM DA MODIFICAÇÃO
-            // ===================================================================
-
             if (atendimentoIdParaEditar) {
                 carregarFormularioParaEdicao(atendimentoIdParaEditar);
             } else {
                 formularioContainer.innerHTML = `<p class="erro">Nenhum atendimento selecionado.</p>`;
             }
 
+            // ===================================================================
+            // INÍCIO DA MODIFICAÇÃO JAVASCRIPT: 2. Função de Log Corrigida
+            // ===================================================================
             async function registrarLog(acao, detalhes) {
                 try {
-                    await addDoc(logAuditoriaRef, {
+                    const newLogRef = doc(logAuditoriaRef); // Cria ref com ID auto
+                    await setDoc(newLogRef, { // Usa setDoc
                         timestamp: serverTimestamp(),
                         autor: { uid: user.uid, nome: user.displayName || 'Usuário do Sistema' },
                         acao: acao,
                         detalhes: detalhes
                     });
-                } catch (error) { console.error("Erro ao registrar log:", error); }
+                } catch (error) { console.error("Erro ao registrar log (com setDoc):", error); }
             }
+            // ===================================================================
+            // FIM DA MODIFICAÇÃO JAVASCRIPT
+            // ===================================================================
 
             function manipularEstadoFormulario(travado) {
                 const form = formularioContainer.querySelector('fieldset');
                 if (!form) return;
                 
-                form.querySelectorAll('#atendente-nome, #atendimento-notas, #btn-marcar-retorno').forEach(el => {
+                // ===================================================================
+                // INÍCIO DA MODIFICAÇÃO JAVASCRIPT: 5. Trava o novo campo
+                // ===================================================================
+                form.querySelectorAll('#atendente-nome, #atendimento-notas, #btn-marcar-retorno, #definir-total-atendimentos').forEach(el => {
+                // ===================================================================
+                // FIM DA MODIFICAÇÃO JAVASCRIPT
+                // ===================================================================
                     if (el) el.disabled = travado;
                 });
 
@@ -150,7 +170,7 @@
                 
                 const formHtml = criarFormulario(atendimento, assistido, tratamento);
                 formularioContainer.innerHTML = formHtml;
-                preencherFormulario(atendimento, user);
+                preencherFormulario(atendimento, user, tratamento); // Passa o 'tratamento'
                 
                 const travar = atendimento.detalhes_preenchidos === true;
                 manipularEstadoFormulario(travar);
@@ -160,6 +180,7 @@
             }
             
             async function marcarNovoRetorno(atendimentoAnterior, tratamentoDocRef, tratamento) {
+                // ... (Nenhuma mudança nesta função, ela está correta para retornos)
                 const btn = document.getElementById('btn-marcar-retorno');
                 btn.disabled = true;
 
@@ -227,7 +248,9 @@
                 }
             }
 
-
+            // ===================================================================
+            // INÍCIO DA MODIFICAÇÃO JAVASCRIPT: 6. Função de Salvar (com Batch)
+            // ===================================================================
             async function salvarAtendimentoVL(atendimento, atendimentoDocRef, tratamentoDocRef, tratamento) {
                 const btn = document.getElementById('btn-salvar-atendimento');
                 const atendenteNome = document.getElementById('atendente-nome').value.trim();
@@ -238,33 +261,82 @@
                     return;
                 }
                 
+                // Pega o valor do novo campo (se ele existir)
+                const selectTotalAtendimentos = document.getElementById('definir-total-atendimentos');
+                let retornosSolicitados = tratamento.retornos_solicitados; // Valor padrão
+                let totalAtendimentos = (retornosSolicitados || 0) + 1;
+                let logDetalhesRetornos = {};
+                let statusFinal = tratamento.status; // Valor padrão
+
+                // Se o campo de definição existir (1º atendimento)
+                if (selectTotalAtendimentos) {
+                    totalAtendimentos = parseInt(selectTotalAtendimentos.value, 10);
+                    retornosSolicitados = totalAtendimentos - 1; // 4 Atendimentos = 3 retornos
+                    
+                    if (totalAtendimentos < 1) {
+                        alert('Selecione uma duração de tratamento válida.');
+                        return;
+                    }
+                    
+                    // Se definiu como 1 atendimento, já conclui o tratamento
+                    if (totalAtendimentos === 1 && atendimento.semana === 1) {
+                        statusFinal = 'concluido';
+                    }
+                    
+                    logDetalhesRetornos = { totalDefinido: totalAtendimentos, retornos: retornosSolicitados, statusFinal: statusFinal };
+                }
+
                 btn.disabled = true; btn.textContent = 'Salvando...';
+                
                 try {
-                    const dadosParaAtualizar = {
+                    const batch = writeBatch(db);
+                    
+                    // 1. Atualiza o Atendimento (Notas, Atendente, etc.)
+                    const dadosAtendimento = {
                         atendente: atendenteNome,
                         notas: atendimentoNotas,
                         detalhes_preenchidos: true
                     };
-                    
-                    await updateDoc(atendimentoDocRef, dadosParaAtualizar);
+                    batch.update(atendimentoDocRef, dadosAtendimento);
+
+                    // 2. Atualiza o Tratamento (Retornos e Status)
+                    // (Só atualiza se o campo de definição estava presente)
+                    if (selectTotalAtendimentos) {
+                        batch.update(tratamentoDocRef, {
+                            retornos_solicitados: retornosSolicitados,
+                            status: statusFinal 
+                        });
+                    }
+
+                    // Executa as duas atualizações
+                    await batch.commit();
                     
                     await registrarLog('Preenchimento Atendimento (VL)', {
                         assistidoId: atendimento.assistidoId,
                         atendimentoId: atendimento.id,
-                        semana: atendimento.semana
+                        semana: atendimento.semana,
+                        ...logDetalhesRetornos // Adiciona os detalhes dos retornos (se houver)
                     });
                     
                     alert('Atendimento salvo com sucesso!');
-                    manipularEstadoFormulario(true);
+                    if (statusFinal === 'concluido') {
+                        alert('Tratamento de 1 sessão definido e concluído.');
+                    }
                     
+                    manipularEstadoFormulario(true);
+                    location.reload(); // Recarrega a página para exibir a contagem "X / Y" atualizada
+
                 } catch (error) {
                     console.error("Erro ao salvar atendimento:", error);
                     alert("Falha ao salvar. Tente novamente.");
                     btn.disabled = false; btn.textContent = 'Salvar Alterações';
                 }
             }
+            // ===================================================================
+            // FIM DA MODIFICAÇÃO JAVASCRIPT
+            // ===================================================================
 
-            function preencherFormulario(atendimento, user) {
+            function preencherFormulario(atendimento, user, tratamento) {
                 const atendenteInput = document.getElementById('atendente-nome');
                 const notasInput = document.getElementById('atendimento-notas');
                 
@@ -275,8 +347,19 @@
                     atendenteInput.value = user.displayName || '';
                     notasInput.value = atendimento.notas || '';
                 }
+
+                // Preenche o novo campo <select> se ele existir
+                const selectTotal = document.getElementById('definir-total-atendimentos');
+                if (selectTotal) {
+                    // O valor do 'tratamento.retornos_solicitados' ainda é 0 aqui,
+                    // então definimos um padrão (ex: 4 atendimentos).
+                    selectTotal.value = '4'; // Padrão de 4 atendimentos
+                }
             }
 
+            // ===================================================================
+            // INÍCIO DA MODIFICAÇÃO JAVASCRIPT: 3. e 4. Adiciona HTML
+            // ===================================================================
             function criarFormulario(atendimento, assistido, tratamento) {
                 const dataAtendimento = atendimento.dataAtendimento
                     ? atendimento.dataAtendimento.toDate().toLocaleDateString('pt-br')
@@ -296,6 +379,31 @@
                     botaoRetornoHtml = `<p style="text-align:center; font-weight:bold; color:#28a745; margin-top:15px;">Tratamento concluído.</p>`;
                 }
 
+                // --- LÓGICA DO NOVO CAMPO (Ajuste 1) ---
+                let definicaoTratamentoHtml = '';
+                const isPrimeiroAtendimento = (atendimento.semana === 1);
+                const isDuracaoNaoDefinida = (tratamento.retornos_solicitados === 0);
+
+                // Só mostra o campo de definição se for o 1º atendimento E a duração ainda for 0
+                if (isPrimeiroAtendimento && isDuracaoNaoDefinida) {
+                    definicaoTratamentoHtml = `
+                    <fieldset style="border-color: var(--cor-primaria); margin-top: 20px;">
+                        <legend>Definição do Colegiado</legend>
+                        <div class="form-item">
+                            <label for="definir-total-atendimentos">Definir Duração Total do Tratamento:</label>
+                            <select id="definir-total-atendimentos">
+                                <option value="1">1 Atendimento (Apenas este)</option>
+                                <option value="2">2 Atendimentos (Este + 1 retorno)</option>
+                                <option value="3">3 Atendimentos (Este + 2 retornos)</option>
+                                <option value="4" selected>4 Atendimentos (Este + 3 retornos)</option>
+                                <option value="5">5 Atendimentos (Este + 4 retornos)</option>
+                                <option value="6">6 Atendimentos (Este + 5 retornos)</option>
+                            </select>
+                            <p style="font-size: 0.8em; margin: 5px 0 0 0; color: #555;">Esta definição só pode ser feita uma vez, ao salvar o 1º atendimento.</p>
+                        </div>
+                    </fieldset>`;
+                }
+                // --- FIM DA LÓGICA DO NOVO CAMPO ---
 
                 return `<fieldset>
                             <legend>Detalhes do Atendimento (VL)</legend>
@@ -323,9 +431,14 @@
                             </div>
                             <div class="form-item" style="margin-top: 15px;"><label for="atendimento-notas">Notas do Atendimento:</label><textarea id="atendimento-notas" rows="8"></textarea></div>
                             
+                            ${definicaoTratamentoHtml}
+                            
                             <button id="btn-salvar-atendimento" type="button" class="btn btn-primary" style="width: 100%; margin-top: 20px;">Salvar Alterações</button>
                         </fieldset>`;
             }
+            // ===================================================================
+            // FIM DA MODIFICAÇÃO JAVASCRIPT
+            // ===================================================================
 
         } // Fim da função inicializarPagina
     </script>
