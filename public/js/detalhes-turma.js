@@ -237,66 +237,79 @@ function configurarTabelaParticipantes() {
     if(participantesTable) participantesTable.querySelector('thead').innerHTML = tableHeaderHTML;
 }
 
+// Substitua a função inteira por esta
 function escutarParticipantes() {
-    if (!participantesTableBody) return; // Sai se a tabela não existe
-    const participantesRef = collection(db, "turmas", turmaId, "participantes");
-    const q = query(participantesRef, orderBy("nome"));
-    onSnapshot(q, (snapshot) => {
-        let rowsHTML = [];
-        const podeGerenciar = userIsAdminGlobal || (userIsFacilitatorDaTurma && userIsAdminEducacional);
+    if (!participantesTableBody) return; // Sai se a tabela não existe
+    const participantesRef = collection(db, "turmas", turmaId, "participantes");
+    
+    // ### MUDANÇA AQUI: Adiciona o 'where' para filtrar por statusGeral ###
+    // Mostra apenas participantes ativos (ou recém-inscritos sem o campo)
+    // O Firestore não permite query (statusGeral == 'ativo' || statusGeral == null)
+    // Então, por padrão, mostramos os 'ativos'.
+    // Nossas funções de inscrição (front e back) garantem que novos alunos recebam 'ativo'.
+    // Alunos "reprovados" ou "inativos" terão esse campo mudado e sumirão da lista.
+    const q = query(participantesRef, where("statusGeral", "==", "ativo"), orderBy("nome"));
+    
+    onSnapshot(q, (snapshot) => {
+        let rowsHTML = [];
+        const podeGerenciar = userIsAdminGlobal || (userIsFacilitatorDaTurma && userIsAdminEducacional);
 
-        if (snapshot.empty) {
-            const colspan = turmaData.isEAE ? 8 : 5;
-            rowsHTML.push(`<tr><td colspan="${colspan}" style="text-align: center;">Nenhum participante inscrito.</td></tr>`);
-        } else {
-            snapshot.forEach(doc => {
-                const participante = doc.data();
-                const origem = participante.origem === 'aluno' ? 'Aluno' : 'Voluntário';
-                const anoAtual = turmaData.anoAtual || 1;
-                const avaliacaoDoAno = participante.avaliacoes ? participante.avaliacoes[anoAtual] : null;
-                const freq = (avaliacaoDoAno ? avaliacaoDoAno.notaFrequencia : 0) || 0;
+        if (snapshot.empty) {
+            const colspan = turmaData.isEAE ? 8 : 5;
+            rowsHTML.push(`<tr><td colspan="${colspan}" style="text-align: center;">Nenhum participante ativo inscrito.</td></tr>`);
+        } else {
+            snapshot.forEach(doc => {
+                const participante = doc.data();
+                // Se, por algum motivo, um participante sem statusGeral vazar, ele é tratado como ativo
+                if (participante.statusGeral && participante.statusGeral !== 'ativo') {
+                    return; // Pula este participante
+                }
 
-                let row = `<td>${participante.nome}</td>`;
-                let actionsHTML = '';
+                const origem = participante.origem === 'aluno' ? 'Aluno' : 'Voluntário';
+                const anoAtual = turmaData.anoAtual || 1;
+                const avaliacaoDoAno = participante.avaliacoes ? participante.avaliacoes[anoAtual] : null;
+                const freq = (avaliacaoDoAno ? avaliacaoDoAno.notaFrequencia : 0) || 0;
 
-                if (podeGerenciar) {
-                     if (participante.origem === 'aluno') {
-                         actionsHTML += `<button class="icon-btn" style="color: #27ae60;" title="Promover para Voluntário" data-action="promote-to-volunteer" data-participante-doc-id="${doc.id}"><i class="fas fa-user-plus"></i></button>`;
-                     }
-                     if (turmaData.isEAE) {
-                         actionsHTML += `<button class="icon-btn notes" title="Lançar Notas" data-action="notas" data-id="${doc.id}"><i class="fas fa-edit"></i></button>`;
-                         actionsHTML += `<button class="icon-btn promote" title="Promover Grau" data-action="promover" data-id="${doc.id}"><i class="fas fa-user-graduate"></i></button>`;
-                     }
-                     actionsHTML += `<button class="icon-btn delete" title="Remover da Turma" data-action="remover" data-id="${doc.id}"><i class="fas fa-user-minus"></i></button>`;
-                } else {
-                    actionsHTML = '---';
-                }
+                let row = `<td>${participante.nome}</td>`;
+                let actionsHTML = '';
 
+                if (podeGerenciar) {
+                     if (participante.origem === 'aluno') {
+                         actionsHTML += `<button class="icon-btn" style="color: #27ae60;" title="Promover para Voluntário" data-action="promote-to-volunteer" data-participante-doc-id="${doc.id}"><i class="fas fa-user-plus"></i></button>`;
+                  }
+                     if (turmaData.isEAE) {
+                         actionsHTML += `<button class="icon-btn notes" title="Lançar Notas" data-action="notas" data-id="${doc.id}"><i class="fas fa-edit"></i></button>`;
+                         actionsHTML += `<button class="icon-btn promote" title="Promover Grau" data-action="promover" data-id="${doc.id}"><i class="fas fa-user-graduate"></i></button>`;
+                     }
+                     actionsHTML += `<button class="icon-btn delete" title="Remover da Turma" data-action="remover" data-id="${doc.id}"><i class="fas fa-user-minus"></i></button>`;
+                } else {
+                    actionsHTML = '---';
+                }
 
-                if (turmaData.isEAE) {
-                    row += `
-                        <td>${participante.grau || 'Aluno'}</td>
-                        <td>${origem}</td>
-                        <td>${freq}%</td>
-                        <td>${((avaliacaoDoAno ? avaliacaoDoAno.mediaRI : 0) || 0).toFixed(1)}</td>
-                        <td>${((avaliacaoDoAno ? avaliacaoDoAno.mediaFinal : 0) || 0).toFixed(1)}</td>
-                        <td>${(avaliacaoDoAno ? avaliacaoDoAno.statusAprovacao : 'Em Andamento')}</td>
-                        <td class="actions">${actionsHTML}</td>
-                    `;
-                } else {
-                    const status = freq >= 75 ? 'Aprovado' : 'Cursando';
-                    row += `
-                        <td>${origem}</td>
-                        <td>${freq}%</td>
-                        <td>${status}</td>
-                        <td class="actions">${actionsHTML}</td>
-                    `;
-                }
-                rowsHTML.push(`<tr>${row}</tr>`);
-            });
-        }
-        participantesTableBody.innerHTML = rowsHTML.join('');
-    });
+                if (turmaData.isEAE) {
+                    row += `
+                        <td>${participante.grau || 'Aluno'}</td>
+                        <td>${origem}</td>
+                        <td>${freq}%</td>
+                        <td>${((avaliacaoDoAno ? avaliacaoDoAno.mediaRI : 0) || 0).toFixed(1)}</td>
+                        <td>${((avaliacaoDoAno ? avaliacaoDoAno.mediaFinal : 0) || 0).toFixed(1)}</td>
+                        <td>${(avaliacaoDoAno ? avaliacaoDoAno.statusAprovacao : 'Em Andamento')}</td>
+                        <td class="actions">${actionsHTML}</td>
+                    `;
+                } else {
+                    const status = freq >= 75 ? 'Aprovado' : 'Cursando';
+                    row += `
+                        <td>${origem}</td>
+                        <td>${freq}%</td>
+                        <td>${status}</td>
+                        <td class="actions">${actionsHTML}</td>
+                   `;
+                }
+                rowsHTML.push(`<tr>${row}</tr>`);
+line-through         });
+        }
+        participantesTableBody.innerHTML = rowsHTML.join('');
+    });
 }
 
 async function removerParticipante(participanteDocId) {
@@ -429,12 +442,13 @@ async function inscreverParticipante(event) {
         }
 
         const novoParticipante = {
-            participanteId,
-            nome: participanteNome,
-            inscritoEm: serverTimestamp(),
-            origem: 'voluntario',
-            avaliacoes: {} // Inicializa avaliações
-        };
+            participanteId,
+            nome: participanteNome,
+            inscritoEm: serverTimestamp(),
+            origem: 'voluntario',
+            statusGeral: 'ativo', // <-- LINHA ADICIONADA AQUI
+            avaliacoes: {} // Inicializa avaliações
+        };
         if (turmaData.isEAE && participanteGrauSelect) {
              novoParticipante.grau = participanteGrauSelect.value;
              const anoAtual = turmaData.anoAtual || 1;
@@ -637,24 +651,29 @@ async function promoverGrau(participanteId) {
 }
 
 
+// Substitua a função inteira por esta
 async function avancarAnoDaTurma() {
     const anoAtual = turmaData.anoAtual || 1;
     if (anoAtual >= 3) { return alert("Esta turma já concluiu o 3º ano."); }
-    if (!confirm(`Tem certeza que deseja avançar esta turma para o ${anoAtual + 1}º ano? Esta ação não pode ser desfeita.`)) return;
+    if (!confirm(`Tem certeza que deseja avançar esta turma para o ${anoAtual + 1}º ano?\n\nATENÇÃO: Apenas alunos com status 'Aprovado' no ${anoAtual}º ano serão movidos. Esta ação não pode ser desfeita.`)) return;
 
     if (btnAvancarAno) {
         btnAvancarAno.disabled = true;
-        btnAvancarAno.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Avançando...';
+        btnAvancarAno.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Processando...';
     }
 
     try {
-        const turmaRef = doc(db, "turmas", turmaId);
-        await updateDoc(turmaRef, { anoAtual: anoAtual + 1 });
-        alert(`Turma avançou para o ${anoAtual + 1}º ano com sucesso!`);
-        location.reload(); // <-- ESTA É A ÚNICA LINHA ADICIONADA
+        // CHAMA A NOVA CLOUD FUNCTION
+        const avancarAno = httpsCallable(functions, 'avancarAnoComVerificacao');
+        const result = await avancarAno({ turmaId: turmaId });
+        
+        // Mostra a mensagem de sucesso do back-end
+        alert(result.data.message);
+        location.reload(); // Recarrega a página para ver a mudança
+        
     } catch (error) {
         console.error("Erro ao avançar o ano da turma:", error);
-         alert("Ocorreu um erro ao avançar o ano da turma.");
+         alert(`Ocorreu um erro: ${error.message}`);
     } finally {
          if (btnAvancarAno) {
             btnAvancarAno.disabled = false;

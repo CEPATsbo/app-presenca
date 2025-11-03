@@ -1502,12 +1502,13 @@ exports.matricularNovoAluno = onCall(OPCOES_FUNCAO, async (request) => {
 
         // Inscreve o aluno na subcoleção 'participantes' da turma
         const novoParticipante = {
-            participanteId: novoAlunoRef.id, // ID do doc em 'alunos'
-            nome: nome,
-            inscritoEm: admin.firestore.FieldValue.serverTimestamp(),
-            origem: 'aluno', // Marca como origem 'aluno'
-            avaliacoes: {} // Inicializa avaliações
-        };
+            participanteId: novoAlunoRef.id, // ID do doc em 'alunos'
+            nome: nome,
+            inscritoEm: admin.firestore.FieldValue.serverTimestamp(),
+            origem: 'aluno', // Marca como origem 'aluno'
+            statusGeral: 'ativo', // <-- LINHA ADICIONADA AQUI
+            avaliacoes: {} // Inicializa avaliações
+        };
 
         if (turmaData.isEAE) {
             novoParticipante.grau = 'Aluno'; // Grau inicial padrão
@@ -1689,8 +1690,110 @@ exports.importarFeriadosNacionais = onCall(OPCOES_FUNCAO, async (request) => {
 
     });
 
+    // ===================================================================
+// ## NOVA FUNÇÃO: Avança o ano da turma, marcando reprovados ##
 // ===================================================================
-// ## INÍCIO: FUNÇÕES PARA O PORTAL "CEPAT - AO VIVO" ##
+exports.avancarAnoComVerificacao = onCall(OPCOES_FUNCAO, async (request) => {
+    // 1. Verificação de autenticação básica
+    if (!request.auth) {
+        throw new HttpsError('unauthenticated', 'A função deve ser chamada por um usuário autenticado.');
+    }
+
+    const { turmaId } = request.data;
+    if (!turmaId) {
+        throw new HttpsError('invalid-argument', 'O ID da turma é obrigatório.');
+    }
+
+    const callerAuthUid = request.auth.uid;
+    const callerClaims = request.auth.token || {};
+
+    try {
+        // 2. Busca o ID do documento Firestore do chamador
+        const callerQuery = await db.collection('voluntarios').where('authUid', '==', callerAuthUid).limit(1).get();
+        if (callerQuery.empty) {
+            throw new HttpsError('not-found', 'Seu perfil de voluntário não foi encontrado para verificar permissão.');
+        }
+        const callerFirestoreId = callerQuery.docs[0].id;
+
+        // 3. Busca dados da turma
+        const turmaRef = db.collection('turmas').doc(turmaId);
+        const turmaDoc = await turmaRef.get();
+
+        if (!turmaDoc.exists) {
+            throw new HttpsError('not-found', 'A turma especificada não foi encontrada.');
+        }
+        const turmaData = turmaDoc.data();
+        const anoAtual = turmaData.anoAtual || 1;
+        const proximoAno = anoAtual + 1;
+
+        if (anoAtual >= 3) {
+            throw new HttpsError('failed-precondition', 'A turma já está no último ano e não pode avançar.');
+        }
+
+        // 4. Verificação de segurança (Admin Global OU Admin Educacional da Turma)
+        const isAdminGlobal = ['super-admin', 'diretor', 'tesoureiro'].some(role => callerClaims[role] === true || callerClaims.role === role);
+        const isEducacionalAdminRole = callerClaims['dirigente-escola'] === true || callerClaims['secretario-escola'] === true || callerClaims.role === 'dirigente-escola' || callerClaims.role === 'secretario-escola';
+        const isFacilitatorInTurma = (turmaData.facilitadoresIds || []).includes(callerFirestoreId);
+
+        const temPermissao = isAdminGlobal || (isFacilitatorInTurma && isEducacionalAdminRole);
+
+        if (!temPermissao) {
+            throw new HttpsError('permission-denied', 'Você não tem permissão para avançar o ano desta turma.');
+        }
+
+        // 5. Lógica de verificação e marcação
+        console.log(`Iniciando avanço para o ${proximoAno}º Ano da turma ${turmaId}. Verificando ${anoAtual}º ano...`);
+        const participantesRef = turmaRef.collection('participantes');
+        const participantesSnap = await participantesRef.get();
+
+        if (participantesSnap.empty) {
+            // Se a turma está vazia, apenas avança o ano
+            await turmaRef.update({ anoAtual: proximoAno });
+            return { success: true, message: `Turma vazia avançada para o ${proximoAno}º ano.` };
+        }
+
+        const batch = db.batch();
+        let aprovadosCount = 0;
+        let reprovadosCount = 0;
+
+        participantesSnap.forEach(doc => {
+            const participante = doc.data();
+            const avaliacao = participante.avaliacoes ? participante.avaliacoes[anoAtual] : null;
+            let statusFinal = "reprovado"; // Default é reprovado
+
+            if (avaliacao && avaliacao.statusAprovacao === 'Aprovado') {
+                statusFinal = "ativo"; // Aprovado, continua ativo para o próximo ano
+                aprovadosCount++;
+            } else {
+                reprovadosCount++;
+            }
+            
+            // Atualiza o statusGeral do participante
+            batch.update(doc.ref, { statusGeral: statusFinal });
+        });
+
+        // 6. Atualiza a turma para o próximo ano
+        batch.update(turmaRef, { anoAtual: proximoAno });
+
+        // 7. Executa todas as operações
+        await batch.commit();
+
+        return {
+            success: true,
+            message: `Turma avançada para o ${proximoAno}º ano! ${aprovadosCount} alunos aprovados, ${reprovadosCount} alunos não avançaram.`
+        };
+
+    } catch (error) {
+        console.error("Erro na função avancarAnoComVerificacao:", error);
+        if (error instanceof HttpsError) {
+            throw error;
+        }
+        throw new HttpsError('internal', 'Ocorreu um erro interno ao processar o avanço de ano.');
+    }
+});
+
+// ===================================================================
+// ## INÍCIO: FUNÇÕES PARA O PORTA "CEPAT - AO VIVO" ##
 // ===================================================================
 
 /**
