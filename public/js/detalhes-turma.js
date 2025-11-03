@@ -638,28 +638,29 @@ async function promoverGrau(participanteId) {
 
 
 async function avancarAnoDaTurma() {
-    const anoAtual = turmaData.anoAtual || 1;
-    if (anoAtual >= 3) { return alert("Esta turma já concluiu o 3º ano."); }
-    if (!confirm(`Tem certeza que deseja avançar esta turma para o ${anoAtual + 1}º ano? Esta ação não pode ser desfeita.`)) return;
+    const anoAtual = turmaData.anoAtual || 1;
+    if (anoAtual >= 3) { return alert("Esta turma já concluiu o 3º ano."); }
+    if (!confirm(`Tem certeza que deseja avançar esta turma para o ${anoAtual + 1}º ano? Esta ação não pode ser desfeita.`)) return;
 
-    if (btnAvancarAno) {
-        btnAvancarAno.disabled = true;
-        btnAvancarAno.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Avançando...';
-    }
+    if (btnAvancarAno) {
+        btnAvancarAno.disabled = true;
+        btnAvancarAno.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Avançando...';
+    }
 
-    try {
-        const turmaRef = doc(db, "turmas", turmaId);
-        await updateDoc(turmaRef, { anoAtual: anoAtual + 1 });
-        alert(`Turma avançou para o ${anoAtual + 1}º ano com sucesso!`);
-    } catch (error) {
-        console.error("Erro ao avançar o ano da turma:", error);
-         alert("Ocorreu um erro ao avançar o ano da turma.");
-    } finally {
-         if (btnAvancarAno) {
-            btnAvancarAno.disabled = false;
-            btnAvancarAno.innerHTML = '<i class="fas fa-arrow-right"></i> Avançar para o Próximo Ano';
-        }
-    }
+    try {
+        const turmaRef = doc(db, "turmas", turmaId);
+        await updateDoc(turmaRef, { anoAtual: anoAtual + 1 });
+        alert(`Turma avançou para o ${anoAtual + 1}º ano com sucesso!`);
+        location.reload(); // <-- ESTA É A ÚNICA LINHA ADICIONADA
+    } catch (error) {
+        console.error("Erro ao avançar o ano da turma:", error);
+         alert("Ocorreu um erro ao avançar o ano da turma.");
+    } finally {
+         if (btnAvancarAno) {
+            btnAvancarAno.disabled = false;
+            btnAvancarAno.innerHTML = '<i class="fas fa-arrow-right"></i> Avançar para o Próximo Ano';
+        }
+    }
 }
 
 
