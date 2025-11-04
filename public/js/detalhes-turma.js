@@ -1014,7 +1014,28 @@ async function getDadosCompletosParaRelatorio() {
         return { participantes: [], cronograma: [], frequenciasMap: new Map() };
     }
 }
-
+// ==========================================================
+// ## FUNÇÃO AUXILIAR PARA CARREGAR IMAGENS DO CERTIFICADO ##
+// ==========================================================
+function precarregarImagem(url) {
+    return new Promise((resolve) => {
+        if (!url) {
+            // Se a URL for nula (ex: sem assinatura), resolve com null
+            resolve(null);
+            return;
+        }
+        const img = new Image();
+        // Essencial para o html2canvas ler imagens de outro domínio (Firebase Storage)
+        img.crossOrigin = "Anonymous"; 
+        img.onload = () => resolve(img);
+        img.onerror = () => {
+            console.warn(`Falha ao precarregar imagem: ${url}`);
+            resolve(null); // Resolve com null para não quebrar o Promise.all
+        };
+        img.src = url;
+    });
+}
+// ==========================================================
 
 async function gerarDiarioDeClasse() {
     if (!areaRelatorioGerado) return;
