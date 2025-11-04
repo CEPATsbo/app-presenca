@@ -1223,7 +1223,7 @@ async function gerarCertificados() {
 
         for (const facilitadorId of facilitadoresIds) {
             const voluntarioRef = doc(db, "voluntarios", facilitadorId);
-            const voluntarioDoc = await voluntarioRef.get();
+            const voluntarioDoc = await getDoc(voluntarioRef);
 
             if (voluntarioDoc.exists()) {
                 const voluntarioData = voluntarioDoc.data();
