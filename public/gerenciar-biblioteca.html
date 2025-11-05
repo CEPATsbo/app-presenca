@@ -75,61 +75,55 @@
             font-size: 0.9em;
         }
         /* ================================================= */
-/* === INÍCIO: NOVO CSS PARA CORRIGIR O MODAL === */
-/* SUBSTITUA TODAS AS REGRAS ANTERIORES DO MODAL */
-/* (como .modal-form-layout) POR ISTO:             */
+/* === INÍCIO: NOVO CSS DEFINITIVO PARA O MODAL === */
+/* Cole isto na sua tag <style>                    */
 /* ================================================= */
 
-/* Garante que o H2 (título) tenha um bom espaçamento */
+/* Centraliza o título do modal e dá espaço */
 #modal-relatorio .modal-content h2 {
     text-align: center;
     margin-top: 0;
-    margin-bottom: 25px; /* Adiciona um espaço abaixo do título */
+    margin-bottom: 30px; /* Mais espaço abaixo do título */
 }
 
-/* Este é o container dos seletores de Mês/Ano */
-.modal-form-layout {
+/* * Cria o grid de 2 colunas (label à esquerda, select à direita)
+ * Este ID corresponde ao novo HTML do Passo 1
+*/
+#modal-form-grid {
     display: grid;
-    grid-template-columns: 1fr 1fr; /* Duas colunas iguais */
-    gap: 20px; /* Espaço entre as colunas */
+    grid-template-columns: auto 1fr; /* Coluna 1 (label): tamanho automático */
+                                     /* Coluna 2 (select): ocupa o resto */
+    gap: 18px 10px; /* 18px de espaço entre linhas, 10px entre colunas */
+    align-items: center; /* Alinha label e select na mesma altura */
 }
 
-/*
- * ESTA É A MUDANÇA PRINCIPAL.
- * Anula o CSS global e força o rótulo e o seletor
- * a ficarem LADO A LADO.
-*/
-.modal-form-layout .form-item {
-    display: flex;
-    flex-direction: row;  /* Rótulo e seletor na mesma linha */
-    align-items: center; /* Alinha eles verticalmente */
-    gap: 10px;           /* Espaço entre o rótulo e o seletor */
+/* Formata os RÓTULOS (Mês, Ano) */
+#modal-form-grid label {
+    font-weight: bold;
+    color: #555;
+    text-align: right; /* Alinha o texto à direita (ex: "Mês") */
+    margin-bottom: 0; /* Remove margem global */
 }
 
-/* * Ajuste para o RÓTULO (Mês, Ano)
-*/
-.modal-form-layout .form-item label {
-    flex-shrink: 0;   /* Impede que o rótulo "achate" */
-    margin-bottom: 0; /* Remove a margem inferior do layout antigo */
+/* Formata os SELETORES (Dropdowns) */
+#modal-form-grid select {
+    padding: 10px;
+    border-radius: 6px;
+    border: 1px solid #ccc;
+    font-size: 1em;
+    width: 100%; /* Ocupa todo o espaço da coluna 2 */
 }
 
-/*
- * Ajuste para o SELETOR (Dropdown)
-*/
-.modal-form-layout .form-item select {
-    width: 100%; /* Faz o seletor ocupar o resto do espaço */
-}
-
-/* Container dos botões, alinhados à direita */
+/* Formata os BOTÕES (Cancelar, Gerar) */
 .modal-actions {
     display: flex;
-    justify-content: flex-end; /* Alinha botões à direita */
-    gap: 10px; /* Espaço entre os botões */
-    margin-top: 30px; /* Mais espaço acima dos botões */
-    margin-bottom: 20px; /* Espaço ABAIXO (para o <hr> e a tabela) */
+    justify-content: flex-end; /* Alinha à direita */
+    gap: 10px; /* Espaço entre botões */
+    margin-top: 30px; /* Espaço acima dos botões */
+    margin-bottom: 20px; /* Espaço para a tabela aparecer embaixo */
 }
 
-/* === FIM: NOVO CSS PARA CORRIGIR O MODAL === */
+/* === FIM DO NOVO CSS === */
     </style>
 </head>
 <body>
@@ -199,16 +193,13 @@
     <div id="modal-relatorio" class="modal-overlay">
         <div class="modal-content">
             <h2>Gerar Relatório da Biblioteca</h2>
-            <div class="modal-form-layout">
-                <div class="form-item">
-                    <label for="relatorio-mes">Mês</label>
-                    <select id="relatorio-mes"></select>
-                </div>
-                <div class="form-item">
-                    <label for="relatorio-ano">Ano</label>
-                    <select id="relatorio-ano"></select>
-                </div>
-            </div>
+            <div id="modal-form-grid">
+                <label for="relatorio-mes">Mês</label>
+                <select id="relatorio-mes"></select>
+                
+                <label for="relatorio-ano">Ano</label>
+                <select id="relatorio-ano"></select>
+            </div>
             <div class="modal-actions">
                                 <button type="button" id="btn-cancelar-relatorio" class="btn btn-secondary">Cancelar</button>
                 <button id="btn-confirmar-relatorio" class="btn btn-primary">Gerar</button>
