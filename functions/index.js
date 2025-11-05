@@ -710,8 +710,18 @@ exports.gerarRelatorioBiblioteca = onCall(OPCOES_FUNCAO, async (request) => {
         const qPrazo = db.collection('biblioteca_contas_a_receber').where('registradoEm', '>=', inicioDoMes).where('registradoEm', '<=', fimDoMes);
         const qEmprestimos = db.collection('biblioteca_emprestimos').where('dataEmprestimo', '>=', inicioDoMes).where('dataEmprestimo', '<=', fimDoMes);
         const [snapshotVista, snapshotPrazo, snapshotEmprestimos] = await Promise.all([qVista.get(), qPrazo.get(), qEmprestimos.get()]);
-        const vendasVista = snapshotVista.docs.map(doc => ({ ...doc.data(), registradoEm: doc.data().registradoEm.toDate().toISOString() }));
-        const vendasPrazo = snapshotPrazo.docs.map(doc => ({ ...doc.data(), registradoEm: doc.data().registradoEm.toDate().toISOString() }));
+        const vendasVista = snapshotVista.docs.map(doc => ({
+        id: doc.id,
+        tipoVenda: 'vista',
+        ...doc.data(),
+        registradoEm: doc.data().registradoEm.toDate().toISOString()
+    }));
+    const vendasPrazo = snapshotPrazo.docs.map(doc => ({
+        id: doc.id,
+        tipoVenda: 'prazo',
+        ...doc.data(),
+        registradoEm: doc.data().registradoEm.toDate().toISOString()
+    }));
         const emprestimos = snapshotEmprestimos.docs.map(doc => ({ ...doc.data(), dataEmprestimo: doc.data().dataEmprestimo.toDate().toISOString(), dataDevolucao: doc.data().dataDevolucao ? doc.data().dataDevolucao.toDate().toISOString() : null }));
         return { vendas: [...vendasVista, ...vendasPrazo], emprestimos: emprestimos };
     } catch (error) {
@@ -1870,5 +1880,81 @@ exports.recontarTotaisEstatisticos = onSchedule({ ...OPCOES_FUNCAO_SAOPAULO, sch
 });
 
 // ===================================================================
-// ## FIM: FUNÇÕES PARA O PORTAL "CEPAT - AO VIVO" ##
+// ## NOVA FUNÇÃO: Estornar Venda da Biblioteca ##
 // ===================================================================
+exports.estornarVendaBiblioteca = onCall(OPCOES_FUNCAO, async (request) => {
+    // 1. Verificação de permissão
+    if (!request.auth) {
+        throw new HttpsError('unauthenticated', 'A função deve ser chamada por um usuário autenticado.');
+    }
+    const permissoes = ['super-admin', 'diretor', 'tesoureiro', 'bibliotecario'];
+    if (!permissoes.includes(request.auth.token.role)) {
+        throw new HttpsError('permission-denied', 'Permissão negada.');
+    }
+
+    const { vendaId, tipoVenda } = request.data;
+    if (!vendaId || !tipoVenda) {
+        throw new HttpsError('invalid-argument', 'O ID da venda e o tipo são obrigatórios.');
+    }
+
+    // 2. Determina qual coleção consultar
+    const colecaoVenda = tipoVenda === 'vista' ? 'biblioteca_vendas_avista' : 'biblioteca_contas_a_receber';
+    const vendaRef = db.collection(colecaoVenda).doc(vendaId);
+
+    // Pega os dados da venda ANTES da transação, para usar no log
+    const vendaDocLog = await vendaRef.get();
+    if (!vendaDocLog.exists) {
+        throw new HttpsError('not-found', 'A venda que você está tentando estornar não foi encontrada.');
+    }
+    const vendaDataLog = vendaDocLog.data();
+
+    try {
+        // 3. Inicia a transação
+        await db.runTransaction(async (transaction) => {
+            // Re-busca a venda dentro da transação para segurança
+            const vendaDoc = await transaction.get(vendaRef);
+            if (!vendaDoc.exists) {
+                throw new HttpsError('not-found', 'A venda não foi encontrada durante a transação.');
+            }
+
+            const vendaData = vendaDoc.data();
+            const itensParaDevolver = vendaData.itens || [];
+
+            // 4. Devolve os itens ao estoque
+            for (const item of itensParaDevolver) {
+                if (item.id) { // Garante que o item tem um ID
+                    const livroRef = db.collection('biblioteca_livros').doc(item.id);
+                    // Incrementa a quantidade de volta no estoque
+                    transaction.update(livroRef, {
+                        quantidade: admin.firestore.FieldValue.increment(item.qtd)
+                    });
+                }
+            }
+
+            // 5. Apaga o registro da venda (estorno financeiro)
+            transaction.delete(vendaRef);
+        });
+
+        // 6. Registra o Log de Auditoria (Fora da transação)
+        await db.collection('log_auditoria').add({
+            acao: "ESTORNO_VENDA_BIBLIOTECA",
+            autor: { uid: request.auth.uid, nome: request.auth.token.name || request.auth.token.email },
+            timestamp: admin.firestore.FieldValue.serverTimestamp(),
+            detalhes: {
+                vendaId: vendaId,
+                tipo: tipoVenda,
+                total: vendaDataLog.total,
+                itens: vendaDataLog.itens
+            }
+        });
+
+        return { success: true, message: 'Venda estornada e estoque devolvido com sucesso!' };
+
+    } catch (error) {
+        console.error("Erro CRÍTICO ao estornar venda da biblioteca:", error);
+        if (error instanceof HttpsError) {
+            throw error;
+        }
+        throw new HttpsError('internal', 'Ocorreu um erro interno ao processar o estorno.');
+    }
+});

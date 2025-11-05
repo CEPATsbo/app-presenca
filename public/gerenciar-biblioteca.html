@@ -47,6 +47,15 @@
             display: none;
         }
         @keyframes spin { 0% { transform: translateY(-50%) rotate(0deg); } 100% { transform: translateY(-50%) rotate(360deg); } }
+    .btn-estornar {
+        background-color: #dc3545;
+        color: white;
+        border: none;
+
+    }
+    .btn-estornar:disabled {
+        background-color: #aaa;
+    }
     </style>
 </head>
 <body>
@@ -127,9 +136,13 @@
                 </div>
             </div>
             <div style="text-align: right; margin-top: 20px;">
-                <button type="button" id="btn-cancelar-relatorio" class="btn-secondary">Cancelar</button>
-                <button id="btn-confirmar-relatorio" class="btn btn-primary">Gerar</button>
-            </div>
+                <button type="button" id="btn-cancelar-relatorio" class="btn-secondary">Cancelar</button>
+                <button id="btn-confirmar-relatorio" class="btn btn-primary">Gerar</button>
+            </div>
+
+                        <hr id="divisor-relatorio" style="display:none; margin: 20px 0; border: 0; border-top: 1px solid #eee;">
+            <div id="relatorio-interativo-container" style="max-height: 40vh; overflow-y: auto;">
+                            </div>
         </div>
     </div>
 
@@ -164,7 +177,7 @@
             const registrarLogDeAcesso = httpsCallable(functions, 'registrarLogDeAcesso');
             const gerarRelatorioBiblioteca = httpsCallable(functions, 'gerarRelatorioBiblioteca');
             const buscarDadosLivroPorISBN = httpsCallable(functions, 'buscarDadosLivroPorISBN');
-
+            const estornarVendaBiblioteca = httpsCallable(functions, 'estornarVendaBiblioteca');
             const form = document.getElementById('form-livro');
             const tabelaLivros = document.getElementById('tabela-livros').querySelector('tbody');
             const campoPreco = document.getElementById('campo-preco');
@@ -332,27 +345,35 @@
              }); 
 
              btnCancelarRelatorio.addEventListener('click', () => { 
-                modalRelatorio.style.display = 'none'; 
+                modalRelatorio.style.display = 'none';
+                document.getElementById('relatorio-interativo-container').innerHTML = '';
+                document.getElementById('divisor-relatorio').style.display = 'none'; 
              }); 
 
-             btnConfirmarRelatorio.addEventListener('click', async () => { 
-                const mes = seletorMes.value; 
-                const ano = seletorAno.value; 
-                btnConfirmarRelatorio.disabled = true; 
-                btnConfirmarRelatorio.textContent = 'Gerando...'; 
+             btnConfirmarRelatorio.addEventListener('click', async () => { 
+                const mes = seletorMes.value; 
+                const ano = seletorAno.value; 
+                btnConfirmarRelatorio.disabled = true; 
+                btnConfirmarRelatorio.textContent = 'Gerando...'; 
 
-                try { 
-                    const resultado = await gerarRelatorioBiblioteca({ mes: parseInt(mes), ano: parseInt(ano) }); 
-                    gerarPDF(resultado.data, mes, ano); 
-                } catch (error) { 
-                    console.error("Erro ao gerar relatório:", error); 
-                    alert("Não foi possível gerar o relatório. Verifique o console."); 
-                } finally { 
-                    btnConfirmarRelatorio.disabled = false; 
-                    btnConfirmarRelatorio.textContent = 'Gerar'; 
-                    modalRelatorio.style.display = 'none'; 
-                } 
-             }); 
+                // Limpa o relatório anterior
+                document.getElementById('relatorio-interativo-container').innerHTML = '';
+                document.getElementById('divisor-relatorio').style.display = 'none';
+
+                try { 
+                    const resultado = await gerarRelatorioBiblioteca({ mes: parseInt(mes), ano: parseInt(ano) }); 
+                    // 1. Renderiza o relatório interativo na tela
+                    renderizarRelatorioInterativo(resultado.data);
+                    // 2. Gera o PDF como antes
+                    gerarPDF(resultado.data, mes, ano);
+                } catch (error) { 
+                    console.error("Erro ao gerar relatório:", error); 
+                    alert("Não foi possível gerar o relatório. Verifique o console."); 
+                } finally { 
+                    btnConfirmarRelatorio.disabled = false;
+                    btnConfirmarRelatorio.textContent = 'Gerar'; 
+                } 
+             }); 
              
              function preencherFiltrosRelatorio() { 
                 const meses = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"]; 
@@ -417,7 +438,89 @@
 
                 doc.save(`relatorio_biblioteca_${mes}_${ano}.pdf`); 
              } 
-        }
+             function renderizarRelatorioInterativo(dados) {
+                const container = document.getElementById('relatorio-interativo-container');
+                const divisor = document.getElementById('divisor-relatorio');
+                container.innerHTML = ''; 
+                
+                if (!dados.vendas || dados.vendas.length === 0) {
+                    container.innerHTML = '<p style="text-align:center;">Nenhuma venda encontrada para este período.</p>';
+                    divisor.style.display = 'block';
+                    return;
+                }
+
+                const tabela = document.createElement('table');
+                tabela.innerHTML = `
+                    <thead>
+                        <tr>
+                            <th>Data/Comprador</th>
+                            <th>Itens</th>
+                            <th>Total</th>
+                            <th style="width: 80px;">Ação</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                    </tbody>
+                `;
+                
+                const tbody = tabela.querySelector('tbody');
+                dados.vendas.sort((a, b) => new Date(b.registradoEm) - new Date(a.registradoEm));
+                
+                dados.vendas.forEach(v => {
+                    const tr = document.createElement('tr');
+                    const dataVenda = new Date(v.registradoEm).toLocaleString('pt-BR', {day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit'});
+                    const itensStr = v.itens.map(i => `${i.qtd}x ${i.titulo}`).join('<br>');
+                    const totalStr = Number(v.total).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+                    
+                    tr.innerHTML = `
+                        <td>
+                            <strong>${dataVenda}</strong>
+                            <br><small>${v.compradorNome || 'Venda à vista'}</small>
+                        </td>
+                        <td><small>${itensStr}</small></td>
+                        <td><strong>${totalStr}</strong></td>
+                        <td>
+                            <button class="btn-delete btn-estornar" data-id="${v.id}" data-tipo="${v.tipoVenda}" title="Estornar esta venda">
+                                Estornar
+                            </button>
+                        </td>
+                    `;
+                    tbody.appendChild(tr);
+                });
+
+                container.appendChild(tabela);
+                divisor.style.display = 'block';
+             }
+
+             document.getElementById('relatorio-interativo-container').addEventListener('click', async (e) => {
+                if (!e.target.classList.contains('btn-estornar')) return;
+
+                const btn = e.target;
+                const vendaId = btn.dataset.id;
+                const tipoVenda = btn.dataset.tipo;
+
+                if (!confirm('Tem certeza que deseja ESTORNAR esta venda?\n\nO ESTOQUE será devolvido e o REGISTRO FINANCEIRO será APAGADO.\n\nEsta ação NÃO pode ser desfeita.')) {
+                    return;
+                }
+
+                btn.disabled = true;
+                btn.textContent = '...';
+
+                try {
+                    await estornarVendaBiblioteca({ vendaId, tipoVenda });
+                    alert('Venda estornada com sucesso!');
+                    
+                    btn.closest('tr').remove();
+                    
+                } catch (error) {
+                    console.error("Erro ao estornar:", error);
+                    alert(`Falha ao estornar: ${error.message}`);
+                    btn.disabled = false;
+                    btn.textContent = 'Estornar';
+                }
+             });
+
+    }
     </script>
 </body>
 </html>
