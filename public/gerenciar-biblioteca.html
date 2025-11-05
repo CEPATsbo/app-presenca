@@ -123,6 +123,30 @@
     margin-bottom: 20px; /* Espaço para a tabela aparecer embaixo */
 }
 
+/* ================================================= */
+/* === INÍCIO: CSS PARA ALINHAR A TABELA DO RELATÓRIO === */
+/* ================================================= */
+
+/* Define o alinhamento das colunas da tabela de relatório */
+#relatorio-interativo-container th.col-total,
+#relatorio-interativo-container td.col-total {
+    text-align: right;    /* Alinha o 'Total' (R$) à direita */
+    white-space: nowrap;  /* Impede que o R$ 22,00 quebre linha */
+    width: 100px;         /* Define uma largura fixa */
+}
+
+#relatorio-interativo-container th.col-acao,
+#relatorio-interativo-container td.col-acao {
+    text-align: center;   /* Alinha a 'Ação' (botão) ao centro */
+    width: 100px;         /* Define uma largura fixa */
+}
+
+/* Garante que o botão ocupe o espaço da célula */
+#relatorio-interativo-container .btn-estornar {
+    width: 100%;
+    box-sizing: border-box; /* Impede que o padding estoure a largura */
+}
+
 /* === FIM DO NOVO CSS === */
     </style>
 </head>
@@ -516,17 +540,17 @@
 
                 const tabela = document.createElement('table');
                 tabela.innerHTML = `
-                    <thead>
-                        <tr>
-                            <th>Data/Comprador</th>
-                            <th>Itens</th>
-                            <th>Total</th>
-                            <th style="width: 80px;">Ação</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                    </tbody>
-                `;
+    <thead>
+        <tr>
+            <th>Data/Comprador</th>
+            <th>Itens</th>
+            <th class="col-total">Total</th>
+            <th class="col-acao">Ação</th>
+        </tr>
+    </thead>
+    <tbody>
+    </tbody>
+`;
                 
                 const tbody = tabela.querySelector('tbody');
                 dados.vendas.sort((a, b) => new Date(b.registradoEm) - new Date(a.registradoEm));
@@ -538,18 +562,18 @@
                     const totalStr = Number(v.total).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
                     
                     tr.innerHTML = `
-                        <td>
-                            <strong>${dataVenda}</strong>
-                            <br><small>${v.compradorNome || 'Venda à vista'}</small>
-                        </td>
-                        <td><small>${itensStr}</small></td>
-                        <td><strong>${totalStr}</strong></td>
-                        <td>
-                            <button class="btn-delete btn-estornar" data-id="${v.id}" data-tipo="${v.tipoVenda}" title="Estornar esta venda">
-                                Estornar
-                            </button>
-                        </td>
-                    `;
+    <td>
+        <strong>${dataVenda}</strong>
+        <br><small>${v.compradorNome || 'Venda à vista'}</small>
+    </td>
+    <td><small>${itensStr}</small></td>
+    <td class="col-total"><strong>${totalStr}</strong></td>
+    <td class="col-acao">
+        <button class="btn-delete btn-estornar" data-id="${v.id}" data-tipo="${v.tipoVenda}" title="Estornar esta venda">
+            Estornar
+        </button>
+    </td>
+`;
                     tbody.appendChild(tr);
                 });
 
