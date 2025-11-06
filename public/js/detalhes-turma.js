@@ -727,7 +727,7 @@ async function salvarAula(event) {
     const isExtra = inputAulaIsExtra.value === 'true';
     const dadosAula = {
         titulo: inputAulaTitulo.value.trim(),
-        dataAgendada: Timestamp.fromDate(new Date(inputAulaData.value + 'T00:00:00Z')),
+        dataAgendada: Timestamp.fromDate(new Date(inputAulaData.value + 'T00:00:00')),
         isExtra: isExtra
     };
 
@@ -830,8 +830,8 @@ async function salvarRecesso(event) {
     try {
         const recessosRef = collection(db, "turmas", turmaId, "recessos");
         await addDoc(recessosRef, {
-            dataInicio: Timestamp.fromDate(new Date(dataInicio + 'T00:00:00Z')),
-            dataFim: Timestamp.fromDate(new Date(dataFim + 'T00:00:00Z'))
+            dataInicio: Timestamp.fromDate(new Date(dataInicio + 'T00:00:00')),
+            dataFim: Timestamp.fromDate(new Date(dataFim + 'T00:00:00'))
         });
         formRecesso.reset();
         alert("Recesso adicionado. O cronograma será reajustado.");
