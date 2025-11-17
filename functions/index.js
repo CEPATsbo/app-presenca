@@ -1177,150 +1177,138 @@ while (dataAtual.getUTCDay() !== diaDaSemana) { dataAtual.setDate(dataAtual.getD
 });
 
 // ==========================================================
-// ## FUNÇÃO recalcularCronogramaCompleto CORRIGIDA ##
+// ## FUNÇÃO recalcularCronogramaCompleto CORRIGIDA (FINAL) ##
 // ==========================================================
 exports.recalcularCronogramaCompleto = onDocumentWritten({ ...OPCOES_FUNCAO, document: 'turmas/{turmaId}/{subcolecao}/{docId}' }, async (event) => {
 
-    const { turmaId, subcolecao } = event.params;
+    const { turmaId, subcolecao } = event.params;
 
-    // Só reage a mudanças em cronograma ou recessos
-    if (subcolecao !== "cronograma" && subcolecao !== "recessos") {
-        return null;
-    }
+    // Só reage a mudanças em cronograma ou recessos
+    if (subcolecao !== "cronograma" && subcolecao !== "recessos") {
+        return null;
+    }
 
-    // Ignora a criação inicial de aulas REGULARES para evitar loop com o robô 2
-    const dadosDepois = event.data.after.data();
-    const isCreation = !event.data.before.exists;
-    const isAulaRegular = dadosDepois && dadosDepois.isExtra !== true;
+    // Ignora a criação inicial de aulas REGULARES para evitar loop com o robô 2
+    const dadosDepois = event.data.after.data();
+    const isCreation = !event.data.before.exists;
+    const isAulaRegular = dadosDepois && dadosDepois.isExtra !== true;
 
-    if (subcolecao === "cronograma" && isCreation && isAulaRegular) {
-        console.log(`CRIAÇÃO de aula regular ${dadosDepois?.numeroDaAula}. Robô Recalcular ignora.`);
-        return null;
-    }
+    if (subcolecao === "cronograma" && isCreation && isAulaRegular) {
+        console.log(`CRIAÇÃO de aula regular ${dadosDepois?.numeroDaAula}. Robô Recalcular ignora.`);
+        return null;
+    }
 
-    console.log(`Gatilho de reajuste válido para turma ${turmaId} (mudança em ${subcolecao}, Doc: ${event.params.docId}). Iniciando recálculo...`);
+    console.log(`Gatilho de reajuste válido para turma ${turmaId} (mudança em ${subcolecao}, Doc: ${event.params.docId}). Iniciando recálculo...`);
 
-    try {
-        const turmaRef = db.collection("turmas").doc(turmaId);
-        const turmaDoc = await turmaRef.get();
-        if (!turmaDoc.exists) {
-             console.warn(`Turma ${turmaId} não encontrada. Abortando recálculo.`);
-             return null;
-        }
+    try {
+        const turmaRef = db.collection("turmas").doc(turmaId);
+        const turmaDoc = await turmaRef.get();
+        if (!turmaDoc.exists) {
+             console.warn(`Turma ${turmaId} não encontrada. Abortando recálculo.`);
+             return null;
+        }
 
-        const turmaData = turmaDoc.data();
-        // Garante que temos os dados necessários
-        if (!turmaData.dataInicio || turmaData.diaDaSemana === undefined) {
-            console.warn(`Turma ${turmaId} sem data de início ou dia da semana definidos. Abortando recálculo.`);
-            return null;
-        }
-        const dataInicio = turmaData.dataInicio.toDate();
-        const diaDaSemana = turmaData.diaDaSemana;
+        const turmaData = turmaDoc.data();
+        if (!turmaData.dataInicio || turmaData.diaDaSemana === undefined) {
+            console.warn(`Turma ${turmaId} sem data de início ou dia da semana definidos. Abortando recálculo.`);
+            return null;
+        }
+        const dataInicio = turmaData.dataInicio.toDate();
+        const diaDaSemana = turmaData.diaDaSemana;
 
-        // Busca todas as aulas normais, extras e recessos
-        const [aulasNormaisSnap, aulasExtrasSnap, recessosSnap] = await Promise.all([
-            turmaRef.collection("cronograma").where("isExtra", "==", false).orderBy("numeroDaAula").get(),
-            turmaRef.collection("cronograma").where("isExtra", "==", true).get(),
-            turmaRef.collection("recessos").get(),
-        ]);
+        // Busca todas as aulas normais, extras e recessos
+        const [aulasNormaisSnap, aulasExtrasSnap, recessosSnap] = await Promise.all([
+            turmaRef.collection("cronograma").where("isExtra", "==", false).orderBy("numeroDaAula").get(),
+            turmaRef.collection("cronograma").where("isExtra", "==", true).get(),
+            turmaRef.collection("recessos").get(),
+        ]);
 
-        // ### AJUSTE NA COMPARAÇÃO DE DATAS ###
-        // Função auxiliar para obter YYYY-MM-DD de um Date object (considerando UTC para evitar fuso)
-        const toYYYYMMDD = (date) => {
-            const d = new Date(date); // Cria cópia para não modificar original
-            const year = d.getUTCFullYear();
-            const month = String(d.getUTCMonth() + 1).padStart(2, '0');
-            const day = String(d.getUTCDate()).padStart(2, '0');
-            return `${year}-${month}-${day}`;
-        };
+        const toYYYYMMDD = (date) => {
+            const d = new Date(date);
+            // Usamos UTC (FullYear, Month, Date) para ler a data "correta"
+            const year = d.getUTCFullYear();
+            const month = String(d.getUTCMonth() + 1).padStart(2, '0');
+            const day = String(d.getUTCDate()).padStart(2, '0');
+            return `${year}-${month}-${day}`;
+        };
 
-        // Cria um SET (conjunto) de strings YYYY-MM-DD das datas ocupadas por aulas extras
-        const datasOcupadasExtras = new Set(
-            aulasExtrasSnap.docs.map(doc => toYYYYMMDD(doc.data().dataAgendada.toDate()))
-        );
-        console.log(`Datas ocupadas por aulas extras (YYYY-MM-DD):`, Array.from(datasOcupadasExtras));
+        const datasOcupadasExtras = new Set(
+            aulasExtrasSnap.docs.map(doc => toYYYYMMDD(doc.data().dataAgendada.toDate()))
+        );
+        console.log(`Datas ocupadas por aulas extras (YYYY-MM-DD):`, Array.from(datasOcupadasExtras));
 
-        // Cria array de períodos de recesso (comparação mantém objetos Date por enquanto)
-        const periodosRecesso = recessosSnap.docs.map(doc => ({
-             // Zera a hora para comparar apenas dias
-            inicio: new Date(doc.data().dataInicio.toDate().setUTCHours(0, 0, 0, 0)),
-            fim: new Date(doc.data().dataFim.toDate().setUTCHours(0, 0, 0, 0)),
-        }));
-        console.log(`Períodos de Recesso (UTC):`, periodosRecesso);
+        const periodosRecesso = recessosSnap.docs.map(doc => ({
+            // Cria datas em UTC 00:00 para comparação segura
+            inicio: new Date(doc.data().dataInicio.toDate().setUTCHours(0, 0, 0, 0)),
+            fim: new Date(doc.data().dataFim.toDate().setUTCHours(0, 0, 0, 0)),
+        }));
+        console.log(`Períodos de Recesso (UTC):`, periodosRecesso);
 
 
-        const batch = db.batch();
-        let dataAulaAtual = new Date(dataInicio.getTime()); // Começa na data de início da turma
-        let aulasAtualizadasCount = 0;
+        const batch = db.batch();
+        let dataAulaAtual = new Date(dataInicio.getTime()); // Começa na data de início da turma (ex: 17/04 00:00 UTC-3)
+        let aulasAtualizadasCount = 0;
 
-        // Loop pelas AULAS NORMAIS em ordem
-        for (const aulaDoc of aulasNormaisSnap.docs) {
-            const aulaDataOriginal = aulaDoc.data();
+        // Loop pelas AULAS NORMAIS em ordem
+        for (const aulaDoc of aulasNormaisSnap.docs) {
+            const aulaDataOriginal = aulaDoc.data();
 
-            // Encontra o próximo dia da semana correto (ou a própria data de início se for o dia certo)
-            while (dataAulaAtual.getDay() !== diaDaSemana) {
-                dataAulaAtual.setDate(dataAulaAtual.getDate() + 1);
-            }
-             // Zera a hora para garantir consistência na comparação
-            dataAulaAtual.setUTCHours(0,0,0,0);
+            // ### CORREÇÃO 1: Usa getUTCDay() ###
+            // Encontra o próximo dia da semana correto
+            while (dataAulaAtual.getUTCDay() !== diaDaSemana) {
+                dataAulaAtual.setDate(dataAulaAtual.getDate() + 1);
+            }
+            // ### CORREÇÃO 2: REMOVIDO o `setUTCHours(0,0,0,0)` ###
+            // A data (ex: 17/04 00:00 UTC-3) já está correta.
 
+            // Verifica se a data atual (ex: 17/04 00:00 UTC-3) está ocupada
+            let dataValidaEncontrada = false;
+            while (!dataValidaEncontrada) {
+                 const dataAtualStr = toYYYYMMDD(dataAulaAtual); // ex: "2024-04-17"
+                 let isDataOcupada = datasOcupadasExtras.has(dataAtualStr);
 
-            // Verifica se a data atual está ocupada (extra ou recesso)
-            let dataValidaEncontrada = false;
-            while (!dataValidaEncontrada) {
-                 // Converte dataAulaAtual para string YYYY-MM-DD para checar no Set
-                const dataAtualStr = toYYYYMMDD(dataAulaAtual);
-                let isDataOcupada = datasOcupadasExtras.has(dataAtualStr);
+                 // Converte a data atual para UTC 00:00 SÓ PARA A COMPARAÇÃO com o recesso
+                 const dataAtualParaCompararRecesso = new Date(Date.UTC(dataAulaAtual.getUTCFullYear(), dataAulaAtual.getUTCMonth(), dataAulaAtual.getUTCDate()));
+                 let isRecesso = periodosRecesso.some(p => dataAtualParaCompararRecesso >= p.inicio && dataAtualParaCompararRecesso <= p.fim);
 
-                // Compara dataAulaAtual (já zerada) com os períodos de recesso (também zerados)
-                let isRecesso = periodosRecesso.some(p => dataAulaAtual >= p.inicio && dataAulaAtual <= p.fim);
+                if (isDataOcupada || isRecesso) {
+                    console.log(`Data ${dataAtualStr} pulada (Ocupada=${isDataOcupada}, Recesso=${isRecesso}) para aula ${aulaDataOriginal.numeroDaAula}.`);
+                    // Se ocupada, avança 7 dias e RECOMEÇA a verificação para a nova data
+                    dataAulaAtual.setDate(dataAulaAtual.getDate() + 7);
+                } else {
+                    // Data válida!
+                   dataValidaEncontrada = true;
+                }
+            }
 
-                if (isDataOcupada || isRecesso) {
-                    console.log(`Data ${dataAtualStr} pulada (Ocupada=${isDataOcupada}, Recesso=${isRecesso}) para aula ${aulaDataOriginal.numeroDaAula}.`);
-                    // Se ocupada, avança 7 dias e RECOMEÇA a verificação para a nova data
-                    dataAulaAtual.setDate(dataAulaAtual.getDate() + 7);
-                    dataAulaAtual.setUTCHours(0,0,0,0); // Zera hora novamente
-                } else {
-                    // Data válida!
-                    dataValidaEncontrada = true;
-                }
-            }
+            // Compara a nova data calculada (ex: 17/04 00:00 UTC-3) com a data no Firestore
+            const dataAgendadaAtualNoFirestore = aulaDataOriginal.dataAgendada.toDate();
+            if (toYYYYMMDD(dataAulaAtual) !== toYYYYMMDD(dataAgendadaAtualNoFirestore)) {
+                console.log(`Atualizando data da aula ${aulaDataOriginal.numeroDaAula} (${aulaDataOriginal.titulo}) para ${toYYYYMMDD(dataAulaAtual)}`);
+                // Salva a data correta (ex: 17/04 00:00 UTC-3)
+                batch.update(aulaDoc.ref, { dataAgendada: admin.firestore.Timestamp.fromDate(dataAulaAtual) });
+                aulasAtualizadasCount++;
+            } else {
+                 console.log(`Data da aula ${aulaDataOriginal.numeroDaAula} (${toYYYYMMDD(dataAulaAtual)}) já está correta. Nenhuma atualização necessária.`);
+            }
 
-            // Compara a nova data calculada com a data atual no Firestore
-            const dataAgendadaAtualNoFirestore = aulaDataOriginal.dataAgendada.toDate();
-            // Compara apenas YYYY-MM-DD para evitar atualizações desnecessárias por causa de hora/fuso
-            if (toYYYYMMDD(dataAulaAtual) !== toYYYYMMDD(dataAgendadaAtualNoFirestore)) {
-                console.log(`Atualizando data da aula ${aulaDataOriginal.numeroDaAula} (${aulaDataOriginal.titulo}) para ${toYYYYMMDD(dataAulaAtual)}`);
-                batch.update(aulaDoc.ref, { dataAgendada: admin.firestore.Timestamp.fromDate(dataAulaAtual) });
-                aulasAtualizadasCount++;
-            } else {
-                 console.log(`Data da aula ${aulaDataOriginal.numeroDaAula} (${toYYYYMMDD(dataAulaAtual)}) já está correta. Nenhuma atualização necessária.`);
-            }
+            // Avança 7 dias para a PRÓXIMA aula normal
+            dataAulaAtual.setDate(dataAulaAtual.getDate() + 7);
+        }
 
+        if (aulasAtualizadasCount > 0) {
+            await batch.commit();
+            console.log(`SUCESSO! ${aulasAtualizadasCount} aulas do cronograma da turma ${turmaId} foram reajustadas.`);
+        } else {
+            console.log(`Nenhuma data precisou ser alterada para a turma ${turmaId}.`);
+        }
 
-            // Avança 7 dias para a PRÓXIMA aula normal
-            dataAulaAtual.setDate(dataAulaAtual.getDate() + 7);
-        }
-        // ### FIM DO AJUSTE NA COMPARAÇÃO ###
-
-
-        if (aulasAtualizadasCount > 0) {
-            await batch.commit();
-            console.log(`SUCESSO! ${aulasAtualizadasCount} aulas do cronograma da turma ${turmaId} foram reajustadas.`);
-        } else {
-            console.log(`Nenhuma data precisou ser alterada para a turma ${turmaId}.`);
-        }
-
-    } catch (error) {
-        console.error(`ERRO CRÍTICO ao recalcular cronograma da turma ${turmaId}:`, error);
-        // Considerar logar o erro em uma coleção específica para monitoramento
-    }
-    return null; // Encerra a função
+    } catch (error) {
+        console.error(`ERRO CRÍTICO ao recalcular cronograma da turma ${turmaId}:`, error);
+   }
+    return null; // Encerra a função
 });
 
-// ==========================================================
-// ## FIM DA FUNÇÃO recalcularCronogramaCompleto CORRIGIDA ##
-// ==========================================================
 // VERSÃO NOVA E CORRIGIDA (COM JUSTIFICADO E ABONO DE AULA EXTRA)
 exports.calcularFrequencia = onDocumentWritten({ ...OPCOES_FUNCAO, document: 'turmas/{turmaId}/frequencias/{frequenciaId}' }, async (event) => {
     const turmaId = event.params.turmaId;
@@ -1803,80 +1791,83 @@ exports.avancarAnoComVerificacao = onCall(OPCOES_FUNCAO, async (request) => {
 });
 
 // ===================================================================
-// ## INÍCIO: FUNÇÕES PARA O PORTA "CEPAT - AO VIVO" ##
+// ## INÍCIO: FUNÇÕES PARA O "CEPAT - AO VIVO" (OTIMIZADO) ##
 // ===================================================================
 
 /**
- * GATILHO (Trigger): Atualiza a contagem da Fila VL em tempo real.
- * Acionado sempre que um documento é escrito (criado, mudado, deletado) 
- * na fila do VL.
+ * GATILHO (Trigger): Mantido igual.
+ * Este gatilho é "event-driven" (só roda se alguém mexer na fila),
+ * então ele já é otimizado e não gasta recursos se a casa estiver vazia.
  */
 exports.atualizarContagemFilaVL = onDocumentWritten({ ...OPCOES_FUNCAO, document: 'fila_atendimento_vl/{docId}' }, async (event) => {
-    
-    // 1. Define a consulta: Contar quantos na fila estão "Aguardando"
     const q_fila_vl = db.collection('fila_atendimento_vl').where('status', '==', 'Aguardando');
-    
-    // 2. Executa a contagem (usando a sintaxe do Admin SDK)
     const snapshot = await q_fila_vl.count().get();
     const count = snapshot.data().count;
 
-    // 3. Atualiza o "Placar"
     const placarRef = db.doc('estatisticas/ao-vivo');
-    
     console.log(`Gatilho Fila VL: Contagem atualizada para ${count}`);
     
-    // Usa .set() com { merge: true } para criar o documento se não existir
-    // ou apenas atualizar este campo se já existir.
-    return placarRef.set({
-        total_fila_vl: count
-    }, { merge: true });
+    return placarRef.set({ total_fila_vl: count }, { merge: true });
 });
 
 
 /**
- * AGENDADA (Scheduled): Recalcula os totais estratégicos a cada 10 minutos.
- * Roda automaticamente e atualiza os totais "frios" 
- * (Assistidos, Ativos VL) para garantir que o placar esteja sempre correto.
+ * FUNÇÃO AUXILIAR (Lógica Compartilhada)
+ * Extraímos a lógica para cá para poder chamá-la de diferentes agendamentos.
  */
-exports.recontarTotaisEstatisticos = onSchedule({ ...OPCOES_FUNCAO_SAOPAULO, schedule: 'every 10 minutes' }, async (event) => {
-    
-    console.log("Iniciando recontagem agendada dos totais...");
-
+async function executarRecontagemEstatistica() {
+    console.log("Iniciando recontagem de totais...");
     try {
-        // 1. Define as consultas de contagem
         const q_assistidos = db.collection('assistidos');
         const q_ativos_vl = db.collection('tratamentos_vl').where('status', '==', 'ativo');
         
-        // 2. Cria as "promessas" de contagem
-        const assistidosPromise = q_assistidos.count().get();
-        const ativosVlPromise = q_ativos_vl.count().get();
-        
-        // 3. Executa todas as contagens em paralelo
         const [assistidosSnap, ativosVlSnap] = await Promise.all([
-            assistidosPromise,
-            ativosVlPromise
+            q_assistidos.count().get(),
+            q_ativos_vl.count().get()
         ]);
 
-        // 4. Extrai os números
         const total_assistidos = assistidosSnap.data().count;
         const total_ativos_vl = ativosVlSnap.data().count;
 
-        // 5. Atualiza o "Placar" com todos os dados de uma vez
         const placarRef = db.doc('estatisticas/ao-vivo');
         
         await placarRef.set({
             total_assistidos: total_assistidos,
             total_ativos_vl: total_ativos_vl,
-            ultimaAtualizacao: admin.firestore.FieldValue.serverTimestamp() // Adiciona um carimbo de data/hora
-        }, { merge: true }); // Merge: true para não apagar a contagem da fila
+            ultimaAtualizacao: admin.firestore.FieldValue.serverTimestamp()
+        }, { merge: true });
 
         console.log(`Recontagem concluída: Assistidos=${total_assistidos}, Ativos VL=${total_ativos_vl}`);
-        return null;
-
     } catch (error) {
-        console.error("Erro na recontagem agendada:", error);
-        return null;
+        console.error("Erro na recontagem:", error);
     }
+}
+
+
+/**
+ * AGENDAMENTO 1: ALTA FREQUÊNCIA (Horário de Pico)
+ * Roda a cada 10 minutos, APENAS nas Terças (2) e Sextas (5),
+ * das 19:00 às 21:59.
+ * Sintaxe Cron: "intervalo horas dia_mes mes dia_semana"
+ */
+exports.recontarAltaFrequencia = onSchedule({ 
+    ...OPCOES_FUNCAO_SAOPAULO, 
+    schedule: '*/10 19-21 * * 2,5' 
+}, async (event) => {
+    await executarRecontagemEstatistica();
+});
+
+
+/**
+ * AGENDAMENTO 2: BAIXA FREQUÊNCIA (Diário)
+ * Roda todos os dias às 19:00 para garantir que o painel
+ * esteja atualizado antes do início dos trabalhos (mesmo que não seja dia de pico).
+ */
+exports.recontarDiario = onSchedule({ 
+    ...OPCOES_FUNCAO_SAOPAULO, 
+    schedule: '0 19 * * *' 
+}, async (event) => {
+    await executarRecontagemEstatistica();
 });
 
 // ===================================================================
