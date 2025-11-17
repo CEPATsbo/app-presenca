@@ -102,6 +102,12 @@ onAuthStateChanged(auth, async (user) => {
             }
             greetingName.textContent = `Olá, ${currentUserData.nome}!`;
 
+            // ### LINHA NOVA A ADICIONAR AQUI: ###
+            if (origemBusca === 'voluntario') {
+                verificarPendenciaTASV(currentUserData, currentUserId);
+            }
+            // ####################################
+
             const [isAluno, isFacilitador, isAdmin] = await Promise.all([
                 verificarPapelAluno(currentUserId, origemBusca),
                 verificarPapelFacilitador(currentUserId),
@@ -679,6 +685,108 @@ async function carregarHistoricoDePresenca() {
         console.error("Erro ao carregar histórico de presença:", error);
         historyListContainer.innerHTML = '<p style="color:red;">Ocorreu um erro ao buscar seu histórico.</p>';
     }
+}
+
+// ===================================================================
+// ## LÓGICA DO TASV DIGITAL (TERMO DE ADESÃO) ##
+// ===================================================================
+
+// Elementos do TASV
+const modalTasv = document.getElementById('modal-tasv');
+const checkAceiteTasv = document.getElementById('check-aceite-tasv');
+const btnAssinarTasv = document.getElementById('btn-assinar-tasv');
+const spanTasvAno = document.getElementById('tasv-ano-atual');
+
+// 1. Função para verificar se o voluntário deve assinar
+async function verificarPendenciaTASV(userData, userId) {
+    const anoAtual = new Date().getFullYear();
+    
+    // Se o campo não existe, ou é null, ou é diferente do ano atual
+    if (userData.tasvAssinadoAno !== anoAtual) {
+        abrirModalTASV(anoAtual);
+    }
+}
+
+// 2. Função para abrir o Modal (Bloqueante)
+function abrirModalTASV(ano) {
+    if (spanTasvAno) spanTasvAno.textContent = ano;
+    if (modalTasv) {
+        modalTasv.classList.add('visible');
+        // Garante que o checkbox comece desmarcado e botão desabilitado
+        if (checkAceiteTasv) checkAceiteTasv.checked = false;
+        if (btnAssinarTasv) {
+            btnAssinarTasv.disabled = true;
+            btnAssinarTasv.style.backgroundColor = '#9ca3af'; // Cinza
+        }
+    }
+}
+
+// 3. Listener do Checkbox (Habilita o botão)
+if (checkAceiteTasv) {
+    checkAceiteTasv.addEventListener('change', (e) => {
+        if (e.target.checked) {
+            btnAssinarTasv.disabled = false;
+            btnAssinarTasv.style.backgroundColor = '#0277BD'; // Azul
+        } else {
+            btnAssinarTasv.disabled = true;
+            btnAssinarTasv.style.backgroundColor = '#9ca3af'; // Cinza
+        }
+    });
+}
+
+// 4. Ação de Assinar (Salvar no Banco e Log)
+if (btnAssinarTasv) {
+    btnAssinarTasv.addEventListener('click', async () => {
+        if (!currentUserId || !currentUserData) return;
+        
+        btnAssinarTasv.disabled = true;
+        btnAssinarTasv.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Registrando...';
+        
+        const anoAtual = new Date().getFullYear();
+        const timestampAgora = serverTimestamp();
+
+        try {
+            const batch = writeBatch(db);
+            
+            // A. Atualiza o perfil do voluntário
+            const voluntarioRef = doc(db, "voluntarios", currentUserId);
+            batch.update(voluntarioRef, { 
+                tasvAssinadoAno: anoAtual,
+                tasvDataAssinatura: timestampAgora
+            });
+
+            // B. Cria o Log Jurídico de Auditoria (A Assinatura Digital)
+            const logRef = doc(collection(db, "log_auditoria"));
+            batch.set(logRef, {
+                acao: "ASSINATURA_DIGITAL_TASV",
+                autor: { 
+                    uid: auth.currentUser.uid, 
+                    nome: currentUserData.nome,
+                    id_voluntario: currentUserId
+                },
+                detalhes: {
+                    ano_referencia: anoAtual,
+                    texto_aceito: "Lei nº 9.608/1998 e Termo de Adesão CEPAT",
+                    navegador: navigator.userAgent // Útil para auditoria técnica
+                },
+                timestamp: timestampAgora
+            });
+
+            await batch.commit();
+
+            alert(`Termo de Adesão ${anoAtual} assinado com sucesso! Obrigado pelo seu serviço voluntário.`);
+            modalTasv.classList.remove('visible');
+
+            // Atualiza o dado local para não pedir de novo na mesma sessão
+            currentUserData.tasvAssinadoAno = anoAtual;
+
+        } catch (error) {
+            console.error("Erro ao assinar TASV:", error);
+            alert("Ocorreu um erro ao registrar sua assinatura. Tente novamente.");
+            btnAssinarTasv.disabled = false;
+            btnAssinarTasv.innerHTML = '<i class="fas fa-file-signature"></i> Assinar Digitalmente';
+        }
+    });
 }
 // ===================================================================
 // ## FIM DO BLOCO TRANSPLANTADO ##
