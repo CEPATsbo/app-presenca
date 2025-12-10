@@ -17,7 +17,7 @@
         .btn-warning { background-color: var(--cor-aviso); color: #212529; }
         h1 { color: #333; text-align: center; }
         .cards-container { display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: 20px; }
-        .assistido-card { background-color: white; padding: 20px; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); display: flex; flex-direction: column; gap: 15px; border-left: 5px solid #6c757d; }
+        .assistido-card { background-color: white; padding: 20px; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); display: flex; flex-direction: column; gap: 15px; border-left: 5px solid #6c757d; position: relative; }
         .assistido-card h3 { margin: 0; font-size: 1.5em; text-align: center; color: #333; }
         .assistido-card .info { text-align: center; font-size: 1.0em; color: #666; line-height: 1.5; }
         .actions-3-buttons { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; }
@@ -26,38 +26,30 @@
         .chamado-entrevista { border-left-color: #17a2b8; }
         .entrevista-realizada { border-left-color: var(--cor-aviso); }
         .card-alta { border-left-color: var(--cor-alta); }
-        .chamado-passe { border-left-color: #28a745; background-color: #f8f9fa; opacity: 0.8; }
-        .chamado-passe h3, .chamado-passe .info { text-decoration: line-through; }
+        
+        /* Modificação Visual para Card Finalizado */
+        .card-finalizado { border-left-color: #28a745; background-color: #e8f5e9; opacity: 0.7; }
+        .card-finalizado h3, .card-finalizado .info { text-decoration: line-through; }
+        .card-finalizado button { display: none; } /* Esconde botões se finalizado */
+
         .hidden { display: none; }
         .filtro-data { text-align: center; margin-bottom: 25px; background-color: #fff; padding: 15px; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.05); }
         .filtro-data label { font-weight: bold; margin-right: 10px; }
         .filtro-data input { padding: 8px; border: 1px solid #ccc; border-radius: 6px; font-size: 1em; }
-        .aviso-decisao { text-align:center; font-weight:bold; color: #c0392b; margin-top: 10px; font-size: 0.9em; }
         
+        /* Estilo do Toggle de Inversão */
+        .toggle-inversao { display: flex; align-items: center; justify-content: center; margin-bottom: 5px; background: #fff3cd; padding: 5px; border-radius: 5px; border: 1px solid #ffeeba; }
+        .toggle-inversao label { font-size: 0.9em; font-weight: bold; color: #856404; display: flex; align-items: center; cursor: pointer; }
+        .toggle-inversao input { margin-right: 8px; width: 18px; height: 18px; }
+
         @media (max-width: 768px) {
             body { padding: 10px; }
-            .cards-container {
-                grid-template-columns: 1fr;
-                gap: 15px;
-            }
-            .assistido-card h3 {
-                font-size: 1.8em;
-            }
-            .assistido-card .info {
-                font-size: 1.1em;
-            }
-            .actions-3-buttons .btn, .actions-1-button .btn {
-                padding: 20px 10px;
-                font-size: 1.1em;
-                font-weight: bold;
-            }
-            .btn, .btn-voltar {
-                 padding: 15px 20px;
-                 font-size: 1.1em;
-            }
-            .filtro-data input, .filtro-data label {
-                font-size: 1.1em;
-            }
+            .cards-container { grid-template-columns: 1fr; gap: 15px; }
+            .assistido-card h3 { font-size: 1.8em; }
+            .assistido-card .info { font-size: 1.1em; }
+            .actions-3-buttons .btn, .actions-1-button .btn { padding: 20px 10px; font-size: 1.1em; font-weight: bold; }
+            .btn, .btn-voltar { padding: 15px 20px; font-size: 1.1em; }
+            .filtro-data input, .filtro-data label { font-size: 1.1em; }
         }
     </style>
 </head>
@@ -108,7 +100,6 @@
         function inicializarPagina(user) {
             const db = getFirestore();
             const filaRef = collection(db, 'fila_atendimento_ae');
-            const tratamentosRef = collection(db, 'tratamentos_ae');
             const painelEstadoRef = doc(db, 'painel_estado', 'atual');
             const logAuditoriaRef = collection(db, 'log_auditoria');
             const cardsContainer = document.getElementById('cards-container');
@@ -125,9 +116,7 @@
                         acao: acao,
                         detalhes: detalhes
                     });
-                } catch (error) {
-                    console.error("Erro ao registrar log:", error);
-                }
+                } catch (error) { console.error("Erro ao registrar log:", error); }
             }
 
             const hoje = new Date();
@@ -142,9 +131,7 @@
             });
 
             function monitorarFila(dataString) {
-                if (unsubscribeFila) {
-                    unsubscribeFila();
-                }
+                if (unsubscribeFila) { unsubscribeFila(); }
                 cardsContainer.innerHTML = `<p>Buscando fila para o dia ${new Date(dataString + 'T12:00:00').toLocaleDateString()}...</p>`;
                 const dataSelecionada = new Date(dataString + 'T12:00:00');
                 const inicioDoDia = new Date(dataSelecionada.setHours(0, 0, 0, 0));
@@ -164,76 +151,81 @@
                 });
             }
 
+            async function getContextoDoAtendimento(filaDocSnapshot) {
+                const atendimentoFila = { id: filaDocSnapshot.id, ...filaDocSnapshot.data() };
+                if (atendimentoFila.tipoAtendimento === 'avulso') {
+                    return { ...atendimentoFila, precisaEntrevista: false, passeParaMostrar: atendimentoFila.passeRecomendado };
+                }
+                if (atendimentoFila.tipoAtendimento === 'alta_programada') {
+                    return { ...atendimentoFila, precisaEntrevista: true, passeParaMostrar: atendimentoFila.passeRecomendado };
+                }
+                if (!atendimentoFila.tratamentoId) return null;
+                const tratamentoDocRef = doc(db, 'tratamentos_ae', atendimentoFila.tratamentoId);
+                const tratamentoDoc = await getDoc(tratamentoDocRef);
+                if (!tratamentoDoc.exists()) return null;
+                const tratamento = tratamentoDoc.data();
+                const semanaNum = atendimentoFila.semana_atual || 1;
+                let precisaEntrevista = false;
+                if (tratamento.passe_ciclo_atual === 'P3A' || tratamento.passe_ciclo_atual === 'P3B' || [1, 4, 5].includes(semanaNum)) {
+                    precisaEntrevista = true;
+                }
+                return {
+                    ...atendimentoFila,
+                    precisaEntrevista,
+                    passeParaMostrar: atendimentoFila.passeRecomendado,
+                    status_tratamento: tratamento.status
+                };
+            }
+
             function renderizarCards() {
                 cardsContainer.innerHTML = '';
                 if (atendimentosDoDia.length === 0) {
                     cardsContainer.innerHTML = '<p>Nenhuma pessoa na fila de atendimento para este dia.</p>';
                     return;
                 }
-
                 atendimentosDoDia.sort((a, b) => {
                     const prioridadeA = a.precisaEntrevista ? 1 : 0;
                     const prioridadeB = b.precisaEntrevista ? 1 : 0;
                     return prioridadeB - prioridadeA;
                 });
-
                 atendimentosDoDia.forEach(atendimento => {
                     if(atendimento) cardsContainer.appendChild(criarCard(atendimento));
                 });
             }
 
-            // ===================================================================
-            // INÍCIO DA MODIFICAÇÃO JAVASCRIPT: getContextoDoAtendimento
-            // ===================================================================
-            async function getContextoDoAtendimento(filaDocSnapshot) {
-                const atendimentoFila = { id: filaDocSnapshot.id, ...filaDocSnapshot.data() };
-
-                // Retorna dados básicos se for avulso ou alta programada (não precisa buscar tratamento)
-                if (atendimentoFila.tipoAtendimento === 'avulso') {
-                    // CORREÇÃO: Adiciona 'passeParaMostrar' para consistência
-                    return { ...atendimentoFila, precisaEntrevista: false, passeParaMostrar: atendimentoFila.passeRecomendado };
-                }
-                if (atendimentoFila.tipoAtendimento === 'alta_programada') {
-                    return { ...atendimentoFila, precisaEntrevista: true, passeParaMostrar: atendimentoFila.passeRecomendado };
-                }
-
-                // Se for um atendimento normal ou migração de ciclo, busca o tratamento
-                if (!atendimentoFila.tratamentoId) return null;
-
-                const tratamentoDocRef = doc(db, 'tratamentos_ae', atendimentoFila.tratamentoId);
-                const tratamentoDoc = await getDoc(tratamentoDocRef);
-                if (!tratamentoDoc.exists()) {
-                    console.warn(`Tratamento ${atendimentoFila.tratamentoId} não encontrado para item da fila ${atendimentoFila.id}`);
-                    return null;
-                }
-                const tratamento = tratamentoDoc.data();
-
-                const semanaNum = atendimentoFila.semana_atual || 1;
-
-                let precisaEntrevista = false;
-                if (tratamento.passe_ciclo_atual === 'P3A' || tratamento.passe_ciclo_atual === 'P3B' || [1, 4, 5].includes(semanaNum)) {
-                    precisaEntrevista = true;
-                }
-
-                return {
-                    ...atendimentoFila,
-                    precisaEntrevista,
-                    passeParaMostrar: atendimentoFila.passeRecomendado, // Usa o passe da fila para exibição
-                    status_tratamento: tratamento.status
-                };
-            }
-            // ===================================================================
-            // FIM DA MODIFICAÇÃO JAVASCRIPT
-            // ===================================================================
-
-
             function criarCard(atendimento) {
                 const card = document.createElement('div');
                 card.className = 'assistido-card';
+                
+                // Variáveis de Estado
                 const statusFila = atendimento.status;
+                const ordemInvertida = atendimento.ordem_invertida === true;
+                const entrevistaConcluida = atendimento.entrevista_concluida === true; // Nova flag
+                const passeChamado = atendimento.passe_chamado === true || statusFila === 'chamado_passe'; // Nova flag ou status legado
 
-                if (statusFila === 'chamado_passe') {
-                    card.classList.add('chamado-passe');
+                // ===================================================================
+                // NOVA LÓGICA DE ENCERRAMENTO (Strikethrough)
+                // ===================================================================
+                // O card só encerra se NÃO precisar de entrevista OU se precisar E ela já estiver concluída.
+                // E claro, o passe tem que ter sido chamado.
+                let cardDeveFechar = false;
+                
+                if (passeChamado) {
+                    if (!atendimento.precisaEntrevista) {
+                        cardDeveFechar = true; // Só passe, passe chamado = fim.
+                    } else {
+                        // Precisa entrevista. Só fecha se entrevista estiver concluída.
+                        if (entrevistaConcluida) {
+                            cardDeveFechar = true;
+                        } else {
+                            // Passe chamado, mas entrevista pendente (caso invertido). Mantém aberto.
+                            cardDeveFechar = false;
+                        }
+                    }
+                }
+
+                if (cardDeveFechar) {
+                    card.classList.add('card-finalizado');
                     card.innerHTML = `<h3>${atendimento.nomeAssistido}</h3><p class="info">Atendimento finalizado.</p>`;
                     return card;
                 }
@@ -247,18 +239,38 @@
                     buttonsHtml = `<button class="btn btn-success btn-chamar-passe" data-id="${atendimento.id}">Chamar p/ Passe</button>`;
                 } else {
                     actionsClass = 'actions-3-buttons';
-                    const entrevistaChamada = statusFila === 'chamado_entrevista';
-                    const entrevistaRealizada = statusFila === 'entrevista_realizada';
+                    
+                    // Estados dos botões
+                    const statusChamadoEntrevista = statusFila === 'chamado_entrevista';
+                    const statusEntrevistaRealizada = statusFila === 'entrevista_realizada' || entrevistaConcluida;
 
-                    let entrevistaBtnDisabled = entrevistaChamada || entrevistaRealizada;
+                    // Lógica de Habilitação INVERTIDA vs NORMAL
+                    let entrevistaBtnDisabled = statusChamadoEntrevista || statusEntrevistaRealizada;
+                    
+                    // O botão de passe fica desabilitado se não for invertido e a entrevista não tiver ocorrido.
+                    // SE for invertido, libera o passe sempre (desde que não chamado).
                     let passeBtnDisabled = true;
-                    let entrevistaRealizadaBtnDisabled = !entrevistaChamada || entrevistaRealizada;
-
-                    if (entrevistaRealizada) {
-                        if (atendimento.tipoAtendimento !== 'alta_programada') {
-                           passeBtnDisabled = false;
-                        }
+                    if (ordemInvertida) {
+                         passeBtnDisabled = passeChamado; // Se invertido, só trava se já chamou
+                    } else {
+                         passeBtnDisabled = !statusEntrevistaRealizada || passeChamado; // Normal: trava se não fez entrevista
                     }
+                    
+                    // Alta programada libera passe? Não, bloqueia no click handler, mas visualmente pode confundir
+                    if(atendimento.tipoAtendimento === 'alta_programada') passeBtnDisabled = true;
+
+                    let entrevistaRealizadaBtnDisabled = !statusChamadoEntrevista || statusEntrevistaRealizada;
+
+                    // Checkbox HTML
+                    const checkedHtml = ordemInvertida ? 'checked' : '';
+                    avisoHtml = `
+                        <div class="toggle-inversao">
+                            <label>
+                                <input type="checkbox" class="chk-inversao" data-id="${atendimento.id}" ${checkedHtml}>
+                                ⚠️ Inverter Ordem (Passe 1º)
+                            </label>
+                        </div>
+                    `;
 
                     buttonsHtml = `
                         <button class="btn btn-info btn-chamar-entrevista" data-id="${atendimento.id}" ${entrevistaBtnDisabled ? 'disabled' : ''}>1. Chamar Entrevista</button>
@@ -268,7 +280,8 @@
                 }
 
                 if (statusFila === 'chamado_entrevista') card.classList.add('chamado-entrevista');
-                if (statusFila === 'entrevista_realizada') card.classList.add('entrevista-realizada');
+                if (statusFila === 'entrevista_realizada' || entrevistaConcluida) card.classList.add('entrevista-realizada');
+                if (passeChamado && !cardDeveFechar) card.classList.add('chamado-passe'); // Visual de passe chamado mas ainda ativo
 
                 let tipoLabel = '';
                 const passeExibicao = atendimento.passeParaMostrar || 'N/A';
@@ -289,23 +302,29 @@
                         Semana: <strong>${atendimento.semana_atual || 1}</strong><br>
                         Entrevista hoje: <strong>${atendimento.precisaEntrevista ? 'Sim' : 'Não'}</strong>
                     </p>
+                    ${avisoHtml}
                     <div class="${actionsClass}">${buttonsHtml}</div>
-                    ${avisoHtml}`;
+                `;
+                
+                // Event listener para o checkbox de inversão
+                const checkbox = card.querySelector('.chk-inversao');
+                if(checkbox) {
+                    checkbox.addEventListener('change', async (e) => {
+                        const novoEstado = e.target.checked;
+                        try {
+                            await updateDoc(doc(db, 'fila_atendimento_ae', atendimento.id), { ordem_invertida: novoEstado });
+                        } catch(err) {
+                            console.error("Erro ao inverter ordem", err);
+                            e.target.checked = !novoEstado; // Reverte visualmente em caso de erro
+                        }
+                    });
+                }
 
                 return card;
             }
 
-
             async function atualizarPainelTV(chamadaAtual, novoStatus) {
-                // ===================================================================
-                // INÍCIO DA MODIFICAÇÃO JAVASCRIPT: atualizarPainelTV
-                // ===================================================================
-                // A lógica do passe agora verifica as duas propriedades para segurança
                 const passe = chamadaAtual.passeParaMostrar || chamadaAtual.passeRecomendado;
-                // ===================================================================
-                // FIM DA MODIFICAÇÃO JAVASCRIPT
-                // ===================================================================
-                
                 const salas = { 'P1': 'SALA 1', 'P2': 'SALA 2', 'P3A': 'SALA 1', 'P3B': 'SALA 1', 'P4A': 'SALA 2', 'P4B': 'SALA 2', 'CH': 'SALA 2' };
                 let salaDestino = 'ENCAMINHAMENTO';
                 if (novoStatus === 'chamado_entrevista') { salaDestino = 'ENTREVISTA'; }
@@ -325,15 +344,18 @@
             cardsContainer.addEventListener('click', async (e) => {
                 const target = e.target;
                 const id = target.dataset.id;
-                if (!id || target.disabled) return;
+                if (!id || target.disabled || target.type === 'checkbox') return; // Ignora checkbox aqui
+                
                 const atendimentoChamado = atendimentosDoDia.find(a => a && a.id === id);
-                if (!atendimentoChamado) { console.error(`Atendimento com ID ${id} não encontrado.`); return; }
+                if (!atendimentoChamado) return;
+                
                 target.disabled = true;
 
                 try {
                     if (target.classList.contains('btn-chamar-entrevista')) {
                         await atualizarPainelTV(atendimentoChamado, 'chamado_entrevista');
                         await updateDoc(doc(db, 'fila_atendimento_ae', id), { status: 'chamado_entrevista' });
+                    
                     } else if (target.classList.contains('btn-entrevista-realizada')) {
                         if (atendimentoChamado.tipoAtendimento === 'alta_programada') {
                             if (confirm(`Confirmar encerramento do tratamento de ${atendimentoChamado.nomeAssistido} por ALTA?`)) {
@@ -342,19 +364,28 @@
                                 batch.update(tratamentoDocRef, { status: 'concluido_com_alta', dataFim: serverTimestamp() });
                                 batch.delete(doc(db, 'fila_atendimento_ae', id));
                                 await batch.commit();
-                                registrarLog('Tratamento Encerrado por Alta (AE)', { assistidoId: atendimentoChamado.assistidoId, assistidoNome: atendimentoChamado.nomeAssistido, tratamentoId: atendimentoChamado.tratamentoId });
+                                registrarLog('Tratamento Encerrado por Alta (AE)', { assistidoId: atendimentoChamado.assistidoId, assistidoNome: atendimentoChamado.nomeAssistido });
                             } else { target.disabled = false; }
                         } else {
-                            await updateDoc(doc(db, 'fila_atendimento_ae', id), { status: 'entrevista_realizada' });
+                            // MARCA COMO ENTREVISTA CONCLUÍDA
+                            await updateDoc(doc(db, 'fila_atendimento_ae', id), { 
+                                status: 'entrevista_realizada',
+                                entrevista_concluida: true 
+                            });
                             target.disabled = false;
                         }
+                    
                     } else if (target.classList.contains('btn-chamar-passe')) {
                          if (atendimentoChamado.tipoAtendimento === 'alta_programada') {
                              alert("Este assistido está de alta e não deve ser chamado para o passe.");
                              target.disabled = true; return;
                          }
                         await atualizarPainelTV(atendimentoChamado, 'chamado_passe');
-                        await updateDoc(doc(db, 'fila_atendimento_ae', id), { status: 'chamado_passe' });
+                        // MARCA QUE PASSE FOI CHAMADO
+                        await updateDoc(doc(db, 'fila_atendimento_ae', id), { 
+                            status: 'chamado_passe',
+                            passe_chamado: true
+                        });
                     }
                 } catch (error) {
                     console.error("Erro ao processar chamada:", error);
