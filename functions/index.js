@@ -341,36 +341,45 @@ exports.revogarAcessoSecretarioEscola = onCall(OPCOES_FUNCAO, async (request) =>
 // ### FIM DO AJUSTE 2 ###
 
 // ===================================================================
-// ## MÓDULO CÁRITAS: Promover e Revogar Acesso ##
+// ## MÓDULO CÁRITAS: Promover e Revogar Acesso (CORRIGIDO) ##
 // ===================================================================
 
 exports.promoverParaCaritas = onCall(OPCOES_FUNCAO, async (request) => {
     if (!request.auth) throw new HttpsError('unauthenticated', 'Login necessário.');
     
-    const { voluntarioUid, voluntarioDocId } = request.data;
+    // Ajustado para 'uid', que é o que o seu front-end envia
+    const { uid } = request.data; 
     const adminUid = request.auth.uid;
 
-    try {
-        // 1. Define o Custom Claim
-        await admin.auth().setCustomUserClaims(voluntarioUid, { caritas: true });
+    if (!uid) throw new HttpsError('invalid-argument', 'O UID do voluntário é obrigatório.');
 
-        // 2. Atualiza o documento no Firestore
-        await db.collection('voluntarios').doc(voluntarioDocId).update({
-            role: 'caritas',
-            permissoes: admin.firestore.FieldValue.arrayUnion('assistencia_social')
-        });
+    try {
+        // 1. Define o Custom Claim no Firebase Auth
+        await admin.auth().setCustomUserClaims(uid, { caritas: true });
+
+        // 2. Busca o documento do voluntário no Firestore pelo authUid
+        const voluntarioQuery = await db.collection('voluntarios').where('authUid', '==', uid).limit(1).get();
+        
+        if (!voluntarioQuery.empty) {
+            const voluntarioDoc = voluntarioQuery.docs[0];
+            await voluntarioDoc.ref.update({
+                role: 'caritas',
+                permissoes: admin.firestore.FieldValue.arrayUnion('assistencia_social')
+            });
+        }
 
         // 3. Registra Log de Auditoria
         await db.collection('logs_auditoria').add({
             timestamp: admin.firestore.FieldValue.serverTimestamp(),
             usuarioId: adminUid,
             acao: "PROMOÇÃO_CARITAS",
-            detalhes: `Voluntário ${voluntarioDocId} promovido ao módulo Cáritas.`,
+            detalhes: `Voluntário com UID ${uid} promovido ao módulo Cáritas.`,
             modulo: "ADMINISTRAÇÃO"
         });
 
         return { success: true, message: "Promovido a Cáritas com sucesso!" };
     } catch (error) {
+        console.error("Erro na promoção Cáritas:", error);
         throw new HttpsError('internal', error.message);
     }
 });
@@ -378,30 +387,38 @@ exports.promoverParaCaritas = onCall(OPCOES_FUNCAO, async (request) => {
 exports.revogarAcessoCaritas = onCall(OPCOES_FUNCAO, async (request) => {
     if (!request.auth) throw new HttpsError('unauthenticated', 'Login necessário.');
     
-    const { voluntarioUid, voluntarioDocId } = request.data;
+    const { uid } = request.data;
     const adminUid = request.auth.uid;
+
+    if (!uid) throw new HttpsError('invalid-argument', 'O UID do voluntário é obrigatório.');
 
     try {
         // 1. Remove o Custom Claim
-        await admin.auth().setCustomUserClaims(voluntarioUid, { caritas: false });
+        await admin.auth().setCustomUserClaims(uid, { caritas: false });
 
-        // 2. Volta o cargo para voluntário comum
-        await db.collection('voluntarios').doc(voluntarioDocId).update({
-            role: 'voluntario',
-            permissoes: admin.firestore.FieldValue.arrayRemove('assistencia_social')
-        });
+        // 2. Busca e atualiza no Firestore
+        const voluntarioQuery = await db.collection('voluntarios').where('authUid', '==', uid).limit(1).get();
+        
+        if (!voluntarioQuery.empty) {
+            const voluntarioDoc = voluntarioQuery.docs[0];
+            await voluntarioDoc.ref.update({
+                role: 'voluntario',
+                permissoes: admin.firestore.FieldValue.arrayRemove('assistencia_social')
+            });
+        }
 
         // 3. Registra Log de Auditoria
         await db.collection('logs_auditoria').add({
             timestamp: admin.firestore.FieldValue.serverTimestamp(),
             usuarioId: adminUid,
             acao: "REVOGAÇÃO_CARITAS",
-            detalhes: `Acesso Cáritas removido do voluntário ${voluntarioDocId}.`,
+            detalhes: `Acesso Cáritas removido do voluntário com UID ${uid}.`,
             modulo: "ADMINISTRAÇÃO"
         });
 
         return { success: true, message: "Acesso Cáritas revogado." };
     } catch (error) {
+        console.error("Erro na revogação Cáritas:", error);
         throw new HttpsError('internal', error.message);
     }
 });

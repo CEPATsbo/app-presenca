@@ -55,7 +55,7 @@
             gap: 25px;
             width: 100%;
             max-width: 1000px;
-            display: none; /* Starts hidden, shown by JS */
+            display: none; /* Inicia escondido, exibido pelo JS */
         }
         .card {
             background-color: white;
@@ -70,7 +70,7 @@
             border-left: 5px solid transparent;
         }
         .card.hidden {
-            display: none; /* Used by JS to hide cards based on role */
+            display: none; 
         }
         .card:hover {
             transform: translateY(-5px);
@@ -87,12 +87,12 @@
             line-height: 1.5;
             text-align: left;
         }
-        /* Estilo específico para o parágrafo de aviso */
+        
         #card-ae-warning {
-             color: #dc3545; /* Cor vermelha para atenção */
+             color: #dc3545;
              font-weight: bold;
-             margin-top: 5px; /* Espaçamento */
-             display: none; /* Começa escondido */
+             margin-top: 5px;
+             display: none;
         }
 
         .logout-container {
@@ -111,7 +111,7 @@
             font-weight: bold;
             text-decoration: none;
         }
-        /* Badge de notificação */
+        
         .notification-badge {
             position: absolute;
             top: 15px;
@@ -121,14 +121,12 @@
             width: 25px;
             height: 25px;
             border-radius: 50%;
-            display: flex; /* Usado pelo JS para mostrar/esconder */
+            display: none;
             align-items: center;
             justify-content: center;
             font-weight: bold;
             font-size: 0.9em;
-            display: none; /* Começa escondido */
         }
-
     </style>
 </head>
 <body>
@@ -149,9 +147,15 @@
             <p id="card-ae-warning"></p>
             <span class="notification-badge" id="card-ae-badge">0</span>
         </a>
+
         <a href="/dashboard-educacional.html" class="card" data-role="super-admin,secretario-escola,dirigente-escola,diretor,tesoureiro" style="border-left-color: #3498db;">
             <h2>Módulo Educacional</h2>
             <p>Gerenciar cursos, turmas, alunos, frequências e avaliações.</p>
+        </a>
+
+        <a href="/modulo-caritas.html" class="card" data-role="super-admin,diretor,tesoureiro,conselheiro,entrevistador,recepcionista,caritas" style="border-left-color: #e67e22;">
+            <h2>Assistência Social</h2>
+            <p>Gestão de famílias, cestas básicas e campanhas solidárias.</p>
         </a>
 
         <a href="/gerenciar-diretoria.html" class="card" data-role="super-admin,diretor,tesoureiro" style="border-left-color: #9b59b6;">
@@ -165,14 +169,14 @@
         </a>
 
         <a href="/dashboard-financeiro.html" class="card" data-role="super-admin,diretor,tesoureiro,conselheiro" style="border-left-color: #f39c12;">
-            <h2>Módulo Financeiro</h2>
-            <p>Acessar balancetes mensais, revisões do conselho e gerar o fechamento anual.</p>
-        </a>
+            <h2>Módulo Financeiro</h2>
+            <p>Acessar balancetes mensais, revisões do conselho e gerar o fechamento anual.</p>
+        </a>
 
         <a href="/estatisticas.html" class="card" data-role="super-admin,diretor,tesoureiro,conselheiro,entrevistador,recepcionista,irradiador,secretario-escola,dirigente-escola,produtor-evento,bibliotecario" style="border-left-color: #1abc9c;">
-            <h2>Estatísticas</h2>
-            <p>Visualizar gráficos de presença, financeiros e de vibrações.</p>
-        </a>
+            <h2>Estatísticas</h2>
+            <p>Visualizar gráficos de presença, financeiros e de vibrações.</p>
+        </a>
 
         <a href="/pdv-cantina.html" class="card" data-role="super-admin,diretor,tesoureiro,conselheiro,produtor-evento" style="border-left-color: #f1c40f;">
             <h2>PDV da Cantina</h2>
@@ -259,7 +263,6 @@
         import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-auth.js";
         import { getFirestore, collection, query, where, onSnapshot, Timestamp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
 
-
         const firebaseConfig = {
             apiKey: "AIzaSyBV7RPjk3cFTqL-aIpflJcUojKg1ZXMLuU",
             authDomain: "voluntarios-ativos---cepat.firebaseapp.com",
@@ -271,12 +274,13 @@
 
         const app = initializeApp(firebaseConfig);
         const auth = getAuth(app);
-        const db = getFirestore(app); // Inicializa o Firestore
+        const db = getFirestore(app);
 
         onAuthStateChanged(auth, (user) => {
             if (user) {
                 user.getIdTokenResult(true).then((idTokenResult) => {
                     const userRole = idTokenResult.claims.role || 'voluntario';
+                    
                     document.querySelectorAll('.card').forEach(card => {
                         const rolesPermitidas = card.dataset.role.split(',');
 
@@ -288,7 +292,6 @@
                     });
                     document.getElementById('main-content').style.display = 'grid';
 
-                    // Chama a função de monitoramento SE o card for visível
                     const cardAE = document.getElementById('card-assistencia-espiritual');
                     if (cardAE && cardAE.style.display !== 'none') {
                          monitorarEntrevistasPendentes();
@@ -307,7 +310,6 @@
             });
         });
 
-        // Função de monitoramento corrigida
         function monitorarEntrevistasPendentes() {
             const atendimentosRef = collection(db, 'atendimentos_ae');
 
@@ -315,7 +317,6 @@
                 atendimentosRef,
                 where("detalhes_preenchidos", "==", false),
                 where("entrevistador", "==", "Aguardando Detalhes")
-                // Nota: Pode precisar de índice no Firestore.
             );
 
             onSnapshot(qPendentes, (snapshot) => {
@@ -326,39 +327,30 @@
             });
         }
 
-        // Função de atualização da UI corrigida (com parágrafo de aviso)
         function atualizarCardNotificacao(count) {
             const card = document.getElementById('card-assistencia-espiritual');
-            const status = document.getElementById('card-ae-status'); // Parágrafo original
-            const warning = document.getElementById('card-ae-warning'); // NOVO: Parágrafo de aviso
+            const status = document.getElementById('card-ae-status');
+            const warning = document.getElementById('card-ae-warning');
             const badge = document.getElementById('card-ae-badge');
 
-            // Verifica se todos os elementos existem
             if (!card || !status || !warning || !badge) {
-                console.error("Um ou mais elementos do card de notificação AE não foram encontrados no HTML.");
+                console.error("Elementos do card AE não encontrados.");
                 return;
             }
 
-            // Mantém o texto original SEMPRE visível
             status.textContent = 'Gerenciar todo o fluxo de atendimento Fraterno.';
-            card.classList.remove('notificacao-ativa'); // Remove estilo antigo
-            card.style.borderLeftColor = '#2ecc71'; // Garante cor original da borda
+            card.style.borderLeftColor = '#2ecc71';
 
             if (count > 0) {
-                // Mostra o aviso e o badge
                 warning.textContent = `Atenção: ${count} entrevista(s) aguardando preenchimento.`;
-                warning.style.display = 'block'; // Mostra o parágrafo de aviso
-
+                warning.style.display = 'block';
                 badge.textContent = count;
-                badge.style.display = 'flex'; // Mostra o badge
-
+                badge.style.display = 'flex';
             } else {
-                // Esconde o aviso e o badge
-                warning.style.display = 'none'; // Esconde o parágrafo de aviso
-                badge.style.display = 'none'; // Esconde o badge
+                warning.style.display = 'none';
+                badge.style.display = 'none';
             }
         }
-
     </script>
 </body>
 </html>
