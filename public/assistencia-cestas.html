@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cáritas - Entrega de Cestas</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background-color: #f4f6f9; margin: 0; padding: 20px; display: flex; flex-direction: column; align-items: center; }
+        .nav-header { width: 100%; max-width: 1000px; display: flex; justify-content: space-between; margin-bottom: 20px; }
+        .btn-voltar { background-color: #6c757d; color: white; padding: 10px 15px; border-radius: 8px; text-decoration: none; font-weight: bold; }
+        .container { background: white; padding: 30px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); width: 100%; max-width: 1000px; box-sizing: border-box; }
+        h1 { color: #2c3e50; margin-top: 0; border-bottom: 2px solid #e67e22; padding-bottom: 10px; }
+        .search-box { margin: 20px 0; display: flex; gap: 10px; }
+        #input-busca { flex-grow: 1; padding: 12px; border: 1px solid #ddd; border-radius: 8px; font-size: 1em; }
+        .familia-row { display: grid; grid-template-columns: 1fr auto; gap: 20px; padding: 15px; border-bottom: 1px solid #eee; align-items: center; }
+        .info-nome { font-weight: bold; color: #34495e; font-size: 1.1em; }
+        .btn-entregar { background-color: #27ae60; color: white; border: none; padding: 10px 20px; border-radius: 8px; cursor: pointer; font-weight: bold; }
+        .btn-entregar:disabled { background-color: #bdc3c7; cursor: not-allowed; }
+    </style>
+</head>
+<body>
+    <header class="nav-header">
+        <a href="/modulo-caritas.html" class="btn-voltar"><i class="fas fa-arrow-left"></i> Painel Cáritas</a>
+    </header>
+
+    <main class="container">
+        <h1><i class="fas fa-shopping-basket"></i> Entrega de Cestas</h1>
+        <div class="search-box">
+            <input type="text" id="input-busca" placeholder="Buscar família...">
+        </div>
+        <div id="lista-entrega">
+            <p style="text-align:center; color:#999;">Carregando...</p>
+        </div>
+    </main>
+
+    <script type="module">
+        console.log("Iniciando Script de Cestas...");
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
+        import { getFirestore, collection, addDoc, onSnapshot, query, where, orderBy, serverTimestamp, doc, updateDoc } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
+        import { protegerPagina } from '/auth.js';
+
+        const firebaseConfig = {
+            apiKey: "AIzaSyBV7RPjk3cFTqL-aIpflJcUojKg1ZXMLuU",
+            authDomain: "voluntarios-ativos---cepat.firebaseapp.com",
+            projectId: "voluntarios-ativos---cepat",
+            storageBucket: "voluntarios-ativos---cepat.firebasestorage.app",
+            messagingSenderId: "66122858261",
+            appId: "1:66122858261:web:7fa21f1805463b5c08331c"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const db = getFirestore(app);
+
+        protegerPagina(['super-admin', 'diretor', 'tesoureiro', 'conselheiro', 'entrevistador', 'recepcionista', 'caritas'])
+            .then(user => {
+                console.log("Acesso OK. Monitorando famílias...");
+                inicializarCestas(user);
+            })
+            .catch(err => console.error("Erro de Auth:", err));
+
+        function inicializarCestas(user) {
+            const container = document.getElementById('lista-entrega');
+            const inputBusca = document.getElementById('input-busca');
+            let todasFamilias = [];
+
+            onSnapshot(query(collection(db, "familiasAssistidas"), where("statusGeral", "==", "Ativa")), (snapshot) => {
+                todasFamilias = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                renderizar(todasFamilias);
+            }, err => console.error("Erro ao ler famílias:", err));
+
+            inputBusca.oninput = (e) => {
+                const termo = e.target.value.toLowerCase();
+                renderizar(todasFamilias.filter(f => f.responsavel1.nome.toLowerCase().includes(termo)));
+            };
+
+            function renderizar(dados) {
+                if (dados.length === 0) { container.innerHTML = '<p>Nenhuma família.</p>'; return; }
+                container.innerHTML = dados.map(f => {
+                    const jaRecebeu = f.ultimaCesta && verificarMes(f.ultimaCesta);
+                    return `
+                        <div class="familia-row">
+                            <div>
+                                <div class="info-nome">${f.responsavel1.nome}</div>
+                                <div style="font-size:0.8em; color:#666">Última: ${f.ultimaCesta ? f.ultimaCesta.toDate().toLocaleDateString() : 'Nunca'}</div>
+                            </div>
+                            <button class="btn-entregar" onclick="entregar('${f.id}', '${f.responsavel1.nome}')" ${jaRecebeu ? 'disabled' : ''}>
+                                ${jaRecebeu ? 'Entregue' : 'Confirmar'}
+                            </button>
+                        </div>
+                    `;
+                }).join('');
+            }
+
+            window.entregar = async (id, nome) => {
+                if (!confirm(`Confirmar entrega para ${nome}?`)) return;
+                try {
+                    await updateDoc(doc(db, "familiasAssistidas", id), { ultimaCesta: serverTimestamp() });
+                    await addDoc(collection(db, "entregasCestas"), { familiaId: id, data: serverTimestamp(), voluntario: user.uid });
+                    await addDoc(collection(db, "logs_auditoria"), { timestamp: serverTimestamp(), usuarioId: user.uid, acao: "ENTREGA_CESTA", detalhes: `Cesta para ${nome}` });
+                    alert("Sucesso!");
+                } catch (e) { alert("Erro: " + e.message); }
+            };
+
+            function verificarMes(ts) {
+                const d = ts.toDate(); const h = new Date();
+                return d.getMonth() === h.getMonth() && d.getFullYear() === h.getFullYear();
+            }
+        }
+    </script>
+</body>
+</html>
