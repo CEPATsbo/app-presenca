@@ -37,7 +37,8 @@
     <script type="module">
         console.log("Iniciando Script de Cestas...");
         import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
-        import { getFirestore, collection, addDoc, onSnapshot, query, where, orderBy, serverTimestamp, doc, updateDoc } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
+        // ADICIONADO: getDocs incluído na lista de importação abaixo
+        import { getFirestore, collection, addDoc, onSnapshot, query, where, orderBy, serverTimestamp, doc, updateDoc, getDocs } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
         import { protegerPagina } from '/auth.js';
 
         const firebaseConfig = {
@@ -93,46 +94,42 @@
             }
 
             window.entregar = async (id, nome) => {
-    if (!confirm(`Confirmar entrega para ${nome}?`)) return;
-    try {
-        // 1. Atualiza a data da última cesta na família
-        await updateDoc(doc(db, "familiasAssistidas", id), { ultimaCesta: serverTimestamp() });
-        
-        // 2. Registra o histórico na coleção de entregas
-        await addDoc(collection(db, "entregasCestas"), { 
-            familiaId: id, 
-            data: serverTimestamp(), 
-            voluntario: user.uid 
-        });
+                if (!confirm(`Confirmar entrega para ${nome}?`)) return;
+                try {
+                    // 1. Atualiza a data da última cesta na família
+                    await updateDoc(doc(db, "familiasAssistidas", id), { ultimaCesta: serverTimestamp() });
+                    
+                    // 2. Registra o histórico na coleção de entregas
+                    await addDoc(collection(db, "entregasCestas"), { familiaId: id, data: serverTimestamp(), voluntario: user.uid });
+                    
+                    // 3. BAIXA AUTOMÁTICA NO ESTOQUE
+                    const qEstoque = query(collection(db, "estoque_caritas"), where("tipo", "==", "cesta"));
+                    const estoqueSnap = await getDocs(qEstoque);
+                    
+                    if (!estoqueSnap.empty) {
+                        const estoqueDoc = estoqueSnap.docs[0];
+                        const saldoAtual = estoqueDoc.data().quantidade || 0;
+                        const novaQtd = Math.max(0, saldoAtual - 1);
+                        
+                        await updateDoc(doc(db, "estoque_caritas", estoqueDoc.id), { 
+                            quantidade: novaQtd 
+                        });
+                    }
 
-        // 3. BAIXA AUTOMÁTICA NO ESTOQUE (NOVO)
-        const qEstoque = query(collection(db, "estoque_caritas"), where("tipo", "==", "cesta"));
-        const estoqueSnap = await getDocs(qEstoque);
-        
-        if (!estoqueSnap.empty) {
-            const estoqueDoc = estoqueSnap.docs[0];
-            const saldoAtual = estoqueDoc.data().quantidade || 0;
-            const novaQtd = Math.max(0, saldoAtual - 1);
-            
-            await updateDoc(doc(db, "estoque_caritas", estoqueDoc.id), { 
-                quantidade: novaQtd 
-            });
-        }
+                    // 4. REGISTRO DE AUDITORIA UNIFICADO
+                    await addDoc(collection(db, "log_auditoria"), { 
+                        timestamp: serverTimestamp(), 
+                        autor: { nome: user.displayName || user.email }, 
+                        acao: "ENTREGA_CESTA", 
+                        detalhes: `Cesta para ${nome}. Baixa automática realizada no estoque.` 
+                    });
 
-        // 4. REGISTRO DE AUDITORIA UNIFICADO
-        await addDoc(collection(db, "log_auditoria"), { 
-            timestamp: serverTimestamp(), 
-            autor: { nome: user.displayName || user.email }, 
-            acao: "ENTREGA_CESTA", 
-            detalhes: `Cesta para ${nome}. Baixa automática realizada no estoque.` 
-        });
-
-        alert("Entrega confirmada e estoque atualizado!");
-    } catch (e) { 
-        console.error(e);
-        alert("Erro ao processar entrega: " + e.message); 
-    }
-};
+                    alert("Sucesso! Entrega registrada e estoque atualizado.");
+                } catch (e) { 
+                    console.error(e);
+                    alert("Erro ao processar entrega: " + e.message); 
+                }
+            };
 
             function verificarMes(ts) {
                 const d = ts.toDate(); const h = new Date();
