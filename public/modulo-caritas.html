@@ -232,85 +232,84 @@
     </div>
 
     <script type="module">
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
-        import { getFirestore, collection, query, where, getCountFromServer, onSnapshot } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
-        import { protegerPagina } from '/auth.js';
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
+    import { getFirestore, collection, query, where, getCountFromServer, onSnapshot, Timestamp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
+    import { protegerPagina } from '/auth.js';
 
-        const firebaseConfig = {
-            apiKey: "AIzaSyBV7RPjk3cFTqL-aIpflJcUojKg1ZXMLuU",
-            authDomain: "voluntarios-ativos---cepat.firebaseapp.com",
-            projectId: "voluntarios-ativos---cepat",
-            storageBucket: "voluntarios-ativos---cepat.firebasestorage.app",
-            messagingSenderId: "66122858261",
-            appId: "1:66122858261:web:7fa21f1805463b5c08331c"
-        };
+    const firebaseConfig = {
+        apiKey: "AIzaSyBV7RPjk3cFTqL-aIpflJcUojKg1ZXMLuU",
+        authDomain: "voluntarios-ativos---cepat.firebaseapp.com",
+        projectId: "voluntarios-ativos---cepat",
+        storageBucket: "voluntarios-ativos---cepat.firebasestorage.app",
+        messagingSenderId: "66122858261",
+        appId: "1:66122858261:web:7fa21f1805463b5c08331c"
+    };
 
-        const app = initializeApp(firebaseConfig);
-        const db = getFirestore(app);
+    const app = initializeApp(firebaseConfig);
+    const db = getFirestore(app);
 
-        // Verifica permissão de acesso
-        protegerPagina(['super-admin', 'diretor', 'tesoureiro', 'entrevistador', 'recepcionista', 'conselheiro', 'caritas'])
-            .then(user => {
-                carregarEstatisticas();
-                calcularProximoDomingoSocial();
-                verificarCampanhaAtiva();
-            })
-            .catch(() => window.location.href = '/dashboard.html');
+    // Proteção de acesso ao módulo
+    protegerPagina(['super-admin', 'diretor', 'tesoureiro', 'caritas', 'conselheiro', 'entrevistador'])
+        .then(() => inicializarDashboard())
+        .catch(() => window.location.href = '/dashboard.html');
 
-        // Busca o total de famílias ativas no banco
-        async function carregarEstatisticas() {
-            const familiasRef = collection(db, "familiasAssistidas");
-            const q = query(familiasRef, where("statusGeral", "==", "Ativa"));
-            
-            try {
-                const snapshot = await getCountFromServer(q);
-                document.getElementById('stats-familias').textContent = snapshot.data().count;
-            } catch (error) {
-                console.error("Erro ao buscar contagem de famílias:", error);
-                document.getElementById('stats-familias').textContent = "!";
+    async function inicializarDashboard() {
+        // 1. Calcular o início do mês atual para o filtro
+        const agora = new Date();
+        const inicioDoMes = new Date(agora.getFullYear(), agora.getMonth(), 1);
+        const timestampInicio = Timestamp.fromDate(inicioDoMes);
+
+        // 2. Referências das Coleções
+        const colFamilias = collection(db, "familiasAssistidas");
+        const colEntregas = collection(db, "entregasCestas");
+
+        // 3. Queries de Contagem
+        const qFamiliasAtivas = query(colFamilias, where("statusGeral", "==", "Ativa"));
+        // CORREÇÃO: Filtra entregas onde o campo 'data' é maior ou igual ao dia 1 deste mês
+        const qCestasMes = query(colEntregas, where("data", ">=", timestampInicio));
+
+        // 4. Executar Contagens e Atualizar UI
+        try {
+            const snapFamilias = await getCountFromServer(qFamiliasAtivas);
+            document.getElementById('total-familias-count').textContent = snapFamilias.data().count;
+
+            const snapCestas = await getCountFromServer(qCestasMes);
+            document.getElementById('cestas-mes-count').textContent = snapCestas.data().count;
+
+            // 5. Cálculo Automático do Próximo Domingo Social (Todo 3º domingo do mês)
+            document.getElementById('proximo-domingo-social').textContent = calcularTerceiroDomingo();
+
+        } catch (error) {
+            console.error("Erro ao carregar indicadores:", error);
+        }
+    }
+
+    function calcularTerceiroDomingo() {
+        const hoje = new Date();
+        let ano = hoje.getFullYear();
+        let mes = hoje.getMonth();
+
+        function buscarDomingo(m, a) {
+            let d = new Date(a, m, 1);
+            let domingos = [];
+            while (d.getMonth() === m) {
+                if (d.getDay() === 0) domingos.push(new Date(d));
+                d.setDate(d.getDate() + 1);
             }
+            return domingos[2]; // Retorna o 3º domingo
         }
 
-        // Lógica para calcular o 3º domingo do mês atual (ou do próximo se já passou)
-        function calcularProximoDomingoSocial() {
-            const hoje = new Date();
-            let dataSugerida = obterTerceiroDomingo(hoje.getMonth(), hoje.getFullYear());
-
-            // Se o 3º domingo de hoje já passou, calcula o do mês que vem
-            if (hoje > dataSugerida) {
-                const proximoMes = hoje.getMonth() === 11 ? 0 : hoje.getMonth() + 1;
-                const proximoAno = hoje.getMonth() === 11 ? hoje.getFullYear() + 1 : hoje.getFullYear();
-                dataSugerida = obterTerceiroDomingo(proximoMes, proximoAno);
-            }
-
-            const dia = String(dataSugerida.getDate()).padStart(2, '0');
-            const mes = String(dataSugerida.getMonth() + 1).padStart(2, '0');
-            document.getElementById('stats-data').textContent = `${dia}/${mes}`;
+        let dataSocial = buscarDomingo(mes, ano);
+        
+        // Se o domingo social deste mês já passou, mostra o do mês que vem
+        if (hoje > dataSocial) {
+            mes++;
+            if (mes > 11) { mes = 0; ano++; }
+            dataSocial = buscarDomingo(mes, ano);
         }
 
-        function obterTerceiroDomingo(mes, ano) {
-            let data = new Date(ano, mes, 1);
-            let domingos = 0;
-            
-            while (domingos < 3) {
-                if (data.getDay() === 0) { // 0 é Domingo
-                    domingos++;
-                    if (domingos === 3) return data;
-                }
-                data.setDate(data.getDate() + 1);
-            }
-            return data;
-        }
-
-        // Mostra o badge de Campanha se estivermos entre Setembro e Dezembro
-        function verificarCampanhaAtiva() {
-            const mesAtual = new Date().getMonth(); // 0 a 11
-            if (mesAtual >= 8 && mesAtual <= 11) { // Setembro(8) a Dezembro(11)
-                const badge = document.getElementById('badge-campanha');
-                badge.style.display = 'inline-block';
-                badge.textContent = mesAtual === 11 ? 'Natal' : 'Dia das Crianças';
-            }
-        }
-    </script>
+        return dataSocial.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
+    }
+</script>
 </body>
 </html>
