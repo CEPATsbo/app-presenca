@@ -331,7 +331,12 @@
 
                 try {
                     await addDoc(collection(db, "familiasAssistidas"), novaFamilia);
-                    await addDoc(collection(db, "logs_auditoria"), { timestamp: serverTimestamp(), usuarioId: user.uid, acao: "CADASTRO_FAMILIA", detalhes: `Cadastrou família: ${novaFamilia.responsavel1.nome}` });
+                    await addDoc(collection(db, "log_auditoria"), { 
+    timestamp: serverTimestamp(), 
+    autor: { nome: user.displayName || user.email }, // Aqui entra o nome para a tabela central
+    acao: "CADASTRO_FAMILIA", 
+    detalhes: `Cadastrou família: ${novaFamilia.responsavel1.nome}` 
+});
                     alert("Sucesso no cadastro!");
                     ui.modal.style.display = 'none';
                 } catch (err) { alert("Erro: " + err.message); }

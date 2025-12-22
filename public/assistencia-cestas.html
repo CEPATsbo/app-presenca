@@ -95,10 +95,21 @@
             window.entregar = async (id, nome) => {
                 if (!confirm(`Confirmar entrega para ${nome}?`)) return;
                 try {
+                    // 1. Atualiza a data da última cesta na família
                     await updateDoc(doc(db, "familiasAssistidas", id), { ultimaCesta: serverTimestamp() });
+                    
+                    // 2. Registra o histórico na coleção de entregas
                     await addDoc(collection(db, "entregasCestas"), { familiaId: id, data: serverTimestamp(), voluntario: user.uid });
-                    await addDoc(collection(db, "logs_auditoria"), { timestamp: serverTimestamp(), usuarioId: user.uid, acao: "ENTREGA_CESTA", detalhes: `Cesta para ${nome}` });
-                    alert("Sucesso!");
+                    
+                    // 3. REGISTRO DE AUDITORIA UNIFICADO (CORRIGIDO)
+                    await addDoc(collection(db, "log_auditoria"), { 
+                        timestamp: serverTimestamp(), 
+                        autor: { nome: user.displayName || user.email }, 
+                        acao: "ENTREGA_CESTA", 
+                        detalhes: `Cesta para ${nome}` 
+                    });
+
+                    alert("Entrega registrada com sucesso!");
                 } catch (e) { alert("Erro: " + e.message); }
             };
 
