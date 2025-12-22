@@ -27,7 +27,6 @@
     </nav>
 
     <div id="main-content" style="display: none;">
-        
         <div class="container">
             <h2>Gestão Atual</h2>
             <p style="text-align: center; margin-top: -10px; margin-bottom: 20px;">Lista de voluntários com cargos administrativos. A promoção/revogação agora é feita em "Gerenciar Voluntários".</p>
@@ -95,6 +94,7 @@
                 'diretor': 'Diretor(a)',
                 'tesoureiro': 'Tesoureiro(a)',
                 'conselheiro': 'Conselheiro(a)',
+                'caritas': 'Assistência Social (Cáritas)',
                 'produtor-evento': 'Produtor(a) de Evento',
                 'irradiador': 'Irradiador(a)',
                 'bibliotecario': 'Bibliotecário(a)',
@@ -108,34 +108,24 @@
             carregarDiretoria();
             setupLogFilters();
 
-            // ### AJUSTE: Função 'carregarDiretoria' modificada para 2 consultas ###
             async function carregarDiretoria() {
                 tabelaDiretoria.innerHTML = `<tr><td colspan="3">Carregando gestão...</td></tr>`;
 
-                // Lista de 11 cargos dividida em duas
                 const cargosGestao_Parte1 = [
                     "diretor", "super-admin", "tesoureiro", "conselheiro", 
-                    "bibliotecario", "produtor-evento" // 6 itens
+                    "bibliotecario", "produtor-evento"
                 ];
                 const cargosGestao_Parte2 = [
                     "irradiador", "recepcionista", "entrevistador",
-                    "dirigente-escola", "secretario-escola" // 5 itens
+                    "dirigente-escola", "secretario-escola", "caritas" // Incluído cargo Cáritas
                 ];
                 
                 const colRef = collection(db, "voluntarios");
-                
-                // Cria as duas consultas
                 const q1 = query(colRef, where("role", "in", cargosGestao_Parte1));
                 const q2 = query(colRef, where("role", "in", cargosGestao_Parte2));
 
                 try {
-                    // Executa as duas consultas em paralelo
-                    const [snapshot1, snapshot2] = await Promise.all([
-                        getDocs(q1),
-                        getDocs(q2)
-                    ]);
-
-                    // Junta os resultados das duas consultas
+                    const [snapshot1, snapshot2] = await Promise.all([getDocs(q1), getDocs(q2)]);
                     const todosOsDocumentos = [...snapshot1.docs, ...snapshot2.docs];
 
                     tabelaDiretoria.innerHTML = '';
@@ -144,7 +134,6 @@
                         return;
                     }
                     
-                    // Ordena os resultados combinados pelo nome (no lado do cliente)
                     todosOsDocumentos.sort((a,b) => a.data().nome.localeCompare(b.data().nome)).forEach(doc => {
                         const v = doc.data();
                         const tr = document.createElement('tr');
@@ -160,17 +149,11 @@
                 } catch (error) {
                     console.error("Erro ao carregar diretoria:", error);
                     tabelaDiretoria.innerHTML = '<tr><td colspan="3" style="color: red;">Erro ao carregar dados.</td></tr>';
-                    // Se o erro for de índice, o Firestore geralmente sugere o link no console
-                    if (error.code === 'failed-precondition') {
-                         console.error("ERRO: O Firestore está exigindo um índice. Por favor, crie o índice que ele sugere no link de erro no console.");
-                    }
                 }
             }
-            // ### FIM DO AJUSTE ###
 
-            // Funções de Log (sem alterações)
             function setupLogFilters() {
-                 const hoje = new Date();
+                const hoje = new Date();
                 document.getElementById('log-data-fim').value = hoje.toISOString().split('T')[0];
                 document.getElementById('log-data-inicio').value = hoje.toISOString().split('T')[0];
                 btnFiltrarLogs.addEventListener('click', carregarLogsDeAuditoria);
@@ -190,22 +173,35 @@
                 const dataInicio = new Date(dataInicioInput + 'T00:00:00');
                 const dataFim = new Date(dataFimInput + 'T23:59:59');
                 
+                // Qery unificada na coleção log_auditoria
                 const q = query(collection(db, "log_auditoria"), where("timestamp", ">=", Timestamp.fromDate(dataInicio)), where("timestamp", "<=", Timestamp.fromDate(dataFim)), orderBy("timestamp", "desc"));
+                
                 try {
                     const snapshot = await getDocs(q);
                     tabelaLogs.innerHTML = "";
                     if (snapshot.empty) { tabelaLogs.innerHTML = `<tr><td colspan="4">Nenhum registro para este período.</td></tr>`; return; }
+                    
                     snapshot.forEach(doc => {
                         const log = doc.data();
                         const data = log.timestamp ? log.timestamp.toDate().toLocaleString('pt-BR') : 'N/A';
-                        const autor = log.autor ? log.autor.nome : 'Desconhecido';
+                        
+                        // Fallback para capturar autor de diferentes módulos
+                        let autor = 'Desconhecido';
+                        if (log.autor && log.autor.nome) autor = log.autor.nome;
+                        else if (log.voluntarioNome) autor = log.voluntarioNome;
+                        else if (log.usuarioId) autor = `ID: ${log.usuarioId}`;
+
                         const acao = log.acao || 'N/A';
-                        const detalhes = log.detalhes ? JSON.stringify(log.detalhes, null, 2) : '{}';
+                        const detalhes = log.detalhes ? (typeof log.detalhes === 'object' ? JSON.stringify(log.detalhes, null, 2) : log.detalhes) : '{}';
+                        
                         const tr = document.createElement('tr');
                         tr.innerHTML = `<td>${data}</td><td>${autor}</td><td>${acao}</td><td><pre class="log-details">${detalhes}</pre></td>`;
                         tabelaLogs.appendChild(tr);
                     });
-                } catch (error) { console.error("Erro ao buscar logs:", error); tabelaLogs.innerHTML = `<tr><td colspan="4" style="color: red;">Erro ao carregar.</td></tr>`; }
+                } catch (error) { 
+                    console.error("Erro ao buscar logs:", error); 
+                    tabelaLogs.innerHTML = `<tr><td colspan="4" style="color: red;">Erro ao carregar.</td></tr>`; 
+                }
             }
         }
     </script>
