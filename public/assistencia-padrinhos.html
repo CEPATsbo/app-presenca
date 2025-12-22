@@ -6,30 +6,29 @@
     <title>Cáritas - Padrinhos</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <style>
-        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background-color: #f4f6f9; margin: 0; padding: 20px; display: flex; flex-direction: column; align-items: center; }
-        .nav-header { width: 100%; max-width: 1000px; display: flex; justify-content: space-between; margin-bottom: 20px; }
-        .btn-voltar { background-color: #6c757d; color: white; padding: 10px 15px; border-radius: 8px; text-decoration: none; font-weight: bold; }
-        .container { background: white; padding: 30px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); width: 100%; max-width: 1000px; box-sizing: border-box; }
-        h1 { color: #2c3e50; border-bottom: 2px solid #e67e22; padding-bottom: 10px; }
+        body { font-family: -apple-system, sans-serif; background-color: #f4f6f9; margin: 0; padding: 20px; display: flex; flex-direction: column; align-items: center; }
+        .container { background: white; padding: 30px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); width: 100%; max-width: 1000px; }
         .child-card { border: 1px solid #eee; padding: 15px; border-radius: 10px; margin-bottom: 15px; display: grid; grid-template-columns: 2fr 2fr auto; gap: 20px; align-items: center; }
+        .info-p { margin: 5px 0 0 0; color: #7f8c8d; font-size: 0.9em; }
         .padrinho-form { display: flex; gap: 10px; }
         .padrinho-form input { padding: 8px; border: 1px solid #ddd; border-radius: 6px; }
         .btn-vincular { background: #e67e22; color: white; border: none; padding: 10px; border-radius: 6px; cursor: pointer; font-weight: bold; }
         .padrinho-ativo { background: #f1f8e9; border-color: #8bc34a; }
+        .badge { background: #ef5350; color: white; padding: 2px 6px; border-radius: 4px; font-size: 0.75em; }
     </style>
 </head>
 <body>
-    <header class="nav-header">
-        <a href="/modulo-caritas.html" class="btn-voltar">⬅ Painel Cáritas</a>
-    </header>
+    <div style="width:100%; max-width:1000px; margin-bottom:20px;">
+        <a href="/modulo-caritas.html" style="text-decoration:none; color:#666;">⬅ Voltar</a>
+    </div>
     <main class="container">
-        <h1>Apadrinhamento (Até 13 anos)</h1>
-        <div id="lista-padrinhos"><p style="text-align:center;">Carregando...</p></div>
+        <h1>Apadrinhamento de Crianças</h1>
+        <div id="lista-padrinhos"></div>
     </main>
 
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
-        import { getFirestore, collection, onSnapshot, query, where, doc, updateDoc, serverTimestamp, addDoc, getDoc } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
+        import { getFirestore, collection, onSnapshot, query, where, doc, updateDoc, getDoc } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
         import { protegerPagina } from '/auth.js';
 
         const firebaseConfig = {
@@ -44,33 +43,35 @@
         const app = initializeApp(firebaseConfig);
         const db = getFirestore(app);
 
-        protegerPagina(['super-admin', 'diretor', 'tesoureiro', 'conselheiro', 'entrevistador', 'recepcionista', 'caritas'])
-            .then(user => {
-                onSnapshot(query(collection(db, "familiasAssistidas"), where("statusGeral", "==", "Ativa")), (snapshot) => {
+        protegerPagina(['super-admin', 'diretor', 'tesoureiro', 'caritas'])
+            .then(() => {
+                onSnapshot(query(collection(db, "familiasAssistidas"), where("statusGeral", "==", "Ativa")), (snap) => {
                     let html = '';
-                    snapshot.docs.forEach(docSnap => {
-                        const familia = docSnap.data();
-                        const familiaId = docSnap.id;
-                        if (!familia.filhos) return;
-
-                        familia.filhos.forEach((filho, idx) => {
-                            if (!filho.nascimento) return; // PROTEÇÃO CONTRA TELA BRANCA
+                    snap.docs.forEach(docSnap => {
+                        const fam = docSnap.data();
+                        const famId = docSnap.id;
+                        fam.filhos.forEach((filho, idx) => {
+                            if (!filho.nascimento) return;
                             const idade = calcularIdade(filho.nascimento);
                             if (idade <= 13) {
-                                const padrinho = filho.padrinho || { nome: '', tel: '' };
+                                const pad = filho.padrinho || { nome: '', tel: '' };
                                 html += `
-                                    <div class="child-card ${padrinho.nome ? 'padrinho-ativo' : ''}">
-                                        <div><b>${filho.nome}</b> (${idade} anos)<br><small>Família: ${familia.responsavel1.nome}</small></div>
-                                        <div class="padrinho-form">
-                                            <input type="text" id="p-nome-${familiaId}-${idx}" placeholder="Padrinho" value="${padrinho.nome}">
-                                            <input type="tel" id="p-tel-${familiaId}-${idx}" placeholder="Tel" value="${padrinho.tel}">
+                                    <div class="child-card ${pad.nome ? 'padrinho-ativo' : ''}">
+                                        <div>
+                                            <b>${filho.nome}</b> <span class="badge">${idade} anos</span>
+                                            <p class="info-p">Família: ${fam.responsavel1.nome}</p>
+                                            <p class="info-p"><b>Roupa:</b> ${filho.tamanho || 'N/A'} | <b>Calçado:</b> ${filho.calcado || 'N/A'}</p>
                                         </div>
-                                        <button class="btn-vincular" onclick="vincular('${familiaId}', ${idx})">Salvar</button>
+                                        <div class="padrinho-form">
+                                            <input type="text" id="p-nome-${famId}-${idx}" placeholder="Padrinho" value="${pad.nome}">
+                                            <input type="tel" id="p-tel-${famId}-${idx}" placeholder="Tel" value="${pad.tel}">
+                                        </div>
+                                        <button class="btn-vincular" onclick="vincular('${famId}', ${idx})">Salvar</button>
                                     </div>`;
                             }
                         });
                     });
-                    document.getElementById('lista-padrinhos').innerHTML = html || '<p>Nenhuma criança elegível.</p>';
+                    document.getElementById('lista-padrinhos').innerHTML = html || '<p>Nenhuma criança.</p>';
                 });
 
                 window.vincular = async (id, idx) => {
@@ -83,16 +84,15 @@
                         filhos[idx].padrinho = { nome, tel };
                         await updateDoc(ref, { filhos });
                         alert("Padrinho salvo!");
-                    } catch (e) { alert("Erro: " + e.message); }
+                    } catch (e) { alert(e.message); }
                 };
             });
 
-        function calcularIdade(data) {
-            const nasc = new Date(data);
-            const hoje = new Date();
-            let idade = hoje.getFullYear() - nasc.getFullYear();
-            if (hoje.getMonth() < nasc.getMonth() || (hoje.getMonth() === nasc.getMonth() && hoje.getDate() < nasc.getDate())) idade--;
-            return idade;
+        function calcularIdade(n) {
+            const nasc = new Date(n); const hoje = new Date();
+            let i = hoje.getFullYear() - nasc.getFullYear();
+            if (hoje.getMonth() < nasc.getMonth() || (hoje.getMonth() === nasc.getMonth() && hoje.getDate() < nasc.getDate())) i--;
+            return i;
         }
     </script>
 </body>

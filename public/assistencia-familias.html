@@ -6,135 +6,158 @@
     <title>Cáritas - Cadastro de Famílias</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <style>
-        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background-color: #f4f6f9; margin: 0; padding: 20px; display: flex; flex-direction: column; align-items: center; }
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background-color: #f4f6f9; margin: 0; padding: 20px; display: flex; flex-direction: column; align-items: center; }
         .nav-header { width: 100%; max-width: 1000px; display: flex; justify-content: space-between; margin-bottom: 20px; }
         .btn-voltar { background-color: #6c757d; color: white; padding: 10px 15px; border-radius: 8px; text-decoration: none; font-weight: bold; }
         .container { background: white; padding: 30px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); width: 100%; max-width: 1000px; box-sizing: border-box; }
         h1 { color: #2c3e50; margin-top: 0; border-bottom: 2px solid #e67e22; padding-bottom: 10px; }
-        
         .search-container { margin-bottom: 25px; display: flex; gap: 10px; }
         #search-input { flex-grow: 1; padding: 12px; border: 1px solid #ddd; border-radius: 8px; font-size: 1em; }
         .btn-novo { background-color: #e67e22; color: white; border: none; padding: 12px 20px; border-radius: 8px; cursor: pointer; font-weight: bold; }
-
-        .familia-card { border: 1px solid #eee; padding: 20px; border-radius: 10px; margin-bottom: 15px; display: flex; justify-content: space-between; align-items: center; transition: transform 0.2s; }
-        .familia-card:hover { transform: scale(1.01); box-shadow: 0 2px 8px rgba(0,0,0,0.05); }
-        .familia-info h3 { margin: 0 0 5px 0; color: #34495e; }
-        .familia-info p { margin: 0; color: #7f8c8d; font-size: 0.9em; }
-        
-        /* Modal Styles */
+        .familia-card { border: 1px solid #eee; padding: 20px; border-radius: 10px; margin-bottom: 15px; display: flex; justify-content: space-between; align-items: center; }
         .modal { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.6); display: none; justify-content: center; align-items: center; z-index: 1000; }
-        .modal.active { display: flex; }
         .modal-content { background: white; padding: 30px; border-radius: 12px; width: 90%; max-width: 700px; max-height: 90vh; overflow-y: auto; }
         .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; }
         .full-width { grid-column: 1 / -1; }
         .form-group { display: flex; flex-direction: column; gap: 5px; margin-bottom: 10px; }
         .form-group label { font-weight: bold; color: #555; }
         .form-group input, .form-group select { padding: 10px; border: 1px solid #ccc; border-radius: 6px; }
-        
         .filhos-section { margin-top: 20px; border-top: 1px dashed #ddd; padding-top: 15px; }
-        .filho-item { display: grid; grid-template-columns: 2fr 1fr 1fr auto; gap: 10px; margin-bottom: 10px; align-items: end; }
+        .filho-item { display: grid; grid-template-columns: 2fr 1fr 1fr 1fr auto; gap: 10px; margin-bottom: 10px; align-items: end; }
         .btn-remove-filho { color: #e74c3c; cursor: pointer; background: none; border: none; font-size: 1.2em; }
         .btn-add-filho { background: #3498db; color: white; border: none; padding: 8px 15px; border-radius: 6px; cursor: pointer; margin-top: 10px; }
-
-        .modal-footer { margin-top: 25px; display: flex; justify-content: flex-end; gap: 10px; }
-        .btn-save { background: #27ae60; color: white; border: none; padding: 12px 25px; border-radius: 8px; cursor: pointer; font-weight: bold; }
-        .btn-cancel { background: #ecf0f1; border: none; padding: 12px 25px; border-radius: 8px; cursor: pointer; }
-        
         .situacao-rua-toggle { display: flex; align-items: center; gap: 10px; background: #fff3e0; padding: 10px; border-radius: 8px; margin-bottom: 15px; border: 1px solid #ffe0b2; }
     </style>
 </head>
 <body>
     <header class="nav-header">
-        <a href="/dashboard.html" class="btn-voltar"><i class="fas fa-arrow-left"></i> Painel Principal</a>
+        <a href="/modulo-caritas.html" class="btn-voltar"><i class="fas fa-arrow-left"></i> Painel Cáritas</a>
     </header>
 
     <main class="container">
-        <h1><i class="fas fa-hands-helping"></i> Assistência Social - Famílias</h1>
-        
+        <h1><i class="fas fa-hands-helping"></i> Famílias Assistidas</h1>
         <div class="search-container">
-            <input type="text" id="search-input" placeholder="Buscar por nome do pai, mãe ou responsável...">
+            <input type="text" id="search-input" placeholder="Buscar por nome...">
             <button id="btn-abrir-modal" class="btn-novo">+ Nova Família</button>
         </div>
-
-        <div id="lista-familias">
-            <p style="text-align:center; color:#999;">Carregando famílias...</p>
-        </div>
+        <div id="lista-familias"></div>
     </main>
 
     <div id="modal-familia" class="modal">
         <div class="modal-content">
-            <h2 id="modal-titulo">Cadastrar Nova Família</h2>
+            <h2>Cadastrar Família</h2>
             <form id="form-familia">
                 <div class="form-grid">
                     <div class="form-group full-width">
-                        <label>Responsável 1 (Pai/Mãe/Tutor) *</label>
-                        <input type="text" id="resp1-nome" required placeholder="Nome completo">
+                        <label>Responsável 1 *</label>
+                        <input type="text" id="resp1-nome" required>
                     </div>
                     <div class="form-group">
-                        <label>Data Nascimento</label>
-                        <input type="date" id="resp1-nasc">
+                        <label>Telefone *</label>
+                        <input type="tel" id="familia-tel" required>
                     </div>
-                    <div class="form-group">
-                        <label>Parentesco</label>
-                        <select id="resp1-tipo">
-                            <option value="Mãe">Mãe</option>
-                            <option value="Pai">Pai</option>
-                            <option value="Avó/Avô">Avó/Avô</option>
-                            <option value="Tutor">Tutor(a)</option>
-                        </select>
-                    </div>
-
-                    <div class="form-group full-width" style="margin-top: 10px; border-top: 1px solid #eee; padding-top: 10px;">
-                        <label>Responsável 2 (Opcional)</label>
-                        <input type="text" id="resp2-nome" placeholder="Nome completo">
-                    </div>
-                    <div class="form-group">
-                        <label>Data Nascimento</label>
-                        <input type="date" id="resp2-nasc">
-                    </div>
-                    <div class="form-group">
-                        <label>Parentesco</label>
-                        <select id="resp2-tipo">
-                            <option value="">Nenhum</option>
-                            <option value="Pai">Pai</option>
-                            <option value="Mãe">Mãe</option>
-                            <option value="Outro">Outro</option>
-                        </select>
-                    </div>
-
-                    <div class="form-group full-width">
-                        <label>Telefone de Contato *</label>
-                        <input type="tel" id="familia-tel" required placeholder="(00) 00000-0000">
-                    </div>
-
                     <div class="full-width situacao-rua-toggle">
                         <input type="checkbox" id="situacao-rua-checkbox">
-                        <label for="situacao-rua-checkbox" style="color: #e67e22; margin: 0;">Esta família está em situação de rua</label>
+                        <label for="situacao-rua-checkbox">Família em situação de rua</label>
                     </div>
-
-                    <div id="endereco-section" class="full-width form-grid" style="grid-template-columns: 1fr 1fr;">
-                        <div class="form-group full-width">
-                            <label>Endereço Completo</label>
-                            <input type="text" id="familia-endereco" placeholder="Rua, Número, Bairro">
-                        </div>
+                    <div class="form-group full-width">
+                        <label>Endereço</label>
+                        <input type="text" id="familia-endereco">
                     </div>
                 </div>
 
                 <div class="filhos-section">
-                    <h3>Filhos / Dependentes</h3>
-                    <div id="lista-filhos-inputs">
-                        </div>
+                    <h3>Dependentes</h3>
+                    <div id="lista-filhos-inputs"></div>
                     <button type="button" id="btn-add-filho" class="btn-add-filho">+ Adicionar Filho(a)</button>
                 </div>
 
-                <div class="modal-footer">
-                    <button type="button" class="btn-cancel" id="btn-fechar-modal">Cancelar</button>
-                    <button type="submit" class="btn-save">Salvar Família</button>
+                <div style="margin-top:20px; text-align:right;">
+                    <button type="button" id="btn-fechar-modal" style="padding:10px;">Cancelar</button>
+                    <button type="submit" class="btn-novo">Salvar</button>
                 </div>
             </form>
         </div>
     </div>
 
-    <script type="module" src="js/assistencia-familias.js"></script>
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
+        import { getFirestore, collection, addDoc, onSnapshot, query, orderBy, serverTimestamp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
+        import { protegerPagina } from '/auth.js';
+
+        const firebaseConfig = {
+            apiKey: "AIzaSyBV7RPjk3cFTqL-aIpflJcUojKg1ZXMLuU",
+            authDomain: "voluntarios-ativos---cepat.firebaseapp.com",
+            projectId: "voluntarios-ativos---cepat",
+            storageBucket: "voluntarios-ativos---cepat.firebasestorage.app",
+            messagingSenderId: "66122858261",
+            appId: "1:66122858261:web:7fa21f1805463b5c08331c"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const db = getFirestore(app);
+
+        protegerPagina(['super-admin', 'diretor', 'tesoureiro', 'caritas'])
+            .then(user => inicializar(user));
+
+        function inicializar(user) {
+            const ui = {
+                modal: document.getElementById('modal-familia'),
+                form: document.getElementById('form-familia'),
+                btnNovo: document.getElementById('btn-abrir-modal'),
+                btnFechar: document.getElementById('btn-fechar-modal'),
+                btnAddFilho: document.getElementById('btn-add-filho'),
+                listaFilhos: document.getElementById('lista-filhos-inputs'),
+                checkRua: document.getElementById('situacao-rua-checkbox'),
+                inputEndereco: document.getElementById('familia-endereco'),
+                lista: document.getElementById('lista-familias')
+            };
+
+            ui.btnNovo.onclick = () => { ui.form.reset(); ui.listaFilhos.innerHTML = ''; ui.modal.style.display = 'flex'; };
+            ui.btnFechar.onclick = () => ui.modal.style.display = 'none';
+
+            ui.btnAddFilho.onclick = () => {
+                const div = document.createElement('div');
+                div.className = 'filho-item';
+                div.innerHTML = `
+                    <input type="text" placeholder="Nome" class="f-nome" required>
+                    <input type="date" class="f-nasc" required>
+                    <input type="text" placeholder="Roupa" class="f-roupa">
+                    <input type="text" placeholder="Calçado" class="f-calcado">
+                    <button type="button" class="btn-remove-filho">×</button>
+                `;
+                div.querySelector('.btn-remove-filho').onclick = () => div.remove();
+                ui.listaFilhos.appendChild(div);
+            };
+
+            ui.form.onsubmit = async (e) => {
+                e.preventDefault();
+                const filhos = Array.from(document.querySelectorAll('.filho-item')).map(item => ({
+                    nome: item.querySelector('.f-nome').value,
+                    nascimento: item.querySelector('.f-nasc').value,
+                    tamanho: item.querySelector('.f-roupa').value,
+                    calcado: item.querySelector('.f-calcado').value // SALVANDO CALÇADO
+                }));
+
+                const novaFamilia = {
+                    responsavel1: { nome: document.getElementById('resp1-nome').value },
+                    contato: { telefone: document.getElementById('familia-tel').value, endereco: ui.inputEndereco.value, emSituacaoDeRua: ui.checkRua.checked },
+                    filhos: filhos,
+                    statusGeral: 'Ativa',
+                    cadastradoEm: serverTimestamp()
+                };
+
+                try {
+                    await addDoc(collection(db, "familiasAssistidas"), novaFamilia);
+                    alert("Sucesso!");
+                    ui.modal.style.display = 'none';
+                } catch (err) { alert(err.message); }
+            };
+
+            onSnapshot(query(collection(db, "familiasAssistidas"), orderBy("cadastradoEm", "desc")), (snap) => {
+                ui.lista.innerHTML = snap.docs.map(doc => `<div class="familia-card"><b>${doc.data().responsavel1.nome}</b></div>`).join('');
+            });
+        }
+    </script>
 </body>
 </html>
