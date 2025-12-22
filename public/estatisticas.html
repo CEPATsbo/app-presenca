@@ -27,6 +27,14 @@
         #descricao-filtros { text-align: center; color: #555; font-style: italic; margin-bottom: 20px; min-height: 1.2em; }
         .feedback-grafico { text-align: center; padding: 20px; font-style: italic; color: #666; }
         .btn-link-ae { background-color: #007bff; color: white; border-color: #007bff; text-align: center; }
+
+        /* Estilos incluídos para as Métricas Sociais - Cáritas */
+        .metricas-social-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; margin-bottom: 25px; margin-top: 15px; }
+        .metrica-social-box { background: #fff; padding: 20px; border-radius: 10px; border-top: 5px solid #e67e22; text-align: center; box-shadow: 0 2px 5px rgba(0,0,0,0.05); }
+        .metrica-social-box h4 { margin: 0; color: #7f8c8d; font-size: 0.8em; text-transform: uppercase; }
+        .metrica-social-box p { margin: 10px 0 0 0; font-size: 2em; font-weight: bold; color: #2c3e50; }
+        .caritas-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+        @media (max-width: 768px) { .caritas-grid { grid-template-columns: 1fr; } }
     </style>
 </head>
 <body>
@@ -39,12 +47,32 @@
     </div>
 
     <div id="main-content" class="dashboard-container" style="display: none;">
-        <div class="header"><h1>Dashboard de Estatísticas</h1></div>
+        <div class="header"><h1>Dashboard de Estatísticas Integrado</h1></div>
         
         <div class="chart-card" style="text-align: center;">
             <h2>Estatísticas da Assistência Espiritual</h2>
             <p>Clique no botão abaixo para acessar o painel detalhado com os dados de atendimentos, altas e desistências da Assistência Espiritual.</p>
             <a href="/estatisticas-ae.html" class="btn-link-ae">Acessar Painel da Assistência Espiritual</a>
+        </div>
+
+        <div class="chart-card">
+            <h2 style="text-align: center;">Indicadores da Assistência Social (Cáritas)</h2>
+            <div class="metricas-social-row">
+                <div class="metrica-social-box"><h4>Famílias Ativas</h4><p id="total-familias">--</p></div>
+                <div class="metrica-social-box"><h4>Total Dependentes</h4><p id="total-filhos">--</p></div>
+                <div class="metrica-social-box"><h4>Cestas Entregues</h4><p id="total-cestas">--</p></div>
+                <div class="metrica-social-box"><h4>Padrinhos Ativos</h4><p id="total-padrinhos">--</p></div>
+            </div>
+            <div class="caritas-grid">
+                <div>
+                    <h3 style="text-align: center;">Faixa Etária dos Dependentes</h3>
+                    <canvas id="grafico-idades-social"></canvas>
+                </div>
+                <div>
+                    <h3 style="text-align: center;">Evolução de Entrega de Cestas</h3>
+                    <canvas id="grafico-cestas-social"></canvas>
+                </div>
+            </div>
         </div>
         
         <div class="chart-card">
@@ -84,7 +112,6 @@
     </div>
 
     <script type="module">
-        // Seu script original permanece aqui, sem nenhuma alteração
         import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
         import { getFirestore, collection, getDocs, query, orderBy, where, documentId, Timestamp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
         import { protegerPagina } from '/auth.js';
@@ -98,7 +125,8 @@
             appId: "1:66122858261:web:7fa21f1805463b5c08331c"
         };
         
-        initializeApp(firebaseConfig);
+        const app = initializeApp(firebaseConfig);
+        const db = getFirestore(app);
 
         protegerPagina(['super-admin', 'diretor', 'tesoureiro', 'conselheiro', 'entrevistador', 'recepcionista', 'irradiador', 'secretario-escola', 'dirigente-escola', 'produtor-evento', 'bibliotecario'])
             .then(user => {
@@ -113,8 +141,6 @@
             });
 
         function inicializar() {
-            const db = getFirestore();
-
             // Lógica para os gráficos existentes (Presença)
             let todosOsDados = [];
             let todasAsAtividades = new Map();
@@ -270,7 +296,8 @@
                     
                     aplicarFiltrosPresenca();
                     carregarGraficoFinanceiro();
-                    carregarGraficoVibracoes(); // Chama a nova função
+                    carregarGraficoVibracoes();
+                    carregarDadosCaritas(); // Chamada para a nova função
                 } catch (error) {
                     console.error("Erro ao inicializar:", error);
                     ui.loadingMessage.textContent = "Erro ao carregar dados. Verifique o console.";
@@ -311,14 +338,10 @@
                         Object.values(dados.receitas || {}).flat().forEach(item => totalReceitas += item.valor || 0);
                         Object.values(dados.despesas || {}).flat().forEach(item => totalDespesas += item.valor || 0);
                         
-                        dadosMensais[mesAno] = {
-                            receitas: totalReceitas,
-                            despesas: totalDespesas
-                        };
+                        dadosMensais[mesAno] = { receitas: totalReceitas, despesas: totalDespesas };
                     });
                     
                     const mesesOrdenados = Object.keys(dadosMensais).sort();
-                    
                     const labels = mesesOrdenados.map(mes => {
                         const [ano, mesNum] = mes.split('-');
                         return `${mesNum}/${ano.slice(2)}`;
@@ -331,22 +354,8 @@
                         data: {
                             labels: labels,
                             datasets: [
-                                {
-                                    label: 'Receitas',
-                                    data: dadosReceitas,
-                                    borderColor: 'rgba(75, 192, 192, 1)',
-                                    backgroundColor: 'rgba(75, 192, 192, 0.2)',
-                                    fill: true,
-                                    tension: 0.1
-                                },
-                                {
-                                    label: 'Despesas',
-                                    data: dadosDespesas,
-                                    borderColor: 'rgba(255, 99, 132, 1)',
-                                    backgroundColor: 'rgba(255, 99, 132, 0.2)',
-                                    fill: true,
-                                    tension: 0.1
-                                }
+                                { label: 'Receitas', data: dadosReceitas, borderColor: 'rgba(75, 192, 192, 1)', backgroundColor: 'rgba(75, 192, 192, 0.2)', fill: true, tension: 0.1 },
+                                { label: 'Despesas', data: dadosDespesas, borderColor: 'rgba(255, 99, 132, 1)', backgroundColor: 'rgba(255, 99, 132, 0.2)', fill: true, tension: 0.1 }
                             ]
                         },
                         options: { scales: { y: { beginAtZero: true, ticks: { callback: function(value) { return 'R$ ' + value.toLocaleString('pt-BR'); } } } } }
@@ -358,9 +367,6 @@
                 }
             }
 
-            // ===================================================================
-            // NOVA FUNÇÃO PARA O GRÁFICO DE VIBRAÇÕES
-            // ===================================================================
             async function carregarGraficoVibracoes() {
                 const feedbackDiv = document.getElementById('vibracoes-feedback');
                 const canvas = document.getElementById('grafico-vibracoes');
@@ -397,7 +403,6 @@
                     });
                     
                     const semanasOrdenadas = Object.keys(dadosSemanais).sort();
-                    
                     const labels = semanasOrdenadas.map(semana => {
                         const [ano, mes, dia] = semana.split('-');
                         return `${dia}/${mes}`;
@@ -410,32 +415,71 @@
                         data: {
                             labels: labels,
                             datasets: [
-                                {
-                                    label: 'Encarnados',
-                                    data: dadosEncarnados,
-                                    backgroundColor: 'rgba(75, 192, 192, 0.7)', // VERDE
-                                    borderColor: 'rgba(75, 192, 192, 1)',
-                                    borderWidth: 1
-                                },
-                                {
-                                    label: 'Desencarnados',
-                                    data: dadosDesencarnados,
-                                    backgroundColor: 'rgba(54, 162, 235, 0.7)', // AZUL
-                                    borderColor: 'rgba(54, 162, 235, 1)',
-                                    borderWidth: 1
-                                }
+                                { label: 'Encarnados', data: dadosEncarnados, backgroundColor: 'rgba(75, 192, 192, 0.7)', borderColor: 'rgba(75, 192, 192, 1)', borderWidth: 1 },
+                                { label: 'Desencarnados', data: dadosDesencarnados, backgroundColor: 'rgba(54, 162, 235, 0.7)', borderColor: 'rgba(54, 162, 235, 1)', borderWidth: 1 }
                             ]
                         },
-                        options: {
-                            scales: {
-                                y: { beginAtZero: true, ticks: { stepSize: 5 } } // Ajusta o eixo Y
-                            }
-                        }
+                        options: { scales: { y: { beginAtZero: true, ticks: { stepSize: 5 } } } }
                     });
                 } catch (error) {
                     console.error("Erro ao gerar gráfico de vibrações:", error);
                     feedbackDiv.textContent = "Erro ao carregar dados de vibrações.";
                     feedbackDiv.style.color = 'red';
+                }
+            }
+
+            // --- NOVA FUNÇÃO: CARREGAR DADOS CÁRITAS ---
+            async function carregarDadosCaritas() {
+                try {
+                    const [famSnap, cestaSnap] = await Promise.all([
+                        getDocs(query(collection(db, "familiasAssistidas"), where("statusGeral", "==", "Ativa"))),
+                        getDocs(collection(db, "entregasCestas"))
+                    ]);
+                    
+                    let totalFilhos = 0;
+                    let totalPadrinhos = 0;
+                    let idades = { "0-3 anos": 0, "4-7 anos": 0, "8-13 anos": 0, "14+ anos": 0 };
+
+                    famSnap.forEach(doc => {
+                        const f = doc.data();
+                        (f.filhos || []).forEach(filho => {
+                            totalFilhos++;
+                            if (filho.padrinho?.nome) totalPadrinhos++;
+                            
+                            const nasc = new Date(filho.nascimento);
+                            const hoje = new Date();
+                            let idade = hoje.getFullYear() - nasc.getFullYear();
+                            if (hoje.getMonth() < nasc.getMonth() || (hoje.getMonth() === nasc.getMonth() && hoje.getDate() < nasc.getDate())) idade--;
+                            
+                            if (idade <= 3) idades["0-3 anos"]++;
+                            else if (idade <= 7) idades["4-7 anos"]++;
+                            else if (idade <= 13) idades["8-13 anos"]++;
+                            else idades["14+ anos"]++;
+                        });
+                    });
+
+                    document.getElementById('total-familias').textContent = famSnap.size;
+                    document.getElementById('total-filhos').textContent = totalFilhos;
+                    document.getElementById('total-cestas').textContent = cestaSnap.size;
+                    document.getElementById('total-padrinhos').textContent = totalPadrinhos;
+
+                    new Chart(document.getElementById('grafico-idades-social'), {
+                        type: 'pie',
+                        data: { labels: Object.keys(idades), datasets: [{ data: Object.values(idades), backgroundColor: ['#e67e22', '#3498db', '#27ae60', '#9b59b6'] }] }
+                    });
+
+                    const contagemMensal = new Array(12).fill(0);
+                    cestaSnap.forEach(doc => {
+                        const d = doc.data().dataEntrega?.toDate();
+                        if (d) contagemMensal[d.getMonth()]++;
+                    });
+
+                    new Chart(document.getElementById('grafico-cestas-social'), {
+                        type: 'bar',
+                        data: { labels: ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'], datasets: [{ label: 'Cestas', data: contagemMensal, backgroundColor: '#e67e22' }] }
+                    });
+                } catch (error) {
+                    console.error("Erro ao carregar dados Cáritas:", error);
                 }
             }
             
