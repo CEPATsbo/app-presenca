@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cáritas - Etiquetas de Natal</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <style>
+        /* --- Estilos para visualização em TELA --- */
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background-color: #f4f6f9; margin: 0; padding: 20px; }
+        
+        /* Barra superior que não sai na impressão */
+        .no-print { max-width: 210mm; margin: 0 auto 20px auto; display: flex; justify-content: space-between; align-items: center; background: white; padding: 15px 20px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+        .btn-acao { padding: 10px 20px; border-radius: 6px; border: none; cursor: pointer; font-weight: bold; color: white; text-decoration: none; font-size: 0.9em; display: flex; align-items: center; gap: 8px; }
+        .btn-imprimir { background-color: #27ae60; transition: background 0.2s; }
+        .btn-imprimir:hover { background-color: #219653; }
+        .btn-voltar { background-color: #6c757d; transition: background 0.2s; }
+        .btn-voltar:hover { background-color: #5a6268; }
+
+        /* Simulação da Folha A4 na tela */
+        .folha-a4 { background: white; width: 210mm; min-height: 297mm; padding: 10mm; margin: 0 auto; box-sizing: border-box; display: grid; grid-template-columns: 1fr 1fr; gap: 10mm; box-shadow: 0 4px 15px rgba(0,0,0,0.05); }
+        
+        /* Card da Etiqueta Individual */
+        .etiqueta-card { border: 2px dashed #e67e22; padding: 15px; border-radius: 8px; position: relative; display: flex; flex-direction: column; gap: 6px; background: white; height: fit-content; page-break-inside: avoid; }
+        
+        /* Cabeçalho da Etiqueta */
+        .etiqueta-header { border-bottom: 2px solid #f0f0f0; padding-bottom: 8px; margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center; }
+        .etiqueta-header img { height: 35px; }
+        .etiqueta-header span { font-size: 0.8em; font-weight: 800; color: #e67e22; letter-spacing: 0.5px; }
+
+        /* Informações Principais */
+        .info-crianca { font-size: 1.2em; font-weight: 900; color: #2c3e50; margin-bottom: 5px; }
+        .info-detalhe { font-size: 0.95em; color: #555; line-height: 1.4; }
+        .info-detalhe b { color: #333; }
+        
+        /* Box do Padrinho */
+        .padrinho-box { margin-top: 12px; background: #fff8f0; border: 1px solid #ffe0b2; padding: 10px; border-radius: 6px; font-size: 0.9em; }
+        .padrinho-box b { color: #d35400; font-size: 1.1em; }
+        .padrinho-box small { display: block; margin-top: 4px; color: #7f8c8d; }
+
+        /* Mensagens de Estado (Carregando/Vazio/Erro) */
+        .estado-mensaje { grid-column: 1 / -1; text-align: center; padding: 50px; color: #7f8c8d; font-size: 1.2em; font-style: italic; }
+        .erro-mensaje { color: #e74c3c; }
+
+        /* --- Configuração Específica para IMPRESSÃO (Ctrl+P) --- */
+        @media print {
+            body { background: white; padding: 0; margin: 0; }
+            .no-print { display: none !important; } /* Esconde botões */
+            .folha-a4 { width: 100%; min-height: auto; padding: 5mm; margin: 0; gap: 5mm; box-shadow: none; }
+            .etiqueta-card { border: 1px solid #999; /* Borda mais fina e cinza para economizar tinta */ box-shadow: none; }
+            .padrinho-box { background: none !important; border-color: #ccc !important; } /* Remove fundo colorido na impressão */
+        }
+    </style>
+</head>
+<body>
+
+    <div class="no-print">
+        <a href="/modulo-caritas.html" class="btn-acao btn-voltar"><i class="fas fa-arrow-left"></i> Voltar ao Painel</a>
+        <div style="text-align: center;">
+            <h2 style="margin: 0; color: #2c3e50; font-size: 1.5em;">Etiquetas de Natal 2025</h2>
+            <small style="color: #666;">Layout configurado para papel A4 (2 colunas)</small>
+        </div>
+        <button onclick="window.print()" class="btn-acao btn-imprimir"><i class="fas fa-print"></i> Imprimir Agora</button>
+    </div>
+
+    <div id="container-etiquetas" class="folha-a4">
+        <p class="estado-mensaje"><i class="fas fa-spinner fa-spin"></i> Carregando dados das crianças elegíveis...</p>
+    </div>
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
+        import { getFirestore, collection, getDocs, query, where, orderBy } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
+        import { protegerPagina } from '/auth.js';
+
+        const firebaseConfig = {
+            apiKey: "AIzaSyBV7RPjk3cFTqL-aIpflJcUojKg1ZXMLuU",
+            authDomain: "voluntarios-ativos---cepat.firebaseapp.com",
+            projectId: "voluntarios-ativos---cepat",
+            storageBucket: "voluntarios-ativos---cepat.firebasestorage.app",
+            messagingSenderId: "66122858261",
+            appId: "1:66122858261:web:7fa21f1805463b5c08331c"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const db = getFirestore(app);
+
+        // Proteção da Página: Apenas cargos autorizados podem acessar
+        protegerPagina(['super-admin', 'diretor', 'tesoureiro', 'caritas'])
+            .then(() => carregarEtiquetas())
+            .catch(() => window.location.href = '/dashboard.html');
+
+        async function carregarEtiquetas() {
+            const container = document.getElementById('container-etiquetas');
+            
+            try {
+                console.log("Iniciando busca de etiquetas...");
+                // Busca apenas famílias ativas, ordenadas pelo nome do responsável para facilitar a logística
+                const q = query(collection(db, "familiasAssistidas"), where("statusGeral", "==", "Ativa"), orderBy("responsavel1.nome"));
+                const snapshot = await getDocs(q);
+                
+                let htmlGeral = '';
+                let contadorCrianças = 0;
+
+                if (snapshot.empty) {
+                    container.innerHTML = '<p class="estado-mensaje">Nenhuma família ativa encontrada no sistema.</p>';
+                    return;
+                }
+
+                snapshot.forEach(docSnap => {
+                    const familia = docSnap.data();
+                    // Garante que o array de filhos exista, mesmo que vazio
+                    const filhos = familia.filhos || [];
+
+                    filhos.forEach(filho => {
+                        // Proteção contra dados faltantes (Evita tela branca)
+                        if (!filho || !filho.nascimento) return;
+
+                        const idade = calcularIdade(filho.nascimento);
+                        
+                        // Critério da Campanha: Crianças até 13 anos
+                        if (idade <= 13) {
+                            contadorCrianças++;
+                            
+                            // Dados seguros com valores padrão caso algo esteja em branco no banco
+                            // O .toUpperCase() agora é seguro pois garantimos que existe uma string antes
+                            const nomeCriancaStr = filho.nome ? filho.nome.toUpperCase() : 'NOME NÃO INFORMADO';
+                            const tamanhoRoupa = filho.tamanho || '---';
+                            const tamanhoCalcado = filho.calcado || '---';
+                            const nomeResponsavel = familia.responsavel1?.nome || 'Responsável não identificado';
+                            const nomePadrinho = filho.padrinho?.nome || '____________________';
+                            const telPadrinho = filho.padrinho?.tel || '(  ) _____-____';
+
+                            htmlGeral += `
+                                <div class="etiqueta-card">
+                                    <div class="etiqueta-header">
+                                        <img src="/logo-cepat.png" alt="CEPAT" onerror="this.style.display='none'">
+                                        <span>NATAL SOLIDÁRIO 2025</span>
+                                    </div>
+                                    
+                                    <div class="info-crianca">${nomeCriancaStr}</div>
+                                    
+                                    <div class="info-detalhe">
+                                        <b>Idade:</b> ${idade} anos | <b>Roupa:</b> ${tamanhoRoupa}
+                                    </div>
+                                    
+                                    <div class="info-detalhe">
+                                        <b>Calçado:</b> ${tamanhoCalcado}
+                                    </div>
+                                    
+                                    <div class="info-detalhe" style="margin-top: 5px;">
+                                        <b>Família/Resp.:</b> ${nomeResponsavel}
+                                    </div>
+
+                                    <div class="padrinho-box">
+                                        <div>PADRINHO/MADRINHA:</div>
+                                        <b>${nomePadrinho}</b>
+                                        <small>Telefone: ${telPadrinho}</small>
+                                    </div>
+                                </div>
+                            `;
+                        }
+                    });
+                });
+
+                // Atualiza a tela com o resultado
+                if (contadorCrianças === 0) {
+                    container.innerHTML = '<p class="estado-mensaje">Nenhuma criança elegível (até 13 anos) encontrada nas famílias ativas.</p>';
+                } else {
+                    container.innerHTML = htmlGeral;
+                }
+
+            } catch (error) {
+                // Em caso de erro grave (ex: falha de rede, permissão), mostra mensagem vermelha
+                console.error("Erro fatal ao carregar etiquetas:", error);
+                container.innerHTML = `<p class="estado-mensaje erro-mensaje"><i class="fas fa-exclamation-triangle"></i> Erro ao carregar dados: ${error.message}</p>`;
+            }
+        }
+
+        // Função auxiliar para calcular idade
+        function calcularIdade(dataNascimento) {
+            if (!dataNascimento) return 0;
+            const hoje = new Date();
+            const nasc = new Date(dataNascimento);
+            // Verifica se a data é válida
+            if (isNaN(nasc.getTime())) return 0;
+            
+            let idade = hoje.getFullYear() - nasc.getFullYear();
+            const m = hoje.getMonth() - nasc.getMonth();
+            if (m < 0 || (m === 0 && hoje.getDate() < nasc.getDate())) {
+                idade--;
+            }
+            return idade;
+        }
+    </script>
+</body>
+</html>
