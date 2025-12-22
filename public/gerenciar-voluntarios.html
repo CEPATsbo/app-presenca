@@ -138,8 +138,9 @@
             const gerarCracha = httpsCallable(functions, 'gerarCracha');
             const backfillNomesCracha = httpsCallable(functions, 'backfillNomesCracha');
 
-            // ### AJUSTE 1 DE 2: Adicionadas funções de Diretor e Tesoureiro ###
             const funcoesCargos = {
+                'promoverParaCaritas': httpsCallable(functions, 'promoverParaCaritas'),
+                'revogarAcessoCaritas': httpsCallable(functions, 'revogarAcessoCaritas'),
                 'promoverParaDiretor': httpsCallable(functions, 'promoverParaDiretor'),
                 'revogarAcessoDiretor': httpsCallable(functions, 'revogarAcessoDiretor'),
                 'promoverParaTesoureiro': httpsCallable(functions, 'promoverParaTesoureiro'),
@@ -228,28 +229,32 @@
                         const v = docSnapshot.data();
                         const id = docSnapshot.id;
                         let statusClasse = 'status-pendente';
-                        if (v.statusVoluntario === 'inativo') { statusClasse = 'status-inativo'; } 
+                        if (v.statusVoluntario === 'inactive') { statusClasse = 'status-inativo'; } 
                         else if (v.tasvAssinadoAno === anoVigente) { statusClasse = 'status-ativo'; }
                         
                         const li = document.createElement('li');
                         li.className = `item-voluntario ${statusClasse}`;
                         
-                        // ### AJUSTE 2 DE 2: Lógica de botões ATUALIZADA ###
                         let botoesPromocao = '';
-                        // Só o super-admin pode ver botões de promoção
-                        // E não pode gerenciar a si mesmo ou outros super-admins
                         if (userRole === 'super-admin' && v.authUid && v.role !== 'super-admin' && v.authUid !== user.uid) { 
                             const cargoAtual = v.role || 'voluntario';
                             const authUid = v.authUid;
                             const nome = v.nome;
 
-                            // --- CARGOS GLOBAIS (NOVOS AQUI) ---
+                            // Módulo Cáritas
+                            if (cargoAtual === 'caritas') {
+                                botoesPromocao += `<button data-auth-uid="${authUid}" data-nome="${nome}" class="btn-revogar btn-revogar-caritas">Revogar Cáritas</button>`;
+                            } else {
+                                botoesPromocao += `<button data-auth-uid="${authUid}" data-nome="${nome}" class="btn-promover btn-promover-caritas">Promover a Cáritas</button>`;
+                            }
+
                             // Diretor
                             if (cargoAtual === 'diretor') {
                                 botoesPromocao += `<button data-auth-uid="${authUid}" data-nome="${nome}" class="btn-revogar btn-revogar-diretor">Revogar Diretor</button>`;
                             } else {
                                 botoesPromocao += `<button data-auth-uid="${authUid}" data-nome="${nome}" class="btn-promover btn-promover-diretor">Promover a Diretor</button>`;
                             }
+                            
                             // Tesoureiro
                             if (cargoAtual === 'tesoureiro') {
                                 botoesPromocao += `<button data-auth-uid="${authUid}" data-nome="${nome}" class="btn-revogar btn-revogar-tesoureiro">Revogar Tesoureiro</button>`;
@@ -257,7 +262,6 @@
                                 botoesPromocao += `<button data-auth-uid="${authUid}" data-nome="${nome}" class="btn-promover btn-promover-tesoureiro">Promover a Tesoureiro</button>`;
                             }
                             
-                            // --- OUTROS CARGOS (JÁ EXISTENTES) ---
                             // Conselheiro
                             if (cargoAtual === 'conselheiro') {
                                 botoesPromocao += `<button data-auth-uid="${authUid}" data-nome="${nome}" class="btn-revogar btn-revogar-conselheiro">Revogar Conselheiro</button>`;
@@ -316,7 +320,6 @@
                                 botoesPromocao += `<button data-auth-uid="${authUid}" data-nome="${nome}" class="btn-promover btn-promover-secretario-escola">Promover a Secretário(a)</button>`;
                             }
                         }
-                        // ### FIM DO AJUSTE 2 ###
                         
                         let botaoCracha = '';
                         if (v.codigoVoluntario && v.nomeParaCracha) {
@@ -391,27 +394,17 @@
                     if (target.classList.contains('btn-gerar-cracha')) {
                         target.disabled = true;
                         ui.loader.style.display = 'flex';
-                        
                         const codigo = target.dataset.codigo;
                         const nomeCracha = target.dataset.nomeCracha;
-
                         try {
                             const result = await gerarCracha({ codigoVoluntario: codigo, nomeParaCracha: nomeCracha });
-                            
                             if (result.data.success) {
-                                const imageBase64 = result.data.imageBase64;
-                                const imageUrl = `data:image/png;base64,${imageBase64}`;
-                                
                                 const link = document.createElement('a');
-                                link.href = imageUrl;
-                                
-                                const nomeArquivo = `cracha_${nomeCracha.replace(/ /g, '_')}_${codigo}.png`;
-                                link.download = nomeArquivo;
-
+                                link.href = `data:image/png;base64,${result.data.imageBase64}`;
+                                link.download = `cracha_${nomeCracha.replace(/ /g, '_')}_${codigo}.png`;
                                 document.body.appendChild(link);
                                 link.click();
                                 document.body.removeChild(link);
-
                             } else {
                                 alert('A função retornou um erro ao gerar o crachá.');
                             }
@@ -447,7 +440,7 @@
                                 await deleteDoc(docRef);
                             }
                         } else if (target.classList.contains('btn-toggle')) {
-                            const novoStatus = target.dataset.status === 'ativo' ? 'inativo' : 'ativo';
+                            const novoStatus = target.dataset.status === 'ativo' ? 'inactive' : 'ativo';
                             await updateDoc(docRef, { statusVoluntario: novoStatus });
                             await registrarLog("ALTEROU_STATUS_VOLUNTARIO", { voluntarioId: docId, novoStatus: novoStatus });
                         }
@@ -460,8 +453,11 @@
                         let logAction = '';
                         let isRevoke = false;
 
-                        // ### AJUSTE: Adiciona Diretor e Tesoureiro ###
-                        if (target.classList.contains('btn-promover-diretor')) {
+                        if (target.classList.contains('btn-promover-caritas')) {
+                            functionName = 'promoverParaCaritas'; roleName = 'Cáritas'; logAction = 'PROMOVEU_CARITAS';
+                        } else if (target.classList.contains('btn-revogar-caritas')) {
+                            functionName = 'revogarAcessoCaritas'; roleName = 'Cáritas'; logAction = 'REVOGOU_CARITAS'; isRevoke = true;
+                        } else if (target.classList.contains('btn-promover-diretor')) {
                             functionName = 'promoverParaDiretor'; roleName = 'Diretor(a)'; logAction = 'PROMOVEU_DIRETOR';
                         } else if (target.classList.contains('btn-revogar-diretor')) {
                             functionName = 'revogarAcessoDiretor'; roleName = 'Diretor(a)'; logAction = 'REVOGOU_DIRETOR'; isRevoke = true;
@@ -469,7 +465,6 @@
                             functionName = 'promoverParaTesoureiro'; roleName = 'Tesoureiro(a)'; logAction = 'PROMOVEU_TESOUREIRO';
                         } else if (target.classList.contains('btn-revogar-tesoureiro')) {
                             functionName = 'revogarAcessoTesoureiro'; roleName = 'Tesoureiro(a)'; logAction = 'REVOGOU_TESOUREIRO'; isRevoke = true;
-                        // ### FIM DO AJUSTE ###
                         } else if (target.classList.contains('btn-promover-conselheiro')) {
                             functionName = 'promoverParaConselheiro'; roleName = 'Conselheiro'; logAction = 'PROMOVEU_CONSELHEIRO';
                         } else if (target.classList.contains('btn-revogar-conselheiro')) {
@@ -519,7 +514,6 @@
                                     console.error(`Erro ao ${acaoTexto}:`, error);
                                     alert(`Erro: ${error.message}`);
                                 }
-                                // O onSnapshot irá recarregar a lista
                             }
                         }
                     }
@@ -529,11 +523,10 @@
                     if (!currentEditingId) return;
                     const docRef = doc(db, 'voluntarios', currentEditingId);
                     const docSnap = await getDoc(docRef);
-                    const dadosAntigos = docSnap.data();
                     const dadosNovos = { nome: ui.editNome.value.trim(), endereco: ui.editEndereco.value.trim(), telefone: ui.editTelefone.value.trim(), aniversario: ui.editAniversario.value.trim() };
                     try {
                         await updateDoc(docRef, dadosNovos);
-                        await registrarLog("EDITOU_VOLUNTARIO", { voluntarioId: currentEditingId, dadosAntigos, dadosNovos });
+                        await registrarLog("EDITOU_VOLUNTARIO", { voluntarioId: currentEditingId, dadosAntigos: docSnap.data(), dadosNovos });
                         ui.editModal.style.display = 'none';
                         currentEditingId = null;
                     } catch (error) { console.error("Erro ao salvar:", error); }

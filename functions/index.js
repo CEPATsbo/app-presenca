@@ -340,6 +340,72 @@ exports.revogarAcessoSecretarioEscola = onCall(OPCOES_FUNCAO, async (request) =>
 });
 // ### FIM DO AJUSTE 2 ###
 
+// ===================================================================
+// ## MÓDULO CÁRITAS: Promover e Revogar Acesso ##
+// ===================================================================
+
+exports.promoverParaCaritas = onCall(OPCOES_FUNCAO, async (request) => {
+    if (!request.auth) throw new HttpsError('unauthenticated', 'Login necessário.');
+    
+    const { voluntarioUid, voluntarioDocId } = request.data;
+    const adminUid = request.auth.uid;
+
+    try {
+        // 1. Define o Custom Claim
+        await admin.auth().setCustomUserClaims(voluntarioUid, { caritas: true });
+
+        // 2. Atualiza o documento no Firestore
+        await db.collection('voluntarios').doc(voluntarioDocId).update({
+            role: 'caritas',
+            permissoes: admin.firestore.FieldValue.arrayUnion('assistencia_social')
+        });
+
+        // 3. Registra Log de Auditoria
+        await db.collection('logs_auditoria').add({
+            timestamp: admin.firestore.FieldValue.serverTimestamp(),
+            usuarioId: adminUid,
+            acao: "PROMOÇÃO_CARITAS",
+            detalhes: `Voluntário ${voluntarioDocId} promovido ao módulo Cáritas.`,
+            modulo: "ADMINISTRAÇÃO"
+        });
+
+        return { success: true, message: "Promovido a Cáritas com sucesso!" };
+    } catch (error) {
+        throw new HttpsError('internal', error.message);
+    }
+});
+
+exports.revogarAcessoCaritas = onCall(OPCOES_FUNCAO, async (request) => {
+    if (!request.auth) throw new HttpsError('unauthenticated', 'Login necessário.');
+    
+    const { voluntarioUid, voluntarioDocId } = request.data;
+    const adminUid = request.auth.uid;
+
+    try {
+        // 1. Remove o Custom Claim
+        await admin.auth().setCustomUserClaims(voluntarioUid, { caritas: false });
+
+        // 2. Volta o cargo para voluntário comum
+        await db.collection('voluntarios').doc(voluntarioDocId).update({
+            role: 'voluntario',
+            permissoes: admin.firestore.FieldValue.arrayRemove('assistencia_social')
+        });
+
+        // 3. Registra Log de Auditoria
+        await db.collection('logs_auditoria').add({
+            timestamp: admin.firestore.FieldValue.serverTimestamp(),
+            usuarioId: adminUid,
+            acao: "REVOGAÇÃO_CARITAS",
+            detalhes: `Acesso Cáritas removido do voluntário ${voluntarioDocId}.`,
+            modulo: "ADMINISTRAÇÃO"
+        });
+
+        return { success: true, message: "Acesso Cáritas revogado." };
+    } catch (error) {
+        throw new HttpsError('internal', error.message);
+    }
+});
+
 exports.registrarVotoConselho = onCall(OPCOES_FUNCAO, async (request) => {
     if (!request.auth) { throw new HttpsError('unauthenticated', 'A função deve ser chamada por um usuário autenticado.'); }
     const userRole = request.auth.token.role;
