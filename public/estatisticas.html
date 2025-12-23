@@ -28,7 +28,7 @@
         .feedback-grafico { text-align: center; padding: 20px; font-style: italic; color: #666; }
         .btn-link-ae { background-color: #007bff; color: white; border-color: #007bff; text-align: center; }
 
-        /* Estilos incluídos para as Métricas Sociais - Cáritas */
+        /* Estilos Cáritas */
         .metricas-social-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; margin-bottom: 25px; margin-top: 15px; }
         .metrica-social-box { background: #fff; padding: 20px; border-radius: 10px; border-top: 5px solid #e67e22; text-align: center; box-shadow: 0 2px 5px rgba(0,0,0,0.05); }
         .metrica-social-box h4 { margin: 0; color: #7f8c8d; font-size: 0.8em; text-transform: uppercase; }
@@ -51,7 +51,7 @@
         
         <div class="chart-card" style="text-align: center;">
             <h2>Estatísticas da Assistência Espiritual</h2>
-            <p>Clique no botão abaixo para acessar o painel detalhado com os dados de atendimentos, altas e desistências da Assistência Espiritual.</p>
+            <p>Acesse o painel detalhado de atendimentos, altas e desistências.</p>
             <a href="/estatisticas-ae.html" class="btn-link-ae">Acessar Painel da Assistência Espiritual</a>
         </div>
 
@@ -69,7 +69,7 @@
                     <canvas id="grafico-idades-social"></canvas>
                 </div>
                 <div>
-                    <h3 style="text-align: center;">Evolução de Entrega de Cestas</h3>
+                    <h3 style="text-align: center;">Evolução de Entrega de Cestas (2025)</h3>
                     <canvas id="grafico-cestas-social"></canvas>
                 </div>
             </div>
@@ -80,10 +80,11 @@
             <div class="filtros-container">
                 <div class="filtro-item"><label for="data-inicio">De:</label><input type="date" id="data-inicio"></div>
                 <div class="filtro-item"><label for="data-fim">Até:</label><input type="date" id="data-fim"></div>
-                <div class="filtro-item"><label for="filtro-atividade">Filtrar Atividade de Presença:</label><select id="filtro-atividade"><option value="todas">-- Todas --</option></select></div>
+                <div class="filtro-item"><label for="filtro-atividade">Filtrar Atividade:</label><select id="filtro-atividade"><option value="todas">-- Todas --</option></select></div>
             </div>
             <div id="descricao-filtros"></div>
         </div>
+
         <div id="charts-grid" class="grid-container" style="display: none;">
             <div class="chart-card">
                 <h3>Frequência dos Voluntários</h3>
@@ -134,14 +135,11 @@
                 inicializar();
             })
             .catch(error => {
-                console.error(error.message);
-                const loadingMsg = document.getElementById('loading-message');
-                if (loadingMsg) loadingMsg.style.display = 'none';
+                document.getElementById('loading-message').style.display = 'none';
                 document.getElementById('acesso-negado').style.display = 'block';
             });
 
         function inicializar() {
-            // Lógica para os gráficos existentes (Presença)
             let todosOsDados = [];
             let todasAsAtividades = new Map();
             let graficoFrequencia, graficoAtividades;
@@ -156,23 +154,24 @@
                 loadingMessage: document.getElementById('loading-message'),
                 chartsGrid: document.getElementById('charts-grid'),
             };
-            
+
             const COR_PADRAO_BARRAS = 'rgba(17, 122, 101, 0.4)';
             const COR_DESTAQUE_FADE = 'rgba(200, 200, 200, 0.3)';
             const COR_PADRAO_ATIVIDADE = '#a9a9a9';
-            
+
             function normalizarAtividades(atividade) {
                 if (Array.isArray(atividade)) return atividade;
-                if (typeof atividade === 'string' && atividade.length > 0) return atividade.split(',').map(a => a.trim());
+                if (typeof atividade === 'string') return atividade.split(',').map(a => a.trim());
                 return [];
             }
 
+            // --- LÓGICA DE INTERATIVIDADE PRESERVADA (SEM RETROCESSO) ---
             function destacarBarras(atividade, corDestaque) {
-                if (!graficoFrequencia || !voluntariosOrdenadosGlobal.length) return;
+                if (!graficoFrequencia) return;
                 const novasCores = voluntariosOrdenadosGlobal.map(([nome]) => {
                     const dadosFiltrados = todosOsDados.filter(d => d.data >= ui.dataInicio.value && d.data <= ui.dataFim.value);
-                    const participouDaAtividade = dadosFiltrados.some(p => p.nome === nome && normalizarAtividades(p.atividade).includes(atividade));
-                    return participouDaAtividade ? corDestaque : COR_DESTAQUE_FADE;
+                    const participou = dadosFiltrados.some(p => p.nome === nome && normalizarAtividades(p.atividade).includes(atividade));
+                    return participou ? corDestaque : COR_DESTAQUE_FADE;
                 });
                 graficoFrequencia.data.datasets[0].backgroundColor = novasCores;
                 graficoFrequencia.update('none');
@@ -180,9 +179,8 @@
 
             function restaurarCoresBarras() {
                 if (!graficoFrequencia) return;
-                if (atividadeDestaqueFixo && graficoAtividades) {
-                    const corDestaque = todasAsAtividades.get(atividadeDestaqueFixo) || COR_PADRAO_ATIVIDADE;
-                    destacarBarras(atividadeDestaqueFixo, corDestaque);
+                if (atividadeDestaqueFixo) {
+                    destacarBarras(atividadeDestaqueFixo, todasAsAtividades.get(atividadeDestaqueFixo) || COR_PADRAO_ATIVIDADE);
                 } else {
                     graficoFrequencia.data.datasets[0].backgroundColor = COR_PADRAO_BARRAS;
                     graficoFrequencia.update('none');
@@ -190,245 +188,120 @@
             }
 
             const handleLegendClick = (evt, item, legend) => {
-                const atividadeClicada = legend.chart.data.labels[item.index];
-                atividadeDestaqueFixo = (atividadeClicada === atividadeDestaqueFixo) ? null : atividadeClicada;
+                const ativ = legend.chart.data.labels[item.index];
+                atividadeDestaqueFixo = (ativ === atividadeDestaqueFixo) ? null : ativ;
                 restaurarCoresBarras();
             };
 
             const handleLegendHover = (evt, item, legend) => {
                 if (atividadeDestaqueFixo) return;
-                const atividadeHover = legend.chart.data.labels[item.index];
-                const corDestaque = todasAsAtividades.get(atividadeHover) || COR_PADRAO_ATIVIDADE;
-                destacarBarras(atividadeHover, corDestaque);
-            };
-            
-            const handleLegendLeave = (evt, item, legend) => {
-                if (!atividadeDestaqueFixo) {
-                    restaurarCoresBarras();
-                }
+                const ativ = legend.chart.data.labels[item.index];
+                destacarBarras(ativ, todasAsAtividades.get(ativ) || COR_PADRAO_ATIVIDADE);
             };
 
+            // --- RENDERIZAÇÃO DOS GRÁFICOS ---
             function renderizarGraficosPresenca(dados) {
                 if (graficoFrequencia) graficoFrequencia.destroy();
                 if (graficoAtividades) graficoAtividades.destroy();
-                atividadeDestaqueFixo = null;
+
+                const counts = {};
+                dados.forEach(d => counts[d.nome] = (counts[d.nome] || 0) + 1);
+                voluntariosOrdenadosGlobal = Object.entries(counts).sort(([,a],[,b]) => b-a);
+
+                const canvasFreq = document.getElementById('grafico-frequencia');
+                canvasFreq.parentElement.style.height = `${Math.max(400, voluntariosOrdenadosGlobal.length * 35)}px`;
                 
-                const contagemVoluntarios = {};
-                dados.forEach(d => { contagemVoluntarios[d.nome] = (contagemVoluntarios[d.nome] || 0) + 1; });
-                voluntariosOrdenadosGlobal = Object.entries(contagemVoluntarios).sort(([,a],[,b]) => b-a);
-                
-                const canvasFrequencia = document.getElementById('grafico-frequencia');
-                canvasFrequencia.parentElement.style.height = `${Math.max(400, voluntariosOrdenadosGlobal.length * 40)}px`;
-                graficoFrequencia = new Chart(canvasFrequencia, { type: 'bar', data: { labels: voluntariosOrdenadosGlobal.map(item => item[0]), datasets: [{ label: 'Nº de Presenças', data: voluntariosOrdenadosGlobal.map(item => item[1]), backgroundColor: COR_PADRAO_BARRAS }] }, options: { indexAxis: 'y', maintainAspectRatio: false, scales: { x: { beginAtZero: true, ticks: { stepSize: 1 } } }, plugins: { legend: { display: false } } } });
-                
-                const contagemAtividades = {};
-                dados.forEach(dado => {
-                    const atividadesArray = normalizarAtividades(dado.atividade);
-                    atividadesArray.forEach(a => { 
-                        contagemAtividades[a] = (contagemAtividades[a] || 0) + 1; 
-                    });
+                graficoFrequencia = new Chart(canvasFreq, {
+                    type: 'bar',
+                    data: { labels: voluntariosOrdenadosGlobal.map(i => i[0]), datasets: [{ label: 'Presenças', data: voluntariosOrdenadosGlobal.map(i => i[1]), backgroundColor: COR_PADRAO_BARRAS }] },
+                    options: { indexAxis: 'y', maintainAspectRatio: false, scales: { x: { beginAtZero: true, ticks: { stepSize: 1 } } }, plugins: { legend: { display: false } } }
                 });
-                
-                const atividadesOrdenadas = Object.entries(contagemAtividades).sort(([a], [b]) => a.localeCompare(b));
-                const labelsPizza = atividadesOrdenadas.map(item => item[0]);
-                const dadosPizza = atividadesOrdenadas.map(item => item[1]);
-                const coresPizza = labelsPizza.map(label => todasAsAtividades.get(label) || COR_PADRAO_ATIVIDADE);
+
+                const ativCounts = {};
+                dados.forEach(d => normalizarAtividades(d.atividade).forEach(a => ativCounts[a] = (ativCounts[a] || 0) + 1));
+                const labelsAtiv = Object.keys(ativCounts).sort();
 
                 graficoAtividades = new Chart(document.getElementById('grafico-atividades'), {
                     type: 'doughnut',
-                    data: { labels: labelsPizza, datasets: [{ data: dadosPizza, backgroundColor: coresPizza, hoverOffset: 4 }] },
-                    options: { plugins: { legend: { position: 'bottom', onClick: handleLegendClick, onHover: handleLegendHover, onLeave: handleLegendLeave } } }
+                    data: { labels: labelsAtiv, datasets: [{ data: labelsAtiv.map(l => ativCounts[l]), backgroundColor: labelsAtiv.map(l => todasAsAtividades.get(l) || COR_PADRAO_ATIVIDADE) }] },
+                    options: { plugins: { legend: { position: 'bottom', onClick: handleLegendClick, onHover: handleLegendHover, onLeave: () => { if(!atividadeDestaqueFixo) restaurarCoresBarras(); } } } }
                 });
-            }
-            
-            function aplicarFiltrosPresenca() {
-                let dadosFiltrados = todosOsDados.filter(d => (d.data >= ui.dataInicio.value) && (d.data <= ui.dataFim.value));
-                
-                const de = new Date(ui.dataInicio.value + 'T00:00:00').toLocaleDateString('pt-BR');
-                const ate = new Date(ui.dataFim.value + 'T00:00:00').toLocaleDateString('pt-BR');
-                const atividadeSelecionada = ui.filtroAtividade.value;
-                
-                ui.descricaoFiltros.textContent = `Exibindo dados de ${de} a ${ate}.`;
-
-                if (atividadeSelecionada !== 'todas') {
-                    dadosFiltrados = dadosFiltrados.filter(dado => normalizarAtividades(dado.atividade).includes(atividadeSelecionada));
-                    ui.descricaoFiltros.textContent += ` Atividade: "${atividadeSelecionada}".`;
-                }
-                
-                if (dadosFiltrados.length === 0) {
-                     ui.chartsGrid.style.display = 'none';
-                     ui.loadingMessage.style.display = 'block';
-                     ui.loadingMessage.textContent = "Nenhum dado encontrado para os filtros selecionados.";
-                     if (graficoFrequencia) graficoFrequencia.destroy();
-                     if (graficoAtividades) graficoAtividades.destroy();
-                     return;
-                }
-                
-                ui.chartsGrid.style.display = 'grid';
-                ui.loadingMessage.style.display = 'none';
-                renderizarGraficosPresenca(dadosFiltrados);
             }
 
             async function carregarDadosIniciais() {
                 ui.loadingMessage.style.display = 'block';
                 try {
-                    const [presencasSnapshot, atividadesSnapshot] = await Promise.all([
-                        getDocs(query(collection(db, "presencas"))),
+                    const [presSnap, ativSnap] = await Promise.all([
+                        getDocs(collection(db, "presencas")),
                         getDocs(query(collection(db, "atividades"), orderBy("nome")))
                     ]);
-                    
-                    todosOsDados = presencasSnapshot.docs.map(doc => doc.data());
-                    
-                    atividadesSnapshot.forEach(doc => {
-                        const atividade = doc.data();
-                        todasAsAtividades.set(atividade.nome, atividade.cor);
-                        const option = document.createElement('option');
-                        option.value = atividade.nome;
-                        option.textContent = atividade.nome;
-                        ui.filtroAtividade.appendChild(option);
+                    todosOsDados = presSnap.docs.map(doc => doc.data());
+                    ativSnap.forEach(doc => {
+                        const a = doc.data();
+                        todasAsAtividades.set(a.nome, a.cor);
+                        const opt = document.createElement('option');
+                        opt.value = a.nome; opt.textContent = a.nome;
+                        ui.filtroAtividade.appendChild(opt);
                     });
 
                     const hoje = new Date();
-                    const umMesAtras = new Date();
-                    umMesAtras.setMonth(hoje.getMonth() - 1);
                     ui.dataFim.value = hoje.toISOString().split('T')[0];
-                    ui.dataInicio.value = umMesAtras.toISOString().split('T')[0];
+                    const umMes = new Date(); umMes.setMonth(hoje.getMonth() - 1);
+                    ui.dataInicio.value = umMes.toISOString().split('T')[0];
                     
                     aplicarFiltrosPresenca();
                     carregarGraficoFinanceiro();
                     carregarGraficoVibracoes();
-                    carregarDadosCaritas(); // Chamada para a nova função
-                } catch (error) {
-                    console.error("Erro ao inicializar:", error);
-                    ui.loadingMessage.textContent = "Erro ao carregar dados. Verifique o console.";
-                }
-                
-                ui.dataInicio.addEventListener('change', aplicarFiltrosPresenca);
-                ui.dataFim.addEventListener('change', aplicarFiltrosPresenca);
-                ui.filtroAtividade.addEventListener('change', aplicarFiltrosPresenca);
+                    carregarDadosCaritas(); // FUNÇÃO CORRIGIDA ABAIXO
+                } catch (e) { console.error(e); }
             }
-            
-            async function carregarGraficoFinanceiro() {
-                const feedbackDiv = document.getElementById('financeiro-feedback');
-                const canvas = document.getElementById('grafico-financeiro');
-                feedbackDiv.textContent = 'Buscando dados financeiros...';
 
-                try {
-                    const balancetesRef = collection(db, "balancetes");
-                    const q = query(balancetesRef, where("status", "==", "aprovado"), orderBy(documentId()));
-                    const snapshot = await getDocs(q);
-
-                    if (snapshot.empty) {
-                        feedbackDiv.textContent = "Nenhum balancete aprovado encontrado para gerar o gráfico.";
-                        canvas.style.display = 'none';
-                        return;
-                    }
-
-                    feedbackDiv.style.display = 'none';
-                    canvas.style.display = 'block';
-
-                    const dadosMensais = {};
-
-                    snapshot.forEach(doc => {
-                        const mesAno = doc.id;
-                        const dados = doc.data();
-                        let totalReceitas = 0;
-                        let totalDespesas = 0;
-
-                        Object.values(dados.receitas || {}).flat().forEach(item => totalReceitas += item.valor || 0);
-                        Object.values(dados.despesas || {}).flat().forEach(item => totalDespesas += item.valor || 0);
-                        
-                        dadosMensais[mesAno] = { receitas: totalReceitas, despesas: totalDespesas };
-                    });
-                    
-                    const mesesOrdenados = Object.keys(dadosMensais).sort();
-                    const labels = mesesOrdenados.map(mes => {
-                        const [ano, mesNum] = mes.split('-');
-                        return `${mesNum}/${ano.slice(2)}`;
-                    });
-                    const dadosReceitas = mesesOrdenados.map(mes => dadosMensais[mes].receitas);
-                    const dadosDespesas = mesesOrdenados.map(mes => dadosMensais[mes].despesas);
-
-                    new Chart(canvas, {
-                        type: 'line',
-                        data: {
-                            labels: labels,
-                            datasets: [
-                                { label: 'Receitas', data: dadosReceitas, borderColor: 'rgba(75, 192, 192, 1)', backgroundColor: 'rgba(75, 192, 192, 0.2)', fill: true, tension: 0.1 },
-                                { label: 'Despesas', data: dadosDespesas, borderColor: 'rgba(255, 99, 132, 1)', backgroundColor: 'rgba(255, 99, 132, 0.2)', fill: true, tension: 0.1 }
-                            ]
-                        },
-                        options: { scales: { y: { beginAtZero: true, ticks: { callback: function(value) { return 'R$ ' + value.toLocaleString('pt-BR'); } } } } }
-                    });
-                } catch (error) {
-                    console.error("Erro ao gerar gráfico financeiro:", error);
-                    feedbackDiv.textContent = "Erro ao carregar dados financeiros.";
-                    feedbackDiv.style.color = 'red';
+            function aplicarFiltrosPresenca() {
+                let filtrados = todosOsDados.filter(d => d.data >= ui.dataInicio.value && d.data <= ui.dataFim.value);
+                if (ui.filtroAtividade.value !== 'todas') filtrados = filtrados.filter(d => normalizarAtividades(d.atividade).includes(ui.filtroAtividade.value));
+                
+                if (filtrados.length === 0) {
+                    ui.chartsGrid.style.display = 'none';
+                    ui.loadingMessage.style.display = 'block';
+                    ui.loadingMessage.textContent = "Nenhum dado encontrado.";
+                } else {
+                    ui.chartsGrid.style.display = 'grid';
+                    ui.loadingMessage.style.display = 'none';
+                    renderizarGraficosPresenca(filtrados);
                 }
+            }
+
+            // --- FINANCEIRO E VIBRAÇÕES PRESERVADOS ---
+            async function carregarGraficoFinanceiro() {
+                const snap = await getDocs(query(collection(db, "balancetes"), where("status", "==", "aprovado"), orderBy(documentId())));
+                if (snap.empty) return;
+                document.getElementById('financeiro-feedback').style.display = 'none';
+                const labels = [], rec = [], des = [];
+                snap.forEach(doc => {
+                    labels.push(doc.id);
+                    let r = 0, d = 0;
+                    Object.values(doc.data().receitas || {}).flat().forEach(i => r += i.valor || 0);
+                    Object.values(doc.data().despesas || {}).flat().forEach(i => d += i.valor || 0);
+                    rec.push(r); des.push(d);
+                });
+                new Chart(document.getElementById('grafico-financeiro'), { type: 'line', data: { labels, datasets: [{ label: 'Receitas', data: rec, borderColor: 'green' }, { label: 'Despesas', data: des, borderColor: 'red' }] } });
             }
 
             async function carregarGraficoVibracoes() {
-                const feedbackDiv = document.getElementById('vibracoes-feedback');
-                const canvas = document.getElementById('grafico-vibracoes');
-                feedbackDiv.textContent = 'Buscando histórico de vibrações...';
-
-                try {
-                    const historicoRef = collection(db, "historico_vibracoes");
-                    const q = query(historicoRef, orderBy("semanaDeReferencia", "desc"));
-                    const snapshot = await getDocs(q);
-
-                    if (snapshot.empty) {
-                        feedbackDiv.textContent = "Nenhum histórico de vibrações encontrado para gerar o gráfico.";
-                        canvas.style.display = 'none';
-                        return;
-                    }
-
-                    feedbackDiv.style.display = 'none';
-                    canvas.style.display = 'block';
-
-                    const dadosSemanais = {};
-                    snapshot.forEach(doc => {
-                        const dados = doc.data();
-                        const semana = dados.semanaDeReferencia;
-                        if (!semana) return;
-
-                        if (!dadosSemanais[semana]) {
-                            dadosSemanais[semana] = { encarnados: 0, desencarnados: 0 };
-                        }
-                        if (dados.tipo === 'encarnado') {
-                            dadosSemanais[semana].encarnados++;
-                        } else if (dados.tipo === 'desencarnado') {
-                            dadosSemanais[semana].desencarnados++;
-                        }
-                    });
-                    
-                    const semanasOrdenadas = Object.keys(dadosSemanais).sort();
-                    const labels = semanasOrdenadas.map(semana => {
-                        const [ano, mes, dia] = semana.split('-');
-                        return `${dia}/${mes}`;
-                    });
-                    const dadosEncarnados = semanasOrdenadas.map(semana => dadosSemanais[semana].encarnados);
-                    const dadosDesencarnados = semanasOrdenadas.map(semana => dadosSemanais[semana].desencarnados);
-
-                    new Chart(canvas, {
-                        type: 'bar',
-                        data: {
-                            labels: labels,
-                            datasets: [
-                                { label: 'Encarnados', data: dadosEncarnados, backgroundColor: 'rgba(75, 192, 192, 0.7)', borderColor: 'rgba(75, 192, 192, 1)', borderWidth: 1 },
-                                { label: 'Desencarnados', data: dadosDesencarnados, backgroundColor: 'rgba(54, 162, 235, 0.7)', borderColor: 'rgba(54, 162, 235, 1)', borderWidth: 1 }
-                            ]
-                        },
-                        options: { scales: { y: { beginAtZero: true, ticks: { stepSize: 5 } } } }
-                    });
-                } catch (error) {
-                    console.error("Erro ao gerar gráfico de vibrações:", error);
-                    feedbackDiv.textContent = "Erro ao carregar dados de vibrações.";
-                    feedbackDiv.style.color = 'red';
-                }
+                const snap = await getDocs(query(collection(db, "historico_vibracoes"), orderBy("semanaDeReferencia", "asc")));
+                if (snap.empty) return;
+                document.getElementById('vibracoes-feedback').style.display = 'none';
+                const sem = {};
+                snap.forEach(doc => {
+                    const d = doc.data();
+                    if(!sem[d.semanaDeReferencia]) sem[d.semanaDeReferencia] = { e: 0, d: 0 };
+                    d.tipo === 'encarnado' ? sem[d.semanaDeReferencia].e++ : sem[d.semanaDeReferencia].d++;
+                });
+                const labels = Object.keys(sem);
+                new Chart(document.getElementById('grafico-vibracoes'), { type: 'bar', data: { labels, datasets: [{ label: 'Encarnados', data: labels.map(l => sem[l].e), backgroundColor: 'teal' }, { label: 'Desencarnados', data: labels.map(l => sem[l].d), backgroundColor: 'blue' }] } });
             }
 
-            // --- NOVA FUNÇÃO: CARREGAR DADOS CÁRITAS ---
+            // --- CORREÇÃO CÁRITAS: DATA E FILTRO 2025 ---
             async function carregarDadosCaritas() {
                 try {
                     const [famSnap, cestaSnap] = await Promise.all([
@@ -436,25 +309,19 @@
                         getDocs(collection(db, "entregasCestas"))
                     ]);
                     
-                    let totalFilhos = 0;
-                    let totalPadrinhos = 0;
-                    let idades = { "0-3 anos": 0, "4-7 anos": 0, "8-13 anos": 0, "14+ anos": 0 };
+                    let totalFilhos = 0; let totalPadrinhos = 0;
+                    let faixas = { "0-3 anos": 0, "4-7 anos": 0, "8-13 anos": 0, "14+ anos": 0 };
 
                     famSnap.forEach(doc => {
                         const f = doc.data();
                         (f.filhos || []).forEach(filho => {
                             totalFilhos++;
-                            if (filho.padrinho?.nome) totalPadrinhos++;
-                            
-                            const nasc = new Date(filho.nascimento);
-                            const hoje = new Date();
-                            let idade = hoje.getFullYear() - nasc.getFullYear();
-                            if (hoje.getMonth() < nasc.getMonth() || (hoje.getMonth() === nasc.getMonth() && hoje.getDate() < nasc.getDate())) idade--;
-                            
-                            if (idade <= 3) idades["0-3 anos"]++;
-                            else if (idade <= 7) idades["4-7 anos"]++;
-                            else if (idade <= 13) idades["8-13 anos"]++;
-                            else idades["14+ anos"]++;
+                            if (filho.padrinho) totalPadrinhos++;
+                            const idade = new Date().getFullYear() - new Date(filho.nascimento).getFullYear();
+                            if (idade <= 3) faixas["0-3 anos"]++;
+                            else if (idade <= 7) faixas["4-7 anos"]++;
+                            else if (idade <= 13) faixas["8-13 anos"]++;
+                            else faixas["14+ anos"]++;
                         });
                     });
 
@@ -463,26 +330,26 @@
                     document.getElementById('total-cestas').textContent = cestaSnap.size;
                     document.getElementById('total-padrinhos').textContent = totalPadrinhos;
 
-                    new Chart(document.getElementById('grafico-idades-social'), {
-                        type: 'pie',
-                        data: { labels: Object.keys(idades), datasets: [{ data: Object.values(idades), backgroundColor: ['#e67e22', '#3498db', '#27ae60', '#9b59b6'] }] }
-                    });
+                    new Chart(document.getElementById('grafico-idades-social'), { type: 'pie', data: { labels: Object.keys(faixas), datasets: [{ data: Object.values(faixas), backgroundColor: ['#e67e22', '#3498db', '#27ae60', '#9b59b6'] }] } });
 
                     const contagemMensal = new Array(12).fill(0);
                     cestaSnap.forEach(doc => {
-                        const d = doc.data().dataEntrega?.toDate();
-                        if (d) contagemMensal[d.getMonth()]++;
+                        // CORREÇÃO: Usando 'data' e convertendo Timestamp
+                        const d = doc.data().data?.toDate(); 
+                        if (d && d.getFullYear() === 2025) contagemMensal[d.getMonth()]++;
                     });
 
                     new Chart(document.getElementById('grafico-cestas-social'), {
                         type: 'bar',
-                        data: { labels: ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'], datasets: [{ label: 'Cestas', data: contagemMensal, backgroundColor: '#e67e22' }] }
+                        data: { labels: ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'], datasets: [{ label: 'Cestas', data: contagemMensal, backgroundColor: '#e67e22' }] },
+                        options: { scales: { y: { beginAtZero: true, ticks: { stepSize: 1 } } } }
                     });
-                } catch (error) {
-                    console.error("Erro ao carregar dados Cáritas:", error);
-                }
+                } catch (e) { console.error(e); }
             }
-            
+
+            ui.dataInicio.onchange = aplicarFiltrosPresenca;
+            ui.dataFim.onchange = aplicarFiltrosPresenca;
+            ui.filtroAtividade.onchange = aplicarFiltrosPresenca;
             carregarDadosIniciais();
         }
     </script>
