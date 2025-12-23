@@ -17,10 +17,12 @@
         .escala-card { background: white; border: 1px solid #eee; padding: 25px; border-radius: 12px; border-left: 8px solid #e67e22; box-shadow: 0 2px 8px rgba(0,0,0,0.05); }
         .escala-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 15px; border-bottom: 1px dashed #ddd; padding-bottom: 10px; }
         .data-trabalho { font-size: 1.3em; font-weight: bold; color: #2c3e50; display: flex; align-items: center; gap: 10px; }
+        
         .tema-box { background: #fff8f0; padding: 15px; border-radius: 8px; margin-bottom: 20px; border: 1px solid #ffe0b2; }
         .tema-box b { color: #e67e22; text-transform: uppercase; font-size: 0.85em; display: block; margin-bottom: 5px; }
+        .tema-texto { font-size: 1.1em; color: #2c3e50; font-style: italic; }
         
-        .equipe-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px; }
+        .equipe-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 20px; }
         .equipe-item { display: flex; flex-direction: column; gap: 4px; }
         .equipe-item label { font-weight: bold; color: #7f8c8d; text-transform: uppercase; font-size: 0.75em; letter-spacing: 0.5px; }
         .equipe-item span { color: #2c3e50; font-weight: 500; font-size: 1em; }
@@ -46,7 +48,7 @@
 
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
-        import { getFirestore, collection, onSnapshot, query, orderBy, where } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
+        import { getFirestore, collection, onSnapshot, query, orderBy } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
         import { protegerPagina } from '/auth.js';
 
         const firebaseConfig = {
@@ -61,7 +63,7 @@
         const app = initializeApp(firebaseConfig);
         const db = getFirestore(app);
 
-        // Proteção de Página Restaurada (Segurança do Super Admin)
+        // Segurança do Super Admin preservada
         protegerPagina(['super-admin', 'diretor', 'tesoureiro', 'caritas', 'entrevistador'])
             .then(() => {
                 inicializarConsulta();
@@ -71,7 +73,6 @@
         function inicializarConsulta() {
             const container = document.getElementById('lista-escalas');
 
-            // Escuta em tempo real da coleção escalaCaritas (Corrigido para evitar erro de permissão)
             onSnapshot(query(collection(db, "escalaCaritas"), orderBy("dataTrabalho", "asc")), (snapshot) => {
                 if (snapshot.empty) {
                     container.innerHTML = '<div class="vazio-msg">Nenhuma escala futura agendada no planner.</div>';
@@ -81,7 +82,7 @@
                 container.innerHTML = snapshot.docs.map(doc => {
                     const dados = doc.data();
                     
-                    // Tratamento de Data para exibição amigável
+                    // Tratamento de Data para evitar retrocesso de fuso horário
                     const dataObj = dados.dataTrabalho.toDate();
                     const dataFormatada = dataObj.toLocaleDateString('pt-BR', { 
                         weekday: 'long', 
@@ -90,9 +91,14 @@
                         year: 'numeric' 
                     });
 
-                    // Extração segura da equipe (Evita o erro de "Voluntário não encontrado")
-                    const equipe = dados.equipe || {};
+                    // Lógica corrigida para campos em Array (Médiuns e Evangelizadores)
+                    // Se os campos não estiverem dentro de um objeto 'equipe', lemos do nível raiz do documento
+                    const equipe = dados.equipe || dados; 
                     
+                    // Une os nomes do array com " e "
+                    const exibirMediuns = Array.isArray(equipe.mediuns) ? equipe.mediuns.filter(n => n !== "").join(' e ') : 'A definir';
+                    const exibirEvangelizadores = Array.isArray(equipe.evangelizadores) ? equipe.evangelizadores.filter(n => n !== "").join(' e ') : 'A definir';
+
                     return `
                         <div class="escala-card">
                             <div class="escala-header">
@@ -105,7 +111,7 @@
 
                             <div class="tema-box">
                                 <b>Tema da Preleção</b>
-                                <span>${dados.tema || 'Tema não informado'}</span>
+                                <span class="tema-texto">"${dados.tema || 'Tema não informado'}"</span>
                             </div>
 
                             <div class="equipe-grid">
@@ -119,7 +125,7 @@
                                 </div>
                                 <div class="equipe-item">
                                     <label>Médiuns do Passe</label>
-                                    <span>${equipe.mediuns ? equipe.mediuns.filter(m => m !== "").join(' e ') : 'A definir'}</span>
+                                    <span>${exibirMediuns}</span>
                                 </div>
                                 <div class="equipe-item">
                                     <label>Escola de Pais</label>
@@ -127,15 +133,12 @@
                                 </div>
                                 <div class="equipe-item">
                                     <label>Evangelização</label>
-                                    <span>${equipe.evangelizador1 || 'A definir'}</span>
+                                    <span>${exibirEvangelizadores}</span>
                                 </div>
                             </div>
                         </div>
                     `;
                 }).join('');
-            }, (error) => {
-                console.error("Erro ao ler escalas:", error);
-                container.innerHTML = '<div class="vazio-msg" style="color:red;">Erro de permissão ao acessar escalas. Verifique as regras do banco de dados.</div>';
             });
         }
     </script>
