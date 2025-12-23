@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <title>Cáritas - Relatório Mensal</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <style>
+        body { font-family: sans-serif; padding: 40px; background: #f4f6f9; }
+        .folha-relatorio { background: white; padding: 50px; max-width: 800px; margin: 0 auto; box-shadow: 0 0 20px rgba(0,0,0,0.1); }
+        .header-rep { text-align: center; border-bottom: 2px solid #2c3e50; padding-bottom: 20px; margin-bottom: 30px; }
+        .grid-stats { display: grid; grid-template-columns: repeat(2, 1fr); gap: 20px; margin-bottom: 30px; }
+        .card-stat { padding: 20px; border: 1px solid #eee; border-radius: 8px; text-align: center; }
+        .btn-imprimir { background: #2c3e50; color: white; padding: 10px 20px; border: none; border-radius: 5px; cursor: pointer; margin-bottom: 20px; }
+        @media print { .btn-imprimir { display: none; } body { padding: 0; background: white; } }
+    </style>
+</head>
+<body>
+    <div class="folha-relatorio">
+        <button class="btn-imprimir" onclick="window.print()"><i class="fas fa-print"></i> Imprimir Relatório</button>
+        <div class="header-rep">
+            <img src="/logo-cepat.png" style="height: 60px;">
+            <h2>Relatório Mensal de Atividades Sociais</h2>
+            <p id="data-relatorio">Dezembro / 2025</p>
+        </div>
+
+        <div class="grid-stats">
+            <div class="card-stat"><h4>Total de Cestas Entregues</h4><p id="rep-cestas" style="font-size: 2em; font-weight: bold;">0</p></div>
+            <div class="card-stat"><h4>Novas Famílias Cadastradas</h4><p id="rep-familias" style="font-size: 2em; font-weight: bold;">0</p></div>
+        </div>
+
+        <h3>Principais Movimentações de Estoque</h3>
+        <ul id="lista-movimento" style="font-size: 0.9em; color: #444;"></ul>
+    </div>
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
+        import { getFirestore, collection, query, where, getDocs, Timestamp, orderBy } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
+        
+        // Use o seu config aqui...
+        const db = getFirestore(initializeApp(firebaseConfig));
+
+        async function gerar() {
+            const inicioMes = Timestamp.fromDate(new Date(2025, 11, 1));
+            
+            // Contagem Cestas
+            const qCestas = query(collection(db, "entregasCestas"), where("data", ">=", inicioMes));
+            const snapCestas = await getDocs(qCestas);
+            document.getElementById('rep-cestas').innerText = snapCestas.size;
+
+            // Logs de Estoque
+            const qLogs = query(collection(db, "log_auditoria"), where("timestamp", ">=", inicioMes), orderBy("timestamp", "desc"));
+            const snapLogs = await getDocs(qLogs);
+            let html = "";
+            snapLogs.forEach(doc => {
+                const log = doc.data();
+                if(log.acao.includes("ESTOQUE")) {
+                    html += `<li>[${log.timestamp.toDate().toLocaleDateString()}] ${log.detalhes}</li>`;
+                }
+            });
+            document.getElementById('lista-movimento').innerHTML = html;
+        }
+        gerar();
+    </script>
+</body>
+</html>

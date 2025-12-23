@@ -89,13 +89,14 @@
         <div class="modal-content">
             <h3 style="margin-top: 0;">Novo Item no Estoque</h3>
             <form id="form-novo-produto">
-                <div class="form-group"><label>Nome do Produto</label><input type="text" id="p-nome" placeholder="Ex: Arroz 5kg" required></div>
-                <div class="form-group"><label>Estoque Mínimo (Alerta)</label><input type="number" id="p-minimo" value="5" min="0" required></div>
-                <div style="display: flex; gap: 10px; margin-top: 20px;">
-                    <button type="button" id="btn-cancelar-modal" style="flex:1; padding: 12px; border-radius: 8px; border: 1px solid #ccc; cursor: pointer;">Cancelar</button>
-                    <button type="submit" style="flex:1; background: #27ae60; color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: bold;">Salvar</button>
-                </div>
-            </form>
+    <div class="form-group"><label>Nome do Produto</label><input type="text" id="p-nome" placeholder="Ex: Arroz 5kg" required></div>
+    <div class="form-group"><label>Estoque Mínimo</label><input type="number" id="p-minimo" value="5" min="0" required></div>
+    <div class="form-group"><label>Data de Validade (Opcional)</label><input type="date" id="p-validade"></div>
+    <div style="display: flex; gap: 10px; margin-top: 20px;">
+        <button type="button" id="btn-cancelar-modal" style="flex:1; padding: 12px; border-radius: 8px; border: 1px solid #ccc;">Cancelar</button>
+        <button type="submit" style="flex:1; background: #27ae60; color: white; border: none; border-radius: 8px; font-weight: bold;">Salvar</button>
+    </div>
+</form>
         </div>
     </div>
 
@@ -190,23 +191,24 @@
             // --- FUNÇÕES GLOBAIS (Atribuídas ao window para funcionar no HTML) ---
 
             window.gerenciarQuantidade = async (id, delta, nome) => {
-                const item = dadosEstoque.find(i => i.id === id);
-                if (!item) return;
-                const novaQtd = Math.max(0, item.quantidade + delta);
-                const acao = delta > 0 ? "ENTRADA_ESTOQUE" : "SAIDA_ESTOQUE";
+    const item = dadosEstoque.find(i => i.id === id);
+    const novaQtd = Math.max(0, item.quantidade + delta);
+    let doador = "Não informado";
 
-                try {
-                    await updateDoc(doc(db, "estoque_caritas", id), { quantidade: novaQtd });
-                    
-                    // Log na Auditoria Unificada
-                    await addDoc(collection(db, "log_auditoria"), {
-                        timestamp: serverTimestamp(),
-                        autor: { nome: usuarioLogado.displayName || usuarioLogado.email },
-                        acao: acao,
-                        detalhes: `${delta > 0 ? 'Adicionado' : 'Removido'} ${Math.abs(delta)} unid. de ${nome}. Novo Saldo: ${novaQtd}`
-                    });
-                } catch (e) { console.error(e); }
-            };
+    if (delta > 0) {
+        doador = prompt(`Quem é o doador de ${nome}?`) || "Anônimo";
+    }
+
+    try {
+        await updateDoc(doc(db, "estoque_caritas", id), { quantidade: novaQtd });
+        await addDoc(collection(db, "log_auditoria"), {
+            timestamp: serverTimestamp(),
+            autor: { nome: usuarioLogado.displayName || usuarioLogado.email },
+            acao: delta > 0 ? "ENTRADA_ESTOQUE" : "SAIDA_ESTOQUE",
+            detalhes: `${delta > 0 ? 'Doação de ' + doador : 'Retirada'}: ${Math.abs(delta)} unid. de ${nome}.`
+        });
+    } catch (e) { console.error(e); }
+};
 
             window.excluirItemEstoque = async (id, nome) => {
                 if (confirm(`Deseja realmente excluir ${nome}?`)) {

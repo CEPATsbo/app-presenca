@@ -54,6 +54,13 @@
         .detalhe-item { margin-bottom: 10px; padding-bottom: 10px; border-bottom: 1px solid #f1f1f1; }
         .detalhe-item label { font-weight: bold; color: #7f8c8d; font-size: 0.8em; text-transform: uppercase; display: block; }
         .detalhe-item span { font-size: 1.1em; color: #2c3e50; }
+
+        /* Estilo do Prontuário */
+        .prontuario-container { margin-top: 25px; padding: 20px; background: #fffde7; border-radius: 12px; border: 1px solid #fbc02d; }
+        .prontuario-container h4 { margin: 0 0 10px 0; color: #f57f17; display: flex; align-items: center; gap: 8px; }
+        .prontuario-textarea { width: 100%; height: 120px; padding: 12px; border-radius: 8px; border: 1px solid #ccc; font-family: inherit; font-size: 1em; resize: vertical; box-sizing: border-box; }
+        .btn-salvar-prontuario { margin-top: 12px; background-color: #fbc02d; color: #2c3e50; border: none; padding: 10px 20px; border-radius: 8px; cursor: pointer; font-weight: bold; transition: background 0.2s; }
+        .btn-salvar-prontuario:hover { background-color: #f9a825; }
     </style>
 </head>
 <body>
@@ -152,7 +159,7 @@
     </div>
 
     <div id="modal-detalhes" class="modal">
-        <div class="modal-content" style="max-width: 600px;">
+        <div class="modal-content" style="max-width: 650px;">
             <h2 id="det-titulo" style="color: #3498db; margin-bottom: 25px;">Detalhes da Família</h2>
             
             <div id="det-conteudo">
@@ -163,6 +170,14 @@
                 
                 <h4 style="margin: 20px 0 10px 0; color: #555;">Lista de Dependentes</h4>
                 <div id="det-lista-filhos" style="background: #f9f9f9; padding: 15px; border-radius: 8px;"></div>
+
+                <div id="secao-prontuario" class="prontuario-container">
+                    <h4><i class="fas fa-comment-medical"></i> Prontuário de Evolução Social</h4>
+                    <textarea id="texto-prontuario" class="prontuario-textarea" placeholder="Anote aqui a evolução social, necessidades específicas ou observações fraternas da família..."></textarea>
+                    <button id="btn-gravar-prontuario" class="btn-salvar-prontuario">
+                        <i class="fas fa-save"></i> Gravar Observação
+                    </button>
+                </div>
             </div>
 
             <div style="margin-top: 30px; display: flex; justify-content: flex-end; gap: 10px;">
@@ -174,7 +189,7 @@
 
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
-        import { getFirestore, collection, addDoc, onSnapshot, query, orderBy, serverTimestamp, doc, getDoc } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
+        import { getFirestore, collection, addDoc, onSnapshot, query, orderBy, serverTimestamp, doc, updateDoc } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
         import { protegerPagina } from '/auth.js';
 
         const firebaseConfig = {
@@ -190,7 +205,7 @@
         const db = getFirestore(app);
 
         let todasFamilias = [];
-        let familiaSelecionada = null;
+        let familiaSelecionadaId = null; // Armazena apenas o ID para referência no salvamento
 
         // Proteção de Página baseada em cargo
         protegerPagina(['super-admin', 'diretor', 'tesoureiro', 'caritas', 'conselheiro', 'entrevistador'])
@@ -210,10 +225,12 @@
                 inputEndereco: document.getElementById('familia-endereco'),
                 lista: document.getElementById('lista-familias'),
                 busca: document.getElementById('search-input'),
-                btnExcel: document.getElementById('btn-exportar')
+                btnExcel: document.getElementById('btn-exportar'),
+                textoProntuario: document.getElementById('texto-prontuario'),
+                btnGravarProntuario: document.getElementById('btn-gravar-prontuario')
             };
 
-            // Eventos do Modal
+            // Eventos do Modal de Cadastro
             ui.btnNovo.onclick = () => { ui.form.reset(); ui.listaFilhos.innerHTML = ''; ui.modal.style.display = 'flex'; };
             ui.btnFechar.onclick = () => ui.modal.style.display = 'none';
 
@@ -222,7 +239,7 @@
                 ui.inputEndereco.value = ui.checkRua.checked ? "EM SITUAÇÃO DE RUA" : "";
             };
 
-            // Adicionar campo de dependente
+            // Adicionar campo de dependente no formulário
             ui.btnAddFilho.onclick = () => {
                 const div = document.createElement('div');
                 div.className = 'filho-item';
@@ -237,7 +254,7 @@
                 ui.listaFilhos.appendChild(div);
             };
 
-            // Escuta em tempo real
+            // Escuta em tempo real da base de famílias
             onSnapshot(query(collection(db, "familiasAssistidas"), orderBy("cadastradoEm", "desc")), (snapshot) => {
                 todasFamilias = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
                 renderizarLista(todasFamilias);
@@ -267,41 +284,71 @@
                 }).join('');
             }
 
-            // Visualização Detalhada
+            // Visualização Detalhada incorporando o Prontuário
             window.abrirDetalhes = (id) => {
-                familiaSelecionada = todasFamilias.find(f => f.id === id);
-                if (!familiaSelecionada) return;
+                familiaSelecionadaId = id;
+                const familia = todasFamilias.find(f => f.id === id);
+                if (!familia) return;
 
-                document.getElementById('det-resp1').textContent = `${familiaSelecionada.responsavel1.nome} (${familiaSelecionada.responsavel1.tipo})`;
-                document.getElementById('det-resp2').textContent = familiaSelecionada.responsavel2?.nome ? `${familiaSelecionada.responsavel2.nome} (${familiaSelecionada.responsavel2.tipo})` : "Não informado";
-                document.getElementById('det-tel').textContent = familiaSelecionada.contato.telefone;
-                document.getElementById('det-end').textContent = familiaSelecionada.contato.endereco;
+                document.getElementById('det-resp1').textContent = `${familia.responsavel1.nome} (${familia.responsavel1.tipo})`;
+                document.getElementById('det-resp2').textContent = familia.responsavel2?.nome ? `${familia.responsavel2.nome} (${familia.responsavel2.tipo})` : "Não informado";
+                document.getElementById('det-tel').textContent = familia.contato.telefone;
+                document.getElementById('det-end').textContent = familia.contato.endereco;
                 
-                document.getElementById('det-lista-filhos').innerHTML = familiaSelecionada.filhos.length > 0 ? 
-                    familiaSelecionada.filhos.map(filho => `<div style="margin-bottom:8px;">• <b>${filho.nome}</b> - Roupa: ${filho.tamanho || 'N/A'} | Calçado: ${filho.calcado || 'N/A'}</div>`).join('') :
+                // Lista de Dependentes no Modal
+                document.getElementById('det-lista-filhos').innerHTML = familia.filhos.length > 0 ? 
+                    familia.filhos.map(filho => `<div style="margin-bottom:8px;">• <b>${filho.nome}</b> - Roupa: ${filho.tamanho || 'N/A'} | Calçado: ${filho.calcado || 'N/A'}</div>`).join('') :
                     "Sem dependentes cadastrados.";
+
+                // Preencher o Prontuário Social se existir
+                ui.textoProntuario.value = familia.evolucaoSocial || "";
 
                 ui.modalDet.style.display = 'flex';
             };
 
-            // Recibo de Impressão
+            // Função para Gravar no Prontuário de Evolução Social
+            ui.btnGravarProntuario.onclick = async () => {
+                if (!familiaSelecionadaId) return;
+                const novoTexto = ui.textoProntuario.value;
+
+                try {
+                    const docRef = doc(db, "familiasAssistidas", familiaSelecionadaId);
+                    await updateDoc(docRef, { evolucaoSocial: novoTexto });
+
+                    // Log de Auditoria Centralizado
+                    await addDoc(collection(db, "log_auditoria"), {
+                        timestamp: serverTimestamp(),
+                        autor: { nome: user.displayName || user.email },
+                        acao: "ATUALIZAR_PRONTUARIO",
+                        detalhes: `Atualizou prontuário da família: ${familiaSelecionadaId}`
+                    });
+
+                    alert("Prontuário de evolução social atualizado com sucesso!");
+                } catch (e) {
+                    console.error(e);
+                    alert("Erro ao salvar prontuário: " + e.message);
+                }
+            };
+
+            // Recibo de Impressão para o Domingo Social
             window.gerarReciboImpressao = () => {
-                const f = familiaSelecionada;
+                const f = todasFamilias.find(x => x.id === familiaSelecionadaId);
+                if (!f) return;
                 const data = new Date().toLocaleDateString('pt-BR');
                 const win = window.open('', '', 'height=600,width=800');
                 win.document.write(`
                     <html><head><title>Recibo CEPAT</title><style>body{font-family:sans-serif;padding:40px;line-height:1.6;border:2px solid #333;} h2{text-align:center;border-bottom:1px solid #000;padding-bottom:10px;}</style></head>
                     <body>
-                        <h2>CASA ESPÍRITA PAULO DE TARSO - CÁRITAS</h2>
-                        <p style="text-align:right;"><b>Data:</b> ${data}</p>
-                        <p><b>Responsável:</b> ${f.responsavel1.nome}</p>
-                        <p><b>Endereço:</b> ${f.contato.endereco}</p>
+                        <h2 style="text-transform: uppercase;">Casa Espírita Paulo de Tarso - Assistência Cáritas</h2>
+                        <p style="text-align:right;"><b>Data do Atendimento:</b> ${data}</p>
+                        <p><b>Responsável Assistido:</b> ${f.responsavel1.nome}</p>
+                        <p><b>Endereço Cadastrado:</b> ${f.contato.endereco}</p>
                         <div style="margin: 40px 0; border: 1px solid #eee; padding: 20px;">
-                            Declaramos que a família acima recebeu <b>01 (uma) Cesta Básica</b> e demais assistências sociais deste Centro nesta data.
+                            Declaramos que a família acima recebeu o auxílio fraterno de <b>01 (uma) Cesta Básica</b> e demais itens complementares nesta data, conforme as normas de assistência da casa.
                         </div>
                         <div style="margin-top: 80px; text-align: center;">
                             _______________________________________________________<br>
-                            Assinatura do Responsável
+                            Assinatura do Responsável da Família
                         </div>
                     </body></html>
                 `);
@@ -309,7 +356,7 @@
                 win.print();
             };
 
-            // Salvar no Firestore
+            // Salvar novo cadastro no Firestore com Log Unificado
             ui.form.onsubmit = async (e) => {
                 e.preventDefault();
                 const dependentes = Array.from(document.querySelectorAll('.filho-item')).map(item => ({
@@ -331,39 +378,62 @@
 
                 try {
                     await addDoc(collection(db, "familiasAssistidas"), novaFamilia);
+                    
+                    // Registro na Auditoria Central
                     await addDoc(collection(db, "log_auditoria"), { 
-    timestamp: serverTimestamp(), 
-    autor: { nome: user.displayName || user.email }, // Aqui entra o nome para a tabela central
-    acao: "CADASTRO_FAMILIA", 
-    detalhes: `Cadastrou família: ${novaFamilia.responsavel1.nome}` 
-});
+                        timestamp: serverTimestamp(), 
+                        autor: { nome: user.displayName || user.email }, 
+                        acao: "CADASTRO_FAMILIA", 
+                        detalhes: `Cadastrou a família de: ${novaFamilia.responsavel1.nome}` 
+                    });
+
                     alert("Sucesso no cadastro!");
                     ui.modal.style.display = 'none';
-                } catch (err) { alert("Erro: " + err.message); }
+                } catch (err) { 
+                    console.error(err);
+                    alert("Erro ao cadastrar: " + err.message); 
+                }
             };
 
-            // Filtro de Busca
+            // Filtro de Busca em tempo real
             ui.busca.oninput = () => {
-                const t = ui.busca.value.toLowerCase();
-                const f = todasFamilias.filter(fam => fam.responsavel1.nome.toLowerCase().includes(t) || (fam.responsavel2?.nome?.toLowerCase().includes(t)));
-                renderizarLista(f);
+                const termo = ui.busca.value.toLowerCase();
+                const filtrados = todasFamilias.filter(fam => 
+                    fam.responsavel1.nome.toLowerCase().includes(termo) || 
+                    (fam.responsavel2?.nome?.toLowerCase().includes(termo))
+                );
+                renderizarLista(filtrados);
             };
 
-            // Exportação Excel
+            // Exportação para Excel (Gera base completa de Natal e Atendimento)
             ui.btnExcel.onclick = () => {
                 const dadosXls = [];
                 todasFamilias.forEach(f => {
                     if (f.filhos.length === 0) {
-                        dadosXls.push({ "Responsável": f.responsavel1.nome, "Relação": f.responsavel1.tipo, "Telefone": f.contato.telefone, "Endereço": f.contato.endereco, "Dependente": "Nenhum" });
+                        dadosXls.push({ 
+                            "Responsável": f.responsavel1.nome, 
+                            "Telefone": f.contato.telefone, 
+                            "Endereço": f.contato.endereco, 
+                            "Dependente": "Nenhum",
+                            "Evolução Social": f.evolucaoSocial || ""
+                        });
                     } else {
                         f.filhos.forEach(filho => {
-                            dadosXls.push({ "Responsável": f.responsavel1.nome, "Telefone": f.contato.telefone, "Endereço": f.contato.endereco, "Dependente": filho.nome, "Roupa": filho.tamanho, "Calçado": filho.calcado });
+                            dadosXls.push({ 
+                                "Responsável": f.responsavel1.nome, 
+                                "Telefone": f.contato.telefone, 
+                                "Endereço": f.contato.endereco, 
+                                "Dependente": filho.nome, 
+                                "Roupa": filho.tamanho, 
+                                "Calçado": filho.calcado,
+                                "Evolução Social": f.evolucaoSocial || ""
+                            });
                         });
                     }
                 });
                 const ws = XLSX.utils.json_to_sheet(dadosXls);
                 const wb = XLSX.utils.book_new();
-                XLSX.utils.book_append_sheet(wb, ws, "Base Caritas");
+                XLSX.utils.book_append_sheet(wb, ws, "Base Caritas CEPAT");
                 XLSX.writeFile(wb, `CEPAT_Familias_${new Date().toLocaleDateString('pt-BR').replace(/\//g, '-')}.xlsx`);
             };
         }
