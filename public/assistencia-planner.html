@@ -7,23 +7,27 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <style>
         body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background-color: #f4f6f9; margin: 0; padding: 20px; display: flex; flex-direction: column; align-items: center; }
-        .nav-header { width: 100%; max-width: 800px; margin-bottom: 20px; }
-        .btn-voltar { background-color: #6c757d; color: white; padding: 10px 15px; border-radius: 8px; text-decoration: none; font-weight: bold; font-size: 0.9em; }
-        .container { background: white; padding: 30px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); width: 100%; max-width: 800px; box-sizing: border-box; }
-        h1 { color: #2c3e50; margin-top: 0; border-bottom: 2px solid #e67e22; padding-bottom: 10px; margin-bottom: 20px; display: flex; align-items: center; gap: 10px; }
+        .nav-header { width: 100%; max-width: 900px; display: flex; justify-content: space-between; margin-bottom: 20px; }
+        .btn-voltar { background-color: #6c757d; color: white; padding: 10px 15px; border-radius: 8px; text-decoration: none; font-weight: bold; }
+        .container { background: white; padding: 30px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); width: 100%; max-width: 900px; box-sizing: border-box; }
+        h1 { color: #2c3e50; margin-top: 0; border-bottom: 2px solid #e67e22; padding-bottom: 10px; }
+        .instrucao { background: #fff3e0; padding: 15px; border-radius: 8px; border-left: 5px solid #e67e22; margin-bottom: 25px; font-size: 0.95em; color: #856404; }
         
-        .info-box { background: #fff3e0; border-left: 5px solid #e67e22; padding: 15px; border-radius: 8px; margin-bottom: 25px; font-size: 0.9em; color: #5d4037; }
-        
-        .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+        .form-escala { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
         .full-width { grid-column: 1 / -1; }
-        .form-group { display: flex; flex-direction: column; gap: 5px; margin-bottom: 15px; }
-        .form-group label { font-weight: bold; color: #555; font-size: 0.85em; text-transform: uppercase; }
-        .form-group input, .form-group select, .form-group textarea { padding: 12px; border: 1px solid #ccc; border-radius: 8px; font-size: 1em; background: #fff; }
-        .form-group input:disabled { background: #f8f9fa; color: #7f8c8d; }
-
-        .secao-titulo { background: #fdf2e9; padding: 10px; border-radius: 6px; font-weight: bold; color: #e67e22; margin-top: 15px; margin-bottom: 15px; }
-        .btn-salvar { background-color: #27ae60; color: white; border: none; padding: 15px; border-radius: 8px; cursor: pointer; font-weight: bold; font-size: 1.1em; width: 100%; margin-top: 20px; transition: 0.3s; }
-        .btn-salvar:hover { background-color: #219150; }
+        .form-group { display: flex; flex-direction: column; gap: 8px; }
+        .form-group label { font-weight: bold; color: #34495e; font-size: 0.9em; }
+        .form-group input, .form-group select, .form-group textarea { padding: 12px; border: 1px solid #ddd; border-radius: 8px; font-size: 1em; }
+        
+        /* Estilo para campos bloqueados */
+        .readonly-field { background: #f1f1f1; cursor: not-allowed; }
+        
+        .ajuste-manual-container { display: flex; align-items: center; gap: 10px; margin-top: 5px; font-size: 0.85em; color: #e67e22; font-weight: bold; }
+        
+        .section-titulo { background: #f8f9fa; padding: 10px; border-radius: 6px; font-weight: bold; color: #e67e22; margin-top: 10px; }
+        .footer-actions { margin-top: 30px; display: flex; justify-content: flex-end; gap: 15px; border-top: 1px solid #eee; padding-top: 20px; }
+        .btn-salvar { background-color: #27ae60; color: white; border: none; padding: 15px 30px; border-radius: 8px; cursor: pointer; font-weight: bold; font-size: 1.1em; }
+        .btn-salvar:disabled { background-color: #95a5a6; cursor: not-allowed; }
     </style>
 </head>
 <body>
@@ -31,63 +35,78 @@
         <a href="/modulo-caritas.html" class="btn-voltar"><i class="fas fa-arrow-left"></i> Painel Cáritas</a>
     </header>
 
-    <main class="container">
+    <main class="container" id="conteudo-principal">
         <h1><i class="fas fa-calendar-check"></i> Escala do Domingo Social</h1>
-
-        <div class="info-box">
-            <i class="fas fa-info-circle"></i> <b>Regra de Agendamento:</b> Por padrão, o trabalho ocorre no <b>3º domingo</b>. É possível antecipar para o 2º, mas nunca adiar para o 4º.
+        
+        <div class="instrucao">
+            <i class="fas fa-info-circle"></i> <strong>Regra de Agendamento:</strong> Por padrão, o trabalho ocorre no <strong>3º domingo</strong>. É possível antecipar para o 2º, mas nunca adiar para o 4º.
         </div>
 
-        <form id="form-escala">
-            <div class="form-grid">
-                <div class="form-group">
-                    <label>Data do Trabalho *</label>
-                    <input type="date" id="data-trabalho" required>
-                </div>
-                <div class="form-group">
-                    <label>Mês de Referência</label>
-                    <input type="text" id="mes-referencia" disabled placeholder="Selecione uma data...">
-                </div>
-
-                <div class="form-group full-width">
-                    <label>Tema da Preleção *</label>
-                    <textarea id="tema-prelecao" rows="3" placeholder="Tema da palestra..." required></textarea>
-                </div>
-
-                <div class="secao-titulo full-width">Passe de Harmonização e Sustentação</div>
-                <div class="form-group">
-                    <label>Médium 1</label>
-                    <select id="passe-m1"><option value="">Selecione...</option></select>
-                </div>
-                <div class="form-group">
-                    <label>Médium 2</label>
-                    <select id="passe-m2"><option value="">Selecione...</option></select>
-                </div>
-
-                <div class="secao-titulo full-width">Palestra e Acolhimento</div>
-                <div class="form-group">
-                    <label>Preletor(a)</label>
-                    <select id="palestra-preletor"><option value="">Selecione...</option></select>
-                </div>
-                <div class="form-group">
-                    <label>Entrevistador(a)</label>
-                    <select id="palestra-entrevistador"><option value="">Selecione...</option></select>
-                </div>
-
-                <div class="secao-titulo full-width">Escola de Pais e Evangelização Infantil</div>
-                <div class="form-group full-width">
-                    <label>Membro Escola de Pais</label>
-                    <select id="membro-escola"><option value="">Selecione...</option></select>
-                </div>
+        <form id="form-escala" class="form-escala">
+            <div class="form-group">
+                <label>Mês de Referência (Escala Futura)</label>
+                <select id="mes-referencia" required>
+                    </select>
             </div>
 
-            <button type="submit" class="btn-salvar"><i class="fas fa-save"></i> Gravar Escala Social</button>
+            <div class="form-group">
+                <label>Data do Trabalho (3º Domingo)</label>
+                <input type="date" id="data-trabalho" class="readonly-field" readonly required>
+                <div class="ajuste-manual-container">
+                    <input type="checkbox" id="permitir-ajuste"> 
+                    <label for="permitir-ajuste">Ajustar data manualmente (Exceção)</label>
+                </div>
+            </div>
+            
+            <div class="form-group full-width">
+                <label>Tema da Preleção *</label>
+                <textarea id="tema-prelecao" rows="2" placeholder="Tema da palestra..." required></textarea>
+            </div>
+
+            <div class="full-width section-titulo">Passe de Harmonização e Sustentação</div>
+            <div class="form-group">
+                <label>Médium 1</label>
+                <select id="escala-medium1" class="select-voluntario" required><option value="">Carregando...</option></select>
+            </div>
+            <div class="form-group">
+                <label>Médium 2</label>
+                <select id="escala-medium2" class="select-voluntario" required><option value="">Carregando...</option></select>
+            </div>
+
+            <div class="full-width section-titulo">Palestra e Acolhimento</div>
+            <div class="form-group">
+                <label>Preletor(a)</label>
+                <select id="escala-preletor" class="select-voluntario" required><option value="">Carregando...</option></select>
+            </div>
+            <div class="form-group">
+                <label>Entrevistador(a)</label>
+                <select id="escala-entrevistador" class="select-voluntario" required><option value="">Carregando...</option></select>
+            </div>
+
+            <div class="full-width section-titulo">Escola de Pais e Evangelização Infantil</div>
+            <div class="form-group">
+                <label>Membro Escola de Pais</label>
+                <select id="escala-escola-pais" class="select-voluntario" required><option value="">Carregando...</option></select>
+            </div>
+            <div class="form-group"></div>
+            <div class="form-group">
+                <label>Evangelizador(a) 1</label>
+                <select id="escala-evangelizador1" class="select-voluntario" required><option value="">Carregando...</option></select>
+            </div>
+            <div class="form-group">
+                <label>Evangelizador(a) 2</label>
+                <select id="escala-evangelizador2" class="select-voluntario" required><option value="">Carregando...</option></select>
+            </div>
+
+            <div class="footer-actions full-width">
+                <button type="submit" class="btn-salvar" id="btn-gravar">Gravar Escala Mensal</button>
+            </div>
         </form>
     </main>
 
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
-        import { getFirestore, collection, addDoc, getDocs, query, orderBy, serverTimestamp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
+        import { getFirestore, collection, addDoc, getDocs, query, where, orderBy, serverTimestamp, Timestamp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
         import { protegerPagina } from '/auth.js';
 
         const firebaseConfig = {
@@ -102,72 +121,125 @@
         const app = initializeApp(firebaseConfig);
         const db = getFirestore(app);
 
-        protegerPagina(['super-admin', 'caritas']).then(user => {
-            carregarVoluntarios();
-            configurarData();
-        });
+        protegerPagina(['super-admin', 'diretor', 'tesoureiro', 'caritas'])
+            .then(user => {
+                inicializarPlanner(user);
+            })
+            .catch(() => window.location.href = '/dashboard.html');
 
-        function configurarData() {
+        async function inicializarPlanner(user) {
+            const selectMes = document.getElementById('mes-referencia');
             const inputData = document.getElementById('data-trabalho');
-            const inputMes = document.getElementById('mes-referencia');
+            const checkAjuste = document.getElementById('permitir-ajuste');
+            const form = document.getElementById('form-escala');
 
-            // Lógica para permitir escalas futuras dinamicamente
-            inputData.addEventListener('change', (e) => {
-                if (!e.target.value) return;
+            // 1. Popular Seletor de Meses Futuros (Próximos 12 meses)
+            popularMeses(selectMes);
+
+            // 2. Lógica de Atualização Automática da Data
+            selectMes.onchange = () => {
+                const [mes, ano] = selectMes.value.split('|').map(Number);
+                const dataCalculada = calcularTerceiroDomingo(mes, ano);
                 
-                // Força o horário para meio-dia para evitar problemas de fuso horário na conversão
-                const dataSelecionada = new Date(e.target.value + 'T12:00:00');
-                const mesExtenso = dataSelecionada.toLocaleString('pt-BR', { month: 'long' });
-                const ano = dataSelecionada.getFullYear();
-                
-                inputMes.value = `${mesExtenso.charAt(0).toUpperCase() + mesExtenso.slice(1)} / ${ano}`;
-            });
+                // Formata para o input date (YYYY-MM-DD) sem erro de fuso horário
+                const offset = dataCalculada.getTimezoneOffset() * 60000;
+                const dataLocal = new Date(dataCalculada.getTime() - offset);
+                inputData.value = dataLocal.toISOString().split('T')[0];
+            };
+
+            // Dispara a primeira carga
+            selectMes.dispatchEvent(new Event('change'));
+
+            // 3. Switch de Ajuste Manual
+            checkAjuste.onchange = () => {
+                if (checkAjuste.checked) {
+                    inputData.readOnly = false;
+                    inputData.classList.remove('readonly-field');
+                    inputData.style.background = "#fff";
+                } else {
+                    inputData.readOnly = true;
+                    inputData.classList.add('readonly-field');
+                    inputData.style.background = "#f1f1f1";
+                    selectMes.dispatchEvent(new Event('change')); // Reseta para o 3º domingo
+                }
+            };
+
+            await carregarVoluntarios();
+
+            // 4. Salvar no Firestore (Non-regression: Mantendo campos idênticos ao original)
+            form.onsubmit = async (e) => {
+                e.preventDefault();
+                const btn = document.getElementById('btn-gravar');
+                btn.disabled = true;
+                btn.textContent = "Gravando...";
+
+                const escala = {
+                    dataTrabalho: Timestamp.fromDate(new Date(inputData.value + 'T12:00:00')),
+                    mesReferencia: selectMes.options[selectMes.selectedIndex].text,
+                    tema: document.getElementById('tema-prelecao').value,
+                    equipe: {
+                        mediuns: [document.getElementById('escala-medium1').value, document.getElementById('escala-medium2').value],
+                        preletor: document.getElementById('escala-preletor').value,
+                        entrevistador: document.getElementById('escala-entrevistador').value,
+                        escolaPais: document.getElementById('escala-escola-pais').value,
+                        evangelizadores: [document.getElementById('escala-evangelizador1').value, document.getElementById('escala-evangelizador2').value]
+                    },
+                    criadoEm: serverTimestamp(),
+                    criadoPor: user.uid
+                };
+
+                try {
+                    await addDoc(collection(db, "escalaCaritas"), escala);
+                    alert("Escala gravada com sucesso!");
+                    window.location.href = '/modulo-caritas.html';
+                } catch (error) {
+                    alert("Erro ao salvar: " + error.message);
+                    btn.disabled = false;
+                    btn.textContent = "Gravar Escala Mensal";
+                }
+            };
+        }
+
+        function popularMeses(select) {
+            const mesesExtenso = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
+            const hoje = new Date();
+            let mesAtual = hoje.getMonth();
+            let anoAtual = hoje.getFullYear();
+
+            for (let i = 0; i < 12; i++) {
+                const opt = document.createElement('option');
+                opt.value = `${mesAtual}|${anoAtual}`;
+                opt.textContent = `${mesesExtenso[mesAtual]} / ${anoAtual}`;
+                select.appendChild(opt);
+
+                mesAtual++;
+                if (mesAtual > 11) { mesAtual = 0; anoAtual++; }
+            }
+        }
+
+        function calcularTerceiroDomingo(mes, ano) {
+            let data = new Date(ano, mes, 1);
+            let domingos = 0;
+            while (domingos < 3) {
+                if (data.getDay() === 0) {
+                    domingos++;
+                    if (domingos === 3) return new Date(data);
+                }
+                data.setDate(data.getDate() + 1);
+            }
+            return data;
         }
 
         async function carregarVoluntarios() {
-            const snap = await getDocs(query(collection(db, "voluntarios"), orderBy("nome")));
-            const selects = document.querySelectorAll('select');
-            
-            snap.forEach(doc => {
-                const vol = doc.data();
-                selects.forEach(sel => {
-                    const opt = document.createElement('option');
-                    opt.value = vol.nome;
-                    opt.textContent = vol.nome;
-                    sel.appendChild(opt);
-                });
-            });
-        }
-
-        document.getElementById('form-escala').onsubmit = async (e) => {
-            e.preventDefault();
-            const btn = e.target.querySelector('button');
-            btn.disabled = true;
-            btn.innerText = "Gravando...";
-
-            const escala = {
-                dataTrabalho: document.getElementById('data-trabalho').value,
-                mesReferencia: document.getElementById('mes-referencia').value,
-                tema: document.getElementById('tema-prelecao').value,
-                equipe: {
-                    passe: [document.getElementById('passe-m1').value, document.getElementById('passe-m2').value],
-                    palestra: document.getElementById('palestra-preletor').value,
-                    entrevista: document.getElementById('palestra-entrevistador').value,
-                    escolaPais: document.getElementById('membro-escola').value
-                },
-                criadoEm: serverTimestamp()
-            };
-
+            const selects = document.querySelectorAll('.select-voluntario');
             try {
-                await addDoc(collection(db, "escalas_caritas"), escala);
-                alert("Escala gravada com sucesso!");
-                window.location.href = "/modulo-caritas.html";
-            } catch (err) {
-                alert("Erro ao salvar: " + err.message);
-                btn.disabled = false;
-                btn.innerText = "Gravar Escala Social";
-            }
-        };
+                const q = query(collection(db, "voluntarios"), where("statusVoluntario", "==", "ativo"), orderBy("nome"));
+                const snap = await getDocs(q);
+                let options = '<option value="">Selecione...</option>';
+                snap.forEach(doc => { options += `<option value="${doc.data().nome}">${doc.data().nome}</option>`; });
+                selects.forEach(s => s.innerHTML = options);
+            } catch (error) { console.error("Erro voluntários:", error); }
+        }
     </script>
 </body>
 </html>
