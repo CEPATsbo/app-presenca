@@ -12,10 +12,12 @@
         .container { background: white; padding: 30px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); width: 100%; max-width: 1000px; box-sizing: border-box; min-height: 400px; }
         h1 { color: #2c3e50; margin-top: 0; border-bottom: 2px solid #e67e22; padding-bottom: 10px; margin-bottom: 25px; }
 
+        /* Estilo do Seletor de Modo (Switch) */
         .seletor-modo { background: #eee; padding: 5px; border-radius: 10px; display: inline-flex; margin-bottom: 30px; }
         .btn-modo { padding: 10px 20px; border: none; border-radius: 8px; cursor: pointer; font-weight: bold; transition: 0.3s; background: transparent; color: #666; }
         .btn-modo.ativo { background: #e67e22; color: white; box-shadow: 0 2px 5px rgba(0,0,0,0.2); }
 
+        /* Cards de Controle */
         .grid-estoque { display: grid; grid-template-columns: 1fr; gap: 30px; width: 100%; }
         .secao-estoque { display: none; border: 1px solid #eee; padding: 20px; border-radius: 10px; background: #fafafa; }
         .secao-estoque.visivel { display: block; }
@@ -24,6 +26,7 @@
         .estoque-info b { font-size: 1.1em; color: #2c3e50; }
         .estoque-info p { margin: 5px 0 0 0; color: #7f8c8d; font-size: 0.85em; }
 
+        /* Controles de Quantidade */
         .controles { display: flex; align-items: center; gap: 15px; }
         .btn-ajuste { width: 35px; height: 35px; border-radius: 50%; border: none; cursor: pointer; font-weight: bold; color: white; font-size: 1.2em; display: flex; align-items: center; justify-content: center; }
         .btn-mais { background: #27ae60; }
@@ -33,8 +36,9 @@
 
         .alerta-baixo { border: 2px solid #e74c3c; background: #fff5f5; }
 
+        /* Modais */
         .modal { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.6); display: none; justify-content: center; align-items: center; z-index: 1000; }
-        .modal-content { background: white; padding: 30px; border-radius: 12px; width: 90%; max-width: 400px; }
+        .modal-content { background: white; padding: 30px; border-radius: 12px; width: 90%; max-width: 400px; box-shadow: 0 10px 30px rgba(0,0,0,0.3); }
         .form-group { display: flex; flex-direction: column; gap: 5px; margin-bottom: 15px; }
         .form-group label { font-size: 0.8em; font-weight: bold; color: #666; text-transform: uppercase; }
         .form-group input { padding: 12px; border: 1px solid #ccc; border-radius: 8px; font-size: 1em; }
@@ -42,7 +46,7 @@
 </head>
 <body>
     <header class="nav-header">
-        <a href="/modulo-caritas.html" class="btn-voltar"><i class="fas fa-arrow-left"></i> Voltar</a>
+        <a href="/modulo-caritas.html" class="btn-voltar"><i class="fas fa-arrow-left"></i> Voltar ao Painel</a>
         <img src="/logo-cepat.png" alt="Logo CEPAT" style="height: 60px;">
     </header>
 
@@ -59,7 +63,7 @@
 
         <div id="grid-principal" class="grid-estoque">
             <div id="secao-cestas" class="secao-estoque visivel">
-                <h3 style="color: #e67e22; border-bottom: 1px solid #eee; padding-bottom: 10px;">
+                <h3 style="color: #e67e22; border-bottom: 1px solid #eee; padding-bottom: 10px; margin-top: 0;">
                     <i class="fas fa-shopping-basket"></i> Cestas Montadas
                 </h3>
                 <div id="lista-cestas"></div>
@@ -77,21 +81,38 @@
 
     <div id="modal-produto" class="modal">
         <div class="modal-content">
-            <h3 id="modal-titulo">Novo Item no Estoque</h3>
+            <h3 id="modal-titulo" style="margin-top: 0;">Novo Item</h3>
             <form id="form-item-estoque">
                 <input type="hidden" id="edit-id">
-                <div class="form-group"><label>Nome do Produto</label><input type="text" id="p-nome" required></div>
                 
-                <div id="campos-cadastro-inicial">
-                    <div class="form-group"><label>Quantidade Inicial</label><input type="number" id="p-qtd-ini" value="0"></div>
-                    <div class="form-group"><label>Doador Inicial</label><input type="text" id="p-doador-ini" placeholder="Ex: Doação de Domingo"></div>
+                <div class="form-group">
+                    <label>Nome do Produto</label>
+                    <input type="text" id="p-nome" required>
                 </div>
 
-                <div class="form-group"><label>Estoque Mínimo</label><input type="number" id="p-minimo" value="5" required></div>
-                <div class="form-group"><label>Data de Validade</label><input type="date" id="p-validade"></div>
+                <div id="campos-cadastro-inicial">
+                    <div class="form-group">
+                        <label>Quantidade Inicial</label>
+                        <input type="number" id="p-qtd-ini" value="0">
+                    </div>
+                    <div class="form-group">
+                        <label>Doador Inicial</label>
+                        <input type="text" id="p-doador-ini" placeholder="Ex: Doação Anônima">
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label>Estoque Mínimo (Alerta)</label>
+                    <input type="number" id="p-minimo" value="5" min="0" required>
+                </div>
+
+                <div class="form-group">
+                    <label>Data de Validade</label>
+                    <input type="date" id="p-validade">
+                </div>
                 
                 <div style="display: flex; gap: 10px; margin-top: 20px;">
-                    <button type="button" onclick="document.getElementById('modal-produto').style.display='none'" style="flex:1; padding: 12px; border-radius: 8px; border: 1px solid #ccc; cursor: pointer;">Cancelar</button>
+                    <button type="button" id="btn-cancelar-modal" style="flex:1; padding: 12px; border-radius: 8px; border: 1px solid #ccc; cursor: pointer;">Cancelar</button>
                     <button type="submit" style="flex:1; background: #27ae60; color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: bold;">Salvar</button>
                 </div>
             </form>
@@ -100,7 +121,7 @@
 
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
-        import { getFirestore, collection, addDoc, onSnapshot, query, orderBy, serverTimestamp, doc, updateDoc, deleteDoc } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
+        import { getFirestore, collection, addDoc, onSnapshot, query, orderBy, serverTimestamp, doc, updateDoc, deleteDoc, getDocs, where } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
         import { protegerPagina } from '/auth.js';
 
         const firebaseConfig = {
@@ -118,27 +139,46 @@
 
         protegerPagina(['super-admin', 'caritas']).then(user => {
             usuarioLogado = user;
+            inicializarApp();
+        }).catch(() => window.location.href = '/dashboard.html');
+
+        async function inicializarApp() {
+            // Garantir existência da cesta padrão
+            const qCheck = query(collection(db, "estoque_caritas"), where("tipo", "==", "cesta"));
+            const checkSnap = await getDocs(qCheck);
+            if (checkSnap.empty) {
+                await addDoc(collection(db, "estoque_caritas"), {
+                    nome: "Cesta Básica Padrão",
+                    quantidade: 0,
+                    minimo: 10,
+                    tipo: "cesta",
+                    criadoEm: serverTimestamp()
+                });
+            }
+
+            // Monitoramento em tempo real
             onSnapshot(query(collection(db, "estoque_caritas"), orderBy("nome")), (snapshot) => {
                 dadosEstoque = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
                 renderizarItens();
             });
-        });
+        }
 
         function renderizarItens() {
             const containerCestas = document.getElementById('lista-cestas');
             const containerProdutos = document.getElementById('lista-produtos');
+            
             containerCestas.innerHTML = dadosEstoque.filter(i => i.tipo === 'cesta').map(c => gerarTemplateItem(c)).join('');
             containerProdutos.innerHTML = dadosEstoque.filter(i => i.tipo === 'produto').map(p => gerarTemplateItem(p)).join('');
         }
 
         function gerarTemplateItem(item) {
             const critico = item.quantidade <= item.minimo;
-            const validadeFormatada = item.validade ? new Date(item.validade).toLocaleDateString('pt-BR') : 'Sem data';
+            const validadeStr = item.validade ? new Date(item.validade).toLocaleDateString('pt-BR') : 'S/ Data';
             return `
                 <div class="estoque-item ${critico ? 'alerta-baixo' : ''}">
                     <div class="estoque-info">
                         <b>${item.nome}</b>
-                        <p>Validade: ${validadeFormatada} | Mínimo: ${item.minimo}</p>
+                        <p>Validade: ${validadeStr} | Mín: ${item.minimo}</p>
                     </div>
                     <div class="controles">
                         <button class="btn-ajuste btn-menos" onclick="gerenciarQuantidade('${item.id}', -1, '${item.nome}')">-</button>
@@ -151,74 +191,39 @@
             `;
         }
 
-        // Abre modal para editar validade/mínimo (funciona para Cestas também!)
+        // Funções Globais
         window.abrirEdicao = (id) => {
             const item = dadosEstoque.find(i => i.id === id);
-            document.getElementById('modal-titulo').innerText = "Editar: " + item.nome;
+            document.getElementById('modal-titulo').innerText = "Editar Item: " + item.nome;
             document.getElementById('edit-id').value = id;
             document.getElementById('p-nome').value = item.nome;
             document.getElementById('p-minimo').value = item.minimo;
             document.getElementById('p-validade').value = item.validade || "";
-            document.getElementById('campos-cadastro-inicial').style.display = 'none'; // Esconde campos de saldo inicial na edição
+            document.getElementById('campos-cadastro-inicial').style.display = 'none';
             document.getElementById('modal-produto').style.display = 'flex';
         };
 
         window.gerenciarQuantidade = async (id, delta, nome) => {
             const item = dadosEstoque.find(i => i.id === id);
-            let qtdAjuste = 1, doador = "Não informado";
+            let ajuste = 1, doador = "Não informado";
             if (delta > 0) {
-                const qtdStr = prompt(`Quantas unidades de ${nome} estão entrando?`, "1");
-                if (qtdStr === null) return;
-                qtdAjuste = parseInt(qtdStr) || 1;
+                const qtd = prompt(`Quantas unidades de ${nome} estão entrando?`, "1");
+                if (qtd === null) return;
+                ajuste = parseInt(qtd) || 1;
                 doador = prompt(`Nome do Doador:`, "Anônimo") || "Anônimo";
             }
-            const novaQtd = Math.max(0, item.quantidade + (delta * qtdAjuste));
+            const novaQtd = Math.max(0, item.quantidade + (delta * ajuste));
             await updateDoc(doc(db, "estoque_caritas", id), { quantidade: novaQtd });
             await addDoc(collection(db, "log_auditoria"), {
                 timestamp: serverTimestamp(),
                 autor: { nome: usuarioLogado.displayName || usuarioLogado.email },
                 acao: delta > 0 ? "ENTRADA_ESTOQUE" : "SAIDA_ESTOQUE",
-                detalhes: `${delta > 0 ? 'Doador: ' + doador : 'Retirada'}: ${qtdAjuste}x ${nome}. Novo Saldo: ${novaQtd}`
+                detalhes: `${delta > 0 ? 'Doador: ' + doador : 'Retirada'}: ${ajuste}x ${nome}. Novo Saldo: ${novaQtd}`
             });
         };
 
-        document.getElementById('form-item-estoque').onsubmit = async (e) => {
-            e.preventDefault();
-            const id = document.getElementById('edit-id').value;
-            const nome = document.getElementById('p-nome').value;
-            const minimo = parseInt(document.getElementById('p-minimo').value);
-            const validade = document.getElementById('p-validade').value;
-
-            if (id) {
-                // MODO EDIÇÃO (Validade e Mínimo)
-                await updateDoc(doc(db, "estoque_caritas", id), { nome, minimo, validade });
-            } else {
-                // MODO CADASTRO NOVO (Com Qtd e Doador Inicial)
-                const qtdIni = parseInt(document.getElementById('p-qtd-ini').value) || 0;
-                const doadorIni = document.getElementById('p-doador-ini').value || "Saldo Inicial";
-                await addDoc(collection(db, "estoque_caritas"), { 
-                    nome, quantidade: qtdIni, minimo, validade, tipo: 'produto', criadoEm: serverTimestamp() 
-                });
-                await addDoc(collection(db, "log_auditoria"), {
-                    timestamp: serverTimestamp(),
-                    autor: { nome: usuarioLogado.displayName || usuarioLogado.email },
-                    acao: "CADASTRO_ESTOQUE",
-                    detalhes: `Cadastrou item ${nome} com saldo inicial de ${qtdIni} (Doador: ${doadorIni})`
-                });
-            }
-            document.getElementById('modal-produto').style.display = 'none';
-        };
-
-        document.getElementById('btn-abrir-modal').onclick = () => {
-            document.getElementById('modal-titulo').innerText = "Novo Item no Estoque";
-            document.getElementById('edit-id').value = "";
-            document.getElementById('form-item-estoque').reset();
-            document.getElementById('campos-cadastro-inicial').style.display = 'block';
-            document.getElementById('modal-produto').style.display = 'flex';
-        };
-
         window.excluirItemEstoque = async (id, nome) => {
-            if (confirm(`Excluir ${nome}?`)) await deleteDoc(doc(db, "estoque_caritas", id));
+            if (confirm(`Excluir permanentemente ${nome}?`)) await deleteDoc(doc(db, "estoque_caritas", id));
         };
 
         window.mudarModoVisao = (modo) => {
@@ -228,10 +233,45 @@
             document.getElementById('secao-produtos').style.display = (modo === 'cestas' ? 'none' : 'block');
         };
 
+        // EventListeners Corrigidos (Sem erro de null)
         document.getElementById('btn-modo-cestas').onclick = () => window.mudarModoVisao('cestas');
         document.getElementById('btn-modo-produtos').onclick = () => window.mudarModoVisao('produtos');
         document.getElementById('btn-modo-hibrido').onclick = () => window.mudarModoVisao('hibrido');
+        document.getElementById('btn-abrir-modal').onclick = () => {
+            document.getElementById('modal-titulo').innerText = "Novo Item no Estoque";
+            document.getElementById('edit-id').value = "";
+            document.getElementById('form-item-estoque').reset();
+            document.getElementById('campos-cadastro-inicial').style.display = 'block';
+            document.getElementById('modal-produto').style.display = 'flex';
+        };
         document.getElementById('btn-cancelar-modal').onclick = () => document.getElementById('modal-produto').style.display = 'none';
+
+        document.getElementById('form-item-estoque').onsubmit = async (e) => {
+            e.preventDefault();
+            const id = document.getElementById('edit-id').value;
+            const nome = document.getElementById('p-nome').value;
+            const minimo = parseInt(document.getElementById('p-minimo').value);
+            const validade = document.getElementById('p-validade').value;
+
+            try {
+                if (id) {
+                    await updateDoc(doc(db, "estoque_caritas", id), { nome, minimo, validade });
+                } else {
+                    const qtdIni = parseInt(document.getElementById('p-qtd-ini').value) || 0;
+                    const doadorIni = document.getElementById('p-doador-ini').value || "Saldo Inicial";
+                    await addDoc(collection(db, "estoque_caritas"), { 
+                        nome, quantidade: qtdIni, minimo, validade, tipo: 'produto', criadoEm: serverTimestamp() 
+                    });
+                    await addDoc(collection(db, "log_auditoria"), {
+                        timestamp: serverTimestamp(),
+                        autor: { nome: usuarioLogado.displayName || usuarioLogado.email },
+                        acao: "CADASTRO_ESTOQUE",
+                        detalhes: `Cadastrou item ${nome} (Saldo inicial: ${qtdIni}, Doador: ${doadorIni})`
+                    });
+                }
+                document.getElementById('modal-produto').style.display = 'none';
+            } catch (err) { alert(err.message); }
+        };
     </script>
 </body>
 </html>
