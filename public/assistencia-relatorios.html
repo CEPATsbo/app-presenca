@@ -2,91 +2,202 @@
 <html lang="pt-br">
 <head>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Cáritas - Relatório Mensal de Atividades</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <style>
-        body { font-family: sans-serif; background: #f4f6f9; padding: 40px; }
-        .folha { background: white; padding: 40px; max-width: 900px; margin: 0 auto; border-radius: 8px; box-shadow: 0 0 10px rgba(0,0,0,0.1); }
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #f4f6f9; padding: 40px; }
+        .nav-header { max-width: 900px; margin: 0 auto 20px auto; display: flex; justify-content: space-between; align-items: center; }
+        .btn-voltar { background: #6c757d; color: white; padding: 10px 15px; border-radius: 8px; text-decoration: none; font-weight: bold; font-size: 0.9em; }
+        
+        .folha { background: white; padding: 50px; max-width: 900px; margin: 0 auto; border-radius: 8px; box-shadow: 0 0 20px rgba(0,0,0,0.1); position: relative; }
+        
+        .btn-imprimir { background: #2c3e50; color: white; border: none; padding: 12px 25px; border-radius: 8px; cursor: pointer; font-weight: bold; margin-bottom: 30px; display: flex; align-items: center; gap: 10px; transition: 0.3s; }
+        .btn-imprimir:hover { background: #1a252f; }
+
         .header { text-align: center; border-bottom: 2px solid #2c3e50; padding-bottom: 20px; margin-bottom: 30px; }
-        .grid-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; margin-bottom: 30px; }
-        .card-stat { background: #f8f9fa; padding: 20px; border-radius: 10px; text-align: center; border: 1px solid #eee; }
-        .card-stat h4 { margin: 0; color: #7f8c8d; font-size: 0.8em; text-transform: uppercase; }
-        .card-stat p { margin: 10px 0 0 0; font-size: 1.8em; font-weight: bold; color: #e67e22; }
-        table { width: 100%; border-collapse: collapse; margin-top: 20px; }
-        th { background: #eee; padding: 10px; text-align: left; font-size: 0.9em; }
-        td { padding: 10px; border-bottom: 1px solid #eee; font-size: 0.9em; }
+        .header img { height: 60px; margin-bottom: 10px; }
+        .header h2 { margin: 0; color: #2c3e50; text-transform: uppercase; }
+        .header p { margin: 5px 0 0 0; color: #7f8c8d; font-weight: bold; }
+
+        .grid-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; margin-bottom: 40px; }
+        .card-stat { background: #f8f9fa; padding: 25px; border-radius: 12px; text-align: center; border: 1px solid #eee; }
+        .card-stat h4 { margin: 0; color: #7f8c8d; font-size: 0.8em; text-transform: uppercase; letter-spacing: 1px; }
+        .card-stat p { margin: 10px 0 0 0; font-size: 2.2em; font-weight: bold; color: #e67e22; }
+
+        h3 { color: #2c3e50; border-left: 5px solid #e67e22; padding-left: 15px; margin: 40px 0 20px 0; font-size: 1.2em; }
+        
+        table { width: 100%; border-collapse: collapse; margin-top: 10px; background: white; }
+        th { background: #f2f2f2; padding: 12px; text-align: left; font-size: 0.85em; color: #666; text-transform: uppercase; border-bottom: 2px solid #ddd; }
+        td { padding: 12px; border-bottom: 1px solid #eee; font-size: 0.9em; color: #333; }
+        
         .alerta-val { color: #e67e22; font-weight: bold; }
+        .status-prioridade { background: #fff3e0; color: #e67e22; padding: 4px 8px; border-radius: 4px; font-weight: bold; font-size: 0.8em; }
+
+        footer { margin-top: 60px; text-align: center; font-size: 0.8em; color: #999; border-top: 1px solid #eee; padding-top: 20px; }
+
+        /* Regras de Impressão Corrigidas */
+        @media print {
+            body { padding: 0; background: white; }
+            .btn-imprimir, .btn-voltar, .nav-header { display: none !important; }
+            .folha { box-shadow: none; max-width: 100%; padding: 20px; border: none; }
+            /* CORREÇÃO DO VENDOR PREFIX SOLICITADA PELO SEU EDITOR */
+            th { 
+                background: #eee !important; 
+                -webkit-print-color-adjust: exact; 
+                print-color-adjust: exact; 
+            }
+        }
     </style>
 </head>
 <body>
+
+    <div class="nav-header">
+        <a href="/modulo-caritas.html" class="btn-voltar"><i class="fas fa-arrow-left"></i> Voltar ao Painel</a>
+    </div>
+
     <div class="folha">
+        <button class="btn-imprimir" onclick="window.print()">
+            <i class="fas fa-print"></i> IMPRIMIR RELATÓRIO AGORA
+        </button>
+
         <header class="header">
-            <img src="/logo-cepat.png" style="height: 60px;">
+            <img src="/logo-cepat.png" alt="Logo CEPAT">
             <h2>Relatório de Gestão Social - Cáritas</h2>
-            <p id="data-mes">Resumo de Dezembro / 2025</p>
+            <p id="label-mes">Competência: Dezembro / 2025</p>
         </header>
 
         <section class="grid-stats">
-            <div class="card-stat"><h4>Famílias Atendidas</h4><p id="rep-familias">0</p></div>
-            <div class="card-stat"><h4>Cestas Entregues</h4><p id="rep-cestas">0</p></div>
-            <div class="card-stat"><h4>Itens em Estoque</h4><p id="rep-itens">0</p></div>
+            <div class="card-stat">
+                <h4>Famílias Ativas</h4>
+                <p id="rep-familias">--</p>
+            </div>
+            <div class="card-stat">
+                <h4>Cestas Entregues</h4>
+                <p id="rep-cestas">--</p>
+            </div>
+            <div class="card-stat">
+                <h4>Itens em Estoque</h4>
+                <p id="rep-itens">--</p>
+            </div>
         </section>
 
-        <h3><i class="fas fa-exclamation-circle"></i> Atenção: Itens Próximos do Vencimento</h3>
-        <table id="tabela-vencimentos">
-            <thead><tr><th>Produto</th><th>Validade</th><th>Saldo</th><th>Status</th></tr></thead>
-            <tbody></tbody>
-        </table>
+        <section>
+            <h3><i class="fas fa-clock"></i> Controle de Validade (Prioridade de Saída)</h3>
+            <table id="tabela-vencimentos">
+                <thead>
+                    <tr>
+                        <th>Produto / Insumo</th>
+                        <th>Validade</th>
+                        <th>Saldo Atual</th>
+                        <th>Ação Sugerida</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr><td colspan="4" style="text-align:center;">Carregando dados FEFO...</td></tr>
+                </tbody>
+            </table>
+        </section>
 
-        <h3 style="margin-top:40px;"><i class="fas fa-history"></i> Histórico Recente de Doações</h3>
-        <table id="tabela-logs">
-            <thead><tr><th>Data</th><th>Doador</th><th>Item / Quantidade</th></tr></thead>
-            <tbody></tbody>
-        </table>
+        <section>
+            <h3><i class="fas fa-hand-holding-heart"></i> Histórico de Doações Recebidas</h3>
+            <table id="tabela-logs">
+                <thead>
+                    <tr>
+                        <th>Data</th>
+                        <th>Doador Registrado</th>
+                        <th>Descrição da Doação</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr><td colspan="3" style="text-align:center;">Carregando logs de entrada...</td></tr>
+                </tbody>
+            </table>
+        </section>
+
+        <footer>
+            Documento Gerado pelo Sistema de Gestão Voluntários Ativos - CEPAT em <span id="data-hora-geracao"></span>
+        </footer>
     </div>
 
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
         import { getFirestore, collection, query, where, getDocs, Timestamp, orderBy } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
-        
-        const firebaseConfig = { apiKey: "AIzaSyBV7RPjk3cFTqL-aIpflJcUojKg1ZXMLuU", authDomain: "voluntarios-ativos---cepat.firebaseapp.com", projectId: "voluntarios-ativos---cepat", storageBucket: "voluntarios-ativos---cepat.firebasestorage.app", messagingSenderId: "66122858261", appId: "1:66122858261:web:7fa21f1805463b5c08331c" };
-        const db = getFirestore(initializeApp(firebaseConfig));
+        import { protegerPagina } from '/auth.js';
+
+        const firebaseConfig = {
+            apiKey: "AIzaSyBV7RPjk3cFTqL-aIpflJcUojKg1ZXMLuU",
+            authDomain: "voluntarios-ativos---cepat.firebaseapp.com",
+            projectId: "voluntarios-ativos---cepat",
+            storageBucket: "voluntarios-ativos---cepat.firebasestorage.app",
+            messagingSenderId: "66122858261",
+            appId: "1:66122858261:web:7fa21f1805463b5c08331c"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const db = getFirestore(app);
+
+        protegerPagina(['super-admin', 'diretor', 'caritas']).then(() => {
+            document.getElementById('data-hora-geracao').innerText = new Date().toLocaleString('pt-BR');
+            carregarRelatorio();
+        });
 
         async function carregarRelatorio() {
-            const inicioMes = Timestamp.fromDate(new Date(2025, 11, 1)); // Dezembro
-            const hojeStr = new Date().toISOString().split('T')[0];
+            const agora = new Date();
+            const inicioMes = Timestamp.fromDate(new Date(agora.getFullYear(), agora.getMonth(), 1));
+            
+            try {
+                const fams = await getDocs(query(collection(db, "familiasAssistidas"), where("statusGeral", "==", "Ativa")));
+                document.getElementById('rep-familias').innerText = fams.size;
 
-            // 1. Contagens
-            const fams = await getDocs(query(collection(db, "familiasAssistidas"), where("statusGeral", "==", "Ativa")));
-            document.getElementById('rep-familias').innerText = fams.size;
+                const ents = await getDocs(query(collection(db, "entregasCestas"), where("data", ">=", inicioMes)));
+                document.getElementById('rep-cestas').innerText = ents.size;
 
-            const ents = await getDocs(query(collection(db, "entregasCestas"), where("data", ">=", inicioMes)));
-            document.getElementById('rep-cestas').innerText = ents.size;
+                const estoque = await getDocs(collection(db, "estoque_caritas"));
+                document.getElementById('rep-itens').innerText = estoque.size;
 
-            const estoque = await getDocs(collection(db, "estoque_caritas"));
-            document.getElementById('rep-itens').innerText = estoque.size;
+                let htmlVenc = "";
+                const itensOrdenados = estoque.docs.map(d => d.data()).sort((a, b) => {
+                    if (!a.validade) return 1; if (!b.validade) return -1;
+                    return a.validade.localeCompare(b.validade);
+                });
 
-            // 2. Tabela de Vencimentos (FEFO)
-            let htmlVenc = "";
-            estoque.forEach(doc => {
-                const i = doc.data();
-                if (i.validade && i.validade <= "2026-02-01") { // Mostra o que vence até Fev
-                    const partes = i.validade.split('-');
-                    htmlVenc += `<tr><td>${i.nome}</td><td class="alerta-val">${partes[2]}/${partes[1]}/${partes[0]}</td><td>${i.quantidade}</td><td>Prioridade</td></tr>`;
-                }
-            });
-            document.getElementById('tabela-vencimentos').querySelector('tbody').innerHTML = htmlVenc || "<tr><td colspan='4'>Nenhum item crítico.</td></tr>";
+                itensOrdenados.forEach(i => {
+                    if (i.validade && i.quantidade > 0) {
+                        const partes = i.validade.split('-');
+                        htmlVenc += `
+                            <tr>
+                                <td><b>${i.nome}</b></td>
+                                <td class="alerta-val">${partes[2]}/${partes[1]}/${partes[0]}</td>
+                                <td>${i.quantidade} un.</td>
+                                <td><span class="status-prioridade">FEFO: SAÍDA IMEDIATA</span></td>
+                            </tr>`;
+                    }
+                });
+                document.getElementById('tabela-vencimentos').querySelector('tbody').innerHTML = htmlVenc || "<tr><td colspan='4'>Nenhum item com validade registrada.</td></tr>";
 
-            // 3. Logs de Doações
-            const logs = await getDocs(query(collection(db, "log_auditoria"), where("acao", "==", "ENTRADA"), orderBy("timestamp", "desc")));
-            let htmlLogs = "";
-            logs.forEach(doc => {
-                const l = doc.data();
-                htmlLogs += `<tr><td>${l.timestamp.toDate().toLocaleDateString()}</td><td>${l.detalhes.split(':')[1]}</td><td>${l.detalhes.split(':')[2]}</td></tr>`;
-            });
-            document.getElementById('tabela-logs').querySelector('tbody').innerHTML = htmlLogs;
+                const logs = await getDocs(query(collection(db, "log_auditoria"), where("acao", "==", "ENTRADA"), orderBy("timestamp", "desc")));
+                let htmlLogs = "";
+                logs.forEach(doc => {
+                    const l = doc.data();
+                    const partesDet = l.detalhes.split(':');
+                    const doador = partesDet[1] ? partesDet[1].split('.')[0].trim() : "Anônimo";
+                    const item = partesDet[2] ? partesDet[2].trim() : "Item não identificado";
+                    
+                    htmlLogs += `
+                        <tr>
+                            <td>${l.timestamp.toDate().toLocaleDateString('pt-BR')}</td>
+                            <td>${doador}</td>
+                            <td>${item}</td>
+                        </tr>`;
+                });
+                document.getElementById('tabela-logs').querySelector('tbody').innerHTML = htmlLogs || "<tr><td colspan='3'>Sem registros de doação este mês.</td></tr>";
+
+            } catch (err) {
+                console.error(err);
+                alert("Erro ao carregar relatório.");
+            }
         }
-        carregarRelatorio();
     </script>
 </body>
 </html>
