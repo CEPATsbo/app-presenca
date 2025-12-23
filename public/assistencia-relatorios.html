@@ -2,64 +2,160 @@
 <html lang="pt-br">
 <head>
     <meta charset="UTF-8">
-    <title>Cáritas - Relatório Mensal</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cáritas - Relatório de Atividades</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <style>
-        body { font-family: sans-serif; padding: 40px; background: #f4f6f9; }
-        .folha-relatorio { background: white; padding: 50px; max-width: 800px; margin: 0 auto; box-shadow: 0 0 20px rgba(0,0,0,0.1); }
+        /* Estilos para visualização e impressão */
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background-color: #f4f6f9; margin: 0; padding: 40px; }
+        .btn-voltar { background-color: #6c757d; color: white; padding: 10px 15px; border-radius: 8px; text-decoration: none; font-weight: bold; margin-bottom: 20px; display: inline-block; }
+        .folha-relatorio { background: white; padding: 50px; max-width: 900px; margin: 0 auto; border-radius: 8px; box-shadow: 0 0 20px rgba(0,0,0,0.1); }
         .header-rep { text-align: center; border-bottom: 2px solid #2c3e50; padding-bottom: 20px; margin-bottom: 30px; }
-        .grid-stats { display: grid; grid-template-columns: repeat(2, 1fr); gap: 20px; margin-bottom: 30px; }
-        .card-stat { padding: 20px; border: 1px solid #eee; border-radius: 8px; text-align: center; }
-        .btn-imprimir { background: #2c3e50; color: white; padding: 10px 20px; border: none; border-radius: 5px; cursor: pointer; margin-bottom: 20px; }
-        @media print { .btn-imprimir { display: none; } body { padding: 0; background: white; } }
+        .header-rep h2 { margin: 10px 0 5px 0; color: #2c3e50; }
+        .header-rep p { margin: 0; color: #7f8c8d; font-weight: bold; text-transform: uppercase; }
+        
+        /* Grid de Indicadores */
+        .grid-stats { display: grid; grid-template-columns: repeat(2, 1fr); gap: 20px; margin-bottom: 40px; }
+        .card-stat { background: #f8f9fa; padding: 25px; border: 1px solid #eee; border-radius: 12px; text-align: center; }
+        .card-stat h4 { margin: 0; color: #7f8c8d; font-size: 0.9em; text-transform: uppercase; }
+        .card-stat p { margin: 10px 0 0 0; font-size: 2.5em; font-weight: bold; color: #e67e22; }
+
+        /* Tabela de Movimentações */
+        h3 { color: #2c3e50; border-left: 5px solid #e67e22; padding-left: 10px; margin-bottom: 20px; }
+        table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+        th { background-color: #f2f2f2; text-align: left; padding: 12px; border-bottom: 2px solid #ddd; font-size: 0.9em; color: #666; }
+        td { padding: 12px; border-bottom: 1px solid #eee; font-size: 0.95em; color: #444; }
+        
+        .btn-imprimir { background-color: #2c3e50; color: white; border: none; padding: 12px 25px; border-radius: 8px; cursor: pointer; font-weight: bold; margin-bottom: 20px; }
+        
+        @media print {
+            body { padding: 0; background: white; }
+            .btn-imprimir, .btn-voltar { display: none; }
+            .folha-relatorio { box-shadow: none; max-width: 100%; padding: 20px; }
+        }
     </style>
 </head>
 <body>
+
+    <a href="/modulo-caritas.html" class="btn-voltar"><i class="fas fa-arrow-left"></i> Painel Cáritas</a>
+
     <div class="folha-relatorio">
         <button class="btn-imprimir" onclick="window.print()"><i class="fas fa-print"></i> Imprimir Relatório</button>
-        <div class="header-rep">
-            <img src="/logo-cepat.png" style="height: 60px;">
-            <h2>Relatório Mensal de Atividades Sociais</h2>
-            <p id="data-relatorio">Dezembro / 2025</p>
-        </div>
+        
+        <header class="header-rep">
+            <img src="/logo-cepat.png" alt="Logo CEPAT" style="height: 70px;">
+            <h2>Casa Espírita Paulo de Tarso</h2>
+            <p>Relatório Mensal de Atividades Sociais - Dezembro / 2025</p>
+        </header>
 
-        <div class="grid-stats">
-            <div class="card-stat"><h4>Total de Cestas Entregues</h4><p id="rep-cestas" style="font-size: 2em; font-weight: bold;">0</p></div>
-            <div class="card-stat"><h4>Novas Famílias Cadastradas</h4><p id="rep-familias" style="font-size: 2em; font-weight: bold;">0</p></div>
-        </div>
+        <section class="grid-stats">
+            <div class="card-stat">
+                <h4>Cestas / Kits Entregues</h4>
+                <p id="total-cestas-count">0</p>
+            </div>
+            <div class="card-stat">
+                <h4>Novos Cadastros</h4>
+                <p id="total-novos-count">0</p>
+            </div>
+        </section>
 
-        <h3>Principais Movimentações de Estoque</h3>
-        <ul id="lista-movimento" style="font-size: 0.9em; color: #444;"></ul>
+        <section>
+            <h3><i class="fas fa-exchange-alt"></i> Movimentações de Estoque e Doações</h3>
+            <table id="tabela-movimentacoes">
+                <thead>
+                    <tr>
+                        <th>Data</th>
+                        <th>Operação</th>
+                        <th>Descrição da Atividade</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td colspan="3" style="text-align:center; color:#999;">Carregando histórico...</td>
+                    </tr>
+                </tbody>
+            </table>
+        </section>
+
+        <footer style="margin-top: 50px; text-align: center; color: #999; font-size: 0.8em; border-top: 1px solid #eee; padding-top: 20px;">
+            Documento gerado automaticamente pelo Sistema de Gestão Social CEPAT em <span id="data-geracao"></span>.
+        </footer>
     </div>
 
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
         import { getFirestore, collection, query, where, getDocs, Timestamp, orderBy } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
-        
-        // Use o seu config aqui...
-        const db = getFirestore(initializeApp(firebaseConfig));
+        import { protegerPagina } from '/auth.js';
 
-        async function gerar() {
-            const inicioMes = Timestamp.fromDate(new Date(2025, 11, 1));
+        // DEFINIÇÃO DO CONFIG (CORREÇÃO DO ERRO)
+        const firebaseConfig = {
+            apiKey: "AIzaSyBV7RPjk3cFTqL-aIpflJcUojKg1ZXMLuU",
+            authDomain: "voluntarios-ativos---cepat.firebaseapp.com",
+            projectId: "voluntarios-ativos---cepat",
+            storageBucket: "voluntarios-ativos---cepat.firebasestorage.app",
+            messagingSenderId: "66122858261",
+            appId: "1:66122858261:web:7fa21f1805463b5c08331c"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const db = getFirestore(app);
+
+        // Apenas cargos de gestão acessam o relatório
+        protegerPagina(['super-admin', 'diretor', 'tesoureiro', 'caritas'])
+            .then(() => gerarRelatorioMensal())
+            .catch(() => window.location.href = '/modulo-caritas.html');
+
+        async function gerarRelatorioMensal() {
+            const agora = new Date();
+            const inicioMes = new Date(agora.getFullYear(), agora.getMonth(), 1);
+            const tsInicio = Timestamp.fromDate(inicioMes);
             
-            // Contagem Cestas
-            const qCestas = query(collection(db, "entregasCestas"), where("data", ">=", inicioMes));
-            const snapCestas = await getDocs(qCestas);
-            document.getElementById('rep-cestas').innerText = snapCestas.size;
+            document.getElementById('data-geracao').innerText = agora.toLocaleString();
 
-            // Logs de Estoque
-            const qLogs = query(collection(db, "log_auditoria"), where("timestamp", ">=", inicioMes), orderBy("timestamp", "desc"));
-            const snapLogs = await getDocs(qLogs);
-            let html = "";
-            snapLogs.forEach(doc => {
-                const log = doc.data();
-                if(log.acao.includes("ESTOQUE")) {
-                    html += `<li>[${log.timestamp.toDate().toLocaleDateString()}] ${log.detalhes}</li>`;
-                }
-            });
-            document.getElementById('lista-movimento').innerHTML = html;
+            try {
+                // 1. Contagem de Entregas de Cestas no mês atual
+                const qEntregas = query(collection(db, "entregasCestas"), where("data", ">=", tsInicio));
+                const snapEntregas = await getDocs(qEntregas);
+                document.getElementById('total-cestas-count').innerText = snapEntregas.size;
+
+                // 2. Contagem de Novas Famílias Cadastradas no mês atual
+                const qNovos = query(collection(db, "familiasAssistidas"), where("cadastradoEm", ">=", tsInicio));
+                const snapNovos = await getDocs(qNovos);
+                document.getElementById('total-novos-count').innerText = snapNovos.size;
+
+                // 3. Histórico de Auditoria (Foco em Estoque e Doações)
+                const qLogs = query(
+                    collection(db, "log_auditoria"), 
+                    where("timestamp", ">=", tsInicio),
+                    orderBy("timestamp", "desc")
+                );
+                const snapLogs = await getDocs(qLogs);
+                
+                const tbody = document.getElementById('tabela-movimentacoes').querySelector('tbody');
+                let html = "";
+
+                snapLogs.forEach(doc => {
+                    const log = doc.data();
+                    // Filtramos apenas logs relevantes para a gestão de insumos
+                    if (log.acao.includes("ESTOQUE") || log.acao.includes("ENTRADA") || log.acao.includes("KIT")) {
+                        const dataFormatada = log.timestamp ? log.timestamp.toDate().toLocaleDateString('pt-BR') : '---';
+                        html += `
+                            <tr>
+                                <td>${dataFormatada}</td>
+                                <td><strong>${log.acao.replace(/_/g, ' ')}</strong></td>
+                                <td>${log.detalhes}</td>
+                            </tr>
+                        `;
+                    }
+                });
+
+                tbody.innerHTML = html || '<tr><td colspan="3" style="text-align:center;">Nenhuma movimentação registrada este mês.</td></tr>';
+
+            } catch (error) {
+                console.error("Erro ao gerar relatório:", error);
+                alert("Erro ao carregar dados do relatório. Verifique as permissões.");
+            }
         }
-        gerar();
     </script>
 </body>
 </html>
