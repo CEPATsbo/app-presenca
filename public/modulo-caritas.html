@@ -7,17 +7,16 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <style>
         body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background-color: #f4f6f9; margin: 0; padding: 20px; display: flex; flex-direction: column; align-items: center; }
-        .nav-header { width: 100%; max-width: 1000px; display: flex; justify-content: space-between; margin-bottom: 20px; align-items: center; }
+        .nav-header { width: 100%; max-width: 1100px; display: flex; justify-content: space-between; margin-bottom: 20px; align-items: center; }
         .btn-painel { background-color: #6c757d; color: white; padding: 10px 15px; border-radius: 8px; text-decoration: none; font-weight: bold; font-size: 0.9em; }
-        .container { width: 100%; max-width: 1000px; }
+        .container { width: 100%; max-width: 1100px; }
         .header-titulo { text-align: center; margin-bottom: 30px; }
         .header-titulo h1 { color: #2c3e50; margin: 0; }
         .header-titulo p { color: #7f8c8d; margin: 5px 0 0 0; }
 
-        /* Indicadores do Topo */
         .stats-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; margin-bottom: 25px; }
         .stat-card { background: white; padding: 20px; border-radius: 12px; text-align: center; box-shadow: 0 4px 10px rgba(0,0,0,0.05); border-bottom: 4px solid #e67e22; }
-        .stat-card h4 { margin: 0; color: #95a5a6; font-size: 0.8em; text-transform: uppercase; letter-spacing: 1px; }
+        .stat-card h4 { margin: 0; color: #95a5a6; font-size: 0.8em; text-transform: uppercase; }
         .stat-card p { margin: 10px 0 0 0; font-size: 2em; font-weight: bold; color: #2c3e50; }
 
         /* Painel de Validade Viva */
@@ -26,15 +25,17 @@
         .grid-alertas-vivos { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 10px; }
         .card-alerta-vivo { background: white; padding: 12px; border-radius: 8px; border-left: 5px solid #e74c3c; box-shadow: 0 2px 5px rgba(0,0,0,0.05); }
 
-        /* Grid de Módulos */
-        .menu-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; }
-        .menu-item { background: white; padding: 30px; border-radius: 12px; text-decoration: none; text-align: center; color: #2c3e50; transition: 0.3s; box-shadow: 0 4px 10px rgba(0,0,0,0.05); display: flex; flex-direction: column; align-items: center; gap: 15px; border: 1px solid #eee; }
+        /* Grid de Módulos (Atualizado para 4 colunas para caber tudo) */
+        .menu-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 20px; }
+        .menu-item { background: white; padding: 20px; border-radius: 12px; text-decoration: none; text-align: center; color: #2c3e50; transition: 0.3s; box-shadow: 0 4px 10px rgba(0,0,0,0.05); display: flex; flex-direction: column; align-items: center; gap: 12px; border: 1px solid #eee; min-height: 180px; }
         .menu-item:hover { transform: translateY(-5px); box-shadow: 0 8px 20px rgba(0,0,0,0.1); border-color: #e67e22; }
-        .menu-item i { font-size: 2.5em; color: #e67e22; }
-        .menu-item h3 { margin: 0; font-size: 1.2em; }
-        .menu-item p { margin: 0; font-size: 0.85em; color: #7f8c8d; line-height: 1.4; }
+        .menu-item i { font-size: 2.2em; color: #e67e22; }
+        .menu-item h3 { margin: 0; font-size: 1.1em; }
+        .menu-item p { margin: 0; font-size: 0.8em; color: #7f8c8d; line-height: 1.3; }
+        .badge-campanha { background: #c0392b; color: white; padding: 2px 6px; border-radius: 4px; font-size: 0.7em; text-transform: uppercase; font-weight: bold; }
 
-        @media (max-width: 768px) { .stats-grid, .menu-grid { grid-template-columns: 1fr; } }
+        @media (max-width: 992px) { .menu-grid { grid-template-columns: repeat(2, 1fr); } }
+        @media (max-width: 600px) { .stats-grid, .menu-grid { grid-template-columns: 1fr; } }
     </style>
 </head>
 <body>
@@ -46,7 +47,7 @@
     <main class="container">
         <div class="header-titulo">
             <h1>Módulo Cáritas</h1>
-            <p>Gestão da Assistência Social e Acolhimento Fraterno</p>
+            <p>Gestão da Assistência Social e Acolhimento Fraterno às Famílias</p>
         </div>
 
         <section class="stats-grid">
@@ -56,10 +57,7 @@
         </section>
 
         <section id="painel-validade-viva" style="display: none;">
-            <h3 class="alerta-titulo">
-                <i class="fas fa-exclamation-triangle fa-beat"></i> 
-                ITENS VENCENDO ATÉ O DOMINGO SOCIAL (<span id="data-ref-domingo">--/--</span>)
-            </h3>
+            <h3 class="alerta-titulo"><i class="fas fa-exclamation-triangle fa-beat"></i> ITENS VENCENDO ATÉ O DOMINGO SOCIAL (<span id="data-ref-domingo">--/--</span>)</h3>
             <div id="lista-alertas-vivos" class="grid-alertas-vivos"></div>
         </section>
 
@@ -67,17 +65,37 @@
             <a href="/assistencia-familias.html" class="menu-item">
                 <i class="fas fa-users"></i>
                 <h3>Famílias</h3>
-                <p>Cadastrar núcleos familiares, gerenciar dependentes e prontuários sociais.</p>
+                <p>Cadastrar núcleos familiares, gerenciar dependentes e prontuários.</p>
             </a>
             <a href="/assistencia-cestas.html" class="menu-item">
                 <i class="fas fa-shopping-basket"></i>
                 <h3>Cestas Básicas</h3>
-                <p>Registrar entregas mensais com baixa automática no estoque.</p>
+                <p>Registrar entregas mensais e histórico de benefícios.</p>
+            </a>
+            <a href="/assistencia-padrinhos.html" class="menu-item">
+                <i class="fas fa-gift"></i>
+                <h3>Padrinhos <span class="badge-campanha">Campanha</span></h3>
+                <p>Gerenciar apadrinhamento de crianças para datas especiais.</p>
+            </a>
+            <a href="/assistencia-etiquetas.html" class="menu-item">
+                <i class="fas fa-tag"></i>
+                <h3>Etiquetas de Natal</h3>
+                <p>Identificação para presentes (Nome, Roupa, Calçado e Padrinho).</p>
+            </a>
+            <a href="/assistencia-escala.html" class="menu-item">
+                <i class="fas fa-calendar-check"></i>
+                <h3>Planner de Escala</h3>
+                <p>Escalar voluntários para as atividades sociais.</p>
+            </a>
+            <a href="/consultar-escalas.html" class="menu-item">
+                <i class="fas fa-clipboard-list"></i>
+                <h3>Consultar Escalas</h3>
+                <p>Visualizar as equipes escaladas para os próximos trabalhos.</p>
             </a>
             <a href="/assistencia-estoque.html" class="menu-item">
                 <i class="fas fa-boxes"></i>
                 <h3>Controle de Estoque</h3>
-                <p>Gestão de validade (FEFO) e saldo de insumos e cestas prontas.</p>
+                <p>Gestão de validade (FEFO) e saldo de insumos e cestas.</p>
             </a>
             <a href="/assistencia-relatorios.html" class="menu-item">
                 <i class="fas fa-file-invoice"></i>
@@ -104,39 +122,34 @@
         const app = initializeApp(firebaseConfig);
         const db = getFirestore(app);
 
-        protegerPagina(['super-admin', 'diretor', 'caritas', 'tesoureiro']).then(() => {
-            const domingoSocial = calcularProximoDomingoSocial();
-            const domingoStr = domingoSocial.toISOString().split('T')[0];
-            document.getElementById('data-domingo').innerText = domingoSocial.toLocaleDateString('pt-BR').substring(0, 5);
-            document.getElementById('data-ref-domingo').innerText = domingoSocial.toLocaleDateString('pt-BR');
+        protegerPagina(['super-admin', 'diretor', 'caritas']).then(() => {
+            const domSoc = calcularProximoDomingoSocial();
+            const domStr = domSoc.toISOString().split('T')[0];
+            document.getElementById('data-domingo').innerText = domSoc.toLocaleDateString('pt-BR').substring(0, 5);
+            document.getElementById('data-ref-domingo').innerText = domSoc.toLocaleDateString('pt-BR');
 
-            // Monitorar Famílias
-            onSnapshot(query(collection(db, "familiasAssistidas"), where("statusGeral", "==", "Ativa")), snap => {
-                document.getElementById('total-familias').innerText = snap.size;
-            });
+            // Estatísticas Gerais
+            onSnapshot(query(collection(db, "familiasAssistidas"), where("statusGeral", "==", "Ativa")), s => document.getElementById('total-familias').innerText = s.size);
+            
+            // Cestas este mês (Lógica simplificada para o exemplo)
+            const inicioMes = new Date(); inicioMes.setDate(1); inicioMes.setHours(0,0,0,0);
+            onSnapshot(query(collection(db, "entregasCestas"), where("data", ">=", inicioMes)), s => document.getElementById('total-cestas').innerText = s.size);
 
-            // Monitorar Validades (Painel Vivo)
+            // Painel Vivo de Validade
             onSnapshot(collection(db, "estoque_caritas"), snap => {
                 const painel = document.getElementById('painel-validade-viva');
                 const lista = document.getElementById('lista-alertas-vivos');
                 let criticos = [];
-
                 snap.forEach(doc => {
-                    const item = doc.data();
-                    if (item.validade && item.validade <= domingoStr && item.quantidade > 0) {
-                        criticos.push(item);
-                    }
+                    const i = doc.data();
+                    if (i.validade && i.validade <= domStr && i.quantidade > 0) { criticos.push(i); }
                 });
-
                 if (criticos.length > 0) {
                     painel.style.display = 'block';
-                    lista.innerHTML = criticos.map(i => `
-                        <div class="card-alerta-vivo">
-                            <b>${i.nome}</b><br>
-                            <small style="color:#e74c3c">Vence: ${i.validade.split('-').reverse().join('/')}</small><br>
-                            <small>Saldo: ${i.quantidade} un.</small>
-                        </div>
-                    `).join('');
+                    lista.innerHTML = criticos.map(i => {
+                        const partes = i.validade.split('-');
+                        return `<div class="card-alerta-vivo"><b>${i.nome}</b><br><small style="color:#e74c3c">Vence: ${partes[2]}/${partes[1]}/${partes[0]}</small><br><small>Saldo: ${i.quantidade} un.</small></div>`;
+                    }).join('');
                 } else { painel.style.display = 'none'; }
             });
         });
