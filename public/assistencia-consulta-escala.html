@@ -7,37 +7,46 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <style>
         body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background-color: #f4f6f9; margin: 0; padding: 20px; display: flex; flex-direction: column; align-items: center; }
-        .nav-header { width: 100%; max-width: 900px; display: flex; justify-content: space-between; margin-bottom: 20px; }
+        .nav-header { width: 100%; max-width: 900px; display: flex; justify-content: space-between; margin-bottom: 20px; align-items: center; }
         .btn-voltar { background-color: #6c757d; color: white; padding: 10px 15px; border-radius: 8px; text-decoration: none; font-weight: bold; font-size: 0.9em; }
-        .container { background: white; padding: 30px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); width: 100%; max-width: 900px; box-sizing: border-box; }
+        .container { background: white; padding: 30px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); width: 100%; max-width: 900px; box-sizing: border-box; min-height: 500px; }
         h1 { color: #2c3e50; margin-top: 0; border-bottom: 2px solid #e67e22; padding-bottom: 10px; margin-bottom: 25px; }
-        .escala-card { background: #fff; border: 1px solid #eee; border-left: 6px solid #e67e22; border-radius: 10px; padding: 20px; margin-bottom: 20px; box-shadow: 0 2px 5px rgba(0,0,0,0.03); }
-        .escala-header { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #f1f1f1; padding-bottom: 10px; margin-bottom: 15px; }
-        .data-destaque { font-size: 1.2em; font-weight: bold; color: #2c3e50; }
-        .tema-box { background: #fff8f0; padding: 10px; border-radius: 6px; margin-bottom: 15px; border: 1px solid #ffe0b2; }
-        .tema-box strong { color: #e67e22; }
-        .escala-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; }
-        .membro-item { display: flex; flex-direction: column; gap: 3px; }
-        .membro-label { font-size: 0.75em; font-weight: bold; color: #95a5a6; text-transform: uppercase; }
-        .membro-nome { font-size: 1em; color: #34495e; font-weight: 500; }
-        .no-data { text-align: center; color: #95a5a6; padding: 40px; }
+        
+        #lista-escalas { display: grid; grid-template-columns: 1fr; gap: 20px; }
+        
+        .escala-card { background: white; border: 1px solid #eee; padding: 25px; border-radius: 12px; border-left: 8px solid #e67e22; box-shadow: 0 2px 8px rgba(0,0,0,0.05); }
+        .escala-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 15px; border-bottom: 1px dashed #ddd; padding-bottom: 10px; }
+        .data-trabalho { font-size: 1.3em; font-weight: bold; color: #2c3e50; display: flex; align-items: center; gap: 10px; }
+        .tema-box { background: #fff8f0; padding: 15px; border-radius: 8px; margin-bottom: 20px; border: 1px solid #ffe0b2; }
+        .tema-box b { color: #e67e22; text-transform: uppercase; font-size: 0.85em; display: block; margin-bottom: 5px; }
+        
+        .equipe-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px; }
+        .equipe-item { display: flex; flex-direction: column; gap: 4px; }
+        .equipe-item label { font-weight: bold; color: #7f8c8d; text-transform: uppercase; font-size: 0.75em; letter-spacing: 0.5px; }
+        .equipe-item span { color: #2c3e50; font-weight: 500; font-size: 1em; }
+
+        .vazio-msg { text-align: center; padding: 50px; color: #95a5a6; font-style: italic; }
+        
+        @media (max-width: 600px) { .equipe-grid { grid-template-columns: 1fr; } }
     </style>
 </head>
 <body>
     <header class="nav-header">
-        <a href="/modulo-caritas.html" class="btn-voltar"><i class="fas fa-arrow-left"></i> Painel Cáritas</a>
+        <a href="/modulo-caritas.html" class="btn-voltar"><i class="fas fa-arrow-left"></i> Voltar ao Painel</a>
+        <img src="/logo-cepat.png" alt="Logo CEPAT" style="height: 50px;">
     </header>
 
     <main class="container">
         <h1><i class="fas fa-clipboard-list"></i> Próximas Escalas Salvas</h1>
+        
         <div id="lista-escalas">
-            <p style="text-align:center; color:#999;">Buscando escalas agendadas...</p>
+            <p style="text-align: center; color: #666;"><i class="fas fa-spinner fa-spin"></i> Consultando escalas no banco de dados...</p>
         </div>
     </main>
 
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
-        import { getFirestore, collection, getDocs, query, orderBy, doc, getDoc } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
+        import { getFirestore, collection, onSnapshot, query, orderBy, where } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
         import { protegerPagina } from '/auth.js';
 
         const firebaseConfig = {
@@ -52,72 +61,82 @@
         const app = initializeApp(firebaseConfig);
         const db = getFirestore(app);
 
-        protegerPagina(['super-admin', 'diretor', 'tesoureiro', 'conselheiro', 'entrevistador', 'recepcionista', 'caritas'])
-            .then(() => carregarEscalas())
+        // Proteção de Página Restaurada (Segurança do Super Admin)
+        protegerPagina(['super-admin', 'diretor', 'tesoureiro', 'caritas', 'entrevistador'])
+            .then(() => {
+                inicializarConsulta();
+            })
             .catch(() => window.location.href = '/dashboard.html');
 
-        async function carregarEscalas() {
+        function inicializarConsulta() {
             const container = document.getElementById('lista-escalas');
-            const nomesCache = {};
 
-            async function obterNomeVoluntario(id) {
-                if (!id) return "Não escalado";
-                if (nomesCache[id]) return nomesCache[id];
-                try {
-                    const docRef = doc(db, "voluntarios", id);
-                    const docSnap = await getDoc(docRef);
-                    const nome = docSnap.exists() ? docSnap.data().nome : "Voluntário não encontrado";
-                    nomesCache[id] = nome;
-                    return nome;
-                } catch (e) { return "Erro ao carregar"; }
-            }
-
-            try {
-                const q = query(collection(db, "escalaCaritas"), orderBy("dataTrabalho", "desc"));
-                const querySnapshot = await getDocs(q);
-
-                if (querySnapshot.empty) {
-                    container.innerHTML = '<div class="no-data">Nenhuma escala encontrada.</div>';
+            // Escuta em tempo real da coleção escalaCaritas (Corrigido para evitar erro de permissão)
+            onSnapshot(query(collection(db, "escalaCaritas"), orderBy("dataTrabalho", "asc")), (snapshot) => {
+                if (snapshot.empty) {
+                    container.innerHTML = '<div class="vazio-msg">Nenhuma escala futura agendada no planner.</div>';
                     return;
                 }
 
-                let htmlContent = '';
-                for (const docSnap of querySnapshot.docs) {
-                    const escala = docSnap.data();
-                    const dataObj = escala.dataTrabalho.toDate();
-                    const dataFormatada = dataObj.toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' });
+                container.innerHTML = snapshot.docs.map(doc => {
+                    const dados = doc.data();
+                    
+                    // Tratamento de Data para exibição amigável
+                    const dataObj = dados.dataTrabalho.toDate();
+                    const dataFormatada = dataObj.toLocaleDateString('pt-BR', { 
+                        weekday: 'long', 
+                        day: '2-digit', 
+                        month: 'long', 
+                        year: 'numeric' 
+                    });
 
-                    // Correção aqui: escalaPais (na Promise) e escalaPais (no template) agora são idênticos
-                    const [med1, med2, preletor, entrevistador, escalaPais, evang1, evang2] = await Promise.all([
-                        obterNomeVoluntario(escala.equipe.mediuns[0]),
-                        obterNomeVoluntario(escala.equipe.mediuns[1]),
-                        obterNomeVoluntario(escala.equipe.preletor),
-                        obterNomeVoluntario(escala.equipe.entrevistador),
-                        obterNomeVoluntario(escala.equipe.escolaPais),
-                        obterNomeVoluntario(escala.equipe.evangelizadores[0]),
-                        obterNomeVoluntario(escala.equipe.evangelizadores[1])
-                    ]);
-
-                    htmlContent += `
+                    // Extração segura da equipe (Evita o erro de "Voluntário não encontrado")
+                    const equipe = dados.equipe || {};
+                    
+                    return `
                         <div class="escala-card">
                             <div class="escala-header">
-                                <span class="data-destaque"><i class="far fa-calendar-alt"></i> ${dataFormatada}</span>
+                                <div class="data-trabalho">
+                                    <i class="far fa-calendar-alt" style="color: #e67e22;"></i> 
+                                    ${dataFormatada.charAt(0).toUpperCase() + dataFormatada.slice(1)}
+                                </div>
+                                <span style="font-size: 0.8em; color: #95a5a6; font-weight: bold;">REF: ${dados.mesReferencia || '---'}</span>
                             </div>
-                            <div class="tema-box"><strong>TEMA:</strong> ${escala.tema}</div>
-                            <div class="escala-grid">
-                                <div class="membro-item"><span class="membro-label">Preletor(a)</span><span class="membro-nome">${preletor}</span></div>
-                                <div class="membro-item"><span class="membro-label">Entrevistador(a)</span><span class="membro-nome">${entrevistador}</span></div>
-                                <div class="membro-item"><span class="membro-label">Médiuns Passe</span><span class="membro-nome">${med1} e ${med2}</span></div>
-                                <div class="membro-item"><span class="membro-label">Escola de Pais</span><span class="membro-nome">${escalaPais}</span></div>
-                                <div class="membro-item"><span class="membro-label">Evangelizadores</span><span class="membro-nome">${evang1} e ${evang2}</span></div>
+
+                            <div class="tema-box">
+                                <b>Tema da Preleção</b>
+                                <span>${dados.tema || 'Tema não informado'}</span>
                             </div>
-                        </div>`;
-                }
-                container.innerHTML = htmlContent;
-            } catch (error) {
-                console.error(error);
-                container.innerHTML = '<p style="color:red; text-align:center;">Erro ao carregar escalas.</p>';
-            }
+
+                            <div class="equipe-grid">
+                                <div class="equipe-item">
+                                    <label>Preletor(a)</label>
+                                    <span>${equipe.preletor || 'A definir'}</span>
+                                </div>
+                                <div class="equipe-item">
+                                    <label>Entrevistador(a)</label>
+                                    <span>${equipe.entrevistador || 'A definir'}</span>
+                                </div>
+                                <div class="equipe-item">
+                                    <label>Médiuns do Passe</label>
+                                    <span>${equipe.mediuns ? equipe.mediuns.filter(m => m !== "").join(' e ') : 'A definir'}</span>
+                                </div>
+                                <div class="equipe-item">
+                                    <label>Escola de Pais</label>
+                                    <span>${equipe.escolaPais || 'A definir'}</span>
+                                </div>
+                                <div class="equipe-item">
+                                    <label>Evangelização</label>
+                                    <span>${equipe.evangelizador1 || 'A definir'}</span>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                }).join('');
+            }, (error) => {
+                console.error("Erro ao ler escalas:", error);
+                container.innerHTML = '<div class="vazio-msg" style="color:red;">Erro de permissão ao acessar escalas. Verifique as regras do banco de dados.</div>';
+            });
         }
     </script>
 </body>
