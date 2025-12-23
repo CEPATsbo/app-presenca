@@ -17,6 +17,12 @@
         .info-nome { font-weight: bold; color: #34495e; font-size: 1.1em; }
         .btn-entregar { background-color: #27ae60; color: white; border: none; padding: 10px 20px; border-radius: 8px; cursor: pointer; font-weight: bold; }
         .btn-entregar:disabled { background-color: #bdc3c7; cursor: not-allowed; }
+
+        /* Estilos do Modal de Kit */
+        .modal { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.6); display: none; justify-content: center; align-items: center; z-index: 1000; }
+        .modal-content { background: white; padding: 25px; border-radius: 12px; width: 90%; max-width: 500px; max-height: 80vh; overflow-y: auto; }
+        .item-selecao { display: flex; align-items: center; gap: 10px; padding: 10px; border-bottom: 1px solid #eee; }
+        .item-selecao input[type="checkbox"] { transform: scale(1.3); }
     </style>
 </head>
 <body>
@@ -34,11 +40,25 @@
         </div>
     </main>
 
+    <div id="modal-kit" class="modal">
+        <div class="modal-content">
+            <h3 id="modal-titulo" style="margin-top: 0; color: #2c3e50;">Montar Kit de Entrega</h3>
+            <p style="font-size: 0.9em; color: #666;">Selecione o que a família está levando:</p>
+            
+            <div id="opcoes-estoque">
+                <p>Carregando estoque...</p>
+            </div>
+
+            <div style="margin-top: 25px; display: flex; gap: 10px;">
+                <button onclick="document.getElementById('modal-kit').style.display='none'" style="flex:1; padding: 12px; border-radius: 8px; border: 1px solid #ccc;">Cancelar</button>
+                <button id="btn-finalizar-entrega" style="flex:1; background: #27ae60; color: white; border: none; border-radius: 8px; font-weight: bold; cursor: pointer;">Finalizar Entrega</button>
+            </div>
+        </div>
+    </div>
+
     <script type="module">
-        console.log("Iniciando Script de Cestas...");
         import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
-        // ADICIONADO: getDocs incluído na lista de importação abaixo
-        import { getFirestore, collection, addDoc, onSnapshot, query, where, orderBy, serverTimestamp, doc, updateDoc, getDocs } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
+        import { getFirestore, collection, addDoc, onSnapshot, query, where, serverTimestamp, doc, updateDoc, getDocs } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
         import { protegerPagina } from '/auth.js';
 
         const firebaseConfig = {
@@ -53,22 +73,30 @@
         const app = initializeApp(firebaseConfig);
         const db = getFirestore(app);
 
-        protegerPagina(['super-admin', 'diretor', 'tesoureiro', 'conselheiro', 'entrevistador', 'recepcionista', 'caritas'])
+        let todasFamilias = [];
+        let itensEstoque = [];
+        let familiaSelecionada = null;
+
+        protegerPagina(['super-admin', 'diretor', 'tesoureiro', 'caritas'])
             .then(user => {
-                console.log("Acesso OK. Monitorando famílias...");
                 inicializarCestas(user);
-            })
-            .catch(err => console.error("Erro de Auth:", err));
+                carregarEstoque();
+            });
+
+        async function carregarEstoque() {
+            onSnapshot(collection(db, "estoque_caritas"), (snapshot) => {
+                itensEstoque = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+            });
+        }
 
         function inicializarCestas(user) {
             const container = document.getElementById('lista-entrega');
             const inputBusca = document.getElementById('input-busca');
-            let todasFamilias = [];
 
             onSnapshot(query(collection(db, "familiasAssistidas"), where("statusGeral", "==", "Ativa")), (snapshot) => {
                 todasFamilias = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
                 renderizar(todasFamilias);
-            }, err => console.error("Erro ao ler famílias:", err));
+            });
 
             inputBusca.oninput = (e) => {
                 const termo = e.target.value.toLowerCase();
@@ -85,7 +113,7 @@
                                 <div class="info-nome">${f.responsavel1.nome}</div>
                                 <div style="font-size:0.8em; color:#666">Última: ${f.ultimaCesta ? f.ultimaCesta.toDate().toLocaleDateString() : 'Nunca'}</div>
                             </div>
-                            <button class="btn-entregar" onclick="entregar('${f.id}', '${f.responsavel1.nome}')" ${jaRecebeu ? 'disabled' : ''}>
+                            <button class="btn-entregar" onclick="abrirModalKit('${f.id}', '${f.responsavel1.nome}')" ${jaRecebeu ? 'disabled' : ''}>
                                 ${jaRecebeu ? 'Entregue' : 'Confirmar'}
                             </button>
                         </div>
@@ -93,43 +121,68 @@
                 }).join('');
             }
 
-            window.entregar = async (id, nome) => {
-                if (!confirm(`Confirmar entrega para ${nome}?`)) return;
-                try {
-                    // 1. Atualiza a data da última cesta na família
-                    await updateDoc(doc(db, "familiasAssistidas", id), { ultimaCesta: serverTimestamp() });
-                    
-                    // 2. Registra o histórico na coleção de entregas
-                    await addDoc(collection(db, "entregasCestas"), { familiaId: id, data: serverTimestamp(), voluntario: user.uid });
-                    
-                    // 3. BAIXA AUTOMÁTICA NO ESTOQUE
-                    const qEstoque = query(collection(db, "estoque_caritas"), where("tipo", "==", "cesta"));
-                    const estoqueSnap = await getDocs(qEstoque);
-                    
-                    if (!estoqueSnap.empty) {
-                        const estoqueDoc = estoqueSnap.docs[0];
-                        const saldoAtual = estoqueDoc.data().quantidade || 0;
-                        const novaQtd = Math.max(0, saldoAtual - 1);
-                        
-                        await updateDoc(doc(db, "estoque_caritas", estoqueDoc.id), { 
-                            quantidade: novaQtd 
-                        });
-                    }
+            window.abrirModalKit = (id, nome) => {
+                familiaSelecionada = { id, nome };
+                document.getElementById('modal-titulo').innerText = `Kit para: ${nome}`;
+                const containerOpcoes = document.getElementById('opcoes-estoque');
+                
+                // Gera a lista de itens com base no estoque real
+                containerOpcoes.innerHTML = itensEstoque.map(item => `
+                    <div class="item-selecao">
+                        <input type="checkbox" id="item-${item.id}" data-id="${item.id}" data-nome="${item.nome}" ${item.quantidade <= 0 ? 'disabled' : ''}>
+                        <label for="item-${item.id}">
+                            <b>${item.nome}</b> 
+                            <span style="font-size: 0.8em; color: ${item.quantidade <= 0 ? 'red' : '#666'}">
+                                (Saldo: ${item.quantidade})
+                            </span>
+                        </label>
+                    </div>
+                `).join('');
 
-                    // 4. REGISTRO DE AUDITORIA UNIFICADO
-                    await addDoc(collection(db, "log_auditoria"), { 
-                        timestamp: serverTimestamp(), 
-                        autor: { nome: user.displayName || user.email }, 
-                        acao: "ENTREGA_CESTA", 
-                        detalhes: `Cesta para ${nome}. Baixa automática realizada no estoque.` 
+                document.getElementById('modal-kit').style.display = 'flex';
+                
+                document.getElementById('btn-finalizar-entrega').onclick = () => finalizarEntrega(user);
+            };
+
+            async function finalizarEntrega(user) {
+                const checkboxes = document.querySelectorAll('#opcoes-estoque input[type="checkbox"]:checked');
+                if (checkboxes.length === 0) { alert("Selecione ao menos um item (ou a cesta) para entregar."); return; }
+
+                try {
+                    // 1. Atualiza Família
+                    await updateDoc(doc(db, "familiasAssistidas", familiaSelecionada.id), { ultimaCesta: serverTimestamp() });
+                    
+                    // 2. Histórico de Entrega
+                    await addDoc(collection(db, "entregasCestas"), { 
+                        familiaId: familiaSelecionada.id, 
+                        data: serverTimestamp(), 
+                        voluntario: user.uid 
                     });
 
-                    alert("Sucesso! Entrega registrada e estoque atualizado.");
-                } catch (e) { 
-                    console.error(e);
-                    alert("Erro ao processar entrega: " + e.message); 
-                }
-            };
+                    // 3. Baixa em massa no Estoque (Loop pelos itens selecionados)
+                    let detalhesLog = [];
+                    for (let cb of checkboxes) {
+                        const itemId = cb.getAttribute('data-id');
+                        const itemNome = cb.getAttribute('data-nome');
+                        const itemData = itensEstoque.find(i => i.id === itemId);
+                        
+                        const novaQtd = Math.max(0, itemData.quantidade - 1);
+                        await updateDoc(doc(db, "estoque_caritas", itemId), { quantidade: novaQtd });
+                        detalhesLog.push(itemNome);
+                    }
+
+                    // 4. Auditoria Centralizada
+                    await addDoc(collection(db, "log_auditoria"), {
+                        timestamp: serverTimestamp(),
+                        autor: { nome: user.displayName || user.email },
+                        acao: "ENTREGA_KIT",
+                        detalhes: `Entrega para ${familiaSelecionada.nome}. Itens: ${detalhesLog.join(", ")}`
+                    });
+
+                    alert("Entrega finalizada com sucesso!");
+                    document.getElementById('modal-kit').style.display = 'none';
+                } catch (e) { alert("Erro: " + e.message); }
+            }
 
             function verificarMes(ts) {
                 const d = ts.toDate(); const h = new Date();
