@@ -3,14 +3,14 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Cáritas - Relatório Mensal de Atividades</title>
+    <title>Cáritas - Relatório de Doações e Atividades</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <style>
         body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #f4f6f9; padding: 40px; }
-        .nav-header { max-width: 900px; margin: 0 auto 20px auto; display: flex; justify-content: space-between; align-items: center; }
+        .nav-header { max-width: 1000px; margin: 0 auto 20px auto; display: flex; justify-content: space-between; align-items: center; }
         .btn-voltar { background: #6c757d; color: white; padding: 10px 15px; border-radius: 8px; text-decoration: none; font-weight: bold; font-size: 0.9em; }
         
-        .folha { background: white; padding: 50px; max-width: 900px; margin: 0 auto; border-radius: 8px; box-shadow: 0 0 20px rgba(0,0,0,0.1); position: relative; }
+        .folha { background: white; padding: 50px; max-width: 1000px; margin: 0 auto; border-radius: 8px; box-shadow: 0 0 20px rgba(0,0,0,0.1); position: relative; }
         
         .btn-imprimir { background: #2c3e50; color: white; border: none; padding: 12px 25px; border-radius: 8px; cursor: pointer; font-weight: bold; margin-bottom: 30px; display: flex; align-items: center; gap: 10px; transition: 0.3s; }
         .btn-imprimir:hover { background: #1a252f; }
@@ -32,16 +32,14 @@
         td { padding: 12px; border-bottom: 1px solid #eee; font-size: 0.9em; color: #333; }
         
         .alerta-val { color: #e67e22; font-weight: bold; }
-        .status-prioridade { background: #fff3e0; color: #e67e22; padding: 4px 8px; border-radius: 4px; font-weight: bold; font-size: 0.8em; }
+        .badge-entrada { background: #e8f5e9; color: #2e7d32; padding: 4px 8px; border-radius: 4px; font-weight: bold; font-size: 0.8em; }
 
         footer { margin-top: 60px; text-align: center; font-size: 0.8em; color: #999; border-top: 1px solid #eee; padding-top: 20px; }
 
-        /* Regras de Impressão Corrigidas */
         @media print {
             body { padding: 0; background: white; }
             .btn-imprimir, .btn-voltar, .nav-header { display: none !important; }
             .folha { box-shadow: none; max-width: 100%; padding: 20px; border: none; }
-            /* CORREÇÃO DO VENDOR PREFIX SOLICITADA PELO SEU EDITOR */
             th { 
                 background: #eee !important; 
                 -webkit-print-color-adjust: exact; 
@@ -58,71 +56,73 @@
 
     <div class="folha">
         <button class="btn-imprimir" onclick="window.print()">
-            <i class="fas fa-print"></i> IMPRIMIR RELATÓRIO AGORA
+            <i class="fas fa-print"></i> IMPRIMIR RELATÓRIO
         </button>
 
         <header class="header">
             <img src="/logo-cepat.png" alt="Logo CEPAT">
             <h2>Relatório de Gestão Social - Cáritas</h2>
-            <p id="label-mes">Competência: Dezembro / 2025</p>
+            <p id="label-competencia">Resumo Geral de Atividades e Doações</p>
         </header>
 
         <section class="grid-stats">
             <div class="card-stat">
                 <h4>Famílias Ativas</h4>
-                <p id="rep-familias">--</p>
+                <p id="rep-familias">0</p>
             </div>
             <div class="card-stat">
                 <h4>Cestas Entregues</h4>
-                <p id="rep-cestas">--</p>
+                <p id="rep-cestas">0</p>
             </div>
             <div class="card-stat">
                 <h4>Itens em Estoque</h4>
-                <p id="rep-itens">--</p>
+                <p id="rep-itens">0</p>
             </div>
         </section>
 
         <section>
-            <h3><i class="fas fa-clock"></i> Controle de Validade (Prioridade de Saída)</h3>
-            <table id="tabela-vencimentos">
+            <h3><i class="fas fa-hand-holding-heart"></i> Entradas de Doações (Doador e Quantidade)</h3>
+            <table id="tabela-doacoes">
                 <thead>
                     <tr>
-                        <th>Produto / Insumo</th>
-                        <th>Validade</th>
-                        <th>Saldo Atual</th>
-                        <th>Ação Sugerida</th>
+                        <th>Data</th>
+                        <th>Doador</th>
+                        <th>Item Doado</th>
+                        <th>Quantidade</th>
+                        <th>Tipo</th>
                     </tr>
                 </thead>
                 <tbody>
-                    <tr><td colspan="4" style="text-align:center;">Carregando dados FEFO...</td></tr>
+                    <tr><td colspan="5" style="text-align:center; color:#999;">Buscando registros de generosidade...</td></tr>
                 </tbody>
             </table>
         </section>
 
         <section>
-            <h3><i class="fas fa-hand-holding-heart"></i> Histórico de Doações Recebidas</h3>
-            <table id="tabela-logs">
+            <h3><i class="fas fa-history"></i> Alerta de Estoque Próximo ao Vencimento</h3>
+            <table id="tabela-vencimentos">
                 <thead>
                     <tr>
-                        <th>Data</th>
-                        <th>Doador Registrado</th>
-                        <th>Descrição da Doação</th>
+                        <th>Produto</th>
+                        <th>Validade</th>
+                        <th>Saldo</th>
+                        <th>Status</th>
                     </tr>
                 </thead>
                 <tbody>
-                    <tr><td colspan="3" style="text-align:center;">Carregando logs de entrada...</td></tr>
+                    <tr><td colspan="4" style="text-align:center; color:#999;">Analisando prazos...</td></tr>
                 </tbody>
             </table>
         </section>
 
         <footer>
-            Documento Gerado pelo Sistema de Gestão Voluntários Ativos - CEPAT em <span id="data-hora-geracao"></span>
+            Documento Gerado pelo Sistema CEPAT em <span id="data-geracao"></span>.
         </footer>
     </div>
 
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
-        import { getFirestore, collection, query, where, getDocs, Timestamp, orderBy } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
+        import { getFirestore, collection, query, where, getDocs, orderBy, Timestamp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
         import { protegerPagina } from '/auth.js';
 
         const firebaseConfig = {
@@ -138,64 +138,74 @@
         const db = getFirestore(app);
 
         protegerPagina(['super-admin', 'diretor', 'caritas']).then(() => {
-            document.getElementById('data-hora-geracao').innerText = new Date().toLocaleString('pt-BR');
-            carregarRelatorio();
+            document.getElementById('data-geracao').innerText = new Date().toLocaleString('pt-BR');
+            carregarDadosRelatorio();
         });
 
-        async function carregarRelatorio() {
+        async function carregarDadosRelatorio() {
             const agora = new Date();
             const inicioMes = Timestamp.fromDate(new Date(agora.getFullYear(), agora.getMonth(), 1));
-            
+
             try {
-                const fams = await getDocs(query(collection(db, "familiasAssistidas"), where("statusGeral", "==", "Ativa")));
-                document.getElementById('rep-familias').innerText = fams.size;
+                // 1. Contagens Rápidas
+                const snapFams = await getDocs(query(collection(db, "familiasAssistidas"), where("statusGeral", "==", "Ativa")));
+                document.getElementById('rep-familias').innerText = snapFams.size;
 
-                const ents = await getDocs(query(collection(db, "entregasCestas"), where("data", ">=", inicioMes)));
-                document.getElementById('rep-cestas').innerText = ents.size;
+                const snapEntregas = await getDocs(query(collection(db, "entregasCestas"), where("data", ">=", inicioMes)));
+                document.getElementById('rep-cestas').innerText = snapEntregas.size;
 
-                const estoque = await getDocs(collection(db, "estoque_caritas"));
-                document.getElementById('rep-itens').innerText = estoque.size;
+                const snapEstoque = await getDocs(collection(db, "estoque_caritas"));
+                document.getElementById('rep-itens').innerText = snapEstoque.size;
 
+                // 2. Histórico de Doações (Logs de Entrada)
+                const qLogs = query(collection(db, "log_auditoria"), where("acao", "==", "ENTRADA"), orderBy("timestamp", "desc"));
+                const snapLogs = await getDocs(qLogs);
+                let htmlDoacoes = "";
+
+                snapLogs.forEach(doc => {
+                    const l = doc.data();
+                    const det = l.detalhes || "";
+                    
+                    // Lógica de extração: "Doador: [NOME]: +[QTD]x [PRODUTO]"
+                    const partesDoador = det.split('Doador:')[1] ? det.split('Doador:')[1].split(':')[0].trim() : "Anônimo";
+                    const partesQtd = det.split('+')[1] ? det.split('+')[1].split('x')[0].trim() : "1";
+                    const partesItem = det.split('x')[1] ? det.split('x')[1].split('.')[0].trim() : "Item";
+
+                    htmlDoacoes += `
+                        <tr>
+                            <td>${l.timestamp.toDate().toLocaleDateString('pt-BR')}</td>
+                            <td><strong>${partesDoador}</strong></td>
+                            <td>${partesItem}</td>
+                            <td>${partesQtd} un.</td>
+                            <td><span class="badge-entrada">Entrada</span></td>
+                        </tr>`;
+                });
+                document.getElementById('tabela-doacoes').querySelector('tbody').innerHTML = htmlDoacoes || "<tr><td colspan='5' style='text-align:center;'>Nenhuma doação registrada.</td></tr>";
+
+                // 3. Tabela FEFO (Vencimentos)
                 let htmlVenc = "";
-                const itensOrdenados = estoque.docs.map(d => d.data()).sort((a, b) => {
+                const itensOrdenados = snapEstoque.docs.map(d => d.data()).sort((a,b) => {
                     if (!a.validade) return 1; if (!b.validade) return -1;
                     return a.validade.localeCompare(b.validade);
                 });
 
                 itensOrdenados.forEach(i => {
                     if (i.validade && i.quantidade > 0) {
-                        const partes = i.validade.split('-');
+                        const p = i.validade.split('-');
                         htmlVenc += `
                             <tr>
-                                <td><b>${i.nome}</b></td>
-                                <td class="alerta-val">${partes[2]}/${partes[1]}/${partes[0]}</td>
+                                <td>${i.nome}</td>
+                                <td class="alerta-val">${p[2]}/${p[1]}/${p[0]}</td>
                                 <td>${i.quantidade} un.</td>
-                                <td><span class="status-prioridade">FEFO: SAÍDA IMEDIATA</span></td>
+                                <td><small>Priorizar Doação</small></td>
                             </tr>`;
                     }
                 });
-                document.getElementById('tabela-vencimentos').querySelector('tbody').innerHTML = htmlVenc || "<tr><td colspan='4'>Nenhum item com validade registrada.</td></tr>";
-
-                const logs = await getDocs(query(collection(db, "log_auditoria"), where("acao", "==", "ENTRADA"), orderBy("timestamp", "desc")));
-                let htmlLogs = "";
-                logs.forEach(doc => {
-                    const l = doc.data();
-                    const partesDet = l.detalhes.split(':');
-                    const doador = partesDet[1] ? partesDet[1].split('.')[0].trim() : "Anônimo";
-                    const item = partesDet[2] ? partesDet[2].trim() : "Item não identificado";
-                    
-                    htmlLogs += `
-                        <tr>
-                            <td>${l.timestamp.toDate().toLocaleDateString('pt-BR')}</td>
-                            <td>${doador}</td>
-                            <td>${item}</td>
-                        </tr>`;
-                });
-                document.getElementById('tabela-logs').querySelector('tbody').innerHTML = htmlLogs || "<tr><td colspan='3'>Sem registros de doação este mês.</td></tr>";
+                document.getElementById('tabela-vencimentos').querySelector('tbody').innerHTML = htmlVenc || "<tr><td colspan='4' style='text-align:center;'>Sem itens com validade próxima.</td></tr>";
 
             } catch (err) {
-                console.error(err);
-                alert("Erro ao carregar relatório.");
+                console.error("Erro no Relatório:", err);
+                alert("Erro ao carregar dados. Verifique a conexão.");
             }
         }
     </script>
