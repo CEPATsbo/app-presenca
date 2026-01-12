@@ -20,9 +20,9 @@
 
         .seletor-container { display: flex; justify-content: center; align-items: flex-end; gap: 20px; margin-bottom: 20px; border-bottom: 1px solid #ddd; padding-bottom: 20px; }
         .seletor-bloco { display: flex; flex-direction: column; gap: 5px; }
-        .seletor-bloco select, .seletor-bloco button { font-size: 1.1em; padding: 8px; border: 1px solid #ccc; border-radius: 6px;}
+        .seletor-bloco select { font-size: 1.1em; padding: 8px; border: 1px solid #ccc; border-radius: 6px; }
         
-        /* Ajuste das Colunas */
+        /* Layout das Colunas */
         .corpo-balancete { display: flex; justify-content: space-between; gap: 20px; flex-wrap: nowrap !important; width: 100%; margin-bottom: 20px; }
         .coluna { width: 48.5%; flex: 0 0 48.5%; box-sizing: border-box; }
         
@@ -30,7 +30,7 @@
         .tabela-balancete { width: 100%; border-collapse: collapse; margin-top: 0;}
         .tabela-balancete th, .tabela-balancete td { border: 1px solid #ccc; padding: 8px 6px; font-size: 0.82em; }
         .tabela-balancete th { background-color: #f2f2f2; text-align: left; }
-        .tabela-balancete td:last-child { text-align: right; width: 100px; white-space: nowrap; font-weight: 500; }
+        .tabela-balancete td:last-child { text-align: right; width: 100px; white-space: nowrap; font-weight: 600; }
         
         .categoria-header th { background-color: #dcedc8; font-weight: bold; border-top: 2px solid #999; }
         .total-row td { font-weight: bold; background-color: #f1f8e9; text-align: right; border-top: 2px solid #666; }
@@ -42,11 +42,11 @@
         .nav-voltar { max-width: 1100px; margin: 0 auto 30px auto; text-align: left; width: 100%; }
         .btn-voltar { background-color: #e9ecef; color: #495057; border: 1px solid #dee2e6; padding: 10px 20px; border-radius: 8px; text-decoration: none; font-weight: bold; }
 
-        /* Container de exportação com proteção contra cortes laterais */
+        /* Estilo do container de exportação */
         #balancete-para-pdf { 
             background: white; 
-            padding: 30px; /* Aumentado para garantir bordas brancas */
-            width: 1020px; /* Reduzido para encaixar melhor no A4 */
+            padding: 30px; 
+            width: 1020px; 
             margin: auto; 
             box-sizing: border-box;
         }
@@ -63,7 +63,7 @@
                 <label>Ano de Consolidação</label>
                 <select id="seletor-ano"></select>
             </div>
-            <button id="btn-gerar-relatorio" class="btn-principal" style="padding: 10px 20px; background-color: #007bff;">Gerar Visualização</button>
+            <button id="btn-gerar-relatorio" class="btn-principal" style="padding: 10px 20px; background-color: #007bff;">Visualizar Relatório</button>
         </div>
         <div id="resultado-relatorio"></div>
     </div>
@@ -95,18 +95,19 @@
         document.getElementById('btn-gerar-relatorio').onclick = async () => {
             const ano = document.getElementById('seletor-ano').value;
             const res = document.getElementById('resultado-relatorio');
-            res.innerHTML = '<h3>Processando balancetes...</h3>';
+            res.innerHTML = '<p>Buscando balancetes...</p>';
 
-            const snap = await getDocs(query(collection(db, "balancetes"), orderBy(documentId())));
-            const lista = snap.docs.map(d => ({ id: d.id, ...d.data() })).filter(b => b.id.startsWith(ano));
+            try {
+                const snap = await getDocs(query(collection(db, "balancetes"), orderBy(documentId())));
+                const lista = snap.docs.map(d => ({ id: d.id, ...d.data() })).filter(b => b.id.startsWith(ano));
 
-            if (lista.length === 0) { res.innerHTML = "Sem dados."; return; }
-            if (lista.some(b => b.status !== 'aprovado')) { 
-                res.innerHTML = `<div class="status-bar status-pendente">Existem meses pendentes de aprovação em ${ano}.</div>`;
-                return;
-            }
-
-            renderizar(lista, ano);
+                if (lista.length === 0) { res.innerHTML = "Sem dados para este ano."; return; }
+                if (lista.some(b => b.status !== 'aprovado')) { 
+                    res.innerHTML = `<div class="status-bar status-pendente">Atenção: Existem meses não aprovados em ${ano}. Consolidação bloqueada.</div>`;
+                    return;
+                }
+                renderizar(lista, ano);
+            } catch (e) { res.innerHTML = "Erro ao carregar dados."; }
         };
 
         function renderizar(balancetes, ano) {
@@ -116,12 +117,10 @@
 
             balancetes.forEach(b => {
                 const mes = new Intl.DateTimeFormat('pt-BR', { month: 'short' }).format(new Date(`${b.id.split('_')[0]}-02`));
-                // Receitas
                 Object.entries(b.receitas).forEach(([cat, itens]) => {
                     if (!consolidado.receitas[cat]) consolidado.receitas[cat] = [];
                     itens.forEach(i => { if(i.valor > 0) { consolidado.receitas[cat].push({ n: `${i.nome} (${mes})`, v: i.valor }); totalRec += i.valor; } });
                 });
-                // Despesas
                 Object.entries(b.despesas).forEach(([cat, itens]) => {
                     if (!consolidado.despesas[cat]) consolidado.despesas[cat] = [];
                     itens.forEach(i => { if(i.valor > 0) { consolidado.despesas[cat].push({ n: `${i.nome} (${mes})`, v: i.valor }); totalDes += i.valor; } });
@@ -184,14 +183,14 @@
         async function gerarPdf(ano) {
             const el = document.getElementById('balancete-para-pdf');
             const btn = document.getElementById('btn-gerar-pdf');
-            btn.innerText = "GERANDO..."; btn.disabled = true;
+            btn.innerText = "SINCRONIZANDO PÁGINAS..."; btn.disabled = true;
 
             try {
                 const canvas = await html2canvas(el, {
-                    scale: 2.5, // Aumentada a escala para maior nitidez
+                    scale: 2.5,
                     useCORS: true,
                     logging: false,
-                    width: 1020, // Largura controlada para evitar corte lateral
+                    width: 1020, // Mantém a correção para não cortar a direita
                     windowWidth: 1020
                 });
 
@@ -202,22 +201,24 @@
                 const pdfWidth = pdf.internal.pageSize.getWidth();
                 const pdfHeight = pdf.internal.pageSize.getHeight();
                 
-                // Ajuste de proporção para caber na largura do PDF com margem
-                const imgWidth = pdfWidth - 20; // 10mm de margem em cada lado
+                // Cálculo de proporção
+                const imgWidth = pdfWidth - 20; 
                 const imgHeight = (canvas.height * imgWidth) / canvas.width;
                 
                 let heightLeft = imgHeight;
-                let position = 10; // Margem superior inicial
+                let position = 10; 
 
-                // Adiciona imagem centralizada com margem lateral corrigida
+                // --- CORREÇÃO DA DUPLICAÇÃO DE INFORMAÇÃO ---
+                // Adiciona a primeira página
                 pdf.addImage(imgData, 'JPEG', 10, position, imgWidth, imgHeight);
-                heightLeft -= (pdfHeight - 20);
+                heightLeft -= (pdfHeight - 15); // Subtrai a altura útil com folga
 
-                while (heightLeft >= 0) {
-                    position = heightLeft - imgHeight + 10;
+                // Adiciona páginas extras apenas se sobrar conteúdo, sem sobrepor
+                while (heightLeft > 0) {
                     pdf.addPage();
+                    position = heightLeft - imgHeight + 5; // Ajuste exato do offset para evitar repetição
                     pdf.addImage(imgData, 'JPEG', 10, position, imgWidth, imgHeight);
-                    heightLeft -= (pdfHeight - 20);
+                    heightLeft -= (pdfHeight - 15);
                 }
 
                 pdf.save(`balancete_consolidado_${ano}.pdf`);
