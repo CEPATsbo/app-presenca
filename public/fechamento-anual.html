@@ -1,6 +1,5 @@
 <!DOCTYPE html>
 <html lang="pt-br">
-    
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -8,10 +7,8 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <style>
-        /* Estilos copiados da tesouraria.html para consistência */
         body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background-color: #f4f6f9; display: flex; flex-direction: column; align-items: center; margin: 0; padding: 20px; box-sizing: border-box; }
         .balancete-container { background-color: white; padding: 40px; border-radius: 8px; box-shadow: 0 4px 20px rgba(0,0,0,0.1); width: 100%; max-width: 1100px; margin-bottom: 30px; }
-        .relatorio-container { display: none; } /* Oculta este bloco que não usamos aqui */
         h2 { border-bottom: 1px solid #eee; padding-bottom: 10px; margin-bottom: 20px;}
         #acesso-negado { text-align: center; }
         .cabecalho { text-align: center; margin-bottom: 20px; }
@@ -26,33 +23,36 @@
         .seletor-bloco label { font-weight: bold; text-align: center; color: #555; font-size: 0.9em; }
         .seletor-bloco select, .seletor-bloco button { font-size: 1.1em; padding: 8px; border: 1px solid #ccc; border-radius: 6px;}
         .seletor-bloco button { background-color: #007bff; color: white; cursor: pointer; }
-        .corpo-balancete { display: flex; justify-content: space-between; gap: 40px; flex-wrap: wrap;}
-        .coluna { width: 100%; min-width: 450px; flex: 1; }
-        .coluna h2 { background-color: #e0e0e0; padding: 8px; text-align: center; font-size: 1.2em; margin: 0; }
+        
+        /* Ajuste de colunas para PDF */
+        .corpo-balancete { display: flex; justify-content: space-between; gap: 20px; flex-wrap: nowrap !important; width: 100%; }
+        .coluna { width: 48%; flex: 0 0 48%; }
+        
+        .coluna h2 { background-color: #e0e0e0; padding: 8px; text-align: center; font-size: 1.1em; margin: 0; }
         .tabela-balancete { width: 100%; border-collapse: collapse; margin-top: 15px;}
-        .tabela-balancete th, .tabela-balancete td { border: 1px solid #ccc; padding: 12px 8px; font-size: 0.9em; }
+        .tabela-balancete th, .tabela-balancete td { border: 1px solid #ccc; padding: 8px 5px; font-size: 0.85em; }
         .tabela-balancete th { background-color: #f2f2f2; text-align: left; }
-        .tabela-balancete td:last-child { text-align: right; width: 120px; } /* Alinha valores à direita */
-        .categoria-header th { background-color: #dcedc8; font-weight: bold; }
+        .tabela-balancete td:last-child { text-align: right; width: 100px; white-space: nowrap; }
+        .categoria-header th { background-color: #dcedc8; font-weight: bold; border-top: 2px solid #999; }
         .total-row td { font-weight: bold; background-color: #f1f8e9; text-align: right; }
         .total-row td:first-child { text-align: left; }
-        .assinaturas-container { padding-top: 20px; border-top: 2px solid #333; }
-        .assinatura-digital { background-color: #f5f5f5; border: 1px solid #ddd; padding: 15px; border-radius: 6px; margin-bottom: 15px; }
-        .actions-container { text-align: center; margin-top: 40px; display: flex; justify-content: center; gap: 20px; flex-wrap: wrap; }
-        .actions-container button { width: auto; padding: 15px 30px; font-size: 1.2em; cursor: pointer; border: none; border-radius: 6px; color: white; }
-        #btn-gerar-pdf { background-color: #4CAF50; }
+        .actions-container { text-align: center; margin-top: 40px; display: flex; justify-content: center; gap: 20px; }
+        .actions-container button { padding: 15px 30px; font-size: 1.2em; cursor: pointer; border: none; border-radius: 6px; color: white; background-color: #4CAF50; font-weight: bold; }
         .nav-voltar { max-width: 1100px; margin: 0 auto 30px auto; text-align: left; }
-        .btn-voltar { background-color: #e9ecef; color: #495057; border: 1px solid #dee2e6; padding: 10px 20px; border-radius: 8px; font-weight: bold; font-size: 1em; text-decoration: none; }
-        #resultado-relatorio { display: none; } /* Começa oculto */
+        .btn-voltar { background-color: #e9ecef; color: #495057; border: 1px solid #dee2e6; padding: 10px 20px; border-radius: 8px; text-decoration: none; font-weight: bold; }
+        
+        /* Estilo específico para quando estiver gerando o PDF */
+        .pdf-mode { width: 1100px !important; padding: 20px !important; }
     </style>
 </head>
 <body>
     <nav class="nav-voltar">
         <a href="/dashboard-financeiro.html" class="btn-voltar">⬅ Voltar ao Módulo Financeiro</a>
     </nav>
+    
     <div id="acesso-negado" style="display: none;">
         <h1>Acesso Negado</h1>
-        <p>Você não tem permissão para acessar esta página.</p>
+        <p>Permissão insuficiente.</p>
     </div>
     
     <div id="main-content" class="balancete-container" style="display: none;">
@@ -61,11 +61,12 @@
                 <label for="seletor-ano">Selecione o Ano para Consolidação</label>
                 <select id="seletor-ano"></select>
             </div>
-            <button id="btn-gerar-relatorio">Gerar Relatório Anual</button>
+            <div class="seletor-bloco">
+                <button id="btn-gerar-relatorio">Gerar Relatório Anual</button>
+            </div>
         </div>
 
-        <div id="resultado-relatorio">
-            </div>
+        <div id="resultado-relatorio"></div>
     </div>
     
     <script type="module">
@@ -81,43 +82,23 @@
             messagingSenderId: "66122858261",
             appId: "1:66122858261:web:7fa21f1805463b5c08331c"
         };
-        initializeApp(firebaseConfig);
+        const app = initializeApp(firebaseConfig);
+        const db = getFirestore(app);
 
         protegerPagina(['super-admin', 'diretor', 'tesoureiro', 'conselheiro'])
             .then(user => {
                 document.getElementById('main-content').style.display = 'block';
                 inicializarPagina(user);
             })
-            .catch(error => {
-                document.getElementById('acesso-negado').style.display = 'block';
-                console.error(error.message);
-            });
+            .catch(() => document.getElementById('acesso-negado').style.display = 'block');
 
         function inicializarPagina(user) {
-            const db = getFirestore();
             const seletorAno = document.getElementById('seletor-ano');
             const btnGerarRelatorio = document.getElementById('btn-gerar-relatorio');
             const resultadoRelatorio = document.getElementById('resultado-relatorio');
             
-            // --- FUNÇÕES AUXILIARES COPIADAS DA TESOURARIA ---
             function formatarMoeda(valor) { return (valor || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }); }
             
-            function formatarNomeOpcao(periodoId) {
-                const [inicio, fim] = periodoId.split('_');
-                const dataInicio = new Date(`${inicio}-02T00:00:00`);
-                const formatarData = (data) => new Intl.DateTimeFormat('pt-BR', { month: 'long', year: 'numeric', timeZone: 'UTC' }).format(data);
-                const textoInicio = formatarData(dataInicio);
-
-                if (inicio === fim) {
-                    return textoInicio.charAt(0).toUpperCase() + textoInicio.slice(1);
-                } else {
-                    const dataFim = new Date(`${fim}-02T00:00:00`);
-                    const textoFim = formatarData(dataFim);
-                    return `De ${textoInicio} a ${textoFim}`;
-                }
-            }
-            // --- FIM DAS FUNÇÕES AUXILIARES ---
-
             function popularSeletorAno() {
                 const anoAtual = new Date().getFullYear();
                 let optionsHtml = '';
@@ -126,240 +107,168 @@
                     optionsHtml += `<option value="${ano}">${ano}</option>`;
                 }
                 seletorAno.innerHTML = optionsHtml;
-                // Define o padrão como o ano anterior, que é o mais provável de ser fechado
                 seletorAno.value = anoAtual - 1;
             }
 
             btnGerarRelatorio.addEventListener('click', async () => {
                 const ano = seletorAno.value;
                 resultadoRelatorio.style.display = 'block';
-                resultadoRelatorio.innerHTML = '<h3>Buscando e validando balancetes...</h3>';
+                resultadoRelatorio.innerHTML = '<h3>Validando dados anuais...</h3>';
                 
                 try {
-                    // 1. Buscar todos os balancetes do ano selecionado
-                    const q = query(
-                        collection(db, "balancetes"),
-                        where(documentId(), ">=", `${ano}-01_`), // Começa com 'AAAA-01'
-                        where(documentId(), "<=", `${ano}-12_~`), // Termina com 'AAAA-12' (grosso modo)
-                        orderBy(documentId()) // Ordena por ID (ex: 2024-01_..., 2024-02_...)
-                    );
-                    
+                    const q = query(collection(db, "balancetes"), orderBy(documentId()));
                     const snapshot = await getDocs(q);
-                    
-                    // Filtra para garantir que pegamos apenas o ano exato
                     const balancetes = snapshot.docs
                         .map(doc => ({ id: doc.id, ...doc.data() }))
                         .filter(b => b.id.startsWith(ano));
 
                     if (balancetes.length === 0) {
-                        renderizarAviso('Nenhum balancete encontrado para o ano ' + ano, 'status-pendente');
+                        resultadoRelatorio.innerHTML = `<div class="status-bar status-pendente">Nenhum balancete para ${ano}</div>`;
                         return;
                     }
 
-                    // 2. Verificar se TODOS estão aprovados
                     const pendentes = balancetes.filter(b => b.status !== 'aprovado');
-
                     if (pendentes.length > 0) {
-                        renderizarPendencias(pendentes, ano);
+                        resultadoRelatorio.innerHTML = `<div class="status-bar status-pendente">Relatório Bloqueado: Existem ${pendentes.length} meses pendentes de aprovação em ${ano}.</div>`;
                     } else {
-                        // 3. Se todos aprovados, consolidar!
-                        renderizarRelatorioConsolidado(balancetes, ano);
+                        processarConsolidacao(balancetes, ano);
                     }
-
-                } catch (error) {
-                    console.error("Erro ao gerar relatório anual:", error);
-                    renderizarAviso('Erro ao buscar dados. Tente novamente.', 'status-pendente');
-                }
+                } catch (error) { console.error(error); }
             });
 
-            function renderizarAviso(mensagem, classeStatus) {
-                resultadoRelatorio.innerHTML = `
-                    <div id="status-bar" class="status-bar ${classeStatus}">${mensagem}</div>
-                `;
-            }
-
-            function renderizarPendencias(pendentes, ano) {
-                let pendenciasHtml = '<ul>';
-                pendentes.forEach(p => {
-                    pendenciasHtml += `<li><strong>${formatarNomeOpcao(p.id)}:</strong> Status ${p.status}</li>`;
-                });
-                pendenciasHtml += '</ul>';
-                
-                resultadoRelatorio.innerHTML = `
-                    <div id="status-bar" class="status-bar status-pendente">
-                        Não é possível gerar o relatório de ${ano}.
-                        Todos os balancetes mensais precisam estar com status "Aprovado".
-                    </div>
-                    <h2>Pendências Encontradas:</h2>
-                    ${pendenciasHtml}
-                `;
-            }
-
-            function renderizarRelatorioConsolidado(balancetes, ano) {
+            function processarConsolidacao(balancetes, ano) {
                 const consolidado = { receitas: {}, despesas: {} };
-                let totalReceitas = 0;
-                let totalDespesas = 0;
-
-                // Ordena para garantir que 2024-01 venha antes de 2024-02
+                let totalRec = 0, totalDes = 0;
                 balancetes.sort((a, b) => a.id.localeCompare(b.id)); 
+                const saldoAnterior = balancetes[0].saldoAnterior || 0;
 
-                const saldoAnterior = balancetes[0].saldoAnterior;
-
-                const formatarData = (data) => new Intl.DateTimeFormat('pt-BR', { month: 'short', timeZone: 'UTC' }).format(data);
-
-                // 1. Agrupar todos os itens
-                for (const balancete of balancetes) {
-                    const [inicio] = balancete.id.split('_');
-                    const mesNome = formatarData(new Date(`${inicio}-02T00:00:00`)); // Ex: "jan."
-
-                    // Agrupa Receitas
-                    for (const [catNome, itens] of Object.entries(balancete.receitas)) {
-                        if (!consolidado.receitas[catNome]) consolidado.receitas[catNome] = [];
-                        for (const item of itens) {
-                            if (item.valor > 0) { // Só adiciona se tiver valor
-                                consolidado.receitas[catNome].push({ nome: `${item.nome} (${mesNome})`, valor: item.valor });
-                                totalReceitas += item.valor;
+                balancetes.forEach(b => {
+                    const mes = new Intl.DateTimeFormat('pt-BR', { month: 'short' }).format(new Date(`${b.id.split('_')[0]}-02`));
+                    
+                    // Soma Receitas
+                    Object.entries(b.receitas).forEach(([cat, itens]) => {
+                        if (!consolidado.receitas[cat]) consolidado.receitas[cat] = [];
+                        itens.forEach(i => {
+                            if (i.valor > 0) {
+                                consolidado.receitas[cat].push({ nome: `${i.nome} (${mes})`, valor: i.valor });
+                                totalRec += i.valor;
                             }
-                        }
-                    }
-                    // Agrupa Despesas
-                    for (const [catNome, itens] of Object.entries(balancete.despesas)) {
-                        if (!consolidado.despesas[catNome]) consolidado.despesas[catNome] = [];
-                        for (const item of itens) {
-                            if (item.valor > 0) { // Só adiciona se tiver valor
-                                consolidado.despesas[catNome].push({ nome: `${item.nome} (${mesNome})`, valor: item.valor });
-                                totalDespesas += item.valor;
+                        });
+                    });
+                    // Soma Despesas
+                    Object.entries(b.despesas).forEach(([cat, itens]) => {
+                        if (!consolidado.despesas[cat]) consolidado.despesas[cat] = [];
+                        itens.forEach(i => {
+                            if (i.valor > 0) {
+                                consolidado.despesas[cat].push({ nome: `${i.nome} (${mes})`, valor: i.valor });
+                                totalDes += i.valor;
                             }
-                        }
-                    }
-                }
-                
-                const saldoPeriodo = totalReceitas - totalDespesas;
-                const saldoAtual = saldoPeriodo + saldoAnterior;
-
-                // 2. Gerar HTML das tabelas
-                let htmlReceitas = '';
-                Object.keys(consolidado.receitas).sort().forEach(catNome => {
-                    htmlReceitas += `<tr class="categoria-header"><th colspan="2">${catNome}</th></tr>`;
-                    consolidado.receitas[catNome].forEach(item => {
-                        htmlReceitas += `<tr><td>${item.nome}</td><td>${formatarMoeda(item.valor)}</td></tr>`;
+                        });
                     });
                 });
 
-                let htmlDespesas = '';
-                Object.keys(consolidado.despesas).sort().forEach(catNome => {
-                    htmlDespesas += `<tr class="categoria-header"><th colspan="2">${catNome}</th></tr>`;
-                    consolidado.despesas[catNome].forEach(item => {
-                        htmlDespesas += `<tr><td>${item.nome}</td><td>${formatarMoeda(item.valor)}</td></tr>`;
-                    });
+                let htmlRec = '', htmlDes = '';
+                Object.keys(consolidado.receitas).sort().forEach(cat => {
+                    htmlRec += `<tr class="categoria-header"><th colspan="2">${cat}</th></tr>`;
+                    consolidado.receitas[cat].forEach(i => htmlRec += `<tr><td>${i.nome}</td><td>${formatarMoeda(i.valor)}</td></tr>`);
+                });
+                Object.keys(consolidado.despesas).sort().forEach(cat => {
+                    htmlDes += `<tr class="categoria-header"><th colspan="2">${cat}</th></tr>`;
+                    consolidado.despesas[cat].forEach(i => htmlDes += `<tr><td>${i.nome}</td><td>${formatarMoeda(i.valor)}</td></tr>`);
                 });
 
-                // 3. Montar o relatório final
+                const saldoPer = totalRec - totalDes;
+                const saldoAtu = saldoPer + saldoAnterior;
+
                 resultadoRelatorio.innerHTML = `
-                    <div id="balancete-para-pdf"> <div class="cabecalho">
+                    <div id="balancete-para-pdf" style="background:white; padding: 20px; width: 1050px; margin: auto;">
+                        <div class="cabecalho">
                             <h1>C. E. PAULO DE TARSO</h1>
                             <p>CNPJ Nº 12.253.749/0001-20</p>
                             <p>RUA DO CROMO, 782, VL. PANTANO II - SANTA BARBARA D'OESTE - SP</p>
-                            <h3 id="titulo-balancete">BALANCETE CONSOLIDADO - ANO ${ano}</h3>
+                            <h3>BALANCETE CONSOLIDADO - ANO ${ano}</h3>
                         </div>
-                        <div id="status-bar" class="status-bar status-aprovado">
-                            Relatório consolidado gerado com sucesso. Todos os ${balancetes.length} balancetes do ano foram aprovados.
-                        </div>
-                        
+                        <div class="status-bar status-aprovado">Relatório Consolidado Gerado com Sucesso</div>
                         <div class="corpo-balancete">
                             <div class="coluna">
                                 <h2>RECEITAS</h2>
                                 <table class="tabela-balancete">
-                                    <thead><tr><th style="width:70%;">RECEITAS</th><th>VALOR</th></tr></thead>
-                                    <tbody id="corpo-tabela-receitas">${htmlReceitas}</tbody>
-                                    <tfoot><tr class="total-row"><td>TOTAL DE RECEITAS</td><td id="total-receitas">${formatarMoeda(totalReceitas)}</td></tr></tfoot>
+                                    <thead><tr><th>DESCRIÇÃO</th><th>VALOR</th></tr></thead>
+                                    <tbody>${htmlRec}</tbody>
+                                    <tfoot><tr class="total-row"><td>TOTAL RECEITAS</td><td>${formatarMoeda(totalRec)}</td></tr></tfoot>
                                 </table>
                             </div>
                             <div class="coluna">
                                 <h2>DESPESAS</h2>
                                 <table class="tabela-balancete">
-                                    <thead><tr><th style="width:70%;">DESPESAS</th><th>VALOR</th></tr></thead>
-                                    <tbody id="corpo-tabela-despesas">${htmlDespesas}</tbody>
-                                    <tfoot><tr class="total-row"><td>TOTAL DE DESPESAS</td><td id="total-despesas">${formatarMoeda(totalDespesas)}</td></tr></tfoot>
+                                    <thead><tr><th>DESCRIÇÃO</th><th>VALOR</th></tr></thead>
+                                    <tbody>${htmlDes}</tbody>
+                                    <tfoot><tr class="total-row"><td>TOTAL DESPESAS</td><td>${formatarMoeda(totalDes)}</td></tr></tfoot>
                                 </table>
                             </div>
                         </div>
-
-                        <div class="corpo-balancete" style="margin-top: 20px;">
-                            <div class="coluna">
-                                <table class="tabela-balancete">
-                                    <tr class="total-row"><td>SALDO NO PERÍODO (Anual)</td><td id="saldo-periodo">${formatarMoeda(saldoPeriodo)}</td></tr>
-                                </table>
-                            </div>
-                            <div class="coluna">
-                                <table class="tabela-balancete">
-                                    <tbody>
-                                        <tr>
-                                            <td>SALDO ANTERIOR (Início de ${ano})</td>
-                                            <td style="text-align: right;">${formatarMoeda(saldoAnterior)}</td>
-                                        </tr>
-                                    </tbody>
-                                    <tfoot>
-                                        <tr class="total-row"><td>SALDO ATUAL (Final de ${ano})</td><td id="saldo-atual">${formatarMoeda(saldoAtual)}</td></tr>
-                                    </tfoot>
-                                </table>
-                            </div>
+                        <div class="corpo-balancete" style="margin-top:20px;">
+                            <div class="coluna"><table class="tabela-balancete"><tr class="total-row"><td>SALDO DO PERÍODO</td><td>${formatarMoeda(saldoPer)}</td></tr></table></div>
+                            <div class="coluna"><table class="tabela-balancete">
+                                <tr><td>SALDO ANTERIOR (${ano})</td><td>${formatarMoeda(saldoAnterior)}</td></tr>
+                                <tr class="total-row"><td>SALDO ATUAL</td><td>${formatarMoeda(saldoAtu)}</td></tr>
+                            </table></div>
                         </div>
-                    </div> <div class="actions-container">
-                        <button id="btn-gerar-pdf">Gerar PDF Consolidado</button>
                     </div>
+                    <div class="actions-container"><button id="btn-gerar-pdf">BAIXAR PDF CONSOLIDADO</button></div>
                 `;
-
-                // Adiciona o listener para o botão de PDF recém-criado
-                document.getElementById('btn-gerar-pdf').addEventListener('click', () => gerarPdf(ano));
+                document.getElementById('btn-gerar-pdf').onclick = () => gerarPdf(ano);
             }
 
-            function gerarPdf(ano) {
-                const nomeArquivo = `balancete_consolidado_${ano}.pdf`;
-                const btnContainer = document.querySelector('.actions-container');
-                btnContainer.style.display = 'none'; 
-                alert('Gerando o PDF... Por favor, aguarde.');
+            async function gerarPdf(ano) {
+                const element = document.getElementById('balancete-para-pdf');
+                const btn = document.getElementById('btn-gerar-pdf');
+                btn.innerText = "GERANDO...";
+                btn.disabled = true;
 
-                setTimeout(async () => {
+                try {
+                    const canvas = await html2canvas(element, {
+                        scale: 2,
+                        useCORS: true,
+                        logging: false,
+                        width: 1050, // Força largura fixa para evitar quebras de colunas no PDF
+                        windowWidth: 1050
+                    });
+
+                    const imgData = canvas.toDataURL('image/jpeg', 0.95);
                     const { jsPDF } = window.jspdf;
-                    const balanceteElement = document.getElementById('balancete-para-pdf'); // Seleciona o wrapper
-                    try {
-                        const canvas = await html2canvas(balanceteElement, { scale: 2, useCORS: true, windowWidth: balanceteElement.scrollWidth, windowHeight: balanceteElement.scrollHeight });
-                        const imgData = canvas.toDataURL('image/png');
-                        const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
-                        const pdfWidth = pdf.internal.pageSize.getWidth();
-                        const pdfHeight = pdf.internal.pageSize.getHeight();
-                        const imgWidth = canvas.width;
-                        const imgHeight = canvas.height;
-                        const ratio = imgWidth / imgHeight;
-                        
-                        let newImgWidth = pdfWidth - 20; // Adiciona margem
-                        let newImgHeight = newImgWidth / ratio;
-                        let heightLeft = newImgHeight;
-                        let position = 10; // Margem superior
-                        
-                        pdf.addImage(imgData, 'PNG', 10, position, newImgWidth, newImgHeight);
-                        heightLeft -= (pdfHeight - 20); // Subtrai a altura visível
+                    const pdf = new jsPDF('p', 'mm', 'a4');
+                    
+                    const pdfWidth = pdf.internal.pageSize.getWidth();
+                    const pdfHeight = pdf.internal.pageSize.getHeight();
+                    const imgProps = pdf.getImageProperties(imgData);
+                    const imgHeight = (imgProps.height * pdfWidth) / imgProps.width;
+                    
+                    let heightLeft = imgHeight;
+                    let position = 0;
 
-                        while (heightLeft > 0) {
-                            pdf.addPage();
-                            position = -pdfHeight + 20; // Posição negativa para a próxima parte da imagem
-                            pdf.addImage(imgData, 'PNG', 10, position, newImgWidth, newImgHeight);
-                            heightLeft -= (pdfHeight - 20);
-                        }
-                        
-                        pdf.save(nomeArquivo);
+                    // Primeira Página
+                    pdf.addImage(imgData, 'JPEG', 0, position, pdfWidth, imgHeight);
+                    heightLeft -= pdfHeight;
 
-                    } catch(error) {
-                        console.error("Erro ao gerar PDF:", error);
-                        alert("Ocorreu um erro ao gerar o PDF. Verifique o console.");
-                    } finally {
-                        btnContainer.style.display = 'flex'; 
+                    // Páginas Adicionais (se o relatório for muito longo)
+                    while (heightLeft >= 0) {
+                        position = heightLeft - imgHeight;
+                        pdf.addPage();
+                        pdf.addImage(imgData, 'JPEG', 0, position, pdfWidth, imgHeight);
+                        heightLeft -= pdfHeight;
                     }
-                }, 200);
+
+                    pdf.save(`balancete_consolidado_${ano}.pdf`);
+                } catch (err) {
+                    console.error(err);
+                    alert("Erro ao gerar PDF.");
+                } finally {
+                    btn.innerText = "BAIXAR PDF CONSOLIDADO";
+                    btn.disabled = false;
+                }
             }
 
-            // Inicia a página populando o seletor de anos
             popularSeletorAno();
         }
     </script>
