@@ -3,37 +3,48 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Cronograma de Eventos - TV</title>
+    <title>Cronograma TV - CEPAT</title>
     <style>
-        body { font-family: sans-serif; background-color: #f4f6f9; margin: 0; padding: 2vh; overflow: hidden; height: 100vh; display: flex; flex-direction: column; }
-        .header-tv { text-align: center; flex-shrink: 0; margin-bottom: 2vh; }
-        .header-tv h1 { font-size: 5vh; margin: 0; color: #0d47a1; text-transform: uppercase; letter-spacing: 3px; }
-        .page-container { flex-grow: 1; position: relative; }
-        .semestre { position: absolute; inset: 0; opacity: 0; visibility: hidden; transition: opacity 1.5s; display: flex; flex-direction: column; }
-        .semestre.active { opacity: 1; visibility: visible; }
-        .semestre h2 { background: #34495e; color: #fff; font-size: 3.5vh; padding: 1vh; border-radius: 10px; margin: 0 0 2vh 0; text-align: center;}
+        body { font-family: sans-serif; background-color: #0d47a1; color: #fff; margin: 0; padding: 2vh; overflow: hidden; height: 100vh; }
+        .header-tv { text-align: center; height: 10vh; }
+        .header-tv h1 { font-size: 6vh; margin: 0; text-transform: uppercase; letter-spacing: 5px; text-shadow: 2px 2px 4px rgba(0,0,0,0.5); }
         
-        .timeline { display: grid; position: relative; padding: 20vh 0; flex-grow: 1; }
-        .timeline-axis { position: absolute; top: 50%; left: 0; right: 0; height: 12px; background: #0d47a1; border-radius: 6px; transform: translateY(-50%); z-index: 1; }
-        .month-grid-container { display: contents; }
-        .month { text-align: center; border-right: 1px dotted #bdc3c7; display: flex; justify-content: center; align-items: center; position: relative; }
-        .month-label { background: #f4f6f9; padding: 0 20px; font-size: 2.5vh; font-weight: bold; color: #34495e; z-index: 2; position: absolute; top: 50%; transform: translateY(-50%); }
+        .page-container { position: relative; height: 85vh; }
+        .semestre-slide { 
+            position: absolute; inset: 0; opacity: 0; visibility: hidden; 
+            transition: opacity 1.5s ease-in-out; 
+            display: flex; flex-direction: column; 
+        }
+        .semestre-slide.active { opacity: 1; visibility: visible; }
         
-        .event-node { grid-row: 1; position: relative; width: 14vw; max-width: 200px; z-index: 5; display: flex; align-items: center; }
-        .event-node .details { background: #fff; padding: 1.5vh; border-radius: 12px; border: 2.5px solid #0d47a1; box-shadow: 0 6px 12px rgba(0,0,0,0.1); width: 100%; text-align: center; font-size: 2.1vh; line-height: 1.2; }
-        .event-node .details strong { display: block; font-size: 2.3vh; color: #0d47a1; margin-bottom: 4px; }
-        .event-node .node-circle { width: 3vh; height: 3vh; background: #0d47a1; border: 4px solid #fff; border-radius: 50%; box-shadow: 0 0 0 3px #0d47a1; z-index: 10; flex-shrink: 0; margin: 5px 0; }
-        .event-node .line { width: 4px; background: #0d47a1; flex-shrink: 0; }
+        .semestre-titulo { background: rgba(255,255,255,0.2); font-size: 4vh; padding: 1vh; border-radius: 10px; margin-bottom: 2vh; text-align: center; }
         
-        .event-node[data-position="top"] { align-self: end; flex-direction: column; }
-        .event-node[data-position="bottom"] { align-self: start; flex-direction: column-reverse; }
-        
-        .feriados-lista { position: absolute; bottom: 1vh; left: 0; right: 0; text-align: center; font-size: 2vh; color: #666; font-style: italic; }
+        .grid-meses-tv { 
+            display: grid; grid-template-columns: repeat(3, 1fr); 
+            gap: 2vh; flex-grow: 1; 
+        }
+        .caixa-mes-tv { 
+            background: #fff; color: #333; border-radius: 15px; 
+            padding: 2vh; display: flex; flex-direction: column; 
+            box-shadow: 0 10px 20px rgba(0,0,0,0.3);
+        }
+        .caixa-mes-tv h3 { 
+            margin: 0 0 1.5vh 0; font-size: 3.5vh; border-bottom: 4px solid #0d47a1; 
+            color: #0d47a1; 
+        }
+        .lista-tv { list-style: none; padding: 0; margin: 0; overflow: hidden; }
+        .item-tv { 
+            padding: 1vh 0; border-bottom: 2px solid #eee; 
+            font-size: 2.2vh; line-height: 1.2; 
+        }
+        .item-tv strong { color: #0d47a1; }
+        .item-tv span { display: block; color: #666; font-size: 1.8vh; }
+        .feriado-tv { color: #d32f2f !important; font-weight: bold; }
     </style>
 </head>
 <body>
     <div class="header-tv"><h1>Cronograma de Eventos 2026</h1></div>
-    <div id="cronograma-visual" class="page-container"></div>
+    <div id="container-tv" class="page-container"></div>
 
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
@@ -51,71 +62,62 @@
         const db = getFirestore(app);
 
         onSnapshot(query(collection(db, "eventos"), orderBy("dataInicio", "asc")), (snapshot) => {
-            const eventos = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-            renderizarTV(eventos);
+            const evs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+            renderizarTV(evs);
         });
 
         function renderizarTV(eventos) {
-            const container = document.getElementById('cronograma-visual');
+            const container = document.getElementById('container-tv');
             container.innerHTML = '';
             const ano = 2026;
+            const nomes = ["JANEIRO", "FEVEREIRO", "MARÇO", "ABRIL", "MAIO", "JUNHO", "JULHO", "AGOSTO", "SETEMBRO", "OUTUBRO", "NOVEMBRO", "DEZEMBRO"];
+
             const semestres = [
-                { id: 's1', nome: '1º SEMESTRE', de: new Date(ano, 0, 1), ate: new Date(ano, 5, 30) },
-                { id: 's2', nome: '2º SEMESTRE', de: new Date(ano, 6, 1), ate: new Date(ano, 11, 31) }
+                { id: 's1', nome: '1º SEMESTRE', meses: [0,1,2,3,4,5] },
+                { id: 's2', nome: '2º SEMESTRE', meses: [6,7,8,9,10,11] }
             ];
 
             semestres.forEach(sem => {
                 const sDiv = document.createElement('div');
-                sDiv.className = 'semestre';
+                sDiv.className = 'semestre-slide';
                 sDiv.id = sem.id;
-                const totalD = Math.round((sem.ate - sem.de) / 86400000) + 1;
-                sDiv.innerHTML = `<h2>${sem.nome}</h2><div class="timeline" style="grid-template-columns: repeat(${totalD}, 1fr)">
-                    <div class="timeline-axis"></div><div class="month-grid-container"></div></div><div class="feriados-lista"></div>`;
+                sDiv.innerHTML = `<div class="semestre-titulo">${sem.nome}</div><div class="grid-meses-tv"></div>`;
                 
-                const timeline = sDiv.querySelector('.timeline');
-                const monthGrid = sDiv.querySelector('.month-grid-container');
-                let pos = 1;
-                for(let m=sem.de.getMonth(); m<=sem.ate.getMonth(); m++) {
-                    const dias = new Date(ano, m+1, 0).getDate();
-                    const mDiv = document.createElement('div'); mDiv.className = 'month'; mDiv.style.gridColumn = `${pos} / span ${dias}`;
-                    mDiv.innerHTML = `<span class="month-label">${new Date(ano, m).toLocaleString('pt-BR',{month:'long'}).toUpperCase()}</span>`;
-                    monthGrid.appendChild(mDiv); pos += dias;
-                }
+                const grid = sDiv.querySelector('.grid-meses-tv');
+                sem.meses.forEach(mIdx => {
+                    const caixa = document.createElement('div');
+                    caixa.className = 'caixa-mes-tv';
+                    caixa.innerHTML = `<h3>${nomes[mIdx]}</h3><ul class="lista-tv"></ul>`;
+                    
+                    const lista = caixa.querySelector('ul');
+                    const evsMes = eventos.filter(ev => {
+                        const d = ev.dataInicio.toDate();
+                        return d.getFullYear() === ano && d.getUTCMonth() === mIdx && ev.status !== 'cancelado';
+                    });
 
-                const ocupacao = { top: [], bottom: [] };
-                eventos.filter(e => {
-                    const d = e.dataInicio.toDate();
-                    return d.getFullYear() === ano && d >= sem.de && d <= sem.ate && e.status !== 'cancelado';
-                }).forEach(ev => {
-                    const data = ev.dataInicio.toDate();
-                    if(ev.tipo === 'feriado') {
-                        const list = sDiv.querySelector('.feriados-lista');
-                        list.innerHTML += (list.innerHTML ? ' | ' : '') + `${data.getUTCDate()}/${data.getUTCMonth()+1} ${ev.titulo}`;
-                        return;
-                    }
-                    const offset = Math.floor((data - sem.de) / 86400000) + 1;
-                    let lvl = 0, side = 'top';
-                    const margem = 18; 
-
-                    while(true) {
-                        if(!ocupacao.top[lvl] || offset > ocupacao.top[lvl] + margem) { side='top'; ocupacao.top[lvl]=offset; break; }
-                        if(!ocupacao.bottom[lvl] || offset > ocupacao.bottom[lvl] + margem) { side='bottom'; ocupacao.bottom[lvl]=offset; break; }
-                        lvl++;
-                    }
-                    const node = document.createElement('div'); node.className = 'event-node'; node.style.gridColumn = `${offset} / span 1`; node.dataset.position = side;
-                    const h = 5 + (lvl * 12);
-                    node.innerHTML = side === 'top' 
-                        ? `<div class="details"><strong>${data.getUTCDate().toString().padStart(2,'0')}/${(data.getUTCMonth()+1).toString().padStart(2,'0')}</strong>${ev.titulo}</div><div class="node-circle"></div><div class="line" style="height:${h}vh"></div>`
-                        : `<div class="line" style="height:${h}vh"></div><div class="node-circle"></div><div class="details"><strong>${data.getUTCDate().toString().padStart(2,'0')}/${(data.getUTCMonth()+1).toString().padStart(2,'0')}</strong>${ev.titulo}</div>`;
-                    timeline.appendChild(node);
+                    evsMes.forEach(ev => {
+                        const d = ev.dataInicio.toDate();
+                        const li = document.createElement('li');
+                        li.className = 'item-tv';
+                        const cl = ev.tipo === 'feriado' ? 'feriado-tv' : '';
+                        li.innerHTML = `<strong class="${cl}">${d.getUTCDate().toString().padStart(2,'0')}/${(mIdx+1).toString().padStart(2,'0')} - ${ev.titulo}</strong>
+                                        <span>${ev.detalhes || ''}</span>`;
+                        lista.appendChild(li);
+                    });
+                    grid.appendChild(caixa);
                 });
                 container.appendChild(sDiv);
             });
 
-            let current = 0;
-            const divs = container.querySelectorAll('.semestre');
-            const show = () => { divs.forEach(d => d.classList.remove('active')); divs[current].classList.add('active'); current = (current + 1) % divs.length; };
-            show(); setInterval(show, 15000);
+            // Alternância de Semestres
+            let atual = 0;
+            const slides = document.querySelectorAll('.semestre-slide');
+            const trocar = () => {
+                slides.forEach(s => s.classList.remove('active'));
+                slides[atual].classList.add('active');
+                atual = (atual + 1) % slides.length;
+            };
+            trocar(); setInterval(trocar, 15000); // 15 segundos cada semestre
         }
     </script>
 </body>
