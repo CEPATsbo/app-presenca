@@ -26,6 +26,7 @@
         .voluntario-info { flex-grow: 1; word-break: break-word; }
         .voluntario-info strong { font-size: 1.2em; display: block; margin-bottom: 4px;}
         .voluntario-info small { color: #777; }
+        .tag-medium { background-color: #673ab7; color: white; padding: 2px 6px; border-radius: 4px; font-size: 0.7em; margin-left: 5px; vertical-align: middle; text-transform: uppercase; }
         .codigo-voluntario { font-weight: bold; color: #007bff; font-size: 0.9em; margin-top: 5px;}
         .actions { display: flex; flex-direction: column; gap: 8px; align-items: center; }
         .actions-buttons { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
@@ -70,6 +71,10 @@
                 <div class="form-item"><label for="endereco">Endereço:</label><input type="text" id="endereco"></div>
                 <div class="form-item"><label for="telefone">Telefone:</label><input type="tel" id="telefone" maxlength="15"></div>
                 <div class="form-item"><label for="aniversario">Aniversário (DD/MM):</label><input type="text" id="aniversario" placeholder="Ex: 25/12"></div>
+                <div class="form-item" style="flex-direction: row; align-items: center; gap: 10px; padding-top: 20px;">
+                    <input type="checkbox" id="isMedium" style="width: 20px; height: 20px; cursor: pointer;">
+                    <label for="isMedium" style="margin-bottom: 0; cursor: pointer;">Este voluntário é Médium?</label>
+                </div>
             </div>
             <button id="btn-adicionar" class="add-button">Adicionar Voluntário</button>
         </div>
@@ -95,6 +100,10 @@
                     <div class="form-item"><label for="edit-endereco">Endereço:</label><input type="text" id="edit-endereco"></div>
                     <div class="form-item"><label for="edit-telefone">Telefone:</label><input type="tel" id="edit-telefone" maxlength="15"></div>
                     <div class="form-item"><label for="edit-aniversario">Aniversário (DD/MM):</label><input type="text" id="edit-aniversario"></div>
+                    <div class="form-item" style="flex-direction: row; align-items: center; gap: 10px; padding-top: 20px; grid-column: 1 / -1;">
+                        <input type="checkbox" id="edit-isMedium" style="width: 20px; height: 20px; cursor: pointer;">
+                        <label for="edit-isMedium" style="margin-bottom: 0; cursor: pointer;">Médium da Casa</label>
+                    </div>
                 </div>
                 <div class="modal-actions">
                     <button id="btn-cancelar-edicao" class="btn-delete">Cancelar</button>
@@ -171,6 +180,7 @@
                 endereco: document.getElementById('endereco'),
                 telefone: document.getElementById('telefone'),
                 aniversario: document.getElementById('aniversario'),
+                isMedium: document.getElementById('isMedium'),
                 btnAdd: document.getElementById('btn-adicionar'),
                 listaUl: document.getElementById('lista-voluntarios'),
                 tituloLista: document.getElementById('titulo-lista'),
@@ -180,6 +190,7 @@
                 editEndereco: document.getElementById('edit-endereco'),
                 editTelefone: document.getElementById('edit-telefone'),
                 editAniversario: document.getElementById('edit-aniversario'),
+                editIsMedium: document.getElementById('edit-isMedium'),
                 btnSalvar: document.getElementById('btn-salvar-edicao'),
                 btnCancelar: document.getElementById('btn-cancelar-edicao'),
                 btnAtribuirCodigos: document.getElementById('btn-atribuir-codigos'),
@@ -235,34 +246,32 @@
                         const li = document.createElement('li');
                         li.className = `item-voluntario ${statusClasse}`;
                         
+                        let tagMedium = v.isMedium ? '<span class="tag-medium">Médium</span>' : '';
+
                         let botoesPromocao = '';
                         if (userRole === 'super-admin' && v.authUid && v.role !== 'super-admin' && v.authUid !== user.uid) { 
                             const cargoAtual = v.role || 'voluntario';
                             const authUid = v.authUid;
                             const nome = v.nome;
 
-                            // Módulo Cáritas
                             if (cargoAtual === 'caritas') {
                                 botoesPromocao += `<button data-auth-uid="${authUid}" data-nome="${nome}" class="btn-revogar btn-revogar-caritas">Revogar Cáritas</button>`;
                             } else {
                                 botoesPromocao += `<button data-auth-uid="${authUid}" data-nome="${nome}" class="btn-promover btn-promover-caritas">Promover a Cáritas</button>`;
                             }
 
-                            // Diretor
                             if (cargoAtual === 'diretor') {
                                 botoesPromocao += `<button data-auth-uid="${authUid}" data-nome="${nome}" class="btn-revogar btn-revogar-diretor">Revogar Diretor</button>`;
                             } else {
                                 botoesPromocao += `<button data-auth-uid="${authUid}" data-nome="${nome}" class="btn-promover btn-promover-diretor">Promover a Diretor</button>`;
                             }
                             
-                            // Tesoureiro
                             if (cargoAtual === 'tesoureiro') {
                                 botoesPromocao += `<button data-auth-uid="${authUid}" data-nome="${nome}" class="btn-revogar btn-revogar-tesoureiro">Revogar Tesoureiro</button>`;
                             } else {
                                 botoesPromocao += `<button data-auth-uid="${authUid}" data-nome="${nome}" class="btn-promover btn-promover-tesoureiro">Promover a Tesoureiro</button>`;
                             }
                             
-                            // Conselheiro
                             if (cargoAtual === 'conselheiro') {
                                 botoesPromocao += `<button data-auth-uid="${authUid}" data-nome="${nome}" class="btn-revogar btn-revogar-conselheiro">Revogar Conselheiro</button>`;
                             } else if (totalConselheiros < 5) {
@@ -271,49 +280,42 @@
                                 botoesPromocao += `<button disabled title="Limite de 5 conselheiros atingido.">Promover a Conselheiro</button>`;
                             }
 
-                            // Produtor de Evento
                             if (cargoAtual === 'produtor-evento') {
                                 botoesPromocao += `<button data-auth-uid="${authUid}" data-nome="${nome}" class="btn-revogar btn-revogar-produtor">Revogar Produtor</button>`;
                             } else {
                                 botoesPromocao += `<button data-auth-uid="${authUid}" data-nome="${nome}" class="btn-promover btn-promover-produtor">Promover a Produtor</button>`;
                             }
 
-                            // Irradiador
                             if (cargoAtual === 'irradiador') {
                                 botoesPromocao += `<button data-auth-uid="${authUid}" data-nome="${nome}" class="btn-revogar btn-revogar-irradiador">Revogar Irradiador</button>`;
                             } else {
                                 botoesPromocao += `<button data-auth-uid="${authUid}" data-nome="${nome}" class="btn-promover btn-promover-irradiador">Promover a Irradiador</button>`;
                             }
 
-                            // Bibliotecário
                             if (cargoAtual === 'bibliotecario') {
                                 botoesPromocao += `<button data-auth-uid="${authUid}" data-nome="${nome}" class="btn-revogar btn-revogar-bibliotecario">Revogar Bibliotecário</button>`;
                             } else {
                                 botoesPromocao += `<button data-auth-uid="${authUid}" data-nome="${nome}" class="btn-promover btn-promover-bibliotecario">Promover a Bibliotecário</button>`;
                             }
 
-                            // Recepcionista
                             if (cargoAtual === 'recepcionista') {
                                 botoesPromocao += `<button data-auth-uid="${authUid}" data-nome="${nome}" class="btn-revogar btn-revogar-recepcionista">Revogar Recepcionista</button>`;
                             } else {
                                 botoesPromocao += `<button data-auth-uid="${authUid}" data-nome="${nome}" class="btn-promover btn-promover-recepcionista">Promover a Recepcionista</button>`;
                             }
 
-                            // Entrevistador
                             if (cargoAtual === 'entrevistador') {
                                 botoesPromocao += `<button data-auth-uid="${authUid}" data-nome="${nome}" class="btn-revogar btn-revogar-entrevistador">Revogar Entrevistador(a)</button>`;
                             } else {
                                 botoesPromocao += `<button data-auth-uid="${authUid}" data-nome="${nome}" class="btn-promover btn-promover-entrevistador">Promover a Entrevistador(a)</button>`;
                             }
                             
-                            // Dirigente de Escola
                             if (cargoAtual === 'dirigente-escola') {
                                 botoesPromocao += `<button data-auth-uid="${authUid}" data-nome="${nome}" class="btn-revogar btn-revogar-dirigente-escola">Revogar Dirigente</button>`;
                             } else {
                                 botoesPromocao += `<button data-auth-uid="${authUid}" data-nome="${nome}" class="btn-promover btn-promover-dirigente-escola">Promover a Dirigente</button>`;
                             }
                             
-                            // Secretário de Escola
                             if (cargoAtual === 'secretario-escola') {
                                 botoesPromocao += `<button data-auth-uid="${authUid}" data-nome="${nome}" class="btn-revogar btn-revogar-secretario-escola">Revogar Secretário(a)</button>`;
                             } else {
@@ -328,7 +330,7 @@
 
                         li.innerHTML = `
                             <div class="voluntario-info">
-                                <strong>${v.nome}</strong>
+                                <strong>${v.nome} ${tagMedium}</strong>
                                 <small>${v.endereco || 'N/A'} | ${v.telefone || 'N/A'} | Cargo: ${v.role || 'voluntario'}</small>
                                 <div class="codigo-voluntario">
                                     Cód: ${v.codigoVoluntario || 'N/A'} | Nome Crachá: <strong>${v.nomeParaCracha || 'Pendente (sincronize)'}</strong>
@@ -367,12 +369,22 @@
                 ui.editTelefone.addEventListener('input', handlePhone);
 
                 ui.btnAdd.addEventListener('click', async () => {
-                    const novoVoluntario = { nome: ui.nome.value.trim(), endereco: ui.endereco.value.trim(), telefone: ui.telefone.value.trim(), aniversario: ui.aniversario.value.trim(), statusVoluntario: 'ativo', ultimaPresenca: null, tasvAssinadoAno: null, criadoEm: serverTimestamp() };
+                    const novoVoluntario = { 
+                        nome: ui.nome.value.trim(), 
+                        endereco: ui.endereco.value.trim(), 
+                        telefone: ui.telefone.value.trim(), 
+                        aniversario: ui.aniversario.value.trim(), 
+                        isMedium: ui.isMedium.checked,
+                        statusVoluntario: 'ativo', 
+                        ultimaPresenca: null, 
+                        tasvAssinadoAno: null, 
+                        criadoEm: serverTimestamp() 
+                    };
                     if (!novoVoluntario.nome) return alert("O campo 'Nome Completo' é obrigatório.");
                     try {
                         const docRef = await addDoc(voluntariosCollection, novoVoluntario);
-                        await registrarLog("CRIOU_VOLUNTARIO", { voluntarioId: docRef.id, nome: novoVoluntario.nome });
-                        ui.nome.value = ''; ui.endereco.value = ''; ui.telefone.value = ''; ui.aniversario.value = '';
+                        await registrarLog("CRIOU_VOLUNTARIO", { voluntarioId: docRef.id, nome: novoVoluntario.nome, isMedium: novoVoluntario.isMedium });
+                        ui.nome.value = ''; ui.endereco.value = ''; ui.telefone.value = ''; ui.aniversario.value = ''; ui.isMedium.checked = false;
                     } catch (error) { console.error("Erro ao adicionar voluntário:", error); }
                 });
 
@@ -430,6 +442,7 @@
                                 ui.editEndereco.value = data.endereco || '';
                                 ui.editTelefone.value = phoneMask(data.telefone || '');
                                 ui.editAniversario.value = data.aniversario || '';
+                                ui.editIsMedium.checked = data.isMedium || false;
                                 ui.editModal.style.display = 'flex';
                             }
                         } else if (target.classList.contains('btn-delete')) {
@@ -523,7 +536,13 @@
                     if (!currentEditingId) return;
                     const docRef = doc(db, 'voluntarios', currentEditingId);
                     const docSnap = await getDoc(docRef);
-                    const dadosNovos = { nome: ui.editNome.value.trim(), endereco: ui.editEndereco.value.trim(), telefone: ui.editTelefone.value.trim(), aniversario: ui.editAniversario.value.trim() };
+                    const dadosNovos = { 
+                        nome: ui.editNome.value.trim(), 
+                        endereco: ui.editEndereco.value.trim(), 
+                        telefone: ui.editTelefone.value.trim(), 
+                        aniversario: ui.editAniversario.value.trim(),
+                        isMedium: ui.editIsMedium.checked
+                    };
                     try {
                         await updateDoc(docRef, dadosNovos);
                         await registrarLog("EDITOU_VOLUNTARIO", { voluntarioId: currentEditingId, dadosAntigos: docSnap.data(), dadosNovos });
