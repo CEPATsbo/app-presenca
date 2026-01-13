@@ -17,29 +17,59 @@
         .config-grupo { display: flex; align-items: center; gap: 15px; }
         input[type="month"] { padding: 10px; border-radius: 6px; border: 1px solid #ccc; font-size: 1em; }
         
-        /* Estilo do Toggle de Passado */
         .toggle-passado { display: flex; align-items: center; gap: 8px; cursor: pointer; font-weight: bold; color: #555; background: #fff; padding: 8px 12px; border: 1px solid #ddd; border-radius: 6px; }
         .toggle-passado input { width: 18px; height: 18px; cursor: pointer; }
 
-        .btn-acao { padding: 10px 20px; border-radius: 6px; font-weight: bold; cursor: pointer; border: none; }
+        .btn-acao { padding: 10px 20px; border-radius: 6px; font-weight: bold; cursor: pointer; border: none; display: flex; align-items: center; gap: 8px; }
         .btn-carregar { background-color: #0277BD; color: white; }
         .btn-salvar { background-color: #2e7d32; color: white; }
+        .btn-imprimir { background-color: #555; color: white; }
 
-        /* Estrutura de Tabela com Cabeçalhos e Colunas Fixos */
         .table-responsive { width: 100%; max-height: 70vh; overflow: auto; border: 1px solid #ddd; border-radius: 8px; }
         table { width: 100%; border-collapse: separate; border-spacing: 0; font-size: 0.8em; }
         th, td { border: 1px solid #dee2e6; padding: 8px; text-align: center; min-width: 85px; }
 
-        /* Fixar Cabeçalho no Topo (Vertical) */
         thead th { position: sticky; top: 0; z-index: 20; background-color: #2c3e50; color: white; }
         thead tr:nth-child(2) th { top: 35px; background-color: #ecf0f1; color: #34495e; z-index: 20; }
 
-        /* Fixar Coluna de Nomes à Esquerda (Horizontal) */
         .nome-col { text-align: left; font-weight: bold; min-width: 200px; background-color: #fff; position: sticky; left: 0; z-index: 10; border-right: 3px solid #0277BD; }
         th.nome-col { z-index: 30; top: 0; left: 0; background-color: #34495e; }
 
         .check-box { width: 20px; height: 20px; cursor: pointer; }
         #acesso-negado { display: none; text-align: center; padding: 50px; }
+
+        /* ============================================================
+           REGRAS DE IMPRESSÃO
+        ============================================================ */
+        @media print {
+            @page { size: landscape; margin: 1cm; }
+            body { background-color: white; padding: 0; }
+            .nav-voltar, .controles, .btn-acao { display: none !important; }
+            .container { box-shadow: none; border: none; width: 100%; max-width: 100%; padding: 0; }
+            .table-responsive { max-height: none; overflow: visible; border: none; }
+            table { font-size: 7pt; width: 100%; table-layout: auto; }
+            th, td { border: 0.5pt solid #000 !important; padding: 4px !important; }
+            thead th, .nome-col { position: static !important; background-color: #f0f0f0 !important; color: black !important; }
+            
+            /* Transformar checkboxes marcados em um "X" para o papel */
+            input[type="checkbox"] { display: none; }
+            input[type="checkbox"]:checked::after {
+                content: "X";
+                display: block;
+                text-align: center;
+                font-weight: bold;
+                color: black;
+                font-size: 10pt;
+            }
+            /* Exibir o X mesmo com o input escondido */
+            td:has(input[type="checkbox"]:checked) {
+                background-color: transparent !important;
+            }
+            td:has(input[type="checkbox"]:checked)::before {
+                content: "X";
+                font-weight: bold;
+            }
+        }
     </style>
 </head>
 <body>
@@ -54,7 +84,7 @@
 
     <div id="main-content" style="display: none;">
         <div class="container">
-            <h1>Gestão de Escala Mediúnica</h1>
+            <h1 id="titulo-pagina">Gestão de Escala Mediúnica</h1>
             
             <div class="controles">
                 <div class="config-grupo">
@@ -70,9 +100,15 @@
                         <i class="fas fa-sync-alt"></i> Gerar Tabela
                     </button>
                 </div>
-                <button id="btn-salvar" class="btn-acao btn-salvar">
-                    <i class="fas fa-save"></i> Salvar Escala Mensal
-                </button>
+
+                <div class="config-grupo">
+                    <button id="btn-imprimir" class="btn-acao btn-imprimir">
+                        <i class="fas fa-print"></i> Imprimir Escala
+                    </button>
+                    <button id="btn-salvar" class="btn-acao btn-salvar">
+                        <i class="fas fa-save"></i> Salvar no Sistema
+                    </button>
+                </div>
             </div>
 
             <div class="table-responsive">
@@ -109,8 +145,6 @@
                 const inputMes = document.getElementById('mes-referencia');
                 const hoje = new Date();
                 inputMes.value = `${hoje.getFullYear()}-${String(hoje.getMonth() + 1).padStart(2, '0')}`;
-                
-                // Carrega automaticamente a tabela ao entrar
                 carregarTabela();
             })
             .catch(() => {
@@ -121,13 +155,11 @@
             let datas = [];
             let data = new Date(ano, mes, 1);
             let contadorDomingo = 0;
-
             while (data.getMonth() === mes) {
-                let diaSemana = data.getDay(); // 0=Dom, 2=Ter, 4=Qui, 5=Sex, 6=Sáb
+                let diaSemana = data.getDay();
                 let diaMes = data.getDate();
                 let diaFormatado = `${diaMes.toString().padStart(2, '0')}/${(mes + 1).toString().padStart(2, '0')}`;
                 let idData = `${ano}-${(mes + 1).toString().padStart(2, '0')}-${diaMes.toString().padStart(2, '0')}`;
-
                 let configs = null;
                 if (diaSemana === 2) configs = { dia: 'Ter', jobs: ['Harm. 19h', 'Salas 19h30'] };
                 else if (diaSemana === 4) configs = { dia: 'Qui', jobs: ['Vibra 19h20', 'Col. Med 19h'] };
@@ -137,46 +169,35 @@
                     contadorDomingo++;
                     if (contadorDomingo === 3) configs = { dia: 'Dom', jobs: ['Cáritas 08:30'] };
                 }
-
-                if (configs) {
-                    datas.push({ id: idData, label: diaFormatado, dia: configs.dia, jobs: configs.jobs });
-                }
+                if (configs) datas.push({ id: idData, label: diaFormatado, dia: configs.dia, jobs: configs.jobs });
                 data.setDate(data.getDate() + 1);
             }
             return datas;
         }
 
         async function carregarTabela() {
-            const [ano, mesStr] = document.getElementById('mes-referencia').value.split('-');
+            const val = document.getElementById('mes-referencia').value;
+            const [ano, mesStr] = val.split('-');
             const mes = parseInt(mesStr) - 1;
             const mostrarTudo = document.getElementById('check-ver-passado').checked;
+            const hoje = new Date(); hoje.setHours(0,0,0,0);
             
-            const hoje = new Date();
-            hoje.setHours(0, 0, 0, 0); // Zera as horas para comparar apenas a data
+            // Atualiza o título da página para a impressão saber o mês
+            document.getElementById('titulo-pagina').textContent = `Escala Mediúnica - ${mesStr}/${ano}`;
 
             let todasDatas = obterDatasTrabalho(parseInt(ano), mes);
-            
-            // FILTRO: Se mostrarTudo for falso, remove datas anteriores a hoje
-            let datasFiltradas = todasDatas;
-            if (!mostrarTudo) {
-                datasFiltradas = todasDatas.filter(d => {
-                    const dataObj = new Date(d.id + 'T00:00:00');
-                    return dataObj >= hoje;
-                });
-            }
+            let datasFiltradas = mostrarTudo ? todasDatas : todasDatas.filter(d => new Date(d.id + 'T00:00:00') >= hoje);
 
             const tbody = document.getElementById('tbody-escala');
             if (todasDatas.length > 0 && datasFiltradas.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="5" style="padding:40px; color: #e67e22;">Não há datas futuras neste mês. Marque "Consultar Passado" para ver os registros anteriores.</td></tr>';
-                document.getElementById('thead-escala').innerHTML = '';
+                tbody.innerHTML = '<tr><td colspan="5" style="padding:40px; color: #e67e22;">Não há datas futuras. Marque "Consultar Passado".</td></tr>';
                 return;
             }
 
-            // Busca Médiuns e Escala Salva
             const q = query(collection(db, "voluntarios"), where("isMedium", "==", true), orderBy("nome"));
             const [snapMediuns, snapEscala] = await Promise.all([
                 getDocs(q),
-                getDoc(doc(db, "escalas_mediunicas", `${ano}-${mesStr}`))
+                getDoc(doc(db, "escalas_mediunicas", val))
             ]);
             
             renderizarTabela(datasFiltradas, snapMediuns.docs.map(d => ({ id: d.id, nome: d.data().nome })), snapEscala.exists() ? snapEscala.data().escalados : {});
@@ -185,18 +206,14 @@
         function renderizarTabela(datas, mediuns, dados) {
             const thead = document.getElementById('thead-escala');
             const tbody = document.getElementById('tbody-escala');
-
-            // Cabeçalho 1: Datas
             let head1 = `<tr><th rowspan="2" class="nome-col">Médium</th>`;
             let head2 = `<tr>`;
-            
             datas.forEach(d => {
                 head1 += `<th colspan="${d.jobs.length}">${d.dia} ${d.label}</th>`;
                 d.jobs.forEach(j => head2 += `<th>${j}</th>`);
             });
             thead.innerHTML = head1 + '</tr>' + head2 + '</tr>';
 
-            // Corpo: Nomes e Checkboxes
             let bodyHtml = '';
             mediuns.forEach(m => {
                 bodyHtml += `<tr><td class="nome-col">${m.nome}</td>`;
@@ -209,37 +226,32 @@
                 });
                 bodyHtml += `</tr>`;
             });
-            tbody.innerHTML = bodyHtml || '<tr><td style="padding:20px;">Nenhum médium cadastrado ou encontrado.</td></tr>';
+            tbody.innerHTML = bodyHtml;
         }
 
         document.getElementById('btn-salvar').onclick = async () => {
             const checks = document.querySelectorAll('.check-box');
             const escalados = {};
             const mesId = document.getElementById('mes-referencia').value;
-
-            // Para salvar sem perder os dados das datas que foram ocultadas pelo filtro:
             const escalaRef = doc(db, "escalas_mediunicas", mesId);
             const escalaSnap = await getDoc(escalaRef);
             let dadosCompletos = escalaSnap.exists() ? escalaSnap.data().escalados : {};
 
-            // Atualiza apenas as chaves que estão visíveis na tela atual
             checks.forEach(c => {
                 const key = c.dataset.key;
-                const uid = c.dataset.uid;
-                
                 if (!escalados[key]) escalados[key] = [];
-                if (c.checked) {
-                    escalados[key].push(uid);
-                }
+                if (c.checked) escalados[key].push(c.dataset.uid);
             });
 
-            // Mescla o que já existia (passado) com o que foi marcado agora (futuro)
-            const novoEscalados = { ...dadosCompletos, ...escalados };
-
             try {
-                await setDoc(escalaRef, { escalados: novoEscalados, ultimaAtualizacao: new Date() });
-                alert("Escala salva com sucesso!");
-            } catch (e) { alert("Erro ao salvar: " + e.message); }
+                await setDoc(escalaRef, { escalados: { ...dadosCompletos, ...escalados }, ultimaAtualizacao: new Date() });
+                alert("Escala salva!");
+            } catch (e) { alert("Erro: " + e.message); }
+        };
+
+        // Função de Impressão
+        document.getElementById('btn-imprimir').onclick = () => {
+            window.print();
         };
 
         document.getElementById('btn-carregar').onclick = carregarTabela;
