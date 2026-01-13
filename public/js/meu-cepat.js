@@ -36,6 +36,13 @@ const diaContent = document.getElementById('dia-content');
 const presencaCardContent = document.getElementById('presenca-card-content');
 const pessoalContent = document.getElementById('pessoal-content');
 
+// Elementos do Carrossel Informativo
+const moduleInformativo = document.getElementById('module-informativo');
+const carouselInner = document.getElementById('carousel-inner');
+const carouselDots = document.querySelectorAll('.dot');
+const muralContent = document.getElementById('mural-content');
+const escalaContent = document.getElementById('escala-content');
+
 // Modais de Frequência (Facilitador)
 const modalFrequencia = document.getElementById('modal-frequencia');
 const closeModalFrequenciaBtn = document.getElementById('close-modal-frequencia');
@@ -102,11 +109,24 @@ onAuthStateChanged(auth, async (user) => {
             }
             greetingName.textContent = `Olá, ${currentUserData.nome}!`;
 
-            // ### LINHA NOVA A ADICIONAR AQUI: ###
             if (origemBusca === 'voluntario') {
                 verificarPendenciaTASV(currentUserData, currentUserId);
             }
-            // ####################################
+
+            // --- NOVO: LÓGICA DO MURAL E ESCALA ---
+            await carregarMural();
+            if (currentUserData.isMedium) {
+                moduleInformativo.classList.remove('hidden');
+                await carregarMinhaEscala(currentUserId);
+            } else {
+                // Se não for médium, esconde o slide da escala e a navegação
+                document.getElementById('slide-escala').style.display = 'none';
+                document.getElementById('carousel-nav').classList.add('hidden');
+                // Mostra o carrossel (apenas mural) se houver mensagem
+                if (muralContent.innerText.trim() !== "" && muralContent.innerText !== "Carregando avisos...") {
+                    moduleInformativo.classList.remove('hidden');
+                }
+            }
 
             const [isAluno, isFacilitador, isAdmin] = await Promise.all([
                 verificarPapelAluno(currentUserId, origemBusca),
@@ -123,6 +143,80 @@ onAuthStateChanged(auth, async (user) => {
     } else {
         window.location.href = 'login.html';
     }
+});
+
+// --- LÓGICA DO MURAL (CONFIGURAÇÕES) ---
+async function carregarMural() {
+    try {
+        const configRef = doc(db, "configuracoes", "mural");
+        const snap = await getDoc(configRef);
+        if (snap.exists() && snap.data().mensagem) {
+            muralContent.innerHTML = `<p style="font-size: 1.1em; color: #444; line-height: 1.5;">${snap.data().mensagem}</p>`;
+        } else {
+            muralContent.innerHTML = "<p>Nenhum aviso importante no momento.</p>";
+        }
+    } catch (e) { console.error("Erro mural:", e); muralContent.innerHTML = ""; }
+}
+
+// --- LÓGICA DA ESCALA MEDIÚNICA INDIVIDUAL ---
+async function carregarMinhaEscala(userId) {
+    const hoje = new Date();
+    hoje.setHours(0,0,0,0);
+    const mesId = `${hoje.getFullYear()}-${String(hoje.getMonth() + 1).padStart(2, '0')}`;
+    const hojeIso = hoje.toISOString().split('T')[0];
+
+    try {
+        const escalaRef = doc(db, "escalas_mediunicas", mesId);
+        const snap = await getDoc(escalaRef);
+
+        if (!snap.exists()) {
+            escalaContent.innerHTML = "<p>A escala deste mês ainda não foi publicada.</p>";
+            return;
+        }
+
+        const dados = snap.data().escalados || {};
+        let meusTrabalhos = [];
+
+        // Filtra chaves no formato YYYY-MM-DD_Trabalho
+        for (const [chave, listaUids] of Object.entries(dados)) {
+            const dataString = chave.split('_')[0]; // Pega o YYYY-MM-DD
+            if (listaUids.includes(userId) && dataString >= hojeIso) {
+                meusTrabalhos.push({
+                    data: dataString,
+                    trabalho: chave.split('_').slice(1).join(' ').replace(/_/g, ' ')
+                });
+            }
+        }
+
+        if (meusTrabalhos.length === 0) {
+            escalaContent.innerHTML = "<p>Você não possui trabalhos escalados para o restante deste mês.</p>";
+        } else {
+            meusTrabalhos.sort((a, b) => a.data.localeCompare(b.data));
+            let html = '<ul class="escala-lista">';
+            meusTrabalhos.forEach(t => {
+                const dataBR = t.data.split('-').reverse().join('/');
+                html += `<li class="escala-item">
+                            <span class="escala-data">${dataBR}</span>
+                            <span class="escala-trab">${t.trabalho}</span>
+                         </li>`;
+            });
+            html += '</ul>';
+            escalaContent.innerHTML = html;
+        }
+    } catch (e) {
+        console.error("Erro ao carregar escala:", e);
+        escalaContent.innerHTML = "<p>Não foi possível carregar sua escala.</p>";
+    }
+}
+
+// --- CONTROLE DO CARROSSEL (DOTS) ---
+carouselDots.forEach(dot => {
+    dot.addEventListener('click', () => {
+        const index = dot.dataset.slide;
+        carouselInner.style.transform = `translateX(-${index * 100}%)`;
+        carouselDots.forEach(d => d.classList.remove('active'));
+        dot.classList.add('active');
+    });
 });
 
 async function processarPapeisEExibirModulos(userId, userData, isAluno, isFacilitador, isAdmin) {
@@ -188,7 +282,6 @@ async function verificarPapelAdmin(user) {
             }
         }
 
-        console.log("Verificando acesso admin para Meu CEPAT:", claims, "Resultado:", temAcessoAdmin); // Log para depuração
         return temAcessoAdmin;
 
     } catch (error) {
@@ -700,8 +793,6 @@ const spanTasvAno = document.getElementById('tasv-ano-atual');
 // 1. Função para verificar se o voluntário deve assinar
 async function verificarPendenciaTASV(userData, userId) {
     const anoAtual = new Date().getFullYear();
-    
-    // Se o campo não existe, ou é null, ou é diferente do ano atual
     if (userData.tasvAssinadoAno !== anoAtual) {
         abrirModalTASV(anoAtual);
     }
@@ -712,11 +803,10 @@ function abrirModalTASV(ano) {
     if (spanTasvAno) spanTasvAno.textContent = ano;
     if (modalTasv) {
         modalTasv.classList.add('visible');
-        // Garante que o checkbox comece desmarcado e botão desabilitado
         if (checkAceiteTasv) checkAceiteTasv.checked = false;
         if (btnAssinarTasv) {
             btnAssinarTasv.disabled = true;
-            btnAssinarTasv.style.backgroundColor = '#9ca3af'; // Cinza
+            btnAssinarTasv.style.backgroundColor = '#9ca3af'; 
         }
     }
 }
@@ -726,10 +816,10 @@ if (checkAceiteTasv) {
     checkAceiteTasv.addEventListener('change', (e) => {
         if (e.target.checked) {
             btnAssinarTasv.disabled = false;
-            btnAssinarTasv.style.backgroundColor = '#0277BD'; // Azul
+            btnAssinarTasv.style.backgroundColor = '#0277BD'; 
         } else {
             btnAssinarTasv.disabled = true;
-            btnAssinarTasv.style.backgroundColor = '#9ca3af'; // Cinza
+            btnAssinarTasv.style.backgroundColor = '#9ca3af'; 
         }
     });
 }
@@ -738,51 +828,31 @@ if (checkAceiteTasv) {
 if (btnAssinarTasv) {
     btnAssinarTasv.addEventListener('click', async () => {
         if (!currentUserId || !currentUserData) return;
-        
         btnAssinarTasv.disabled = true;
         btnAssinarTasv.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Registrando...';
-        
         const anoAtual = new Date().getFullYear();
         const timestampAgora = serverTimestamp();
-
         try {
             const batch = writeBatch(db);
-            
-            // A. Atualiza o perfil do voluntário
             const voluntarioRef = doc(db, "voluntarios", currentUserId);
             batch.update(voluntarioRef, { 
                 tasvAssinadoAno: anoAtual,
                 tasvDataAssinatura: timestampAgora
             });
-
-            // B. Cria o Log Jurídico de Auditoria (A Assinatura Digital)
             const logRef = doc(collection(db, "log_auditoria"));
             batch.set(logRef, {
                 acao: "ASSINATURA_DIGITAL_TASV",
-                autor: { 
-                    uid: auth.currentUser.uid, 
-                    nome: currentUserData.nome,
-                    id_voluntario: currentUserId
-                },
-                detalhes: {
-                    ano_referencia: anoAtual,
-                    texto_aceito: "Lei nº 9.608/1998 e Termo de Adesão CEPAT",
-                    navegador: navigator.userAgent // Útil para auditoria técnica
-                },
+                autor: { uid: auth.currentUser.uid, nome: currentUserData.nome, id_voluntario: currentUserId },
+                detalhes: { ano_referencia: anoAtual, texto_aceito: "Lei nº 9.608/1998 e Termo de Adesão CEPAT", navegador: navigator.userAgent },
                 timestamp: timestampAgora
             });
-
             await batch.commit();
-
-            alert(`Termo de Adesão ${anoAtual} assinado com sucesso! Obrigado pelo seu serviço voluntário.`);
+            alert(`Termo de Adesão ${anoAtual} assinado com sucesso!`);
             modalTasv.classList.remove('visible');
-
-            // Atualiza o dado local para não pedir de novo na mesma sessão
             currentUserData.tasvAssinadoAno = anoAtual;
-
         } catch (error) {
             console.error("Erro ao assinar TASV:", error);
-            alert("Ocorreu um erro ao registrar sua assinatura. Tente novamente.");
+            alert("Erro ao registrar assinatura.");
             btnAssinarTasv.disabled = false;
             btnAssinarTasv.innerHTML = '<i class="fas fa-file-signature"></i> Assinar Digitalmente';
         }
@@ -791,7 +861,6 @@ if (btnAssinarTasv) {
 // ===================================================================
 // ## FIM DO BLOCO TRANSPLANTADO ##
 // ===================================================================
-
 
 // --- EVENTOS ---
 btnLogout.addEventListener('click', async (e) => {
@@ -842,7 +911,6 @@ if(frequenciaListContainer) frequenciaListContainer.addEventListener('click', (e
 if(closeModalAtividadesBtn) closeModalAtividadesBtn.addEventListener('click', () => modalAtividades.classList.remove('visible'));
 if(formAtividadesPresenca) formAtividadesPresenca.addEventListener('submit', salvarPresencaLogado);
 
-// ## EVENTOS TRANSPLANTADOS DE PAINEL.JS ##
 if(closeModalDetalhesBtn) closeModalDetalhesBtn.addEventListener('click', () => { modalOverlayDetalhes.classList.remove('visible'); });
 if(modalOverlayDetalhes) modalOverlayDetalhes.addEventListener('click', (event) => { if (event.target === modalOverlayDetalhes) { modalOverlayDetalhes.classList.remove('visible'); } });
 if(closeModalEditarPerfilBtn) closeModalEditarPerfilBtn.addEventListener('click', () => { modalOverlayEditarPerfil.classList.remove('visible'); });
