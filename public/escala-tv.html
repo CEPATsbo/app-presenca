@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Painel de Escala - CEPAT</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <style>
+        :root {
+            --bg-body: #0a0a0a;
+            --bg-card: #161616;
+            --primary: #2ecc71; 
+            --secondary: #e67e22;
+            --text-main: #ffffff;
+            --text-dim: #888888;
+        }
+
+        body {
+            font-family: 'Segoe UI', Roboto, sans-serif;
+            background-color: var(--bg-body);
+            color: var(--text-main);
+            margin: 0; padding: 20px;
+            height: 100vh; display: flex; flex-direction: column;
+            overflow: hidden;
+        }
+
+        /* Erro na tela */
+        #debug-error { 
+            display: none; position: fixed; top: 0; left: 0; width: 100%; 
+            background: #c0392b; color: white; padding: 10px; z-index: 9999; 
+            font-family: monospace; font-size: 12px;
+        }
+
+        .header-tv {
+            display: flex; justify-content: space-between; align-items: center;
+            padding: 20px 40px; background: var(--bg-card);
+            border-radius: 15px; margin-bottom: 20px;
+            border-bottom: 5px solid var(--primary);
+        }
+
+        .grid-escala { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; flex-grow: 1; }
+
+        .coluna-escala {
+            background: var(--bg-card); border-radius: 20px;
+            padding: 25px; display: flex; flex-direction: column;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+        }
+
+        .titulo-secao {
+            display: flex; align-items: center; gap: 15px;
+            font-size: 2.2em; margin-bottom: 20px; border-bottom: 2px solid #222;
+            padding-bottom: 10px; font-weight: bold;
+        }
+
+        .tema-prelecao {
+            background: #222; padding: 15px 25px; border-radius: 12px;
+            margin-bottom: 20px; border-left: 10px solid var(--secondary);
+        }
+
+        .tema-prelecao p { margin: 5px 0; font-size: 1.6em; font-weight: bold; color: #fff; }
+
+        .item-trabalhador {
+            display: flex; flex-direction: column;
+            border-bottom: 1px solid #222; padding: 12px 0;
+        }
+
+        .item-trabalhador label { color: var(--text-dim); font-size: 0.9em; text-transform: uppercase; font-weight: bold; }
+        .item-trabalhador span { font-size: 1.5em; color: var(--text-main); font-weight: 500; }
+
+        .clock { font-size: 2.5em; font-weight: bold; color: var(--primary); font-family: monospace; }
+        .footer-tv { text-align: center; padding: 15px; color: var(--text-dim); font-style: italic; font-size: 1.2em; }
+    </style>
+</head>
+<body>
+
+    <div id="debug-error"></div>
+
+    <header class="header-tv">
+        <div>
+            <h1 style="margin:0; font-size: 2.2em;">ESCALA DE TRABALHO</h1>
+            <div id="data-atual" style="font-size: 1.2em; color: var(--text-dim);">Carregando data...</div>
+        </div>
+        <div class="clock" id="relogio">00:00:00</div>
+    </header>
+
+    <main class="grid-escala">
+        <section class="coluna-escala">
+            <div class="titulo-secao" style="color: var(--secondary);">
+                <i class="fas fa-hand-holding-heart"></i> Módulo Cáritas
+            </div>
+            
+            <div id="card-caritas">
+                <div class="tema-prelecao">
+                    <small style="color: var(--secondary)">TEMA DA PRELEÇÃO</small>
+                    <p id="tema-caritas">Aguardando escala...</p>
+                </div>
+                <div class="item-trabalhador"><label>Preletor(a)</label><span id="preletor-caritas">--</span></div>
+                <div class="item-trabalhador"><label>Entrevistador(a)</label><span id="entrevistador-caritas">--</span></div>
+                <div class="item-trabalhador"><label>Passe Social</label><span id="mediuns-caritas">--</span></div>
+                <div class="item-trabalhador"><label>Escola de Pais / Evangelização</label><span id="evang-caritas">--</span></div>
+            </div>
+        </section>
+
+        <section class="coluna-escala">
+            <div class="titulo-secao" style="color: var(--primary);">
+                <i class="fas fa-dove"></i> Escala Mediúnica
+            </div>
+            <div class="tema-prelecao" style="border-left-color: var(--primary)">
+                <small style="color: var(--primary)">ATIVIDADE</small>
+                <p>Assistência Espiritual / VL</p>
+            </div>
+            <div class="item-trabalhador"><label>Dirigente</label><span id="dirigente-esp">--</span></div>
+            <div class="item-trabalhador"><label>Sustentação</label><span id="sustentacao-esp">--</span></div>
+            <div class="item-trabalhador"><label>Irradiação</label><span id="irradiacao-esp">--</span></div>
+            <div class="item-trabalhador"><label>Recepção</label><span id="recepcao-esp">--</span></div>
+        </section>
+    </main>
+
+    <footer class="footer-tv">
+        "Trabalhemos servindo a todos, sem a preocupação de sermos servidos."
+    </footer>
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
+        import { getFirestore, collection, query, where, getDocs, orderBy, limit, Timestamp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
+
+        // Sua Configuração Original
+        const firebaseConfig = {
+            apiKey: "AIzaSyBV7RPjk3cFTqL-aIpflJcUojKg1ZXMLuU",
+            authDomain: "voluntarios-ativos---cepat.firebaseapp.com",
+            projectId: "voluntarios-ativos---cepat",
+            storageBucket: "voluntarios-ativos---cepat.firebasestorage.app",
+            messagingSenderId: "66122858261",
+            appId: "1:66122858261:web:7fa21f1805463b5c08331c"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const db = getFirestore(app);
+
+        // Relógio
+        setInterval(() => {
+            const agora = new Date();
+            document.getElementById('relogio').innerText = agora.toLocaleTimeString('pt-BR');
+            document.getElementById('data-atual').innerText = agora.toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' });
+        }, 1000);
+
+        async function carregarDados() {
+            try {
+                // Buscamos a escala mais próxima (Cáritas)
+                // Nota: se der erro aqui, verifique o console (F12) para criar o índice
+                const hoje = Timestamp.now();
+                const q = query(collection(db, "escalaCaritas"), where("dataTrabalho", ">=", hoje), orderBy("dataTrabalho", "asc"), limit(1));
+                const snap = await getDocs(q);
+
+                if (!snap.empty) {
+                    const d = snap.docs[0].data();
+                    const eq = d.equipe || d;
+                    document.getElementById('tema-caritas').innerText = d.tema || "Tema não definido";
+                    document.getElementById('preletor-caritas').innerText = eq.preletor || "A definir";
+                    document.getElementById('entrevistador-caritas').innerText = eq.entrevistador || "A definir";
+                    document.getElementById('mediuns-caritas').innerText = eq.mediuns ? eq.mediuns.filter(n => n).join(' • ') : "A definir";
+                    document.getElementById('evang-caritas').innerText = (eq.evangelizadores || eq.escolaPais) ? [...(eq.evangelizadores || []), (eq.escolaPais || "")].filter(n => n).join(' • ') : "A definir";
+                }
+
+            } catch (err) {
+                console.error(err);
+                const debug = document.getElementById('debug-error');
+                debug.style.display = 'block';
+                debug.innerText = "ERRO FIREBASE: " + err.message + " (Verifique se criou o índice composto)";
+            }
+        }
+
+        carregarDados();
+        setInterval(carregarDados, 300000); // Atualiza a cada 5 minutos
+    </script>
+</body>
+</html>
