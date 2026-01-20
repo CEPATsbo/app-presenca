@@ -6,7 +6,18 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <style>
         :root { --bg: #050505; --card: #111; --green: #27ae60; --orange: #e67e22; --text: #fff; --grey: #888; }
-        body { font-family: 'Segoe UI', sans-serif; background: var(--bg); color: var(--text); margin: 0; padding: 15px; height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
+        
+        body { 
+            font-family: 'Segoe UI', sans-serif; 
+            background: var(--bg); 
+            color: var(--text); 
+            margin: 0; 
+            padding: 15px; 
+            height: 100vh; 
+            display: flex; 
+            flex-direction: column; 
+            overflow: hidden; /* Fixo para TV */
+        }
         
         .header { display: flex; justify-content: space-between; align-items: center; padding: 15px 30px; background: var(--card); border-radius: 12px; border-bottom: 5px solid var(--green); margin-bottom: 15px; }
         .clock { font-size: 2.5em; font-weight: bold; color: var(--green); font-family: monospace; }
@@ -16,20 +27,32 @@
         
         .titulo { font-size: 1.8em; border-bottom: 2px solid #333; padding-bottom: 10px; margin-bottom: 15px; font-weight: bold; text-transform: uppercase; display: flex; align-items: center; gap: 12px; }
         
-        /* Estilo Cáritas (Fixo no Próximo Trabalho) */
+        /* Estilo Cáritas */
         .tema-caritas { background: #1a1a1a; padding: 15px; border-radius: 10px; border-left: 8px solid var(--orange); margin-bottom: 20px; }
         .tema-caritas p { margin: 5px 0 0 0; font-size: 1.4em; font-weight: bold; font-style: italic; }
         .item-caritas { border-bottom: 1px solid #222; padding: 10px 0; }
         .item-caritas label { color: var(--grey); font-size: 0.8em; text-transform: uppercase; font-weight: bold; }
         .item-caritas span { display: block; font-size: 1.3em; margin-top: 3px; }
 
-        /* Estilo Mediúnico (Agenda Semanal Rolante) */
+        /* Estilo Mediúnico */
         .agenda-mediunica { overflow-y: auto; flex-grow: 1; padding-right: 5px; }
         .dia-trabalho { margin-bottom: 15px; background: #1a1a1a; border-radius: 8px; overflow: hidden; }
         .dia-header { background: #222; padding: 8px 15px; font-weight: bold; color: var(--green); display: flex; justify-content: space-between; border-left: 5px solid var(--green); }
         .job-linha { padding: 8px 15px; border-bottom: 1px solid #282828; display: flex; gap: 15px; align-items: flex-start; }
         .job-nome { min-width: 110px; color: var(--grey); font-size: 0.85em; text-transform: uppercase; font-weight: bold; padding-top: 3px; }
         .job-voluntarios { font-size: 1.1em; color: #eee; flex-grow: 1; }
+
+        /* ============================================================
+           AJUSTES PARA CELULAR (MOBILE RESPONSIVE)
+        ============================================================ */
+        @media (max-width: 900px) {
+            body { overflow-y: auto; height: auto; } /* Libera o scroll no celular */
+            .header { flex-direction: column; text-align: center; gap: 10px; }
+            .grid { grid-template-columns: 1fr; overflow: visible; } /* Colunas viram linhas */
+            .coluna { height: auto; margin-bottom: 20px; }
+            .clock { font-size: 2em; }
+            .titulo { font-size: 1.5em; }
+        }
 
         ::-webkit-scrollbar { width: 5px; }
         ::-webkit-scrollbar-thumb { background: #333; border-radius: 10px; }
@@ -48,7 +71,7 @@
     <main class="grid">
         <section class="coluna">
             <div class="titulo" style="color: var(--orange);"><i class="fas fa-hand-holding-heart"></i> Cáritas</div>
-            <div id="loading-caritas" style="color:var(--grey)">Buscando próximo domingo social...</div>
+            <div id="loading-caritas" style="color:var(--grey)">Buscando escala...</div>
             <div id="box-caritas" style="display:none">
                 <div class="tema-caritas">
                     <small style="color:var(--orange)">TEMA DA PRELEÇÃO (<span id="caritas-data">--</span>)</small>
@@ -62,9 +85,9 @@
         </section>
 
         <section class="coluna">
-            <div class="titulo" style="color: var(--green);"><i class="fas fa-dove"></i> Agenda Mediúnica (Próximos 7 Dias)</div>
+            <div class="titulo" style="color: var(--green);"><i class="fas fa-dove"></i> Agenda Mediúnica (7 Dias)</div>
             <div id="agenda-mediunica" class="agenda-mediunica">
-                <div style="padding:20px; color:var(--grey)">Sincronizando escala semanal...</div>
+                <div style="padding:20px; color:var(--grey)">Sincronizando...</div>
             </div>
         </section>
     </main>
@@ -86,7 +109,6 @@
         const db = getFirestore(app);
         let mapaVoluntarios = {};
 
-        // Relógio e Data
         setInterval(() => {
             const agora = new Date();
             document.getElementById('relogio').innerText = agora.toLocaleTimeString('pt-BR');
@@ -95,21 +117,19 @@
 
         async function carregarPainel() {
             try {
-                // 0. Carrega mapa de nomes de voluntários (Necessário para a escala mediúnica dinâmica)
                 const vSnap = await getDocs(collection(db, "voluntarios"));
                 vSnap.forEach(d => mapaVoluntarios[d.id] = d.data().nome);
 
                 const hoje = new Date(); hoje.setHours(0,0,0,0);
                 const hojeTS = Timestamp.fromDate(hoje);
 
-                // 1. CARREGA CÁRITAS (Próximo Trabalho do 3º Domingo)
+                // Cáritas
                 const qSoc = query(collection(db, "escalaCaritas"), where("dataTrabalho", ">=", hojeTS), orderBy("dataTrabalho", "asc"), limit(1));
                 const sSoc = await getDocs(qSoc);
                 if (!sSoc.empty) {
                     const d = sSoc.docs[0].data();
                     const eq = d.equipe || d;
-                    const dataObj = d.dataTrabalho.toDate();
-                    document.getElementById('caritas-data').innerText = dataObj.toLocaleDateString('pt-BR');
+                    document.getElementById('caritas-data').innerText = d.dataTrabalho.toDate().toLocaleDateString('pt-BR');
                     document.getElementById('caritas-tema').innerText = d.tema || "A definir";
                     document.getElementById('caritas-preletor').innerText = eq.preletor || "A definir";
                     document.getElementById('caritas-entrevistador').innerText = eq.entrevistador || "A definir";
@@ -119,77 +139,44 @@
                     document.getElementById('box-caritas').style.display = 'block';
                 }
 
-                // 2. CARREGA ESCALA MEDIÚNICA (Rolling 7 Days)
                 await carregarEscalaSemanal(hoje);
-
-            } catch (e) { console.error("Erro painel:", e); }
+            } catch (e) { console.error(e); }
         }
 
         async function carregarEscalaSemanal(hoje) {
             const container = document.getElementById('agenda-mediunica');
-            let html = "";
-            
-            // Gerar lista de datas para os próximos 7 dias
-            let datasTrabalho = [];
+            let html = "", datasTrabalho = [];
             for (let i = 0; i < 8; i++) {
                 let d = new Date(hoje); d.setDate(hoje.getDate() + i);
-                let sem = d.getDay();
-                let jobs = [];
-                // Lógica de dias baseada no seu arquivo Admin Mediúnica
+                let sem = d.getDay(), jobs = [];
                 if (sem === 2) jobs = ['Harm. 19h', 'Salas 19h30'];
                 else if (sem === 4) jobs = ['Vibra 19h20', 'Col. Med 19h'];
                 else if (sem === 5) jobs = ['Harm. 19h', 'Trab. Med'];
                 else if (sem === 6) jobs = ['Harm. 08:30'];
-                
                 if (jobs.length > 0) {
                     const idData = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-                    const mesRef = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2, '0')}`;
-                    datasTrabalho.push({ id: idData, label: d.toLocaleDateString('pt-BR', {weekday: 'short', day: '2-digit', month: '2-digit'}), jobs, mesRef });
+                    datasTrabalho.push({ id: idData, label: d.toLocaleDateString('pt-BR', {weekday: 'short', day: '2-digit', month: '2-digit'}), jobs, mesRef: idData.substring(0,7) });
                 }
             }
-
-            // Buscar documentos de escala dos meses envolvidos
-            const mesesUnicos = [...new Set(datasTrabalho.map(d => d.mesRef))];
+            const meses = [...new Set(datasTrabalho.map(d => d.mesRef))];
             let dadosEscala = {};
-            for (const m of mesesUnicos) {
+            for (const m of meses) {
                 const snap = await getDoc(doc(db, "escalas_mediunicas", m));
                 if (snap.exists()) dadosEscala[m] = snap.data().escalados;
             }
-
-            // Montar HTML
             datasTrabalho.forEach(dt => {
                 let jobsHtml = "";
                 dt.jobs.forEach(job => {
                     const key = `${dt.id}_${job.replace(/\s+/g, '_')}`;
-                    const idsEscalados = (dadosEscala[dt.mesRef] && dadosEscala[dt.mesRef][key]) ? dadosEscala[dt.mesRef][key] : [];
-                    const nomes = idsEscalados.map(id => mapaVoluntarios[id] || "Desconhecido").join(' • ');
-                    
-                    if (nomes) {
-                        jobsHtml += `
-                            <div class="job-linha">
-                                <div class="job-nome">${job}</div>
-                                <div class="job-voluntarios">${nomes}</div>
-                            </div>`;
-                    }
+                    const ids = (dadosEscala[dt.mesRef] && dadosEscala[dt.mesRef][key]) ? dadosEscala[dt.mesRef][key] : [];
+                    const nomes = ids.map(id => mapaVoluntarios[id] || "Desconhecido").join(' • ');
+                    if (nomes) jobsHtml += `<div class="job-linha"><div class="job-nome">${job}</div><div class="job-voluntarios">${nomes}</div></div>`;
                 });
-
-                if (jobsHtml) {
-                    html += `
-                        <div class="dia-trabalho">
-                            <div class="dia-header">
-                                <span>${dt.label.toUpperCase()}</span>
-                                <i class="fas fa-calendar-check"></i>
-                            </div>
-                            ${jobsHtml}
-                        </div>`;
-                }
+                if (jobsHtml) html += `<div class="dia-trabalho"><div class="dia-header"><span>${dt.label.toUpperCase()}</span><i class="fas fa-calendar-check"></i></div>${jobsHtml}</div>`;
             });
-
-            container.innerHTML = html || `<div style="padding:20px; color:var(--grey)">Nenhuma escala mediúnica registrada para os próximos 7 dias.</div>`;
+            container.innerHTML = html || `<div style="padding:20px; color:var(--grey)">Sem escalas nos próximos 7 dias.</div>`;
         }
-
         carregarPainel();
-        setInterval(carregarPainel, 600000); // Atualiza a cada 10 minutos
     </script>
 </body>
 </html>
