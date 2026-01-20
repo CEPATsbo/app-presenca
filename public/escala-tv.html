@@ -9,44 +9,31 @@
         
         body { 
             font-family: 'Segoe UI', sans-serif; 
-            background: var(--bg); 
-            color: var(--text); 
-            margin: 0; 
-            padding: 15px; 
-            height: 100vh; 
-            display: flex; 
-            flex-direction: column; 
-            overflow: hidden; 
+            background: var(--bg); color: var(--text); 
+            margin: 0; padding: 15px; 
+            height: 100vh; display: flex; flex-direction: column; overflow: hidden; 
         }
         
         .header { display: flex; justify-content: space-between; align-items: center; padding: 15px 30px; background: var(--card); border-radius: 12px; border-bottom: 5px solid var(--green); margin-bottom: 15px; }
         .header-left { display: flex; align-items: center; gap: 20px; }
         
-        /* Botão discreto para acionar Fullscreen na TV/Celular */
-        .btn-fullscreen {
-            background: #222;
-            color: var(--green);
-            border: 1px solid #333;
-            padding: 10px 15px;
-            border-radius: 8px;
-            cursor: pointer;
-            transition: 0.3s;
-        }
+        .btn-fullscreen { background: #222; color: var(--green); border: 1px solid #333; padding: 10px 15px; border-radius: 8px; cursor: pointer; transition: 0.3s; }
         .btn-fullscreen:hover { background: #333; transform: scale(1.05); }
 
         .clock { font-size: 2.5em; font-weight: bold; color: var(--green); font-family: monospace; }
 
+        /* Grid ajustado para comportar a linha extra na Cáritas */
         .grid { display: grid; grid-template-columns: 380px 1fr; gap: 20px; flex-grow: 1; overflow: hidden; }
         .coluna { background: var(--card); border-radius: 15px; padding: 20px; display: flex; flex-direction: column; box-shadow: 0 10px 30px rgba(0,0,0,0.5); }
         
         .titulo { font-size: 1.8em; border-bottom: 2px solid #333; padding-bottom: 10px; margin-bottom: 15px; font-weight: bold; text-transform: uppercase; display: flex; align-items: center; gap: 12px; }
         
-        .tema-caritas { background: #1a1a1a; padding: 15px; border-radius: 10px; border-left: 8px solid var(--orange); margin-bottom: 20px; }
-        .tema-caritas p { margin: 5px 0 0 0; font-size: 1.4em; font-weight: bold; font-style: italic; }
+        .tema-caritas { background: #1a1a1a; padding: 12px; border-radius: 10px; border-left: 8px solid var(--orange); margin-bottom: 15px; }
+        .tema-caritas p { margin: 5px 0 0 0; font-size: 1.3em; font-weight: bold; font-style: italic; }
         
-        .item-caritas { border-bottom: 1px solid #222; padding: 10px 0; }
-        .item-caritas label { color: var(--grey); font-size: 0.8em; text-transform: uppercase; font-weight: bold; }
-        .item-caritas span { display: block; font-size: 1.3em; margin-top: 3px; }
+        .item-caritas { border-bottom: 1px solid #222; padding: 8px 0; }
+        .item-caritas label { color: var(--grey); font-size: 0.75em; text-transform: uppercase; font-weight: bold; }
+        .item-caritas span { display: block; font-size: 1.2em; margin-top: 2px; }
 
         .agenda-mediunica { overflow-y: auto; flex-grow: 1; padding-right: 5px; }
         .dia-trabalho { margin-bottom: 15px; background: #1a1a1a; border-radius: 8px; overflow: hidden; }
@@ -55,7 +42,6 @@
         .job-nome { min-width: 110px; color: var(--grey); font-size: 0.85em; text-transform: uppercase; font-weight: bold; padding-top: 3px; }
         .job-voluntarios { font-size: 1.1em; color: #eee; flex-grow: 1; }
 
-        /* Responsividade para Celular */
         @media (max-width: 900px) {
             body { overflow-y: auto; height: auto; }
             .header { flex-direction: column; text-align: center; gap: 10px; }
@@ -88,12 +74,13 @@
             <div id="box-caritas">
                 <div class="tema-caritas">
                     <small style="color:var(--orange)">TEMA DA PRELEÇÃO (<span id="caritas-data">--</span>)</small>
-                    <p id="caritas-tema">Carregando...</p>
+                    <p id="caritas-tema">Buscando escala...</p>
                 </div>
                 <div class="item-caritas"><label>Preletor(a)</label><span id="caritas-preletor">--</span></div>
                 <div class="item-caritas"><label>Entrevistador(a)</label><span id="caritas-entrevistador">--</span></div>
                 <div class="item-caritas"><label>Passe Harmonização</label><span id="caritas-mediuns">--</span></div>
-                <div class="item-caritas"><label>Evangelização</label><span id="caritas-evang">--</span></div>
+                <div class="item-caritas"><label>Escola de Pais</label><span id="caritas-escola">--</span></div>
+                <div class="item-caritas"><label>Evangelização Infantil</label><span id="caritas-evang">--</span></div>
             </div>
         </section>
 
@@ -120,7 +107,6 @@
         const db = getFirestore(app);
         let mapaVoluntarios = {};
 
-        // Função para alternar modo Fullscreen oficial do navegador
         window.toggleFullScreen = function() {
             if (!document.fullscreenElement) {
                 document.documentElement.requestFullscreen().catch(err => {
@@ -145,6 +131,7 @@
                 const hoje = new Date(); hoje.setHours(0,0,0,0);
                 const hojeTS = Timestamp.fromDate(hoje);
 
+                // 1. Lógica Cáritas
                 const qSoc = query(collection(db, "escalaCaritas"), where("dataTrabalho", ">=", hojeTS), orderBy("dataTrabalho", "asc"), limit(1));
                 const sSoc = await getDocs(qSoc);
                 if (!sSoc.empty) {
@@ -155,7 +142,10 @@
                     document.getElementById('caritas-preletor').innerText = eq.preletor || "A definir";
                     document.getElementById('caritas-entrevistador').innerText = eq.entrevistador || "A definir";
                     document.getElementById('caritas-mediuns').innerText = Array.isArray(eq.mediuns) ? eq.mediuns.filter(n => n).join(' • ') : "A definir";
-                    document.getElementById('caritas-evang').innerText = [(eq.escolaPais || ""), ...(eq.evangelizadores || [])].filter(n => n).join(' • ') || "A definir";
+                    
+                    // Separação dos dados
+                    document.getElementById('caritas-escola').innerText = eq.escolaPais || "A definir";
+                    document.getElementById('caritas-evang').innerText = Array.isArray(eq.evangelizadores) ? eq.evangelizadores.filter(n => n).join(' • ') : "A definir";
                 }
                 await carregarEscalaSemanal(hoje);
             } catch (e) { console.error(e); }
