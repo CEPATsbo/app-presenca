@@ -16,10 +16,24 @@
             height: 100vh; 
             display: flex; 
             flex-direction: column; 
-            overflow: hidden; /* Fixo para TV */
+            overflow: hidden; 
         }
         
         .header { display: flex; justify-content: space-between; align-items: center; padding: 15px 30px; background: var(--card); border-radius: 12px; border-bottom: 5px solid var(--green); margin-bottom: 15px; }
+        .header-left { display: flex; align-items: center; gap: 20px; }
+        
+        /* Botão discreto para acionar Fullscreen na TV/Celular */
+        .btn-fullscreen {
+            background: #222;
+            color: var(--green);
+            border: 1px solid #333;
+            padding: 10px 15px;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: 0.3s;
+        }
+        .btn-fullscreen:hover { background: #333; transform: scale(1.05); }
+
         .clock { font-size: 2.5em; font-weight: bold; color: var(--green); font-family: monospace; }
 
         .grid { display: grid; grid-template-columns: 380px 1fr; gap: 20px; flex-grow: 1; overflow: hidden; }
@@ -27,14 +41,13 @@
         
         .titulo { font-size: 1.8em; border-bottom: 2px solid #333; padding-bottom: 10px; margin-bottom: 15px; font-weight: bold; text-transform: uppercase; display: flex; align-items: center; gap: 12px; }
         
-        /* Estilo Cáritas */
         .tema-caritas { background: #1a1a1a; padding: 15px; border-radius: 10px; border-left: 8px solid var(--orange); margin-bottom: 20px; }
         .tema-caritas p { margin: 5px 0 0 0; font-size: 1.4em; font-weight: bold; font-style: italic; }
+        
         .item-caritas { border-bottom: 1px solid #222; padding: 10px 0; }
         .item-caritas label { color: var(--grey); font-size: 0.8em; text-transform: uppercase; font-weight: bold; }
         .item-caritas span { display: block; font-size: 1.3em; margin-top: 3px; }
 
-        /* Estilo Mediúnico */
         .agenda-mediunica { overflow-y: auto; flex-grow: 1; padding-right: 5px; }
         .dia-trabalho { margin-bottom: 15px; background: #1a1a1a; border-radius: 8px; overflow: hidden; }
         .dia-header { background: #222; padding: 8px 15px; font-weight: bold; color: var(--green); display: flex; justify-content: space-between; border-left: 5px solid var(--green); }
@@ -42,16 +55,12 @@
         .job-nome { min-width: 110px; color: var(--grey); font-size: 0.85em; text-transform: uppercase; font-weight: bold; padding-top: 3px; }
         .job-voluntarios { font-size: 1.1em; color: #eee; flex-grow: 1; }
 
-        /* ============================================================
-           AJUSTES PARA CELULAR (MOBILE RESPONSIVE)
-        ============================================================ */
+        /* Responsividade para Celular */
         @media (max-width: 900px) {
-            body { overflow-y: auto; height: auto; } /* Libera o scroll no celular */
+            body { overflow-y: auto; height: auto; }
             .header { flex-direction: column; text-align: center; gap: 10px; }
-            .grid { grid-template-columns: 1fr; overflow: visible; } /* Colunas viram linhas */
+            .grid { grid-template-columns: 1fr; overflow: visible; }
             .coluna { height: auto; margin-bottom: 20px; }
-            .clock { font-size: 2em; }
-            .titulo { font-size: 1.5em; }
         }
 
         ::-webkit-scrollbar { width: 5px; }
@@ -61,9 +70,14 @@
 <body>
 
     <header class="header">
-        <div>
-            <h1 style="margin:0; font-size: 2em; letter-spacing: 1px;">PAINEL DE ESCALAS <small style="color:var(--grey); font-size: 0.5em;">CEPAT</small></h1>
-            <div id="data-topo" style="color: var(--grey); font-size: 1.1em;">--</div>
+        <div class="header-left">
+            <button class="btn-fullscreen" onclick="toggleFullScreen()" title="Alternar Tela Cheia">
+                <i class="fas fa-expand"></i>
+            </button>
+            <div>
+                <h1 style="margin:0; font-size: 2em; letter-spacing: 1px;">PAINEL DE ESCALAS</h1>
+                <div id="data-topo" style="color: var(--grey); font-size: 1.1em;">--</div>
+            </div>
         </div>
         <div class="clock" id="relogio">00:00:00</div>
     </header>
@@ -71,11 +85,10 @@
     <main class="grid">
         <section class="coluna">
             <div class="titulo" style="color: var(--orange);"><i class="fas fa-hand-holding-heart"></i> Cáritas</div>
-            <div id="loading-caritas" style="color:var(--grey)">Buscando escala...</div>
-            <div id="box-caritas" style="display:none">
+            <div id="box-caritas">
                 <div class="tema-caritas">
                     <small style="color:var(--orange)">TEMA DA PRELEÇÃO (<span id="caritas-data">--</span>)</small>
-                    <p id="caritas-tema">--</p>
+                    <p id="caritas-tema">Carregando...</p>
                 </div>
                 <div class="item-caritas"><label>Preletor(a)</label><span id="caritas-preletor">--</span></div>
                 <div class="item-caritas"><label>Entrevistador(a)</label><span id="caritas-entrevistador">--</span></div>
@@ -86,9 +99,7 @@
 
         <section class="coluna">
             <div class="titulo" style="color: var(--green);"><i class="fas fa-dove"></i> Agenda Mediúnica (7 Dias)</div>
-            <div id="agenda-mediunica" class="agenda-mediunica">
-                <div style="padding:20px; color:var(--grey)">Sincronizando...</div>
-            </div>
+            <div id="agenda-mediunica" class="agenda-mediunica"></div>
         </section>
     </main>
 
@@ -109,6 +120,17 @@
         const db = getFirestore(app);
         let mapaVoluntarios = {};
 
+        // Função para alternar modo Fullscreen oficial do navegador
+        window.toggleFullScreen = function() {
+            if (!document.fullscreenElement) {
+                document.documentElement.requestFullscreen().catch(err => {
+                    console.warn(`Erro ao entrar em tela cheia: ${err.message}`);
+                });
+            } else {
+                if (document.exitFullscreen) document.exitFullscreen();
+            }
+        };
+
         setInterval(() => {
             const agora = new Date();
             document.getElementById('relogio').innerText = agora.toLocaleTimeString('pt-BR');
@@ -123,7 +145,6 @@
                 const hoje = new Date(); hoje.setHours(0,0,0,0);
                 const hojeTS = Timestamp.fromDate(hoje);
 
-                // Cáritas
                 const qSoc = query(collection(db, "escalaCaritas"), where("dataTrabalho", ">=", hojeTS), orderBy("dataTrabalho", "asc"), limit(1));
                 const sSoc = await getDocs(qSoc);
                 if (!sSoc.empty) {
@@ -135,10 +156,7 @@
                     document.getElementById('caritas-entrevistador').innerText = eq.entrevistador || "A definir";
                     document.getElementById('caritas-mediuns').innerText = Array.isArray(eq.mediuns) ? eq.mediuns.filter(n => n).join(' • ') : "A definir";
                     document.getElementById('caritas-evang').innerText = [(eq.escolaPais || ""), ...(eq.evangelizadores || [])].filter(n => n).join(' • ') || "A definir";
-                    document.getElementById('loading-caritas').style.display = 'none';
-                    document.getElementById('box-caritas').style.display = 'block';
                 }
-
                 await carregarEscalaSemanal(hoje);
             } catch (e) { console.error(e); }
         }
@@ -174,7 +192,7 @@
                 });
                 if (jobsHtml) html += `<div class="dia-trabalho"><div class="dia-header"><span>${dt.label.toUpperCase()}</span><i class="fas fa-calendar-check"></i></div>${jobsHtml}</div>`;
             });
-            container.innerHTML = html || `<div style="padding:20px; color:var(--grey)">Sem escalas nos próximos 7 dias.</div>`;
+            container.innerHTML = html || `<div style="padding:20px; color:var(--grey)">Sem escalas agendadas para os próximos 7 dias.</div>`;
         }
         carregarPainel();
     </script>
