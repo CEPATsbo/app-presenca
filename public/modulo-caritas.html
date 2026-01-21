@@ -14,12 +14,20 @@
         .header-titulo h1 { color: #2c3e50; margin: 0; }
         .header-titulo p { color: #7f8c8d; margin: 5px 0 0 0; }
 
-        .stats-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; margin-bottom: 25px; }
-        .stat-card { background: white; padding: 20px; border-radius: 12px; text-align: center; box-shadow: 0 4px 10px rgba(0,0,0,0.05); border-bottom: 4px solid #e67e22; }
-        .stat-card h4 { margin: 0; color: #95a5a6; font-size: 0.8em; text-transform: uppercase; }
-        .stat-card p { margin: 10px 0 0 0; font-size: 2em; font-weight: bold; color: #2c3e50; }
+        /* Grade de Estatísticas Otimizada */
+        .stats-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 15px; margin-bottom: 25px; }
+        .stat-card { background: white; padding: 15px; border-radius: 12px; text-align: center; box-shadow: 0 4px 10px rgba(0,0,0,0.05); border-bottom: 4px solid #e67e22; transition: 0.3s; }
+        .stat-card h4 { margin: 0; color: #95a5a6; font-size: 0.75em; text-transform: uppercase; }
+        .stat-card p { margin: 8px 0 0 0; font-size: 1.8em; font-weight: bold; color: #2c3e50; }
 
-        /* Painel de Validade Viva com Margem de Segurança de 14 dias */
+        /* Card Especial de Prontidão */
+        .card-prontidao { grid-column: 1 / -1; background: #e8f5e9; border: 2px solid #27ae60; display: flex; justify-content: space-between; align-items: center; padding: 20px 30px; border-radius: 15px; cursor: pointer; border-bottom: none; }
+        .card-prontidao:hover { transform: translateY(-3px); box-shadow: 0 6px 15px rgba(0,0,0,0.1); }
+        .info-prontidao h2 { margin: 0; font-size: 2.2em; color: #1b5e20; }
+        .info-prontidao span { color: #2e7d32; font-weight: bold; text-transform: uppercase; font-size: 0.9em; }
+        .alerta-gargalo { text-align: right; max-width: 400px; }
+        .alerta-gargalo b { color: #c0392b; display: block; font-size: 0.9em; }
+
         #painel-validade-viva { background: #fff3e0; border: 2px solid #e67e22; border-radius: 12px; padding: 20px; margin-bottom: 25px; box-shadow: 0 4px 10px rgba(0,0,0,0.1); }
         .alerta-titulo { margin: 0 0 10px 0; color: #d35400; display: flex; align-items: center; gap: 10px; font-size: 1.1em; }
         .alerta-subtitulo { font-size: 0.85em; color: #a04000; margin-bottom: 15px; display: block; font-weight: 500; }
@@ -32,10 +40,9 @@
         .menu-item i { font-size: 2.2em; color: #e67e22; }
         .menu-item h3 { margin: 0; font-size: 1.1em; }
         .menu-item p { margin: 0; font-size: 0.8em; color: #7f8c8d; line-height: 1.3; }
-        .badge-campanha { background: #c0392b; color: white; padding: 2px 6px; border-radius: 4px; font-size: 0.7em; text-transform: uppercase; font-weight: bold; }
 
-        @media (max-width: 992px) { .menu-grid { grid-template-columns: repeat(2, 1fr); } }
-        @media (max-width: 600px) { .stats-grid, .menu-grid { grid-template-columns: 1fr; } }
+        @media (max-width: 992px) { .menu-grid { grid-template-columns: repeat(2, 1fr); } .stats-grid { grid-template-columns: repeat(2, 1fr); } }
+        @media (max-width: 600px) { .stats-grid, .menu-grid { grid-template-columns: 1fr; } .card-prontidao { flex-direction: column; text-align: center; gap: 15px; } .alerta-gargalo { text-align: center; } }
     </style>
 </head>
 <body>
@@ -51,30 +58,33 @@
         </div>
 
         <section class="stats-grid">
+            <div class="stat-card card-prontidao" onclick="window.location='/assistencia-estoque.html'">
+                <div class="info-prontidao">
+                    <span id="label-status">Status das Cestas Básicas</span>
+                    <h2 id="total-cestas-prontas">--</h2>
+                </div>
+                <div class="alerta-gargalo">
+                    <b id="item-limitante">Calculando prontidão de estoque...</b>
+                </div>
+            </div>
+
             <div class="stat-card"><h4>Famílias Ativas</h4><p id="total-familias">--</p></div>
-            <div class="stat-card"><h4>Cestas este Mês</h4><p id="total-cestas">0</p></div>
-            <div class="stat-card"><h4>Próximo Domingo Social</h4><p id="data-domingo">--/--</p></div>
+            <div class="stat-card"><h4>Cestas Entregues (Mês)</h4><p id="total-entregas">0</p></div>
+            <div class="stat-card"><h4>Próximo Domingo</h4><p id="data-domingo">--/--</p></div>
         </section>
 
         <section id="painel-validade-viva" style="display: none;">
-            <h3 class="alerta-titulo">
-                <i class="fas fa-exclamation-triangle fa-beat"></i> 
-                ALERTA: VENCIMENTO CRÍTICO
-            </h3>
-            <span class="alerta-subtitulo">
-                Itens com menos de 2 semanas de validade após a entrega de <b id="data-ref-domingo">--/--</b>:
-            </span>
+            <h3 class="alerta-titulo"><i class="fas fa-exclamation-triangle fa-beat"></i> ALERTA: VENCIMENTO CRÍTICO</h3>
+            <span class="alerta-subtitulo">Itens com menos de 2 semanas de validade após a entrega de <b id="data-ref-domingo">--/--</b>:</span>
             <div id="lista-alertas-vivos" class="grid-alertas-vivos"></div>
         </section>
 
         <section class="menu-grid">
             <a href="/assistencia-familias.html" class="menu-item"><i class="fas fa-users"></i><h3>Famílias</h3><p>Cadastros e prontuários sociais.</p></a>
             <a href="/assistencia-cestas.html" class="menu-item"><i class="fas fa-shopping-basket"></i><h3>Cestas Básicas</h3><p>Registrar entregas mensais.</p></a>
-            <a href="/assistencia-padrinhos.html" class="menu-item"><i class="fas fa-gift"></i><h3>Padrinhos <span class="badge-campanha">Campanha</span></h3><p>Gestão de apadrinhamento.</p></a>
-            <a href="/assistencia-etiquetas.html" class="menu-item"><i class="fas fa-tag"></i><h3>Etiquetas</h3><p>Identificação de presentes.</p></a>
+            <a href="/assistencia-padrinhos.html" class="menu-item"><i class="fas fa-gift"></i><h3>Padrinhos</h3><p>Gestão de apadrinhamento.</p></a>
             <a href="/assistencia-planner.html" class="menu-item"><i class="fas fa-calendar-check"></i><h3>Planner de Escala</h3><p>Escalar voluntários para o Domingo Social.</p></a>
-            <a href="/assistencia-consulta-escala.html" class="menu-item"><i class="fas fa-clipboard-list"></i><h3>Consultar Escalas</h3><p>Visualizar equipes escaladas.</p></a>
-            <a href="/assistencia-estoque.html" class="menu-item"><i class="fas fa-boxes"></i><h3>Controle de Estoque</h3><p>Gestão FEFO e saldo de insumos.</p></a>
+            <a href="/assistencia-estoque.html" class="menu-item"><i class="fas fa-boxes"></i><h3>Controle de Estoque</h3><p>Gestão FEFO e cálculo de cestas.</p></a>
             <a href="/assistencia-relatorios.html" class="menu-item"><i class="fas fa-file-invoice"></i><h3>Relatórios</h3><p>Prestação de contas mensal.</p></a>
             <a href="/estatisticas.html" class="menu-item"><i class="fas fa-chart-line"></i><h3>Estatísticas</h3><p>Indicadores e gráficos sociais.</p></a>
         </section>
@@ -82,57 +92,49 @@
 
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
-        import { getFirestore, collection, onSnapshot, query, where, Timestamp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
+        import { getFirestore, collection, onSnapshot, query, where, Timestamp, doc } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
         import { protegerPagina } from '/auth.js';
 
-        const firebaseConfig = {
-            apiKey: "AIzaSyBV7RPjk3cFTqL-aIpflJcUojKg1ZXMLuU",
-            authDomain: "voluntarios-ativos---cepat.firebaseapp.com",
-            projectId: "voluntarios-ativos---cepat",
-            storageBucket: "voluntarios-ativos---cepat.firebasestorage.app",
-            messagingSenderId: "66122858261",
-            appId: "1:66122858261:web:7fa21f1805463b5c08331c"
-        };
-
+        const firebaseConfig = { apiKey: "AIzaSyBV7RPjk3cFTqL-aIpflJcUojKg1ZXMLuU", authDomain: "voluntarios-ativos---cepat.firebaseapp.com", projectId: "voluntarios-ativos---cepat", storageBucket: "voluntarios-ativos---cepat.firebasestorage.app", messagingSenderId: "66122858261", appId: "1:66122858261:web:7fa21f1805463b5c08331c" };
         const app = initializeApp(firebaseConfig);
         const db = getFirestore(app);
 
         protegerPagina(['super-admin','diretor','tesoureiro','conselheiro','recepcionista','entrevistador','caritas']).then(() => {
             const domSoc = calcularProximoDomingoSocial();
-            
-            // Regra: Domingo Social + 14 dias de margem para consumo
-            const dataLimiteAlerta = new Date(domSoc);
-            dataLimiteAlerta.setDate(dataLimiteAlerta.getDate() + 14);
-            const limiteStr = dataLimiteAlerta.toISOString().split('T')[0];
-
             document.getElementById('data-domingo').innerText = domSoc.toLocaleDateString('pt-BR').substring(0, 5);
             document.getElementById('data-ref-domingo').innerText = domSoc.toLocaleDateString('pt-BR');
+
+            // Regra de Validade: Domingo Social + 14 dias
+            const limiteStr = new Date(domSoc.getTime() + 14 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
 
             // 1. Contador de Famílias Ativas
             onSnapshot(query(collection(db, "familiasAssistidas"), where("statusGeral", "==", "Ativa")), s => {
                 document.getElementById('total-familias').innerText = s.size;
             });
             
-            // 2. Contador de Cestas do Mês
+            // 2. Contador de Cestas Entregues no Mês
             const inicioMes = new Date(); inicioMes.setDate(1); inicioMes.setHours(0,0,0,0);
-            const tsInicio = Timestamp.fromDate(inicioMes);
-            onSnapshot(query(collection(db, "entregasCestas"), where("data", ">=", tsInicio)), s => {
-                document.getElementById('total-cestas').innerText = s.size;
+            onSnapshot(query(collection(db, "entregasCestas"), where("data", ">=", Timestamp.fromDate(inicioMes))), s => {
+                document.getElementById('total-entregas').innerText = s.size;
             });
 
-            // 3. Monitoramento de Validade (Painel Vivo)
+            // 3. LOGICA DE PRONTIDÃO DE CESTAS (ESTOQUE)
+            let estoqueGlobal = [];
+            let configCesta = {};
+
+            onSnapshot(doc(db, "configuracoes", "cesta_padrao"), d => {
+                configCesta = d.exists() ? d.data().itens : {};
+                recalcularProntidao();
+            });
+
             onSnapshot(collection(db, "estoque_caritas"), snap => {
+                estoqueGlobal = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+                recalcularProntidao();
+                
+                // Monitoramento de Validade (Painel Vivo)
                 const painel = document.getElementById('painel-validade-viva');
                 const lista = document.getElementById('lista-alertas-vivos');
-                let criticos = [];
-
-                snap.forEach(doc => {
-                    const i = doc.data();
-                    // Alerta se validade for menor ou igual ao Domingo Social + 14 dias
-                    if (i.validade && i.validade <= limiteStr && i.quantidade > 0) {
-                        criticos.push(i);
-                    }
-                });
+                let criticos = estoqueGlobal.filter(i => i.validade && i.validade <= limiteStr && i.quantidade > 0);
 
                 if (criticos.length > 0) {
                     painel.style.display = 'block';
@@ -142,6 +144,37 @@
                     }).join('');
                 } else { painel.style.display = 'none'; }
             });
+
+            function recalcularProntidao() {
+                if (Object.keys(configCesta).length === 0) return;
+                
+                let montaveis = Infinity;
+                let itemGargalo = "";
+                const metaFamilias = 14; // Meta CEPAT
+
+                Object.entries(configCesta).forEach(([id, qtdNecessaria]) => {
+                    const item = estoqueGlobal.find(i => i.id === id);
+                    const saldo = item ? item.quantidade : 0;
+                    const capacidade = Math.floor(saldo / qtdNecessaria);
+                    
+                    if (capacidade < montaveis) {
+                        montaveis = capacidade;
+                        itemGargalo = item ? item.nome : "Item Indefinido";
+                    }
+                });
+
+                const total = montaveis === Infinity ? 0 : montaveis;
+                const display = document.getElementById('total-cestas-prontas');
+                const label = document.getElementById('item-limitante');
+                
+                display.innerText = `${total} Cestas`;
+                
+                if (total < metaFamilias) {
+                    label.innerHTML = `⚠️ <b>${itemGargalo}</b> está limitando a montagem das 14 cestas.`;
+                } else {
+                    label.innerHTML = `<span style="color:#2e7d32">✅ Estoque completo para as 14 famílias!</span>`;
+                }
+            }
         });
 
         function calcularProximoDomingoSocial() {
