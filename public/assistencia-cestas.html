@@ -6,96 +6,104 @@
     <title>Cáritas - Entrega de Cestas</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <style>
-        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background-color: #f4f6f9; margin: 0; padding: 20px; display: flex; flex-direction: column; align-items: center; }
+        :root { --primary: #2c3e50; --green: #27ae60; --orange: #e67e22; --red: #e74c3c; --bg: #f4f6f9; }
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background-color: var(--bg); margin: 0; padding: 20px; display: flex; flex-direction: column; align-items: center; }
         .nav-header { width: 100%; max-width: 1000px; display: flex; justify-content: space-between; margin-bottom: 20px; }
         .btn-voltar { background-color: #6c757d; color: white; padding: 10px 15px; border-radius: 8px; text-decoration: none; font-weight: bold; }
         .container { background: white; padding: 30px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); width: 100%; max-width: 1000px; box-sizing: border-box; }
-        h1 { color: #2c3e50; margin-top: 0; border-bottom: 2px solid #e67e22; padding-bottom: 10px; }
+        h1 { color: var(--primary); margin-top: 0; border-bottom: 2px solid var(--orange); padding-bottom: 10px; }
+        
         .search-box { margin: 20px 0; display: flex; gap: 10px; }
         #input-busca { flex-grow: 1; padding: 12px; border: 1px solid #ddd; border-radius: 8px; font-size: 1em; }
+        
         .familia-row { display: grid; grid-template-columns: 1fr auto; gap: 20px; padding: 15px; border-bottom: 1px solid #eee; align-items: center; }
         .info-nome { font-weight: bold; color: #34495e; font-size: 1.1em; }
-        .btn-entregar { background-color: #27ae60; color: white; border: none; padding: 10px 20px; border-radius: 8px; cursor: pointer; font-weight: bold; }
+        .btn-entregar { background-color: var(--green); color: white; border: none; padding: 10px 20px; border-radius: 8px; cursor: pointer; font-weight: bold; }
         .btn-entregar:disabled { background-color: #bdc3c7; cursor: not-allowed; }
 
-        /* Estilos do Modal Inteligente */
+        /* Modal e Seleção */
         .modal { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.6); display: none; justify-content: center; align-items: center; z-index: 1000; }
-        .modal-content { background: white; padding: 25px; border-radius: 12px; width: 90%; max-width: 500px; max-height: 85vh; overflow-y: auto; }
-        .item-selecao { display: flex; align-items: center; gap: 12px; padding: 15px; border-radius: 10px; border: 1px solid #eee; margin-bottom: 10px; cursor: pointer; transition: 0.2s; }
-        .item-selecao:hover { background: #f8f9fa; border-color: #27ae60; }
-        .item-selecao input[type="checkbox"] { transform: scale(1.5); }
+        .modal-content { background: white; padding: 25px; border-radius: 12px; width: 90%; max-width: 500px; max-height: 90vh; overflow-y: auto; }
+        .item-selecao { display: flex; align-items: center; gap: 12px; padding: 12px; border-radius: 10px; border: 1px solid #eee; margin-bottom: 10px; }
+        
+        .form-group { margin-top: 20px; display: flex; flex-direction: column; gap: 5px; }
+        .form-group label { font-weight: bold; font-size: 0.85em; color: var(--primary); text-transform: uppercase; }
+        .form-group textarea { padding: 10px; border: 1px solid #ddd; border-radius: 8px; font-family: inherit; resize: none; }
+        
         .badge-estoque { font-size: 0.8em; padding: 3px 8px; border-radius: 4px; font-weight: bold; }
         .ok { background: #e8f5e9; color: #2e7d32; }
         .erro { background: #ffebee; color: #c62828; }
     </style>
 </head>
 <body>
+
     <header class="nav-header">
         <a href="/modulo-caritas.html" class="btn-voltar"><i class="fas fa-arrow-left"></i> Painel Cáritas</a>
+        <img src="/logo-cepat.png" alt="Logo" style="height: 50px;">
     </header>
 
     <main class="container">
         <h1><i class="fas fa-shopping-basket"></i> Entrega de Cestas</h1>
         <div class="search-box">
-            <input type="text" id="input-busca" placeholder="Buscar família por nome...">
+            <input type="text" id="input-busca" placeholder="Pesquisar família...">
         </div>
-        <div id="lista-entrega"><p style="text-align:center; color:#999;">Carregando famílias...</p></div>
+        <div id="lista-entrega"></div>
     </main>
 
     <div id="modal-kit" class="modal">
         <div class="modal-content">
-            <h3 id="modal-titulo" style="margin-top: 0; color: #2c3e50;">Confirmar Entrega</h3>
-            <p style="font-size: 0.9em; color: #666; margin-bottom: 20px;">Selecione o kit completo ou itens avulsos:</p>
+            <h3 id="modal-titulo" style="margin-top: 0;">Confirmar Entrega</h3>
             
-            <div id="opcoes-entrega">
-                </div>
+            <div id="opcoes-entrega"></div>
 
-            <div style="margin-top: 30px; display: flex; gap: 10px;">
-                <button onclick="document.getElementById('modal-kit').style.display='none'" style="flex:1; padding: 12px; border-radius: 8px; border: 1px solid #ccc; cursor:pointer;">Cancelar</button>
-                <button id="btn-finalizar-entrega" style="flex:1; background: #27ae60; color: white; border: none; border-radius: 8px; font-weight: bold; cursor: pointer;">Finalizar Entrega</button>
+            <div class="form-group">
+                <label><i class="fas fa-comment-dots"></i> Observações da Entrega</label>
+                <textarea id="obs-entrega" rows="3" placeholder="Ex: Família relatou necessidade de leite especial..."></textarea>
+            </div>
+
+            <div style="margin-top: 25px; display: flex; gap: 10px;">
+                <button onclick="fecharModal()" style="flex:1; padding: 12px; border-radius: 8px; border: 1px solid #ccc; cursor:pointer;">Cancelar</button>
+                <button id="btn-finalizar" style="flex:1; background: var(--green); color: white; border: none; border-radius: 8px; font-weight: bold; cursor: pointer;">Finalizar</button>
             </div>
         </div>
     </div>
 
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
-        import { getFirestore, collection, addDoc, onSnapshot, query, where, serverTimestamp, doc, updateDoc, getDoc } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
+        import { getFirestore, collection, addDoc, onSnapshot, query, where, serverTimestamp, doc, updateDoc } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
         import { protegerPagina } from '/auth.js';
 
         const firebaseConfig = { apiKey: "AIzaSyBV7RPjk3cFTqL-aIpflJcUojKg1ZXMLuU", authDomain: "voluntarios-ativos---cepat.firebaseapp.com", projectId: "voluntarios-ativos---cepat", storageBucket: "voluntarios-ativos---cepat.firebasestorage.app", messagingSenderId: "66122858261", appId: "1:66122858261:web:7fa21f1805463b5c08331c" };
         const db = getFirestore(initializeApp(firebaseConfig));
 
-        let todasFamilias = [], itensEstoque = [], configCesta = {}, familiaSelecionada = null, cestasMontaveis = 0;
+        let todasFamilias = [], itensEstoque = [], configCesta = {}, familiaSelecionada = null, cestasDisponiveis = 0;
 
-        protegerPagina(['super-admin','diretor','tesoureiro','conselheiro','recepcionista','entrevistador','caritas']).then(user => {
-            inicializarApp(user);
+        protegerPagina(['super-admin','caritas']).then(user => {
+            inicializarSincronizacao(user);
         });
 
-        function inicializarApp(user) {
-            // 1. Escuta a Receita da Cesta Padrão
-            onSnapshot(doc(db, "configuracoes", "cesta_padrao"), (d) => {
+        function inicializarSincronizacao(user) {
+            onSnapshot(doc(db, "configuracoes", "cesta_padrao"), d => {
                 configCesta = d.exists() ? d.data().itens : {};
-                recalcularCestas();
+                calcularSaldos();
             });
 
-            // 2. Escuta o Estoque
-            onSnapshot(collection(db, "estoque_caritas"), (snapshot) => {
-                itensEstoque = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-                recalcularCestas();
+            onSnapshot(collection(db, "estoque_caritas"), snap => {
+                itensEstoque = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+                calcularSaldos();
             });
 
-            // 3. Escuta Famílias
-            onSnapshot(query(collection(db, "familiasAssistidas"), where("statusGeral", "==", "Ativa")), (snapshot) => {
-                todasFamilias = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-                renderizarFamilias(todasFamilias);
+            onSnapshot(query(collection(db, "familiasAssistidas"), where("statusGeral", "==", "Ativa")), snap => {
+                todasFamilias = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+                renderizar(todasFamilias);
             });
 
             document.getElementById('input-busca').oninput = (e) => {
-                const termo = e.target.value.toLowerCase();
-                renderizarFamilias(todasFamilias.filter(f => f.responsavel1.nome.toLowerCase().includes(termo)));
+                const t = e.target.value.toLowerCase();
+                renderizar(todasFamilias.filter(f => f.responsavel1.nome.toLowerCase().includes(t)));
             };
 
-            function recalcularCestas() {
+            function calcularSaldos() {
                 if (Object.keys(configCesta).length === 0) return;
                 let min = Infinity;
                 Object.entries(configCesta).forEach(([id, qtd]) => {
@@ -103,114 +111,101 @@
                     const cap = Math.floor((item ? item.quantidade : 0) / qtd);
                     if (cap < min) min = cap;
                 });
-                cestasMontaveis = min === Infinity ? 0 : min;
+                cestasDisponiveis = min === Infinity ? 0 : min;
             }
 
-            function renderizarFamilias(dados) {
+            function renderizar(dados) {
                 const container = document.getElementById('lista-entrega');
-                if (dados.length === 0) { container.innerHTML = '<p style="text-align:center">Nenhuma família encontrada.</p>'; return; }
                 const hoje = new Date();
                 container.innerHTML = dados.map(f => {
-                    const jaRecebeu = f.ultimaCesta && f.ultimaCesta.toDate().getMonth() === hoje.getMonth() && f.ultimaCesta.toDate().getFullYear() === hoje.getFullYear();
+                    const entregue = f.ultimaCesta && f.ultimaCesta.toDate().getMonth() === hoje.getMonth() && f.ultimaCesta.toDate().getFullYear() === hoje.getFullYear();
                     return `
                         <div class="familia-row">
-                            <div>
-                                <div class="info-nome">${f.responsavel1.nome}</div>
-                                <div style="font-size:0.8em; color:#666">Última: ${f.ultimaCesta ? f.ultimaCesta.toDate().toLocaleDateString() : 'Nunca'}</div>
-                            </div>
-                            <button class="btn-entregar" onclick="abrirModalKit('${f.id}', '${f.responsavel1.nome}')" ${jaRecebeu ? 'disabled' : ''}>
-                                ${jaRecebeu ? 'Já Entregue' : 'Confirmar'}
-                            </button>
+                            <div><div class="info-nome">${f.responsavel1.nome}</div><small>Última: ${f.ultimaCesta ? f.ultimaCesta.toDate().toLocaleDateString() : 'Nunca'}</small></div>
+                            <button class="btn-entregar" onclick="abrirModal('${f.id}', '${f.responsavel1.nome}')" ${entregue ? 'disabled' : ''}>${entregue ? 'Entregue' : 'Confirmar'}</button>
                         </div>`;
                 }).join('');
             }
 
-            window.abrirModalKit = (id, nome) => {
+            window.abrirModal = (id, nome) => {
                 familiaSelecionada = { id, nome };
                 document.getElementById('modal-titulo').innerText = `Entrega para: ${nome}`;
+                document.getElementById('obs-entrega').value = "";
                 const container = document.getElementById('opcoes-entrega');
                 
-                // Exibe Opção da Cesta Completa
                 let html = `
-                    <div class="item-selecao" style="background: #e8f5e9; border-color: #27ae60;">
-                        <input type="checkbox" id="check-cesta" ${cestasMontaveis <= 0 ? 'disabled' : 'checked'}>
-                        <label for="check-cesta" style="flex-grow:1; cursor:pointer">
-                            <b style="color:#1b5e20">Cesta Básica Padrão (KIT FECHADO)</b><br>
-                            <span class="badge-estoque ${cestasMontaveis > 0 ? 'ok' : 'erro'}">
-                                ${cestasMontaveis > 0 ? `Disponível (${cestasMontaveis} prontas)` : 'Estoque Insuficiente'}
-                            </span>
+                    <div class="item-selecao" style="background:#e8f5e9; border-color:var(--green);">
+                        <input type="checkbox" id="check-cesta" ${cestasDisponiveis <= 0 ? 'disabled' : 'checked'}>
+                        <label for="check-cesta" style="flex:1">
+                            <b style="color:#1b5e20">Cesta Básica Padrão (KIT)</b><br>
+                            <span class="badge-estoque ${cestasDisponiveis > 0 ? 'ok' : 'erro'}">${cestasDisponiveis > 0 ? `Disponível (${cestasDisponiveis})` : 'Estoque Insuficiente'}</span>
                         </label>
                     </div>
-                    <hr style="margin: 20px 0; border: none; border-top: 1px dashed #ccc;">
-                    <p style="font-size: 0.8em; font-weight: bold; color: #e67e22; margin-bottom: 10px;">ITENS EXTRAS / AVULSOS:</p>
+                    <p style="font-size:0.75em; font-weight:bold; color:var(--orange); margin:15px 0 10px;">ADICIONAIS EXTRAS:</p>
                 `;
 
-                // Exibe apenas itens que NÃO fazem parte da receita da cesta (ou extras sazonais)
-                const itensExtras = itensEstoque.filter(i => !configCesta[i.id]);
-                html += itensExtras.map(item => `
+                const extras = itensEstoque.filter(i => !configCesta[i.id]);
+                html += extras.map(i => `
                     <div class="item-selecao">
-                        <input type="checkbox" class="extra-item" data-id="${item.id}" data-nome="${item.nome}" ${item.quantidade <= 0 ? 'disabled' : ''}>
-                        <label for="item-${item.id}" style="flex-grow:1">
-                            <b>${item.nome}</b><br>
-                            <span class="badge-estoque ${item.quantidade > 0 ? 'ok' : 'erro'}">Saldo: ${item.quantidade}</span>
-                        </label>
+                        <input type="checkbox" class="extra-cb" data-id="${i.id}" data-nome="${i.nome}" ${i.quantidade <= 0 ? 'disabled' : ''}>
+                        <label style="flex:1"><b>${i.nome}</b><br><span class="badge-estoque ${i.quantidade > 0 ? 'ok' : 'erro'}">Saldo: ${i.quantidade}</span></label>
                     </div>
                 `).join('');
 
                 container.innerHTML = html;
                 document.getElementById('modal-kit').style.display = 'flex';
-                document.getElementById('btn-finalizar-entrega').onclick = () => finalizarEntrega(user);
+                document.getElementById('btn-finalizar').onclick = () => finalizar(user);
             };
 
-            async function finalizarEntrega(user) {
-                const entregaCesta = document.getElementById('check-cesta').checked;
-                const extrasSelecionados = document.querySelectorAll('.extra-item:checked');
-                
-                if (!entregaCesta && extrasSelecionados.length === 0) { alert("Selecione o que está sendo entregue."); return; }
+            async function finalizar(user) {
+                const kitCesta = document.getElementById('check-cesta').checked;
+                const extras = document.querySelectorAll('.extra-cb:checked');
+                const obs = document.getElementById('obs-entrega').value.trim(); // Captura observação
+
+                if (!kitCesta && extras.length === 0) return alert("Selecione um item para entregar.");
 
                 try {
-                    let logItens = [];
-
-                    // 1. Processa a Baixa da Cesta Padrão (Explosão de Itens)
-                    if (entregaCesta) {
-                        for (let [itemId, qtdReceita] of Object.entries(configCesta)) {
-                            const itemAtual = itensEstoque.find(i => i.id === itemId);
-                            if (itemAtual) {
-                                await updateDoc(doc(db, "estoque_caritas", itemId), { 
-                                    quantidade: Math.max(0, itemAtual.quantidade - qtdNecessaria(qtdReceita)) 
-                                });
-                            }
+                    let logConteudo = [];
+                    if (kitCesta) {
+                        for (let [id, qtd] of Object.entries(configCesta)) {
+                            const item = itensEstoque.find(i => i.id === id);
+                            if (item) await updateDoc(doc(db, "estoque_caritas", id), { quantidade: Math.max(0, item.quantidade - qtd) });
                         }
-                        logItens.push("Cesta Básica Padrão");
+                        logConteudo.push("Cesta Padrão");
                     }
-
-                    // 2. Processa Baixa de Itens Extras
-                    for (let cb of extrasSelecionados) {
+                    for (let cb of extras) {
                         const id = cb.dataset.id;
-                        const nome = cb.dataset.nome;
-                        const itemDoc = itensEstoque.find(i => i.id === id);
-                        await updateDoc(doc(db, "estoque_caritas", id), { quantidade: Math.max(0, itemDoc.quantidade - 1) });
-                        logItens.push(nome);
+                        const item = itensEstoque.find(i => i.id === id);
+                        await updateDoc(doc(db, "estoque_caritas", id), { quantidade: Math.max(0, item.quantidade - 1) });
+                        logConteudo.push(cb.dataset.nome);
                     }
 
-                    // 3. Registra Entrega e Auditoria
                     await updateDoc(doc(db, "familiasAssistidas", familiaSelecionada.id), { ultimaCesta: serverTimestamp() });
-                    await addDoc(collection(db, "entregasCestas"), { familiaId: familiaSelecionada.id, data: serverTimestamp(), voluntario: user.email, itens: logItens });
                     
+                    // Salva a entrega com as observações no histórico
+                    await addDoc(collection(db, "entregasCestas"), {
+                        familiaId: familiaSelecionada.id,
+                        responsavel: familiaSelecionada.nome,
+                        data: serverTimestamp(),
+                        voluntario: user.email,
+                        itens: logConteudo,
+                        observacoes: obs 
+                    });
+
+                    // Log de Auditoria com observações
                     await addDoc(collection(db, "log_auditoria"), {
                         timestamp: serverTimestamp(),
                         autor: user.displayName || user.email,
-                        acao: "ENTREGA_SOCIAL",
-                        detalhes: `Entrega para ${familiaSelecionada.nome}. Conteúdo: ${logItens.join(", ")}`
+                        acao: "ENTREGA_KIT",
+                        detalhes: `Família: ${familiaSelecionada.nome}. Conteúdo: ${logConteudo.join(", ")}. Obs: ${obs || 'Nenhuma'}`
                     });
 
-                    alert("Entrega confirmada com sucesso!");
-                    document.getElementById('modal-kit').style.display = 'none';
-                } catch (e) { alert("Erro ao finalizar: " + e.message); }
+                    alert("Entrega realizada!");
+                    fecharModal();
+                } catch (e) { alert("Erro: " + e.message); }
             }
-
-            function qtdNecessaria(val) { return parseInt(val) || 1; }
         }
+        window.fecharModal = () => document.getElementById('modal-kit').style.display = 'none';
     </script>
 </body>
 </html>
