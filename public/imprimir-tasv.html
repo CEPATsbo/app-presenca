@@ -14,8 +14,8 @@
         th { background-color: #f8f9fa; color: #555; }
         .btn-print { background-color: #2e7d32; color: white; border: none; padding: 12px 25px; border-radius: 6px; cursor: pointer; font-weight: bold; font-size: 1em; }
         .btn-print:disabled { background-color: #ccc; }
+        #acesso-negado { display: none; text-align: center; padding: 50px; }
         
-        /* Layout de Impressão */
         @media print {
             .no-print { display: none; }
             body { background: white; padding: 0; }
@@ -31,7 +31,6 @@
         .print-page { display: none; font-size: 11pt; line-height: 1.5; }
         .header-termo { text-align: center; margin-bottom: 25px; border-bottom: 1px solid #000; padding-bottom: 15px; }
         .header-termo h2 { margin: 5px 0; font-size: 14pt; }
-        .header-termo p { margin: 2px 0; font-size: 10pt; }
         .secao-titulo { font-weight: bold; margin-top: 15px; text-decoration: underline; display: block; }
         .log-certificacao { margin-top: 30px; padding: 15px; border: 1px solid #000; background-color: #f9f9f9; font-family: "Courier New", Courier, monospace; font-size: 9pt; }
         .assinatura-area { margin-top: 40px; text-align: center; }
@@ -40,10 +39,15 @@
 </head>
 <body>
 
-    <div class="no-print">
+    <div id="acesso-negado">
+        <h1>Acesso Negado</h1>
+        <p>Você não tem permissão para acessar esta ferramenta de impressão.</p>
+        <a href="dashboard.html">Voltar ao Painel</a>
+    </div>
+
+    <div class="no-print" id="conteudo-pagina" style="display: none;">
         <a href="secretaria.html" style="text-decoration: none; color: #1976d2; font-weight: bold;">⬅ Voltar para Secretaria</a>
         <h1 style="margin-top: 15px;">Impressão de Termos de Voluntariado</h1>
-        <p>Selecione os voluntários que já assinaram o termo digitalmente para gerar o documento de arquivo.</p>
         
         <div class="controls">
             <label style="font-weight: bold; cursor: pointer;"><input type="checkbox" id="select-all"> Selecionar Todos</label>
@@ -62,7 +66,7 @@
                 </tr>
             </thead>
             <tbody id="tabela-corpo">
-                <tr><td colspan="4">Carregando voluntários que assinaram...</td></tr>
+                <tr><td colspan="4">Carregando voluntários...</td></tr>
             </tbody>
         </table>
     </div>
@@ -72,6 +76,8 @@
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
         import { getFirestore, collection, query, where, getDocs, doc, getDoc, orderBy } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
+        import { getAuth } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-auth.js";
+        import { protegerPagina } from '/auth.js';
 
         const firebaseConfig = {
             apiKey: "AIzaSyBV7RPjk3cFTqL-aIpflJcUojKg1ZXMLuU",
@@ -83,7 +89,18 @@
 
         const app = initializeApp(firebaseConfig);
         const db = getFirestore(app);
-        const anoVigente = new Date().getFullYear();
+        const auth = getAuth(app);
+        const anoVigente = 2026;
+
+        // Protege a página e inicializa as funções
+        protegerPagina(['super-admin', 'diretor', 'tesoureiro'])
+            .then(() => {
+                document.getElementById('conteudo-pagina').style.display = 'block';
+                carregarLista();
+            })
+            .catch(() => {
+                document.getElementById('acesso-negado').style.display = 'block';
+            });
 
         async function carregarLista() {
             const corpo = document.getElementById('tabela-corpo');
@@ -97,7 +114,7 @@
                 corpo.innerHTML = '';
 
                 if (snap.empty) {
-                    corpo.innerHTML = '<tr><td colspan="4">Nenhum voluntário assinou o termo de '+anoVigente+' ainda.</td></tr>';
+                    corpo.innerHTML = '<tr><td colspan="4">Nenhum termo assinado em '+anoVigente+'.</td></tr>';
                     return;
                 }
 
@@ -114,8 +131,8 @@
                     corpo.appendChild(tr);
                 });
             } catch (e) {
-                console.error(e);
-                corpo.innerHTML = '<tr><td colspan="4" style="color:red">Erro ao carregar dados do Firebase.</td></tr>';
+                console.error("Erro ao carregar lista:", e);
+                corpo.innerHTML = '<tr><td colspan="4" style="color:red">Erro de permissão ao acessar lista.</td></tr>';
             }
         }
 
@@ -123,13 +140,13 @@
             const volSnap = await getDoc(doc(db, "voluntarios", volId));
             const vol = volSnap.data();
 
-            // Busca log de auditoria
             const logQ = query(
                 collection(db, "log_auditoria"), 
                 where("acao", "==", "ASSINATURA_DIGITAL_TASV"),
                 where("autor.id_voluntario", "==", volId),
                 where("detalhes.ano_referencia", "==", anoVigente)
             );
+            
             const logSnap = await getDocs(logQ);
             let log = { timestamp: { toDate: () => new Date() }, detalhes: { navegador: "N/A" } };
             if (!logSnap.empty) log = logSnap.docs[0].data();
@@ -140,41 +157,33 @@
                 <div class="print-page">
                     <div class="header-termo">
                         <h2>CASA ESPÍRITA PAULO DE TARSO</h2>
-                        <p>CNPJ 12.253.749/0001-20</p>
-                        <p>Rua Inácio Antonio, 483 - Americana/SP</p>
-                        <h3>TERMO DE ADESÃO AO SERVIÇO VOLUNTÁRIO - ANO ${anoVigente}</h3>
+                        <p>CNPJ 12.253.749/0001-20 | Rua do Cromo 989, Vila Pântano - Santa Bárbara D'Oeste - 13457-151</p>
+                        <h3>TERMO DE ADESÃO AO SERVIÇO VOLUNTÁRIO - ${anoVigente}</h3>
                     </div>
 
-                    <p style="text-align: justify;">
-                        Pelo presente instrumento jurídico, a entidade acima qualificada e o(a) voluntário(a) 
-                        <strong>${vol.nome.toUpperCase()}</strong>, residente em <strong>${vol.endereco || '(Endereço não informado)'}</strong>, 
-                        portador(a) do telefone <strong>${vol.telefone || '(Não informado)'}</strong> e e-mail <strong>${vol.email}</strong>, 
-                        celebram o presente Termo de Adesão, sob a égide da <strong>Lei nº 9.608, de 18 de fevereiro de 1998</strong>.
-                    </p>
+                    <p>Pelo presente instrumento, a entidade e o(a) voluntário(a) 
+                    <strong>${vol.nome.toUpperCase()}</strong>, residente em <strong>${vol.endereco || 'Não informado'}</strong>, 
+                    celebram este termo sob a <strong>Lei nº 9.608/1998</strong>.</p>
 
                     <span class="secao-titulo">CLÁUSULA PRIMEIRA - DO OBJETO</span>
-                    <p style="text-align: justify;">O serviço voluntário será prestado nas dependências da entidade ou em locais por ela indicados, de forma gratuita, com objetivos cívicos, culturais, educacionais, científicos, recreativos ou de assistência à pessoa, não gerando, em hipótese alguma, vínculo empregatício, nem obrigação de natureza trabalhista, previdenciária ou afim.</p>
+                    <p>O serviço voluntário é prestado de forma gratuita e não gera vínculo empregatício nem obrigações trabalhistas ou previdenciárias.</p>
 
-                    <span class="secao-titulo">CLÁUSULA SEGUNDA - DOS DEVERES E DADOS</span>
-                    <p style="text-align: justify;">O voluntário compromete-se a atuar com zelo e responsabilidade. Autoriza, outrossim, o tratamento de seus dados pessoais para fins exclusivos de gestão administrativa e segurança, em conformidade com a Lei Geral de Proteção de Dados (LGPD).</p>
-
-                    <span class="secao-titulo">CLÁUSULA TERCEIRA - VIGÊNCIA</span>
-                    <p>O presente termo possui vigência para o ano civil de ${anoVigente}, podendo ser rescindido a qualquer tempo por qualquer uma das partes.</p>
+                    <span class="secao-titulo">CLÁUSULA SEGUNDA - PRIVACIDADE</span>
+                    <p>O voluntário autoriza o tratamento de seus dados para fins de gestão interna, conforme a LGPD.</p>
 
                     <div class="log-certificacao">
-                        <strong>EVIDÊNCIA DE ASSINATURA DIGITAL</strong><br>
-                        Certificamos que este documento foi aceito eletronicamente pelo voluntário em seu primeiro acesso ao portal Meu CEPAT no ano de ${anoVigente}.<br><br>
-                        ID REGISTRO: ${volId}<br>
-                        DATA/HORA DO ACEITE: ${log.timestamp.toDate().toLocaleString('pt-BR')}<br>
-                        ORIGEM: ${log.detalhes.navegador}<br>
-                        AUTENTICAÇÃO: Firebase Auth UID (${vol.authUid})
+                        <strong>EVIDÊNCIA TÉCNICA DE ASSINATURA DIGITAL</strong><br>
+                        DATA DO ACEITE: ${log.timestamp.toDate().toLocaleString('pt-BR')}<br>
+                        ID VOLUNTÁRIO: ${volId}<br>
+                        BROWSER: ${log.detalhes.navegador}<br>
+                        AUTENTICAÇÃO: Firebase Auth (UID: ${vol.authUid})
                     </div>
 
-                    <p style="margin-top: 40px;">Americana, SP, ${dataHoje}.</p>
+                    <p style="margin-top: 40px;">Santa Bárbara D'Oeste, SP, ${dataHoje}.</p>
 
                     <div class="assinatura-area">
                         <div class="linha-assinatura"></div>
-                        <small><strong>${vol.nome}</strong><br>Assinado Eletronicamente conforme Lei 14.063/2020</small>
+                        <small><strong>${vol.nome}</strong><br>Assinado Eletronicamente (Lei 14.063/2020)</small>
                     </div>
                 </div>
             `;
@@ -182,31 +191,33 @@
 
         document.getElementById('btn-preparar').addEventListener('click', async () => {
             const checks = document.querySelectorAll('.vol-check:checked');
-            if (checks.length === 0) return alert("Selecione pelo menos um voluntário na lista.");
+            if (checks.length === 0) return alert("Selecione os voluntários na lista.");
 
             const btn = document.getElementById('btn-preparar');
             btn.disabled = true;
-            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Gerando Documentos...';
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Gerando...';
 
             const container = document.getElementById('container-impressao');
             container.innerHTML = '';
 
-            for (const c of checks) {
-                const html = await obterHtmlTermo(c.dataset.id);
-                container.innerHTML += html;
+            try {
+                for (const c of checks) {
+                    const html = await obterHtmlTermo(c.dataset.id);
+                    container.innerHTML += html;
+                }
+                window.print();
+            } catch (error) {
+                console.error("Erro na geração:", error);
+                alert("Erro de permissão ao gerar documentos. Verifique as regras do Firestore.");
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = '<i class="fas fa-print"></i> Gerar e Imprimir Selecionados';
             }
-
-            btn.disabled = false;
-            btn.innerHTML = '<i class="fas fa-print"></i> Gerar e Imprimir Selecionados';
-            
-            window.print();
         });
 
         document.getElementById('select-all').addEventListener('change', (e) => {
             document.querySelectorAll('.vol-check').forEach(c => c.checked = e.target.checked);
         });
-
-        carregarLista();
     </script>
 </body>
 </html>
