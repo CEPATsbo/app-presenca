@@ -12,212 +12,170 @@
         .container { background: white; padding: 30px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); width: 100%; max-width: 1000px; box-sizing: border-box; }
         h1 { color: #2c3e50; margin-top: 0; border-bottom: 2px solid #e67e22; padding-bottom: 10px; margin-bottom: 25px; }
 
+        /* Estilos de Abas e Cards */
         .seletor-modo { background: #eee; padding: 5px; border-radius: 10px; display: inline-flex; margin-bottom: 30px; }
         .btn-modo { padding: 10px 20px; border: none; border-radius: 8px; cursor: pointer; font-weight: bold; transition: 0.3s; background: transparent; color: #666; }
         .btn-modo.ativo { background: #e67e22; color: white; box-shadow: 0 2px 5px rgba(0,0,0,0.2); }
 
-        .grid-estoque { display: grid; grid-template-columns: 1fr; gap: 30px; width: 100%; }
-        .secao-estoque { display: none; border: 1px solid #eee; padding: 20px; border-radius: 10px; background: #fafafa; }
-        .secao-estoque.visivel { display: block; }
-        
+        .secao-estoque { border: 1px solid #eee; padding: 20px; border-radius: 10px; background: #fafafa; margin-bottom: 20px; }
         .estoque-item { background: white; padding: 15px; border-radius: 8px; border: 1px solid #ddd; margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center; }
-        .estoque-info b { font-size: 1.1em; color: #2c3e50; }
-        .estoque-info p { margin: 5px 0 0 0; color: #7f8c8d; font-size: 0.85em; }
+        
+        /* Painel de Cestas Prontas */
+        .cesta-pronta-card { background: #e8f5e9; border: 2px solid #27ae60; padding: 20px; border-radius: 12px; text-align: center; margin-bottom: 20px; }
+        .cesta-pronta-card h2 { margin: 0; color: #1b5e20; font-size: 2.5em; }
+        .cesta-pronta-card p { margin: 5px 0 0 0; font-weight: bold; color: #2e7d32; }
 
-        .controles { display: flex; align-items: center; gap: 15px; }
-        .btn-ajuste { width: 35px; height: 35px; border-radius: 50%; border: none; cursor: pointer; font-weight: bold; color: white; font-size: 1.2em; display: flex; align-items: center; justify-content: center; }
-        .btn-mais { background: #27ae60; }
-        .btn-menos { background: #e74c3c; }
-        .btn-edit { background: none; border: none; color: #3498db; cursor: pointer; font-size: 1.1em; margin-left: 10px; }
-        .qtd-display { font-size: 1.5em; font-weight: bold; min-width: 45px; text-align: center; color: #2c3e50; }
-
-        .alerta-baixo { border-left: 8px solid #e74c3c; background: #fff5f5; }
-        .vencimento-proximo { border-left: 8px solid #f39c12; background: #fff9f0; }
-
-        .modal { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.6); display: none; justify-content: center; align-items: center; z-index: 1000; }
-        .modal-content { background: white; padding: 30px; border-radius: 12px; width: 90%; max-width: 400px; box-shadow: 0 10px 30px rgba(0,0,0,0.3); }
-        .form-group { display: flex; flex-direction: column; gap: 5px; margin-bottom: 15px; }
-        .form-group label { font-size: 0.8em; font-weight: bold; color: #666; text-transform: uppercase; }
-        .form-group input { padding: 12px; border: 1px solid #ccc; border-radius: 8px; font-size: 1em; }
+        .pendencia-item { color: #c0392b; font-size: 0.85em; font-weight: bold; margin-top: 5px; }
+        .controles { display: flex; align-items: center; gap: 10px; }
+        .btn-ajuste { width: 32px; height: 32px; border-radius: 50%; border: none; cursor: pointer; color: white; font-weight: bold; }
+        
+        /* Modal de Composição */
+        .modal { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); display: none; justify-content: center; align-items: center; z-index: 1000; }
+        .modal-content { background: white; padding: 25px; border-radius: 12px; width: 95%; max-width: 500px; max-height: 80vh; overflow-y: auto; }
     </style>
 </head>
 <body>
     <header class="nav-header">
         <a href="/modulo-caritas.html" class="btn-voltar"><i class="fas fa-arrow-left"></i> Voltar</a>
-        <img src="/logo-cepat.png" alt="Logo CEPAT" style="height: 60px;">
+        <img src="/logo-cepat.png" alt="Logo CEPAT" style="height: 50px;">
     </header>
 
     <main class="container">
         <h1><i class="fas fa-boxes"></i> Almoxarifado Social</h1>
 
-        <div style="text-align: center;">
-            <div class="seletor-modo">
-                <button class="btn-modo" id="btn-modo-cestas">Cestas</button>
-                <button class="btn-modo" id="btn-modo-produtos">Produtos</button>
-                <button class="btn-modo ativo" id="btn-modo-hibrido">Híbrido</button>
-            </div>
+        <div id="painel-prontidao" class="cesta-pronta-card">
+            <h2 id="qtd-cestas-montaveis">0</h2>
+            <p>CESTAS BÁSICAS PRONTAS PARA ENTREGA</p>
+            <div id="lista-pendencias" style="margin-top: 15px; text-align: left; display: inline-block;"></div>
         </div>
 
-        <div id="grid-principal" class="grid-estoque">
-            <div id="secao-cestas" class="secao-estoque visivel">
-                <h3 style="color: #e67e22; border-bottom: 1px solid #eee; padding-bottom: 10px;"><i class="fas fa-shopping-basket"></i> Cestas Montadas</h3>
-                <div id="lista-cestas"></div>
+        <div style="text-align: center; margin-bottom: 20px;">
+            <button id="btn-config-cesta" style="background: #2c3e50; color: white; border: none; padding: 10px 20px; border-radius: 8px; cursor: pointer; font-weight: bold;">
+                <i class="fas fa-cog"></i> Configurar Itens da Cesta Padrão
+            </button>
+        </div>
+
+        <div class="secao-estoque">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+                <h3 style="color: #2980b9; margin: 0;"><i class="fas fa-apple-alt"></i> Estoque de Insumos</h3>
+                <button id="btn-novo-item" style="background: #2980b9; color: white; border: none; padding: 8px 15px; border-radius: 6px; cursor: pointer;">+ Novo Item</button>
             </div>
-            <div id="secao-produtos" class="secao-estoque visivel">
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
-                    <h3 style="color: #2980b9; margin:0;"><i class="fas fa-apple-alt"></i> Insumos Avulsos</h3>
-                    <button id="btn-abrir-modal" style="background: #2980b9; color: white; border: none; padding: 8px 15px; border-radius: 6px; cursor: pointer; font-weight: bold;">+ Novo Item</button>
-                </div>
-                <div id="lista-produtos"></div>
-            </div>
+            <div id="lista-produtos"></div>
         </div>
     </main>
 
-    <div id="modal-produto" class="modal">
+    <div id="modal-config" class="modal">
         <div class="modal-content">
-            <h3 id="modal-titulo">Item de Estoque</h3>
-            <form id="form-item-estoque">
-                <input type="hidden" id="edit-id">
-                <div class="form-group"><label>Nome do Produto</label><input type="text" id="p-nome" required></div>
-                <div id="campos-cadastro-inicial">
-                    <div class="form-group"><label>Qtd Inicial</label><input type="number" id="p-qtd-ini" value="0"></div>
-                    <div class="form-group"><label>Doador Inicial</label><input type="text" id="p-doador-ini" placeholder="Ex: Doação Social"></div>
-                </div>
-                <div class="form-group"><label>Estoque Mínimo</label><input type="number" id="p-minimo" value="5" required></div>
-                <div class="form-group"><label>Validade (Mais Próxima)</label><input type="date" id="p-validade"></div>
-                <div style="display: flex; gap: 10px; margin-top: 20px;">
-                    <button type="button" id="btn-cancelar-modal" style="flex:1; padding: 12px; border-radius: 8px; border: 1px solid #ccc; cursor: pointer;">Cancelar</button>
-                    <button type="submit" style="flex:1; background: #27ae60; color: white; border: none; border-radius: 8px; font-weight: bold; cursor: pointer;">Salvar</button>
-                </div>
-            </form>
+            <h3>Definir Itens da Cesta Padrão</h3>
+            <p style="font-size: 0.8em; color: #666;">Indique a quantidade de cada item necessária para 1 cesta básica.</p>
+            <div id="form-composicao" style="margin-top: 15px;"></div>
+            <div style="display: flex; gap: 10px; margin-top: 20px;">
+                <button onclick="fecharModais()" style="flex:1; padding: 10px; border-radius: 8px; border: 1px solid #ccc; cursor: pointer;">Cancelar</button>
+                <button id="btn-salvar-config" style="flex:1; background: #27ae60; color: white; border: none; border-radius: 8px; font-weight: bold; cursor: pointer;">Salvar Configuração</button>
+            </div>
         </div>
     </div>
 
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
-        import { getFirestore, collection, addDoc, onSnapshot, query, serverTimestamp, doc, updateDoc, deleteDoc, getDocs, where } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
+        import { getFirestore, collection, onSnapshot, doc, updateDoc, setDoc, getDoc, addDoc, serverTimestamp, deleteDoc } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
         import { protegerPagina } from '/auth.js';
 
         const firebaseConfig = { apiKey: "AIzaSyBV7RPjk3cFTqL-aIpflJcUojKg1ZXMLuU", authDomain: "voluntarios-ativos---cepat.firebaseapp.com", projectId: "voluntarios-ativos---cepat", storageBucket: "voluntarios-ativos---cepat.firebasestorage.app", messagingSenderId: "66122858261", appId: "1:66122858261:web:7fa21f1805463b5c08331c" };
         const db = getFirestore(initializeApp(firebaseConfig));
-        let dadosEstoque = [], userLogado = null;
+        let itensEstoque = [], configCesta = {}, userLogado = null;
 
-        protegerPagina(['super-admin','diretor','tesoureiro','conselheiro','recepcionista','entrevistador','caritas']).then(user => {
+        protegerPagina(['super-admin', 'caritas']).then(user => {
             userLogado = user;
-            inicializarApp();
+            sincronizarDados();
         });
 
-        async function inicializarApp() {
-            // Lógica de auto-recuperação
-            const qCheck = query(collection(db, "estoque_caritas"), where("tipo", "==", "cesta"));
-            const checkSnap = await getDocs(qCheck);
-            if (checkSnap.empty) {
-                await addDoc(collection(db, "estoque_caritas"), { nome: "Cesta Básica Padrão", quantidade: 0, minimo: 10, tipo: "cesta", criadoEm: serverTimestamp() });
-            }
+        function sincronizarDados() {
+            // 1. Carrega Configuração da Cesta
+            onSnapshot(doc(db, "configuracoes", "cesta_padrao"), (doc) => {
+                configCesta = doc.exists() ? doc.data().itens : {};
+                calcularDisponibilidade();
+            });
 
-            onSnapshot(collection(db, "estoque_caritas"), snap => {
-                const todos = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-                // Ordenação FEFO (Vencimento próximo no topo)
-                dadosEstoque = todos.sort((a,b) => {
-                    if (!a.validade) return 1; if (!b.validade) return -1;
-                    return a.validade.localeCompare(b.validade);
-                });
-                render();
+            // 2. Carrega Estoque
+            onSnapshot(collection(db, "estoque_caritas"), (snap) => {
+                itensEstoque = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+                renderEstoque();
+                calcularDisponibilidade();
             });
         }
 
-        function render() {
-            const ref = new Date(); ref.setDate(ref.getDate() + 30);
-            const alerta = ref.toISOString().split('T')[0];
+        function calcularDisponibilidade() {
+            if (Object.keys(configCesta).length === 0) return;
 
-            const template = (i) => {
-                const crit = i.quantidade <= i.minimo;
-                const prox = i.validade && i.validade <= alerta;
+            let possivelMontar = Infinity;
+            let pendencias = [];
+
+            // Lógica matemática: Estoque / Necessário
+            Object.entries(configCesta).forEach(([prodId, qtdNecessaria]) => {
+                const item = itensEstoque.find(i => i.id === prodId);
+                const estoqueAtual = item ? item.quantidade : 0;
+                const capacidade = Math.floor(estoqueAtual / qtdNecessaria);
                 
-                // Correção definitiva de exibição de data
-                let valExibicao = 'S/ Data';
-                if (i.validade) {
-                    const [ano, mes, dia] = i.validade.split('-');
-                    valExibicao = `${dia}/${mes}/${ano}`;
-                }
+                if (capacidade < possivelMontar) possivelMontar = capacidade;
+                
+                // Calcula o que falta para a meta de 14 cestas (padrão CEPAT)
+                const metaCestas = 14; 
+                const falta = (metaCestas * qtdNecessaria) - estoqueAtual;
+                if (falta > 0) pendencias.push(`Faltam ${falta} unidades de ${item?.nome || 'Item Desconhecido'} para completar 14 cestas.`);
+            });
 
-                return `
-                    <div class="estoque-item ${prox ? 'vencimento-proximo' : (crit ? 'alerta-baixo' : '')}">
-                        <div class="estoque-info">
-                            <b>${i.nome}</b>
-                            <p>Validade: ${valExibicao}</p>
-                        </div>
-                        <div class="controles">
-                            <button class="btn-ajuste btn-menos" onclick="ajustar('${i.id}', -1, '${i.nome}')">-</button>
-                            <span class="qtd-display">${i.quantidade}</span>
-                            <button class="btn-ajuste btn-mais" onclick="ajustar('${i.id}', 1, '${i.nome}')">+</button>
-                            <button class="btn-edit" onclick="editar('${i.id}')"><i class="fas fa-edit"></i></button>
-                            <button onclick="remover('${i.id}', '${i.nome}')" style="background:none; border:none; color:#ddd; cursor:pointer;"><i class="fas fa-trash"></i></button>
-                        </div>
-                    </div>
-                `;
-            };
-            document.getElementById('lista-cestas').innerHTML = dadosEstoque.filter(i => i.tipo === 'cesta').map(template).join('');
-            document.getElementById('lista-produtos').innerHTML = dadosEstoque.filter(i => i.tipo === 'produto').map(template).join('');
+            document.getElementById('qtd-cestas-montaveis').innerText = possivelMontar === Infinity ? 0 : possivelMontar;
+            document.getElementById('lista-pendencias').innerHTML = pendencias.map(p => `<div class="pendencia-item"><i class="fas fa-exclamation-circle"></i> ${p}</div>`).join('');
         }
+
+        function renderEstoque() {
+            const container = document.getElementById('lista-produtos');
+            container.innerHTML = itensEstoque.map(i => `
+                <div class="estoque-item">
+                    <div><b>${i.nome}</b><p>Saldo: ${i.quantidade} unidades</p></div>
+                    <div class="controles">
+                        <button class="btn-ajuste" style="background:#e74c3c" onclick="ajustar('${i.id}', -1, '${i.nome}')">-</button>
+                        <button class="btn-ajuste" style="background:#27ae60" onclick="ajustar('${i.id}', 1, '${i.nome}')">+</button>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        // Abre o configurador de "Receita" da Cesta
+        document.getElementById('btn-config-cesta').onclick = () => {
+            const form = document.getElementById('form-composicao');
+            form.innerHTML = itensEstoque.map(i => `
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+                    <label style="font-size:0.9em">${i.nome}</label>
+                    <input type="number" class="input-comp" data-id="${i.id}" value="${configCesta[i.id] || 0}" style="width:60px; padding:5px; border-radius:5px; border:1px solid #ccc;">
+                </div>
+            `).join('');
+            document.getElementById('modal-config').style.display = 'flex';
+        };
+
+        document.getElementById('btn-salvar-config').onclick = async () => {
+            const novosItens = {};
+            document.querySelectorAll('.input-comp').forEach(inp => {
+                const val = parseInt(inp.value);
+                if (val > 0) novosItens[inp.dataset.id] = val;
+            });
+            await setDoc(doc(db, "configuracoes", "cesta_padrao"), { itens: novosItens, atualizadoEm: serverTimestamp() });
+            fecharModais();
+            alert("Composição da cesta atualizada!");
+        };
 
         window.ajustar = async (id, delta, nome) => {
-            const item = dadosEstoque.find(x => x.id === id);
-            let n = 1; let d = "Não informado";
+            const item = itensEstoque.find(x => x.id === id);
+            let n = 1;
             if (delta > 0) {
-                const q = prompt(`Qtd de ${nome} entrando:`, "1"); if (q === null) return;
-                n = parseInt(q) || 1; d = prompt(`Nome do Doador:`, "Anônimo") || "Anônimo";
+                const q = prompt(`Qtd de ${nome} entrando:`, "1"); if (!q) return;
+                n = parseInt(q);
             }
-            const total = Math.max(0, item.quantidade + (delta * n));
-            await updateDoc(doc(db, "estoque_caritas", id), { quantidade: total });
-            await addDoc(collection(db, "log_auditoria"), { 
-                timestamp: serverTimestamp(), 
-                autor: { nome: userLogado.displayName || userLogado.email }, 
-                acao: delta > 0 ? "ENTRADA" : "SAIDA", 
-                detalhes: `${delta > 0 ? 'Doador: '+d : 'Retirada'}: ${n}x ${nome}. Saldo: ${total}` 
-            });
+            await updateDoc(doc(db, "estoque_caritas", id), { quantidade: Math.max(0, item.quantidade + (delta * n)) });
         };
 
-        window.editar = (id) => {
-            const i = dadosEstoque.find(x => x.id === id);
-            document.getElementById('modal-titulo').innerText = "Editar: " + i.nome;
-            document.getElementById('edit-id').value = id;
-            document.getElementById('p-nome').value = i.nome;
-            document.getElementById('p-minimo').value = i.minimo;
-            document.getElementById('p-validade').value = i.validade || "";
-            document.getElementById('campos-cadastro-inicial').style.display = 'none';
-            document.getElementById('modal-produto').style.display = 'flex';
-        };
-
-        document.getElementById('form-item-estoque').onsubmit = async (e) => {
-            e.preventDefault();
-            const id = document.getElementById('edit-id').value;
-            const dados = { nome: document.getElementById('p-nome').value, minimo: parseInt(document.getElementById('p-minimo').value), validade: document.getElementById('p-validade').value };
-            if (id) { await updateDoc(doc(db, "estoque_caritas", id), dados); }
-            else {
-                const q = parseInt(document.getElementById('p-qtd-ini').value) || 0;
-                await addDoc(collection(db, "estoque_caritas"), { ...dados, quantidade: q, tipo: 'produto', criadoEm: serverTimestamp() });
-            }
-            document.getElementById('modal-produto').style.display = 'none';
-        };
-
-        document.getElementById('btn-abrir-modal').onclick = () => {
-            document.getElementById('modal-titulo').innerText = "Novo Item";
-            document.getElementById('edit-id').value = ""; document.getElementById('form-item-estoque').reset();
-            document.getElementById('campos-cadastro-inicial').style.display = 'block';
-            document.getElementById('modal-produto').style.display = 'flex';
-        };
-        document.getElementById('btn-cancelar-modal').onclick = () => document.getElementById('modal-produto').style.display = 'none';
-        window.remover = async (id, n) => { if(confirm(`Excluir ${n}?`)) await deleteDoc(doc(db, "estoque_caritas", id)); };
-        window.mudar = (m) => {
-            document.querySelectorAll('.btn-modo').forEach(b => b.classList.remove('ativo'));
-            document.getElementById('btn-modo-' + m).classList.add('ativo');
-            document.getElementById('secao-cestas').style.display = m === 'produtos' ? 'none' : 'block';
-            document.getElementById('secao-produtos').style.display = m === 'cestas' ? 'none' : 'block';
-        };
-        document.getElementById('btn-modo-cestas').onclick = () => window.mudar('cestas');
-        document.getElementById('btn-modo-produtos').onclick = () => window.mudar('produtos');
-        document.getElementById('btn-modo-hibrido').onclick = () => window.mudar('hibrido');
+        window.fecharModais = () => document.querySelectorAll('.modal').forEach(m => m.style.display = 'none');
     </script>
 </body>
 </html>
