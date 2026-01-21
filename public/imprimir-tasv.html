@@ -16,8 +16,9 @@
         .btn-print:disabled { background-color: #ccc; }
         #acesso-negado { display: none; text-align: center; padding: 50px; }
         
+        /* CORREÇÃO PARA A IMPRESSÃO DA LISTA */
         @media print {
-            .no-print { display: none; }
+            .no-print { display: none !important; } /* O !important é essencial aqui */
             body { background: white; padding: 0; }
             .print-page { 
                 display: block !important; 
@@ -74,35 +75,33 @@
     <div id="container-impressao"></div>
 
     <script type="module">
-    // Adicionado getApps e getApp para evitar o erro de duplicidade
-    import { initializeApp, getApps, getApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
-    import { getFirestore, collection, query, where, getDocs, doc, getDoc, orderBy } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
-    import { getAuth } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-auth.js";
-    import { protegerPagina } from '/auth.js';
+        import { initializeApp, getApps, getApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
+        import { getFirestore, collection, query, where, getDocs, doc, getDoc, orderBy } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
+        import { getAuth } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-auth.js";
+        import { protegerPagina } from '/auth.js';
 
-    const firebaseConfig = {
-        apiKey: "AIzaSyBV7RPjk3cFTqL-aIpflJcUojKg1ZXMLuU",
-        authDomain: "voluntarios-ativos---cepat.firebaseapp.com",
-        projectId: "voluntarios-ativos---cepat",
-        storageBucket: "voluntarios-ativos---cepat.firebasestorage.app",
-        appId: "1:66122858261:web:7fa21f1805463b5c08331c"
-    };
+        const firebaseConfig = {
+            apiKey: "AIzaSyBV7RPjk3cFTqL-aIpflJcUojKg1ZXMLuU",
+            authDomain: "voluntarios-ativos---cepat.firebaseapp.com",
+            projectId: "voluntarios-ativos---cepat",
+            storageBucket: "voluntarios-ativos---cepat.firebasestorage.app",
+            appId: "1:66122858261:web:7fa21f1805463b5c08331c"
+        };
 
-    // SOLUÇÃO PARA O ERRO: Verifica se já existe um app inicializado
-    const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
-    const db = getFirestore(app);
-    const auth = getAuth(app);
-    const anoVigente = 2026;
+        // Resolve o erro de Duplicate App
+        const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
+        const db = getFirestore(app);
+        const auth = getAuth(app);
+        const anoVigente = 2026;
 
-    // Protege a página e inicializa as funções
-    protegerPagina(['super-admin', 'diretor', 'tesoureiro'])
-        .then(() => {
-            document.getElementById('conteudo-pagina').style.display = 'block';
-            carregarLista();
-        })
-        .catch(() => {
-            document.getElementById('acesso-negado').style.display = 'block';
-        });
+        protegerPagina(['super-admin', 'diretor', 'tesoureiro'])
+            .then(() => {
+                document.getElementById('conteudo-pagina').style.display = 'block';
+                carregarLista();
+            })
+            .catch(() => {
+                document.getElementById('acesso-negado').style.display = 'block';
+            });
 
     async function carregarLista() {
         const corpo = document.getElementById('tabela-corpo');
