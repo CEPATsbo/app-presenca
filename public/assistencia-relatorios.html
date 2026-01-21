@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Cáritas - Relatório de Doações e Atividades</title>
+    <title>Cáritas - Relatório de Gestão Social</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <style>
         body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #f4f6f9; padding: 40px; }
@@ -29,10 +29,13 @@
         
         table { width: 100%; border-collapse: collapse; margin-top: 10px; background: white; }
         th { background: #f2f2f2; padding: 12px; text-align: left; font-size: 0.85em; color: #666; text-transform: uppercase; border-bottom: 2px solid #ddd; }
-        td { padding: 12px; border-bottom: 1px solid #eee; font-size: 0.9em; color: #333; }
+        td { padding: 12px; border-bottom: 1px solid #eee; font-size: 0.9em; color: #333; vertical-align: top; }
         
         .alerta-val { color: #e67e22; font-weight: bold; }
         .badge-entrada { background: #e8f5e9; color: #2e7d32; padding: 4px 8px; border-radius: 4px; font-weight: bold; font-size: 0.8em; }
+        .badge-saida { background: #fff3e0; color: #e67e22; padding: 4px 8px; border-radius: 4px; font-weight: bold; font-size: 0.8em; }
+
+        .obs-texto { font-style: italic; color: #666; font-size: 0.85em; display: block; margin-top: 5px; }
 
         footer { margin-top: 60px; text-align: center; font-size: 0.8em; color: #999; border-top: 1px solid #eee; padding-top: 20px; }
 
@@ -40,11 +43,7 @@
             body { padding: 0; background: white; }
             .btn-imprimir, .btn-voltar, .nav-header { display: none !important; }
             .folha { box-shadow: none; max-width: 100%; padding: 20px; border: none; }
-            th { 
-                background: #eee !important; 
-                -webkit-print-color-adjust: exact; 
-                print-color-adjust: exact; 
-            }
+            th { background: #eee !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
         }
     </style>
 </head>
@@ -56,61 +55,68 @@
 
     <div class="folha">
         <button class="btn-imprimir" onclick="window.print()">
-            <i class="fas fa-print"></i> IMPRIMIR RELATÓRIO
+            <i class="fas fa-print"></i> IMPRIMIR RELATÓRIO DE GESTÃO
         </button>
 
         <header class="header">
             <img src="/logo-cepat.png" alt="Logo CEPAT">
             <h2>Relatório de Gestão Social - Cáritas</h2>
-            <p id="label-competencia">Resumo Geral de Atividades e Doações</p>
+            <p id="label-competencia">Resumo de Atividades, Doações e Entregas</p>
         </header>
 
         <section class="grid-stats">
-            <div class="card-stat">
-                <h4>Famílias Ativas</h4>
-                <p id="rep-familias">0</p>
-            </div>
-            <div class="card-stat">
-                <h4>Cestas Entregues</h4>
-                <p id="rep-cestas">0</p>
-            </div>
-            <div class="card-stat">
-                <h4>Itens em Estoque</h4>
-                <p id="rep-itens">0</p>
-            </div>
+            <div class="card-stat"><h4>Famílias Ativas</h4><p id="rep-familias">0</p></div>
+            <div class="card-stat"><h4>Entregas no Mês</h4><p id="rep-cestas">0</p></div>
+            <div class="card-stat"><h4>Itens em Estoque</h4><p id="rep-itens">0</p></div>
         </section>
 
         <section>
-            <h3><i class="fas fa-hand-holding-heart"></i> Entradas de Doações (Doador e Quantidade)</h3>
-            <table id="tabela-doacoes">
+            <h3><i class="fas fa-shopping-basket"></i> Relatório de Entregas (Cestas e Kits)</h3>
+            <table id="tabela-entregas">
                 <thead>
                     <tr>
-                        <th>Data</th>
-                        <th>Doador</th>
-                        <th>Item Doado</th>
-                        <th>Quantidade</th>
-                        <th>Tipo</th>
+                        <th style="width: 15%;">Data</th>
+                        <th style="width: 25%;">Família</th>
+                        <th>Conteúdo Entregue / Observações</th>
                     </tr>
                 </thead>
                 <tbody>
-                    <tr><td colspan="5" style="text-align:center; color:#999;">Buscando registros de generosidade...</td></tr>
+                    <tr><td colspan="3" style="text-align:center; color:#999;">Buscando histórico de auxílio...</td></tr>
                 </tbody>
             </table>
         </section>
 
         <section>
-            <h3><i class="fas fa-history"></i> Alerta de Estoque Próximo ao Vencimento</h3>
+            <h3><i class="fas fa-hand-holding-heart"></i> Entradas de Doações (Logs de Estoque)</h3>
+            <table id="tabela-doacoes">
+                <thead>
+                    <tr>
+                        <th>Data</th>
+                        <th>Doador / Origem</th>
+                        <th>Item</th>
+                        <th>Qtd</th>
+                        <th>Status</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr><td colspan="5" style="text-align:center; color:#999;">Analisando registros de entrada...</td></tr>
+                </tbody>
+            </table>
+        </section>
+
+        <section>
+            <h3><i class="fas fa-exclamation-circle"></i> Alerta de Estoque Próximo ao Vencimento</h3>
             <table id="tabela-vencimentos">
                 <thead>
                     <tr>
                         <th>Produto</th>
                         <th>Validade</th>
-                        <th>Saldo</th>
-                        <th>Status</th>
+                        <th>Saldo Atual</th>
+                        <th>Recomendação</th>
                     </tr>
                 </thead>
                 <tbody>
-                    <tr><td colspan="4" style="text-align:center; color:#999;">Analisando prazos...</td></tr>
+                    <tr><td colspan="4" style="text-align:center; color:#999;">Verificando prazos...</td></tr>
                 </tbody>
             </table>
         </section>
@@ -125,40 +131,48 @@
         import { getFirestore, collection, query, where, getDocs, orderBy, Timestamp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
         import { protegerPagina } from '/auth.js';
 
-        const firebaseConfig = {
-            apiKey: "AIzaSyBV7RPjk3cFTqL-aIpflJcUojKg1ZXMLuU",
-            authDomain: "voluntarios-ativos---cepat.firebaseapp.com",
-            projectId: "voluntarios-ativos---cepat",
-            storageBucket: "voluntarios-ativos---cepat.firebasestorage.app",
-            messagingSenderId: "66122858261",
-            appId: "1:66122858261:web:7fa21f1805463b5c08331c"
-        };
+        const firebaseConfig = { apiKey: "AIzaSyBV7RPjk3cFTqL-aIpflJcUojKg1ZXMLuU", authDomain: "voluntarios-ativos---cepat.firebaseapp.com", projectId: "voluntarios-ativos---cepat", storageBucket: "voluntarios-ativos---cepat.firebasestorage.app", messagingSenderId: "66122858261", appId: "1:66122858261:web:7fa21f1805463b5c08331c" };
+        const db = getFirestore(initializeApp(firebaseConfig));
 
-        const app = initializeApp(firebaseConfig);
-        const db = getFirestore(app);
-
-        protegerPagina(['super-admin','diretor','tesoureiro','conselheiro','recepcionista','entrevistador','caritas']).then(() => {
+        protegerPagina(['super-admin','diretor','caritas']).then(() => {
             document.getElementById('data-geracao').innerText = new Date().toLocaleString('pt-BR');
-            carregarDadosRelatorio();
+            carregarRelatorio();
         });
 
-        async function carregarDadosRelatorio() {
+        async function carregarRelatorio() {
             const agora = new Date();
             const inicioMes = Timestamp.fromDate(new Date(agora.getFullYear(), agora.getMonth(), 1));
 
             try {
-                // 1. Contagens Rápidas
+                // 1. Estatísticas Gerais
                 const snapFams = await getDocs(query(collection(db, "familiasAssistidas"), where("statusGeral", "==", "Ativa")));
                 document.getElementById('rep-familias').innerText = snapFams.size;
 
-                const snapEntregas = await getDocs(query(collection(db, "entregasCestas"), where("data", ">=", inicioMes)));
+                const snapEntregas = await getDocs(query(collection(db, "entregasCestas"), where("data", ">=", inicioMes), orderBy("data", "desc")));
                 document.getElementById('rep-cestas').innerText = snapEntregas.size;
 
                 const snapEstoque = await getDocs(collection(db, "estoque_caritas"));
                 document.getElementById('rep-itens').innerText = snapEstoque.size;
 
-                // 2. Histórico de Doações (Logs de Entrada)
-                const qLogs = query(collection(db, "log_auditoria"), where("acao", "==", "ENTRADA"), orderBy("timestamp", "desc"));
+                // 2. Tabela de Entregas (Cestas e Kits)
+                let htmlEntregas = "";
+                snapEntregas.forEach(doc => {
+                    const e = doc.data();
+                    htmlEntregas += `
+                        <tr>
+                            <td>${e.data.toDate().toLocaleDateString('pt-BR')}</td>
+                            <td><strong>${e.responsavel || 'Família'}</strong></td>
+                            <td>
+                                <b>Itens:</b> ${e.itens ? e.itens.join(", ") : 'Cesta Padrão'}
+                                ${e.observacoes ? `<span class="obs-texto"><b>Obs:</b> ${e.observacoes}</span>` : ''}
+                            </td>
+                        </tr>`;
+                });
+                document.getElementById('tabela-entregas').querySelector('tbody').innerHTML = htmlEntregas || "<tr><td colspan='3' style='text-align:center;'>Nenhuma entrega realizada este mês.</td></tr>";
+
+                // 3. Histórico de Entradas (Doações)
+                // Busca ações de entrada de estoque
+                const qLogs = query(collection(db, "log_auditoria"), where("acao", "in", ["ENTRADA", "ENTRADA_ESTOQUE"]), orderBy("timestamp", "desc"));
                 const snapLogs = await getDocs(qLogs);
                 let htmlDoacoes = "";
 
@@ -166,46 +180,41 @@
                     const l = doc.data();
                     const det = l.detalhes || "";
                     
-                    // Lógica de extração: "Doador: [NOME]: +[QTD]x [PRODUTO]"
-                    const partesDoador = det.split('Doador:')[1] ? det.split('Doador:')[1].split(':')[0].trim() : "Anônimo";
-                    const partesQtd = det.split('+')[1] ? det.split('+')[1].split('x')[0].trim() : "1";
-                    const partesItem = det.split('x')[1] ? det.split('x')[1].split('.')[0].trim() : "Item";
+                    // Extração flexível dos dados do log
+                    const doador = det.includes('Doador:') ? det.split('Doador:')[1].split('.')[0].trim() : "Doador não identificado";
+                    const itemEQuant = det.includes(':') ? det.split(':')[1].trim() : det;
 
                     htmlDoacoes += `
                         <tr>
                             <td>${l.timestamp.toDate().toLocaleDateString('pt-BR')}</td>
-                            <td><strong>${partesDoador}</strong></td>
-                            <td>${partesItem}</td>
-                            <td>${partesQtd} un.</td>
+                            <td><strong>${doador}</strong></td>
+                            <td colspan="2">${itemEQuant}</td>
                             <td><span class="badge-entrada">Entrada</span></td>
                         </tr>`;
                 });
-                document.getElementById('tabela-doacoes').querySelector('tbody').innerHTML = htmlDoacoes || "<tr><td colspan='5' style='text-align:center;'>Nenhuma doação registrada.</td></tr>";
+                document.getElementById('tabela-doacoes').querySelector('tbody').innerHTML = htmlDoacoes || "<tr><td colspan='5' style='text-align:center;'>Nenhum log de entrada encontrado.</td></tr>";
 
-                // 3. Tabela FEFO (Vencimentos)
+                // 4. Analise de Vencimentos
                 let htmlVenc = "";
-                const itensOrdenados = snapEstoque.docs.map(d => d.data()).sort((a,b) => {
-                    if (!a.validade) return 1; if (!b.validade) return -1;
-                    return a.validade.localeCompare(b.validade);
-                });
+                const itensCriticos = snapEstoque.docs.map(d => d.data())
+                    .filter(i => i.validade && i.quantidade > 0)
+                    .sort((a,b) => a.validade.localeCompare(b.validade));
 
-                itensOrdenados.forEach(i => {
-                    if (i.validade && i.quantidade > 0) {
-                        const p = i.validade.split('-');
-                        htmlVenc += `
-                            <tr>
-                                <td>${i.nome}</td>
-                                <td class="alerta-val">${p[2]}/${p[1]}/${p[0]}</td>
-                                <td>${i.quantidade} un.</td>
-                                <td><small>Priorizar Doação</small></td>
-                            </tr>`;
-                    }
+                itensCriticos.forEach(i => {
+                    const dataVenc = i.validade.split('-');
+                    htmlVenc += `
+                        <tr>
+                            <td>${i.nome}</td>
+                            <td class="alerta-val">${dataVenc[2]}/${dataVenc[1]}/${dataVenc[0]}</td>
+                            <td>${i.quantidade} un.</td>
+                            <td><span class="badge-saida">Priorizar Uso</span></td>
+                        </tr>`;
                 });
-                document.getElementById('tabela-vencimentos').querySelector('tbody').innerHTML = htmlVenc || "<tr><td colspan='4' style='text-align:center;'>Sem itens com validade próxima.</td></tr>";
+                document.getElementById('tabela-vencimentos').querySelector('tbody').innerHTML = htmlVenc || "<tr><td colspan='4' style='text-align:center;'>Tudo em dia. Nenhum item próximo ao vencimento.</td></tr>";
 
             } catch (err) {
-                console.error("Erro no Relatório:", err);
-                alert("Erro ao carregar dados. Verifique a conexão.");
+                console.error("Erro ao gerar relatório:", err);
+                alert("Erro ao ler dados do Firebase.");
             }
         }
     </script>
