@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Imprimir TASV - CEPAT</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background-color: #f4f6f9; margin: 0; padding: 20px; }
+        .no-print { max-width: 900px; margin: auto; background: white; padding: 25px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); }
+        .controls { display: flex; justify-content: space-between; align-items: center; margin: 20px 0; padding-bottom: 20px; border-bottom: 1px solid #eee; }
+        table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+        th, td { padding: 12px; border-bottom: 1px solid #ddd; text-align: left; }
+        th { background-color: #f8f9fa; color: #555; }
+        .btn-print { background-color: #2e7d32; color: white; border: none; padding: 12px 25px; border-radius: 6px; cursor: pointer; font-weight: bold; font-size: 1em; }
+        .btn-print:disabled { background-color: #ccc; }
+        
+        /* Layout de Impressão */
+        @media print {
+            .no-print { display: none; }
+            body { background: white; padding: 0; }
+            .print-page { 
+                display: block !important; 
+                page-break-after: always; 
+                padding: 1.5cm;
+                color: black;
+                background: white;
+            }
+        }
+
+        .print-page { display: none; font-size: 11pt; line-height: 1.5; }
+        .header-termo { text-align: center; margin-bottom: 25px; border-bottom: 1px solid #000; padding-bottom: 15px; }
+        .header-termo h2 { margin: 5px 0; font-size: 14pt; }
+        .header-termo p { margin: 2px 0; font-size: 10pt; }
+        .secao-titulo { font-weight: bold; margin-top: 15px; text-decoration: underline; display: block; }
+        .log-certificacao { margin-top: 30px; padding: 15px; border: 1px solid #000; background-color: #f9f9f9; font-family: "Courier New", Courier, monospace; font-size: 9pt; }
+        .assinatura-area { margin-top: 40px; text-align: center; }
+        .linha-assinatura { border-top: 1px solid #000; width: 300px; margin: 0 auto; padding-top: 5px; }
+    </style>
+</head>
+<body>
+
+    <div class="no-print">
+        <a href="secretaria.html" style="text-decoration: none; color: #1976d2; font-weight: bold;">⬅ Voltar para Secretaria</a>
+        <h1 style="margin-top: 15px;">Impressão de Termos de Voluntariado</h1>
+        <p>Selecione os voluntários que já assinaram o termo digitalmente para gerar o documento de arquivo.</p>
+        
+        <div class="controls">
+            <label style="font-weight: bold; cursor: pointer;"><input type="checkbox" id="select-all"> Selecionar Todos</label>
+            <button class="btn-print" id="btn-preparar">
+                <i class="fas fa-print"></i> Gerar e Imprimir Selecionados
+            </button>
+        </div>
+
+        <table>
+            <thead>
+                <tr>
+                    <th width="40">Sel.</th>
+                    <th>Nome do Voluntário</th>
+                    <th>Data da Assinatura</th>
+                    <th>Ano Ref.</th>
+                </tr>
+            </thead>
+            <tbody id="tabela-corpo">
+                <tr><td colspan="4">Carregando voluntários que assinaram...</td></tr>
+            </tbody>
+        </table>
+    </div>
+
+    <div id="container-impressao"></div>
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
+        import { getFirestore, collection, query, where, getDocs, doc, getDoc, orderBy } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
+
+        const firebaseConfig = {
+            apiKey: "AIzaSyBV7RPjk3cFTqL-aIpflJcUojKg1ZXMLuU",
+            authDomain: "voluntarios-ativos---cepat.firebaseapp.com",
+            projectId: "voluntarios-ativos---cepat",
+            storageBucket: "voluntarios-ativos---cepat.firebasestorage.app",
+            appId: "1:66122858261:web:7fa21f1805463b5c08331c"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const db = getFirestore(app);
+        const anoVigente = new Date().getFullYear();
+
+        async function carregarLista() {
+            const corpo = document.getElementById('tabela-corpo');
+            try {
+                const q = query(
+                    collection(db, "voluntarios"), 
+                    where("tasvAssinadoAno", "==", anoVigente), 
+                    orderBy("nome")
+                );
+                const snap = await getDocs(q);
+                corpo.innerHTML = '';
+
+                if (snap.empty) {
+                    corpo.innerHTML = '<tr><td colspan="4">Nenhum voluntário assinou o termo de '+anoVigente+' ainda.</td></tr>';
+                    return;
+                }
+
+                snap.forEach(d => {
+                    const v = d.data();
+                    const dataFormat = v.tasvDataAssinatura ? v.tasvDataAssinatura.toDate().toLocaleString('pt-BR') : 'Sem data';
+                    const tr = document.createElement('tr');
+                    tr.innerHTML = `
+                        <td><input type="checkbox" class="vol-check" data-id="${d.id}"></td>
+                        <td>${v.nome}</td>
+                        <td>${dataFormat}</td>
+                        <td>${v.tasvAssinadoAno}</td>
+                    `;
+                    corpo.appendChild(tr);
+                });
+            } catch (e) {
+                console.error(e);
+                corpo.innerHTML = '<tr><td colspan="4" style="color:red">Erro ao carregar dados do Firebase.</td></tr>';
+            }
+        }
+
+        async function obterHtmlTermo(volId) {
+            const volSnap = await getDoc(doc(db, "voluntarios", volId));
+            const vol = volSnap.data();
+
+            // Busca log de auditoria
+            const logQ = query(
+                collection(db, "log_auditoria"), 
+                where("acao", "==", "ASSINATURA_DIGITAL_TASV"),
+                where("autor.id_voluntario", "==", volId),
+                where("detalhes.ano_referencia", "==", anoVigente)
+            );
+            const logSnap = await getDocs(logQ);
+            let log = { timestamp: { toDate: () => new Date() }, detalhes: { navegador: "N/A" } };
+            if (!logSnap.empty) log = logSnap.docs[0].data();
+
+            const dataHoje = new Date().toLocaleDateString('pt-BR', { day: 'numeric', month: 'long', year: 'numeric' });
+
+            return `
+                <div class="print-page">
+                    <div class="header-termo">
+                        <h2>CASA ESPÍRITA PAULO DE TARSO</h2>
+                        <p>CNPJ 12.253.749/0001-20</p>
+                        <p>Rua Inácio Antonio, 483 - Americana/SP</p>
+                        <h3>TERMO DE ADESÃO AO SERVIÇO VOLUNTÁRIO - ANO ${anoVigente}</h3>
+                    </div>
+
+                    <p style="text-align: justify;">
+                        Pelo presente instrumento jurídico, a entidade acima qualificada e o(a) voluntário(a) 
+                        <strong>${vol.nome.toUpperCase()}</strong>, residente em <strong>${vol.endereco || '(Endereço não informado)'}</strong>, 
+                        portador(a) do telefone <strong>${vol.telefone || '(Não informado)'}</strong> e e-mail <strong>${vol.email}</strong>, 
+                        celebram o presente Termo de Adesão, sob a égide da <strong>Lei nº 9.608, de 18 de fevereiro de 1998</strong>.
+                    </p>
+
+                    <span class="secao-titulo">CLÁUSULA PRIMEIRA - DO OBJETO</span>
+                    <p style="text-align: justify;">O serviço voluntário será prestado nas dependências da entidade ou em locais por ela indicados, de forma gratuita, com objetivos cívicos, culturais, educacionais, científicos, recreativos ou de assistência à pessoa, não gerando, em hipótese alguma, vínculo empregatício, nem obrigação de natureza trabalhista, previdenciária ou afim.</p>
+
+                    <span class="secao-titulo">CLÁUSULA SEGUNDA - DOS DEVERES E DADOS</span>
+                    <p style="text-align: justify;">O voluntário compromete-se a atuar com zelo e responsabilidade. Autoriza, outrossim, o tratamento de seus dados pessoais para fins exclusivos de gestão administrativa e segurança, em conformidade com a Lei Geral de Proteção de Dados (LGPD).</p>
+
+                    <span class="secao-titulo">CLÁUSULA TERCEIRA - VIGÊNCIA</span>
+                    <p>O presente termo possui vigência para o ano civil de ${anoVigente}, podendo ser rescindido a qualquer tempo por qualquer uma das partes.</p>
+
+                    <div class="log-certificacao">
+                        <strong>EVIDÊNCIA DE ASSINATURA DIGITAL</strong><br>
+                        Certificamos que este documento foi aceito eletronicamente pelo voluntário em seu primeiro acesso ao portal Meu CEPAT no ano de ${anoVigente}.<br><br>
+                        ID REGISTRO: ${volId}<br>
+                        DATA/HORA DO ACEITE: ${log.timestamp.toDate().toLocaleString('pt-BR')}<br>
+                        ORIGEM: ${log.detalhes.navegador}<br>
+                        AUTENTICAÇÃO: Firebase Auth UID (${vol.authUid})
+                    </div>
+
+                    <p style="margin-top: 40px;">Americana, SP, ${dataHoje}.</p>
+
+                    <div class="assinatura-area">
+                        <div class="linha-assinatura"></div>
+                        <small><strong>${vol.nome}</strong><br>Assinado Eletronicamente conforme Lei 14.063/2020</small>
+                    </div>
+                </div>
+            `;
+        }
+
+        document.getElementById('btn-preparar').addEventListener('click', async () => {
+            const checks = document.querySelectorAll('.vol-check:checked');
+            if (checks.length === 0) return alert("Selecione pelo menos um voluntário na lista.");
+
+            const btn = document.getElementById('btn-preparar');
+            btn.disabled = true;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Gerando Documentos...';
+
+            const container = document.getElementById('container-impressao');
+            container.innerHTML = '';
+
+            for (const c of checks) {
+                const html = await obterHtmlTermo(c.dataset.id);
+                container.innerHTML += html;
+            }
+
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fas fa-print"></i> Gerar e Imprimir Selecionados';
+            
+            window.print();
+        });
+
+        document.getElementById('select-all').addEventListener('change', (e) => {
+            document.querySelectorAll('.vol-check').forEach(c => c.checked = e.target.checked);
+        });
+
+        carregarLista();
+    </script>
+</body>
+</html>
