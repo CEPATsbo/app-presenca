@@ -74,150 +74,152 @@
     <div id="container-impressao"></div>
 
     <script type="module">
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
-        import { getFirestore, collection, query, where, getDocs, doc, getDoc, orderBy } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
-        import { getAuth } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-auth.js";
-        import { protegerPagina } from '/auth.js';
+    // Adicionado getApps e getApp para evitar o erro de duplicidade
+    import { initializeApp, getApps, getApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
+    import { getFirestore, collection, query, where, getDocs, doc, getDoc, orderBy } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
+    import { getAuth } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-auth.js";
+    import { protegerPagina } from '/auth.js';
 
-        const firebaseConfig = {
-            apiKey: "AIzaSyBV7RPjk3cFTqL-aIpflJcUojKg1ZXMLuU",
-            authDomain: "voluntarios-ativos---cepat.firebaseapp.com",
-            projectId: "voluntarios-ativos---cepat",
-            storageBucket: "voluntarios-ativos---cepat.firebasestorage.app",
-            appId: "1:66122858261:web:7fa21f1805463b5c08331c"
-        };
+    const firebaseConfig = {
+        apiKey: "AIzaSyBV7RPjk3cFTqL-aIpflJcUojKg1ZXMLuU",
+        authDomain: "voluntarios-ativos---cepat.firebaseapp.com",
+        projectId: "voluntarios-ativos---cepat",
+        storageBucket: "voluntarios-ativos---cepat.firebasestorage.app",
+        appId: "1:66122858261:web:7fa21f1805463b5c08331c"
+    };
 
-        const app = initializeApp(firebaseConfig);
-        const db = getFirestore(app);
-        const auth = getAuth(app);
-        const anoVigente = 2026;
+    // SOLUÇÃO PARA O ERRO: Verifica se já existe um app inicializado
+    const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
+    const db = getFirestore(app);
+    const auth = getAuth(app);
+    const anoVigente = 2026;
 
-        // Protege a página e inicializa as funções
-        protegerPagina(['super-admin', 'diretor', 'tesoureiro'])
-            .then(() => {
-                document.getElementById('conteudo-pagina').style.display = 'block';
-                carregarLista();
-            })
-            .catch(() => {
-                document.getElementById('acesso-negado').style.display = 'block';
-            });
+    // Protege a página e inicializa as funções
+    protegerPagina(['super-admin', 'diretor', 'tesoureiro'])
+        .then(() => {
+            document.getElementById('conteudo-pagina').style.display = 'block';
+            carregarLista();
+        })
+        .catch(() => {
+            document.getElementById('acesso-negado').style.display = 'block';
+        });
 
-        async function carregarLista() {
-            const corpo = document.getElementById('tabela-corpo');
-            try {
-                const q = query(
-                    collection(db, "voluntarios"), 
-                    where("tasvAssinadoAno", "==", anoVigente), 
-                    orderBy("nome")
-                );
-                const snap = await getDocs(q);
-                corpo.innerHTML = '';
-
-                if (snap.empty) {
-                    corpo.innerHTML = '<tr><td colspan="4">Nenhum termo assinado em '+anoVigente+'.</td></tr>';
-                    return;
-                }
-
-                snap.forEach(d => {
-                    const v = d.data();
-                    const dataFormat = v.tasvDataAssinatura ? v.tasvDataAssinatura.toDate().toLocaleString('pt-BR') : 'Sem data';
-                    const tr = document.createElement('tr');
-                    tr.innerHTML = `
-                        <td><input type="checkbox" class="vol-check" data-id="${d.id}"></td>
-                        <td>${v.nome}</td>
-                        <td>${dataFormat}</td>
-                        <td>${v.tasvAssinadoAno}</td>
-                    `;
-                    corpo.appendChild(tr);
-                });
-            } catch (e) {
-                console.error("Erro ao carregar lista:", e);
-                corpo.innerHTML = '<tr><td colspan="4" style="color:red">Erro de permissão ao acessar lista.</td></tr>';
-            }
-        }
-
-        async function obterHtmlTermo(volId) {
-            const volSnap = await getDoc(doc(db, "voluntarios", volId));
-            const vol = volSnap.data();
-
-            const logQ = query(
-                collection(db, "log_auditoria"), 
-                where("acao", "==", "ASSINATURA_DIGITAL_TASV"),
-                where("autor.id_voluntario", "==", volId),
-                where("detalhes.ano_referencia", "==", anoVigente)
+    async function carregarLista() {
+        const corpo = document.getElementById('tabela-corpo');
+        try {
+            const q = query(
+                collection(db, "voluntarios"), 
+                where("tasvAssinadoAno", "==", anoVigente), 
+                orderBy("nome")
             );
-            
-            const logSnap = await getDocs(logQ);
-            let log = { timestamp: { toDate: () => new Date() }, detalhes: { navegador: "N/A" } };
-            if (!logSnap.empty) log = logSnap.docs[0].data();
+            const snap = await getDocs(q);
+            corpo.innerHTML = '';
 
-            const dataHoje = new Date().toLocaleDateString('pt-BR', { day: 'numeric', month: 'long', year: 'numeric' });
-
-            return `
-                <div class="print-page">
-                    <div class="header-termo">
-                        <h2>CASA ESPÍRITA PAULO DE TARSO</h2>
-                        <p>CNPJ 12.253.749/0001-20 | Rua do Cromo 989, Vila Pântano - Santa Bárbara D'Oeste - 13457-151</p>
-                        <h3>TERMO DE ADESÃO AO SERVIÇO VOLUNTÁRIO - ${anoVigente}</h3>
-                    </div>
-
-                    <p>Pelo presente instrumento, a entidade e o(a) voluntário(a) 
-                    <strong>${vol.nome.toUpperCase()}</strong>, residente em <strong>${vol.endereco || 'Não informado'}</strong>, 
-                    celebram este termo sob a <strong>Lei nº 9.608/1998</strong>.</p>
-
-                    <span class="secao-titulo">CLÁUSULA PRIMEIRA - DO OBJETO</span>
-                    <p>O serviço voluntário é prestado de forma gratuita e não gera vínculo empregatício nem obrigações trabalhistas ou previdenciárias.</p>
-
-                    <span class="secao-titulo">CLÁUSULA SEGUNDA - PRIVACIDADE</span>
-                    <p>O voluntário autoriza o tratamento de seus dados para fins de gestão interna, conforme a LGPD.</p>
-
-                    <div class="log-certificacao">
-                        <strong>EVIDÊNCIA TÉCNICA DE ASSINATURA DIGITAL</strong><br>
-                        DATA DO ACEITE: ${log.timestamp.toDate().toLocaleString('pt-BR')}<br>
-                        ID VOLUNTÁRIO: ${volId}<br>
-                        BROWSER: ${log.detalhes.navegador}<br>
-                        AUTENTICAÇÃO: Firebase Auth (UID: ${vol.authUid})
-                    </div>
-
-                    <p style="margin-top: 40px;">Santa Bárbara D'Oeste, SP, ${dataHoje}.</p>
-
-                    <div class="assinatura-area">
-                        <div class="linha-assinatura"></div>
-                        <small><strong>${vol.nome}</strong><br>Assinado Eletronicamente (Lei 14.063/2020)</small>
-                    </div>
-                </div>
-            `;
-        }
-
-        document.getElementById('btn-preparar').addEventListener('click', async () => {
-            const checks = document.querySelectorAll('.vol-check:checked');
-            if (checks.length === 0) return alert("Selecione os voluntários na lista.");
-
-            const btn = document.getElementById('btn-preparar');
-            btn.disabled = true;
-            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Gerando...';
-
-            const container = document.getElementById('container-impressao');
-            container.innerHTML = '';
-
-            try {
-                for (const c of checks) {
-                    const html = await obterHtmlTermo(c.dataset.id);
-                    container.innerHTML += html;
-                }
-                window.print();
-            } catch (error) {
-                console.error("Erro na geração:", error);
-                alert("Erro de permissão ao gerar documentos. Verifique as regras do Firestore.");
-            } finally {
-                btn.disabled = false;
-                btn.innerHTML = '<i class="fas fa-print"></i> Gerar e Imprimir Selecionados';
+            if (snap.empty) {
+                corpo.innerHTML = '<tr><td colspan="4">Nenhum termo assinado em '+anoVigente+'.</td></tr>';
+                return;
             }
-        });
 
-        document.getElementById('select-all').addEventListener('change', (e) => {
-            document.querySelectorAll('.vol-check').forEach(c => c.checked = e.target.checked);
-        });
-    </script>
+            snap.forEach(d => {
+                const v = d.data();
+                const dataFormat = v.tasvDataAssinatura ? v.tasvDataAssinatura.toDate().toLocaleString('pt-BR') : 'Sem data';
+                const tr = document.createElement('tr');
+                tr.innerHTML = `
+                    <td><input type="checkbox" class="vol-check" data-id="${d.id}"></td>
+                    <td>${v.nome}</td>
+                    <td>${dataFormat}</td>
+                    <td>${v.tasvAssinadoAno}</td>
+                `;
+                corpo.appendChild(tr);
+            });
+        } catch (e) {
+            console.error("Erro ao carregar lista:", e);
+            corpo.innerHTML = '<tr><td colspan="4" style="color:red">Erro de permissão ao acessar lista.</td></tr>';
+        }
+    }
+
+    async function obterHtmlTermo(volId) {
+        const volSnap = await getDoc(doc(db, "voluntarios", volId));
+        const vol = volSnap.data();
+
+        const logQ = query(
+            collection(db, "log_auditoria"), 
+            where("acao", "==", "ASSINATURA_DIGITAL_TASV"),
+            where("autor.id_voluntario", "==", volId),
+            where("detalhes.ano_referencia", "==", anoVigente)
+        );
+        
+        const logSnap = await getDocs(logQ);
+        let log = { timestamp: { toDate: () => new Date() }, detalhes: { navegador: "N/A" } };
+        if (!logSnap.empty) log = logSnap.docs[0].data();
+
+        const dataHoje = new Date().toLocaleDateString('pt-BR', { day: 'numeric', month: 'long', year: 'numeric' });
+
+        return `
+            <div class="print-page">
+                <div class="header-termo">
+                    <h2>CASA ESPÍRITA PAULO DE TARSO</h2>
+                    <p>CNPJ 12.253.749/0001-20 | Rua do Cromo 989, Vila Pântano - Santa Bárbara D'Oeste - 13457-151</p>
+                    <h3>TERMO DE ADESÃO AO SERVIÇO VOLUNTÁRIO - ${anoVigente}</h3>
+                </div>
+
+                <p>Pelo presente instrumento, a entidade e o(a) voluntário(a) 
+                <strong>${vol.nome.toUpperCase()}</strong>, residente em <strong>${vol.endereco || 'Não informado'}</strong>, 
+                celebram este termo sob a <strong>Lei nº 9.608/1998</strong>.</p>
+
+                <span class="secao-titulo">CLÁUSULA PRIMEIRA - DO OBJETO</span>
+                <p>O serviço voluntário é prestado de forma gratuita e não gera vínculo empregatício nem obrigações trabalhistas ou previdenciárias.</p>
+
+                <span class="secao-titulo">CLÁUSULA SEGUNDA - PRIVACIDADE</span>
+                <p>O voluntário autoriza o tratamento de seus dados para fins de gestão interna, conforme a LGPD.</p>
+
+                <div class="log-certificacao">
+                    <strong>EVIDÊNCIA TÉCNICA DE ASSINATURA DIGITAL</strong><br>
+                    DATA DO ACEITE: ${log.timestamp.toDate().toLocaleString('pt-BR')}<br>
+                    ID VOLUNTÁRIO: ${volId}<br>
+                    BROWSER: ${log.detalhes.navegador}<br>
+                    AUTENTICAÇÃO: Firebase Auth (UID: ${vol.authUid})
+                </div>
+
+                <p style="margin-top: 40px;">Santa Bárbara D'Oeste, SP, ${dataHoje}.</p>
+
+                <div class="assinatura-area">
+                    <div class="linha-assinatura"></div>
+                    <small><strong>${vol.nome}</strong><br>Assinado Eletronicamente (Lei 14.063/2020)</small>
+                </div>
+            </div>
+        `;
+    }
+
+    document.getElementById('btn-preparar').addEventListener('click', async () => {
+        const checks = document.querySelectorAll('.vol-check:checked');
+        if (checks.length === 0) return alert("Selecione os voluntários na lista.");
+
+        const btn = document.getElementById('btn-preparar');
+        btn.disabled = true;
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Gerando...';
+
+        const container = document.getElementById('container-impressao');
+        container.innerHTML = '';
+
+        try {
+            for (const c of checks) {
+                const html = await obterHtmlTermo(c.dataset.id);
+                container.innerHTML += html;
+            }
+            window.print();
+        } catch (error) {
+            console.error("Erro na geração:", error);
+            alert("Erro de permissão ao gerar documentos. Verifique as regras do Firestore.");
+        } finally {
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fas fa-print"></i> Gerar e Imprimir Selecionados';
+        }
+    });
+
+    document.getElementById('select-all').addEventListener('change', (e) => {
+        document.querySelectorAll('.vol-check').forEach(c => c.checked = e.target.checked);
+    });
+</script>
 </body>
 </html>
