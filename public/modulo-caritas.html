@@ -14,19 +14,19 @@
         .header-titulo h1 { color: #2c3e50; margin: 0; }
         .header-titulo p { color: #7f8c8d; margin: 5px 0 0 0; }
 
-        /* Grade de Estatísticas Otimizada */
+        /* Grade de Estatísticas */
         .stats-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 15px; margin-bottom: 25px; }
         .stat-card { background: white; padding: 15px; border-radius: 12px; text-align: center; box-shadow: 0 4px 10px rgba(0,0,0,0.05); border-bottom: 4px solid #e67e22; transition: 0.3s; }
         .stat-card h4 { margin: 0; color: #95a5a6; font-size: 0.75em; text-transform: uppercase; }
         .stat-card p { margin: 8px 0 0 0; font-size: 1.8em; font-weight: bold; color: #2c3e50; }
 
-        /* Card Especial de Prontidão */
+        /* Card de Prontidão Dinâmico */
         .card-prontidao { grid-column: 1 / -1; background: #e8f5e9; border: 2px solid #27ae60; display: flex; justify-content: space-between; align-items: center; padding: 20px 30px; border-radius: 15px; cursor: pointer; border-bottom: none; }
         .card-prontidao:hover { transform: translateY(-3px); box-shadow: 0 6px 15px rgba(0,0,0,0.1); }
         .info-prontidao h2 { margin: 0; font-size: 2.2em; color: #1b5e20; }
         .info-prontidao span { color: #2e7d32; font-weight: bold; text-transform: uppercase; font-size: 0.9em; }
-        .alerta-gargalo { text-align: right; max-width: 400px; }
-        .alerta-gargalo b { color: #c0392b; display: block; font-size: 0.9em; }
+        .alerta-gargalo { text-align: right; max-width: 500px; }
+        .alerta-gargalo b { color: #c0392b; display: block; font-size: 0.95em; }
 
         #painel-validade-viva { background: #fff3e0; border: 2px solid #e67e22; border-radius: 12px; padding: 20px; margin-bottom: 25px; box-shadow: 0 4px 10px rgba(0,0,0,0.1); }
         .alerta-titulo { margin: 0 0 10px 0; color: #d35400; display: flex; align-items: center; gap: 10px; font-size: 1.1em; }
@@ -64,7 +64,7 @@
                     <h2 id="total-cestas-prontas">--</h2>
                 </div>
                 <div class="alerta-gargalo">
-                    <b id="item-limitante">Calculando prontidão de estoque...</b>
+                    <b id="item-limitante">Sincronizando estoque...</b>
                 </div>
             </div>
 
@@ -75,7 +75,7 @@
 
         <section id="painel-validade-viva" style="display: none;">
             <h3 class="alerta-titulo"><i class="fas fa-exclamation-triangle fa-beat"></i> ALERTA: VENCIMENTO CRÍTICO</h3>
-            <span class="alerta-subtitulo">Itens com menos de 2 semanas de validade após a entrega de <b id="data-ref-domingo">--/--</b>:</span>
+            <span class="alerta-subtitulo">Itens com validade crítica para a entrega de <b id="data-ref-domingo">--/--</b>:</span>
             <div id="lista-alertas-vivos" class="grid-alertas-vivos"></div>
         </section>
 
@@ -104,34 +104,34 @@
             document.getElementById('data-domingo').innerText = domSoc.toLocaleDateString('pt-BR').substring(0, 5);
             document.getElementById('data-ref-domingo').innerText = domSoc.toLocaleDateString('pt-BR');
 
-            // Regra de Validade: Domingo Social + 14 dias
             const limiteStr = new Date(domSoc.getTime() + 14 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
 
-            // 1. Contador de Famílias Ativas
             onSnapshot(query(collection(db, "familiasAssistidas"), where("statusGeral", "==", "Ativa")), s => {
                 document.getElementById('total-familias').innerText = s.size;
             });
             
-            // 2. Contador de Cestas Entregues no Mês
             const inicioMes = new Date(); inicioMes.setDate(1); inicioMes.setHours(0,0,0,0);
             onSnapshot(query(collection(db, "entregasCestas"), where("data", ">=", Timestamp.fromDate(inicioMes))), s => {
                 document.getElementById('total-entregas').innerText = s.size;
             });
 
-            // 3. LOGICA DE PRONTIDÃO DE CESTAS (ESTOQUE)
+            // LÓGICA DE PRONTIDÃO PERSONALIZÁVEL
             let estoqueGlobal = [];
             let configCesta = {};
+            let metaGlobal = 14; 
 
             onSnapshot(doc(db, "configuracoes", "cesta_padrao"), d => {
-                configCesta = d.exists() ? d.data().itens : {};
-                recalcularProntidao();
+                if (d.exists()) {
+                    configCesta = d.data().itens || {};
+                    metaGlobal = d.data().meta || 14; // Puxa a meta salva no banco
+                    recalcularProntidao();
+                }
             });
 
             onSnapshot(collection(db, "estoque_caritas"), snap => {
                 estoqueGlobal = snap.docs.map(d => ({ id: d.id, ...d.data() }));
                 recalcularProntidao();
                 
-                // Monitoramento de Validade (Painel Vivo)
                 const painel = document.getElementById('painel-validade-viva');
                 const lista = document.getElementById('lista-alertas-vivos');
                 let criticos = estoqueGlobal.filter(i => i.validade && i.validade <= limiteStr && i.quantidade > 0);
@@ -150,7 +150,7 @@
                 
                 let montaveis = Infinity;
                 let itemGargalo = "";
-                const metaFamilias = 14; // Meta CEPAT
+                const metaFamilias = metaGlobal; // Agora usa o valor dinâmico
 
                 Object.entries(configCesta).forEach(([id, qtdNecessaria]) => {
                     const item = estoqueGlobal.find(i => i.id === id);
@@ -169,10 +169,11 @@
                 
                 display.innerText = `${total} Cestas`;
                 
+                // Texto Corrigido: Agora usa ${metaFamilias} em vez do número 14 fixo!
                 if (total < metaFamilias) {
-                    label.innerHTML = `⚠️ <b>${itemGargalo}</b> está limitando a montagem das 14 cestas.`;
+                    label.innerHTML = `⚠️ <b>${itemGargalo}</b> está limitando a montagem das ${metaFamilias} cestas.`;
                 } else {
-                    label.innerHTML = `<span style="color:#2e7d32">✅ Estoque completo para as 14 famílias!</span>`;
+                    label.innerHTML = `<span style="color:#2e7d32">✅ Estoque completo para as ${metaFamilias} famílias!</span>`;
                 }
             }
         });
