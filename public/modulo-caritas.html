@@ -14,13 +14,11 @@
         .header-titulo h1 { color: #2c3e50; margin: 0; }
         .header-titulo p { color: #7f8c8d; margin: 5px 0 0 0; }
 
-        /* Grade de Estatísticas */
         .stats-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 15px; margin-bottom: 25px; }
         .stat-card { background: white; padding: 15px; border-radius: 12px; text-align: center; box-shadow: 0 4px 10px rgba(0,0,0,0.05); border-bottom: 4px solid #e67e22; transition: 0.3s; }
         .stat-card h4 { margin: 0; color: #95a5a6; font-size: 0.75em; text-transform: uppercase; }
         .stat-card p { margin: 8px 0 0 0; font-size: 1.8em; font-weight: bold; color: #2c3e50; }
 
-        /* Card de Prontidão Dinâmico */
         .card-prontidao { grid-column: 1 / -1; background: #e8f5e9; border: 2px solid #27ae60; display: flex; justify-content: space-between; align-items: center; padding: 20px 30px; border-radius: 15px; cursor: pointer; border-bottom: none; }
         .card-prontidao:hover { transform: translateY(-3px); box-shadow: 0 6px 15px rgba(0,0,0,0.1); }
         .info-prontidao h2 { margin: 0; font-size: 2.2em; color: #1b5e20; }
@@ -64,7 +62,7 @@
                     <h2 id="total-cestas-prontas">--</h2>
                 </div>
                 <div class="alerta-gargalo">
-                    <b id="item-limitante">Sincronizando estoque...</b>
+                    <b id="item-limitante">Sincronizando...</b>
                 </div>
             </div>
 
@@ -96,8 +94,7 @@
         import { protegerPagina } from '/auth.js';
 
         const firebaseConfig = { apiKey: "AIzaSyBV7RPjk3cFTqL-aIpflJcUojKg1ZXMLuU", authDomain: "voluntarios-ativos---cepat.firebaseapp.com", projectId: "voluntarios-ativos---cepat", storageBucket: "voluntarios-ativos---cepat.firebasestorage.app", messagingSenderId: "66122858261", appId: "1:66122858261:web:7fa21f1805463b5c08331c" };
-        const app = initializeApp(firebaseConfig);
-        const db = getFirestore(app);
+        const db = getFirestore(initializeApp(firebaseConfig));
 
         protegerPagina(['super-admin','diretor','tesoureiro','conselheiro','recepcionista','entrevistador','caritas']).then(() => {
             const domSoc = calcularProximoDomingoSocial();
@@ -106,28 +103,35 @@
 
             const limiteStr = new Date(domSoc.getTime() + 14 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
 
+            // VARIÁVEIS DE ESTADO DINÂMICO
+            let estoqueGlobal = [];
+            let configCesta = {};
+            let metaGlobal = 14; 
+            let entregasRealizadas = 0;
+
+            // 1. Contador de Famílias Ativas
             onSnapshot(query(collection(db, "familiasAssistidas"), where("statusGeral", "==", "Ativa")), s => {
                 document.getElementById('total-familias').innerText = s.size;
             });
             
+            // 2. Monitora Entregas e Atualiza Variável
             const inicioMes = new Date(); inicioMes.setDate(1); inicioMes.setHours(0,0,0,0);
             onSnapshot(query(collection(db, "entregasCestas"), where("data", ">=", Timestamp.fromDate(inicioMes))), s => {
-                document.getElementById('total-entregas').innerText = s.size;
+                entregasRealizadas = s.size;
+                document.getElementById('total-entregas').innerText = entregasRealizadas;
+                recalcularProntidao(); // Dispara o cálculo dinâmico
             });
 
-            // LÓGICA DE PRONTIDÃO PERSONALIZÁVEL
-            let estoqueGlobal = [];
-            let configCesta = {};
-            let metaGlobal = 14; 
-
+            // 3. Monitora Configuração e Meta
             onSnapshot(doc(db, "configuracoes", "cesta_padrao"), d => {
                 if (d.exists()) {
                     configCesta = d.data().itens || {};
-                    metaGlobal = d.data().meta || 14; // Puxa a meta salva no banco
+                    metaGlobal = d.data().meta || 14;
                     recalcularProntidao();
                 }
             });
 
+            // 4. Monitora Estoque
             onSnapshot(collection(db, "estoque_caritas"), snap => {
                 estoqueGlobal = snap.docs.map(d => ({ id: d.id, ...d.data() }));
                 recalcularProntidao();
@@ -150,7 +154,9 @@
                 
                 let montaveis = Infinity;
                 let itemGargalo = "";
-                const metaFamilias = metaGlobal; // Agora usa o valor dinâmico
+                
+                // LÓGICA DINÂMICA: Meta Restante = Meta Total - Já Entregues
+                const metaRestante = Math.max(0, metaGlobal - entregasRealizadas);
 
                 Object.entries(configCesta).forEach(([id, qtdNecessaria]) => {
                     const item = estoqueGlobal.find(i => i.id === id);
@@ -169,11 +175,11 @@
                 
                 display.innerText = `${total} Cestas`;
                 
-                // Texto Corrigido: Agora usa ${metaFamilias} em vez do número 14 fixo!
-                if (total < metaFamilias) {
-                    label.innerHTML = `⚠️ <b>${itemGargalo}</b> está limitando a montagem das ${metaFamilias} cestas.`;
+                // Só alerta se o estoque for menor que o que AINDA falta entregar
+                if (total < metaRestante) {
+                    label.innerHTML = `⚠️ <b>${itemGargalo}</b> está limitando a montagem das ${metaRestante} cestas restantes.`;
                 } else {
-                    label.innerHTML = `<span style="color:#2e7d32">✅ Estoque completo para as ${metaFamilias} famílias!</span>`;
+                    label.innerHTML = `<span style="color:#2e7d32">✅ Estoque ok para as ${metaRestante} famílias que faltam atender!</span>`;
                 }
             }
         });

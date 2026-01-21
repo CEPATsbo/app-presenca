@@ -7,9 +7,12 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <style>
         :root { --bg: #f4f6f9; --white: #ffffff; --primary: #2c3e50; --orange: #e67e22; --green: #27ae60; --red: #e74c3c; --grey: #7f8c8d; }
+        
         body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background-color: var(--bg); margin: 0; padding: 20px; display: flex; flex-direction: column; align-items: center; }
+        
         .nav-header { width: 100%; max-width: 1000px; display: flex; justify-content: space-between; margin-bottom: 20px; align-items: center; }
         .btn-voltar { background-color: var(--grey); color: white; padding: 10px 15px; border-radius: 8px; text-decoration: none; font-weight: bold; font-size: 0.9em; display: flex; align-items: center; gap: 8px; }
+        
         .container { background: var(--white); padding: 30px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1); width: 100%; max-width: 1000px; box-sizing: border-box; }
         h1 { color: var(--primary); margin-top: 0; border-bottom: 2px solid var(--orange); padding-bottom: 10px; margin-bottom: 25px; }
 
@@ -26,12 +29,15 @@
         .modal { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); display: none; justify-content: center; align-items: center; z-index: 1000; }
         .modal-content { background: white; padding: 30px; border-radius: 12px; width: 95%; max-width: 500px; max-height: 85vh; overflow-y: auto; }
         
-        .badge-extra { background: var(--orange); color: white; padding: 2px 6px; border-radius: 4px; font-size: 0.7em; margin-right: 5px; }
         .form-group { display: flex; flex-direction: column; gap: 5px; margin-bottom: 15px; }
         .form-group label { font-size: 0.8em; font-weight: bold; color: #666; }
         .form-group input, .form-group select { padding: 12px; border: 1px solid #ccc; border-radius: 8px; font-size: 1em; }
 
         .btn-acao { border: none; padding: 12px 20px; border-radius: 8px; cursor: pointer; font-weight: bold; display: flex; align-items: center; gap: 8px; }
+        
+        /* Estilo para a linha da receita com botão de excluir */
+        .linha-receita { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; padding: 10px; background: #f9f9f9; border-radius: 8px; border: 1px solid #eee; }
+        .btn-remover-linha { background: none; border: none; color: var(--red); cursor: pointer; font-size: 1.1em; padding: 5px; }
     </style>
 </head>
 <body>
@@ -48,7 +54,7 @@
             <h2 id="qtd-cestas-montaveis">0</h2>
             <p>Cestas Prontas para Entrega</p>
             <div id="status-meta" style="margin-top: 10px; color: #1b5e20; font-weight: bold; font-size: 0.9em;">
-                Sincronizando meta...
+                Sincronizando dados...
             </div>
             <div id="box-pendencias" class="lista-pendencias" style="display: none;">
                 <div id="lista-pendencias"></div>
@@ -95,11 +101,11 @@
                 <input type="number" id="input-meta" value="14" style="font-size: 1.2em; font-weight: bold; text-align: center;">
             </div>
 
-            <label style="font-weight: bold; font-size: 0.8em; color: #666;">RECEITA POR CESTA:</label>
+            <label style="font-weight: bold; font-size: 0.8em; color: #666;">ITENS NA RECEITA ATUAL:</label>
             <div id="lista-composicao" style="margin-top: 10px;"></div>
 
             <div style="border-top: 2px dashed #eee; margin-top: 20px; padding-top: 15px;">
-                <label style="font-weight: bold; font-size: 0.8em; color: var(--orange);">INCLUIR ITEM EXTRA (Sazonal/Ovos/etc)</label>
+                <label style="font-weight: bold; font-size: 0.8em; color: var(--orange);">ADICIONAR ITEM NA CESTA:</label>
                 <div style="display: flex; gap: 8px; margin-top: 8px;">
                     <select id="select-item-estoque" style="flex: 1; padding: 10px; border-radius: 6px;"></select>
                     <button type="button" onclick="adicionarLinhaCesta()" style="background: var(--orange); color: white; border: none; padding: 0 15px; border-radius: 6px; cursor: pointer;"><i class="fas fa-plus"></i></button>
@@ -121,7 +127,6 @@
         const firebaseConfig = { apiKey: "AIzaSyBV7RPjk3cFTqL-aIpflJcUojKg1ZXMLuU", authDomain: "voluntarios-ativos---cepat.firebaseapp.com", projectId: "voluntarios-ativos---cepat", storageBucket: "voluntarios-ativos---cepat.firebasestorage.app", messagingSenderId: "66122858261", appId: "1:66122858261:web:7fa21f1805463b5c08331c" };
         const db = getFirestore(initializeApp(firebaseConfig));
         
-        // VARIÁVEIS DE ESTADO
         let itensEstoque = [], configCesta = {}, metaGlobal = 14, entregasNoMes = 0, userLogado = null;
 
         protegerPagina(['super-admin', 'caritas']).then(user => {
@@ -130,14 +135,12 @@
         });
 
         function iniciarSincronizacao() {
-            // 1. Monitora o Estoque
             onSnapshot(collection(db, "estoque_caritas"), snap => {
                 itensEstoque = snap.docs.map(d => ({ id: d.id, ...d.data() })).sort((a,b) => a.nome.localeCompare(b.nome));
                 renderizarListaEstoque();
                 calcularProntidao();
             });
 
-            // 2. Monitora Configuração e Meta
             onSnapshot(doc(db, "configuracoes", "cesta_padrao"), d => {
                 if (d.exists()) {
                     configCesta = d.data().itens || {};
@@ -146,13 +149,8 @@
                 }
             });
 
-            // 3. Monitora Entregas Realizadas no Mês Atual
-            const inicioMes = new Date();
-            inicioMes.setDate(1);
-            inicioMes.setHours(0,0,0,0);
-            const qEntregas = query(collection(db, "entregasCestas"), where("data", ">=", Timestamp.fromDate(inicioMes)));
-            
-            onSnapshot(qEntregas, s => {
+            const inicioMes = new Date(); inicioMes.setDate(1); inicioMes.setHours(0,0,0,0);
+            onSnapshot(query(collection(db, "entregasCestas"), where("data", ">=", Timestamp.fromDate(inicioMes))), s => {
                 entregasNoMes = s.size;
                 calcularProntidao();
             });
@@ -160,58 +158,44 @@
 
         function calcularProntidao() {
             if (Object.keys(configCesta).length === 0) return;
-
             const hoje = new Date();
             const domSoc = calcularProximoDomingoSocial();
             const ehDiaDeTrabalho = hoje.toDateString() === domSoc.toDateString();
-
-            // INTELIGÊNCIA: Desconta o que já foi entregue da meta mensal
             const metaRestante = Math.max(0, metaGlobal - entregasNoMes);
 
             let cestasPossiveis = Infinity;
             let pendencias = [];
 
-            Object.entries(configCesta).forEach(([id, qtdNecessaria]) => {
+            Object.entries(configCesta).forEach(([id, qtd]) => {
                 const item = itensEstoque.find(i => i.id === id);
                 const saldo = item ? item.quantidade : 0;
-                const capacidade = Math.floor(saldo / qtdNecessaria);
-                
+                const capacidade = Math.floor(saldo / qtd);
                 if (capacidade < cestasPossiveis) cestasPossiveis = capacidade;
-
-                // Alerta só aparece se não for o dia do trabalho e houver falta para o que RESTA entregar
-                const falta = (metaRestante * qtdNecessaria) - saldo;
-                if (falta > 0 && !ehDiaDeTrabalho) {
-                    pendencias.push(`Faltam ${falta} de <b>${item ? item.nome : 'Item'}</b> para completar as ${metaRestante} cestas restantes.`);
-                }
+                const falta = (metaRestante * qtd) - saldo;
+                if (falta > 0 && !ehDiaDeTrabalho) pendencias.push(`Faltam ${falta} de <b>${item ? item.nome : 'Item'}</b>.`);
             });
 
             const resultado = cestasPossiveis === Infinity ? 0 : cestasPossiveis;
             document.getElementById('qtd-cestas-montaveis').innerText = resultado;
-            
-            const box = document.getElementById('box-pendencias');
             const statusMeta = document.getElementById('status-meta');
+            const box = document.getElementById('box-pendencias');
 
             if (ehDiaDeTrabalho) {
-                // Visualização Especial para o Dia do Trabalho
-                statusMeta.innerHTML = `<span style="color:var(--orange)"><i class="fas fa-star fa-spin"></i> <b>DOMINGO SOCIAL EM ANDAMENTO:</b> ${entregasNoMes} de ${metaGlobal} atendidas.</span>`;
-                box.style.display = 'none'; 
+                statusMeta.innerHTML = `<span style="color:var(--orange)"><b>TRABALHO HOJE:</b> ${entregasNoMes} de ${metaGlobal} atendidas.</span>`;
+                box.style.display = 'none';
             } else {
-                statusMeta.innerHTML = `Meta Mensal: ${metaGlobal} | Já Atendidas: ${entregasNoMes} | <b>Faltam Atender: ${metaRestante}</b>`;
-                
+                statusMeta.innerHTML = `Meta: ${metaGlobal} | Atendidas: ${entregasNoMes} | <b>Restam: ${metaRestante}</b>`;
                 if (pendencias.length > 0 && resultado < metaRestante) {
                     box.style.display = 'block';
                     document.getElementById('lista-pendencias').innerHTML = pendencias.map(p => `<div class="pendencia-item"><i class="fas fa-exclamation-triangle"></i> ${p}</div>`).join('');
-                } else { 
-                    box.style.display = 'none'; 
-                }
+                } else { box.style.display = 'none'; }
             }
         }
 
         function renderizarListaEstoque() {
-            const container = document.getElementById('lista-produtos');
-            container.innerHTML = itensEstoque.map(i => `
+            document.getElementById('lista-produtos').innerHTML = itensEstoque.map(i => `
                 <div class="estoque-item">
-                    <div><b>${i.nome}</b><p>Saldo Atual: ${i.quantidade} unidades</p></div>
+                    <div><b>${i.nome}</b><p>Saldo: ${i.quantidade} un.</p></div>
                     <div class="controles">
                         <button class="btn-ajuste" style="background:var(--red)" onclick="ajustarEstoque('${i.id}', -1, '${i.nome}')">-</button>
                         <span style="font-weight:bold; min-width:30px; text-align:center;">${i.quantidade}</span>
@@ -222,7 +206,6 @@
             `).join('');
         }
 
-        // FUNÇÃO AUXILIAR: CALCULAR PRÓXIMO DOMINGO SOCIAL
         function calcularProximoDomingoSocial() {
             const hoje = new Date();
             function buscar(y, m) {
@@ -238,7 +221,7 @@
         }
 
         document.getElementById('btn-abrir-novo').onclick = () => {
-            document.getElementById('titulo-modal-item').innerText = "Novo Item no Estoque";
+            document.getElementById('titulo-modal-item').innerText = "Novo Item";
             document.getElementById('item-edit-id').value = "";
             document.getElementById('form-item-estoque').reset();
             document.getElementById('modal-novo-item').style.display = 'flex';
@@ -263,15 +246,20 @@
             fecharModais();
         };
 
+        // ABRE MODAL DE CONFIGURAÇÃO COM BOTÃO DE EXCLUIR
         document.getElementById('btn-config-cesta').onclick = () => {
             document.getElementById('input-meta').value = metaGlobal;
             const lista = document.getElementById('lista-composicao');
             lista.innerHTML = Object.entries(configCesta).map(([id, qtd]) => {
                 const item = itensEstoque.find(i => i.id === id);
-                return `<div style="display:flex; justify-content:space-between; margin-bottom:10px; padding:10px; background:#fff; border-radius:8px; border:1px solid #ddd;">
-                    <span>${item ? item.nome : 'Item Removido'}</span>
-                    <input type="number" class="input-receita" data-id="${id}" value="${qtd}" style="width:60px; padding:5px; border-radius:5px; border:1px solid #ccc;">
-                </div>`;
+                return `
+                    <div class="linha-receita" id="receita-${id}">
+                        <div style="display:flex; align-items:center; gap:10px;">
+                            <button type="button" class="btn-remover-linha" onclick="removerLinhaDaReceita('${id}')"><i class="fas fa-trash-alt"></i></button>
+                            <span>${item ? item.nome : 'Item Removido'}</span>
+                        </div>
+                        <input type="number" class="input-receita" data-id="${id}" value="${qtd}" style="width:60px; padding:5px; border-radius:5px; border:1px solid #ccc;">
+                    </div>`;
             }).join('');
             
             const sel = document.getElementById('select-item-estoque');
@@ -279,13 +267,25 @@
             document.getElementById('modal-config').style.display = 'flex';
         };
 
+        // Função para remover a linha visualmente antes de salvar
+        window.removerLinhaDaReceita = (id) => {
+            const el = document.getElementById(`receita-${id}`);
+            if (el) el.remove();
+        };
+
         window.adicionarLinhaCesta = () => {
             const id = document.getElementById('select-item-estoque').value;
             if (!id || document.querySelector(`.input-receita[data-id="${id}"]`)) return;
             const item = itensEstoque.find(x => x.id === id);
             const div = document.createElement('div');
-            div.style = "display:flex; justify-content:space-between; margin-bottom:10px; padding:10px; background:#fff3e0; border-radius:8px; border:1px solid var(--orange);";
-            div.innerHTML = `<span><span class="badge-extra">EXTRA</span> ${item.nome}</span><input type="number" class="input-receita" data-id="${id}" value="1" style="width:60px; padding:5px;">`;
+            div.className = "linha-receita";
+            div.id = `receita-${id}`;
+            div.innerHTML = `
+                <div style="display:flex; align-items:center; gap:10px;">
+                    <button type="button" class="btn-remover-linha" onclick="removerLinhaDaReceita('${id}')"><i class="fas fa-trash-alt"></i></button>
+                    <span><span class="badge-extra">EXTRA</span> ${item.nome}</span>
+                </div>
+                <input type="number" class="input-receita" data-id="${id}" value="1" style="width:60px; padding:5px;">`;
             document.getElementById('lista-composicao').appendChild(div);
         };
 
