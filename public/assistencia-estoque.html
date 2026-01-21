@@ -48,7 +48,7 @@
             <h2 id="qtd-cestas-montaveis">0</h2>
             <p>Cestas Prontas para Entrega</p>
             <div id="status-meta" style="margin-top: 10px; color: #1b5e20; font-weight: bold; font-size: 0.9em;">
-                Meta: <span id="val-meta">14</span> famílias
+                Sincronizando meta...
             </div>
             <div id="box-pendencias" class="lista-pendencias" style="display: none;">
                 <div id="lista-pendencias"></div>
@@ -115,12 +115,14 @@
 
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
-        import { getFirestore, collection, onSnapshot, doc, updateDoc, setDoc, addDoc, serverTimestamp, deleteDoc } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
+        import { getFirestore, collection, onSnapshot, doc, updateDoc, setDoc, addDoc, serverTimestamp, query, where, Timestamp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
         import { protegerPagina } from '/auth.js';
 
         const firebaseConfig = { apiKey: "AIzaSyBV7RPjk3cFTqL-aIpflJcUojKg1ZXMLuU", authDomain: "voluntarios-ativos---cepat.firebaseapp.com", projectId: "voluntarios-ativos---cepat", storageBucket: "voluntarios-ativos---cepat.firebasestorage.app", messagingSenderId: "66122858261", appId: "1:66122858261:web:7fa21f1805463b5c08331c" };
         const db = getFirestore(initializeApp(firebaseConfig));
-        let itensEstoque = [], configCesta = {}, metaGlobal = 14, userLogado = null;
+        
+        // VARIÁVEIS DE ESTADO
+        let itensEstoque = [], configCesta = {}, metaGlobal = 14, entregasNoMes = 0, userLogado = null;
 
         protegerPagina(['super-admin', 'caritas']).then(user => {
             userLogado = user;
@@ -128,26 +130,44 @@
         });
 
         function iniciarSincronizacao() {
-            // Monitora o Estoque
+            // 1. Monitora o Estoque
             onSnapshot(collection(db, "estoque_caritas"), snap => {
                 itensEstoque = snap.docs.map(d => ({ id: d.id, ...d.data() })).sort((a,b) => a.nome.localeCompare(b.nome));
                 renderizarListaEstoque();
                 calcularProntidao();
             });
 
-            // Monitora Configuração e Meta
+            // 2. Monitora Configuração e Meta
             onSnapshot(doc(db, "configuracoes", "cesta_padrao"), d => {
                 if (d.exists()) {
                     configCesta = d.data().itens || {};
                     metaGlobal = d.data().meta || 14;
-                    document.getElementById('val-meta').innerText = metaGlobal;
                     calcularProntidao();
                 }
+            });
+
+            // 3. Monitora Entregas Realizadas no Mês Atual
+            const inicioMes = new Date();
+            inicioMes.setDate(1);
+            inicioMes.setHours(0,0,0,0);
+            const qEntregas = query(collection(db, "entregasCestas"), where("data", ">=", Timestamp.fromDate(inicioMes)));
+            
+            onSnapshot(qEntregas, s => {
+                entregasNoMes = s.size;
+                calcularProntidao();
             });
         }
 
         function calcularProntidao() {
             if (Object.keys(configCesta).length === 0) return;
+
+            const hoje = new Date();
+            const domSoc = calcularProximoDomingoSocial();
+            const ehDiaDeTrabalho = hoje.toDateString() === domSoc.toDateString();
+
+            // INTELIGÊNCIA: Desconta o que já foi entregue da meta mensal
+            const metaRestante = Math.max(0, metaGlobal - entregasNoMes);
+
             let cestasPossiveis = Infinity;
             let pendencias = [];
 
@@ -158,25 +178,40 @@
                 
                 if (capacidade < cestasPossiveis) cestasPossiveis = capacidade;
 
-                const falta = (metaGlobal * qtdNecessaria) - saldo;
-                if (falta > 0) pendencias.push(`Faltam ${falta} de <b>${item ? item.nome : 'Item'}</b> para ${metaGlobal} cestas.`);
+                // Alerta só aparece se não for o dia do trabalho e houver falta para o que RESTA entregar
+                const falta = (metaRestante * qtdNecessaria) - saldo;
+                if (falta > 0 && !ehDiaDeTrabalho) {
+                    pendencias.push(`Faltam ${falta} de <b>${item ? item.nome : 'Item'}</b> para completar as ${metaRestante} cestas restantes.`);
+                }
             });
 
             const resultado = cestasPossiveis === Infinity ? 0 : cestasPossiveis;
             document.getElementById('qtd-cestas-montaveis').innerText = resultado;
             
             const box = document.getElementById('box-pendencias');
-            if (pendencias.length > 0 && resultado < metaGlobal) {
-                box.style.display = 'block';
-                document.getElementById('lista-pendencias').innerHTML = pendencias.map(p => `<div class="pendencia-item"><i class="fas fa-exclamation-triangle"></i> ${p}</div>`).join('');
-            } else { box.style.display = 'none'; }
+            const statusMeta = document.getElementById('status-meta');
+
+            if (ehDiaDeTrabalho) {
+                // Visualização Especial para o Dia do Trabalho
+                statusMeta.innerHTML = `<span style="color:var(--orange)"><i class="fas fa-star fa-spin"></i> <b>DOMINGO SOCIAL EM ANDAMENTO:</b> ${entregasNoMes} de ${metaGlobal} atendidas.</span>`;
+                box.style.display = 'none'; 
+            } else {
+                statusMeta.innerHTML = `Meta Mensal: ${metaGlobal} | Já Atendidas: ${entregasNoMes} | <b>Faltam Atender: ${metaRestante}</b>`;
+                
+                if (pendencias.length > 0 && resultado < metaRestante) {
+                    box.style.display = 'block';
+                    document.getElementById('lista-pendencias').innerHTML = pendencias.map(p => `<div class="pendencia-item"><i class="fas fa-exclamation-triangle"></i> ${p}</div>`).join('');
+                } else { 
+                    box.style.display = 'none'; 
+                }
+            }
         }
 
         function renderizarListaEstoque() {
             const container = document.getElementById('lista-produtos');
             container.innerHTML = itensEstoque.map(i => `
                 <div class="estoque-item">
-                    <div><b>${i.nome}</b><p>Saldo: ${i.quantidade} un.</p></div>
+                    <div><b>${i.nome}</b><p>Saldo Atual: ${i.quantidade} unidades</p></div>
                     <div class="controles">
                         <button class="btn-ajuste" style="background:var(--red)" onclick="ajustarEstoque('${i.id}', -1, '${i.nome}')">-</button>
                         <span style="font-weight:bold; min-width:30px; text-align:center;">${i.quantidade}</span>
@@ -187,7 +222,21 @@
             `).join('');
         }
 
-        // Funções para Modal de Novo Item/Edição
+        // FUNÇÃO AUXILIAR: CALCULAR PRÓXIMO DOMINGO SOCIAL
+        function calcularProximoDomingoSocial() {
+            const hoje = new Date();
+            function buscar(y, m) {
+                let dom = 0;
+                for (let d = 1; d <= 31; d++) {
+                    let dt = new Date(y, m, d);
+                    if (dt.getDay() === 0 && ++dom === 3) return dt;
+                }
+            }
+            let res = buscar(hoje.getFullYear(), hoje.getMonth());
+            if (hoje > res) res = buscar(hoje.getMonth() === 11 ? hoje.getFullYear()+1 : hoje.getFullYear(), (hoje.getMonth()+1)%12);
+            return res;
+        }
+
         document.getElementById('btn-abrir-novo').onclick = () => {
             document.getElementById('titulo-modal-item').innerText = "Novo Item no Estoque";
             document.getElementById('item-edit-id').value = "";
@@ -214,7 +263,6 @@
             fecharModais();
         };
 
-        // Funções para Modal de Receita
         document.getElementById('btn-config-cesta').onclick = () => {
             document.getElementById('input-meta').value = metaGlobal;
             const lista = document.getElementById('lista-composicao');
