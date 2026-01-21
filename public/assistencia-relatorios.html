@@ -6,118 +6,116 @@
     <title>Cáritas - Relatório de Gestão Social</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <style>
-        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #f4f6f9; padding: 40px; }
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #f4f6f9; padding: 20px; }
         .nav-header { max-width: 1000px; margin: 0 auto 20px auto; display: flex; justify-content: space-between; align-items: center; }
         .btn-voltar { background: #6c757d; color: white; padding: 10px 15px; border-radius: 8px; text-decoration: none; font-weight: bold; font-size: 0.9em; }
         
+        /* Painel de Filtros */
+        .filtros-painel { background: #fff; padding: 20px; max-width: 1000px; margin: 0 auto 20px auto; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.05); display: flex; gap: 15px; align-items: flex-end; flex-wrap: wrap; }
+        .form-filtro { display: flex; flex-direction: column; gap: 5px; }
+        .form-filtro label { font-size: 0.75em; font-weight: bold; color: #666; text-transform: uppercase; }
+        .form-filtro input { padding: 10px; border: 1px solid #ddd; border-radius: 6px; font-size: 0.9em; }
+        .btn-filtrar { background: #e67e22; color: white; border: none; padding: 11px 20px; border-radius: 6px; cursor: pointer; font-weight: bold; transition: 0.3s; }
+
         .folha { background: white; padding: 50px; max-width: 1000px; margin: 0 auto; border-radius: 8px; box-shadow: 0 0 20px rgba(0,0,0,0.1); position: relative; }
-        
-        .btn-imprimir { background: #2c3e50; color: white; border: none; padding: 12px 25px; border-radius: 8px; cursor: pointer; font-weight: bold; margin-bottom: 30px; display: flex; align-items: center; gap: 10px; transition: 0.3s; }
-        .btn-imprimir:hover { background: #1a252f; }
+        .btn-imprimir { background: #2c3e50; color: white; border: none; padding: 12px 25px; border-radius: 8px; cursor: pointer; font-weight: bold; margin-bottom: 30px; display: flex; align-items: center; gap: 10px; }
 
         .header { text-align: center; border-bottom: 2px solid #2c3e50; padding-bottom: 20px; margin-bottom: 30px; }
         .header img { height: 60px; margin-bottom: 10px; }
         .header h2 { margin: 0; color: #2c3e50; text-transform: uppercase; }
-        .header p { margin: 5px 0 0 0; color: #7f8c8d; font-weight: bold; }
+        .header p { margin: 5px 0 0 0; color: #7f8c8d; font-weight: bold; font-size: 0.9em; }
 
         .grid-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; margin-bottom: 40px; }
-        .card-stat { background: #f8f9fa; padding: 25px; border-radius: 12px; text-align: center; border: 1px solid #eee; }
-        .card-stat h4 { margin: 0; color: #7f8c8d; font-size: 0.8em; text-transform: uppercase; letter-spacing: 1px; }
-        .card-stat p { margin: 10px 0 0 0; font-size: 2.2em; font-weight: bold; color: #e67e22; }
+        .card-stat { background: #f8f9fa; padding: 20px; border-radius: 12px; text-align: center; border: 1px solid #eee; }
+        .card-stat h4 { margin: 0; color: #7f8c8d; font-size: 0.75em; text-transform: uppercase; }
+        .card-stat p { margin: 10px 0 0 0; font-size: 2em; font-weight: bold; color: #e67e22; }
 
-        h3 { color: #2c3e50; border-left: 5px solid #e67e22; padding-left: 15px; margin: 40px 0 20px 0; font-size: 1.2em; }
+        h3 { color: #2c3e50; border-left: 5px solid #e67e22; padding-left: 15px; margin: 40px 0 20px 0; font-size: 1.1em; }
+        table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+        th { background: #f2f2f2; padding: 12px; text-align: left; font-size: 0.8em; color: #666; text-transform: uppercase; border-bottom: 2px solid #ddd; }
+        td { padding: 12px; border-bottom: 1px solid #eee; font-size: 0.85em; color: #333; vertical-align: top; }
         
-        table { width: 100%; border-collapse: collapse; margin-top: 10px; background: white; }
-        th { background: #f2f2f2; padding: 12px; text-align: left; font-size: 0.85em; color: #666; text-transform: uppercase; border-bottom: 2px solid #ddd; }
-        td { padding: 12px; border-bottom: 1px solid #eee; font-size: 0.9em; color: #333; vertical-align: top; }
-        
-        .alerta-val { color: #e67e22; font-weight: bold; }
-        .badge-entrada { background: #e8f5e9; color: #2e7d32; padding: 4px 8px; border-radius: 4px; font-weight: bold; font-size: 0.8em; }
-        .badge-saida { background: #fff3e0; color: #e67e22; padding: 4px 8px; border-radius: 4px; font-weight: bold; font-size: 0.8em; }
-
         .obs-texto { font-style: italic; color: #666; font-size: 0.85em; display: block; margin-top: 5px; }
+        .badge-entrada { background: #e8f5e9; color: #2e7d32; padding: 3px 6px; border-radius: 4px; font-weight: bold; font-size: 0.75em; }
 
-        footer { margin-top: 60px; text-align: center; font-size: 0.8em; color: #999; border-top: 1px solid #eee; padding-top: 20px; }
+        footer { margin-top: 60px; text-align: center; font-size: 0.75em; color: #999; border-top: 1px solid #eee; padding-top: 20px; }
 
+        /* Ajustes de Impressão com a correção de compatibilidade */
         @media print {
             body { padding: 0; background: white; }
-            .btn-imprimir, .btn-voltar, .nav-header { display: none !important; }
-            .folha { box-shadow: none; max-width: 100%; padding: 20px; border: none; }
-            th { background: #eee !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+            .btn-imprimir, .btn-voltar, .nav-header, .filtros-painel { display: none !important; }
+            .folha { box-shadow: none; max-width: 100%; padding: 0; border: none; }
+            th { 
+                background: #eee !important; 
+                -webkit-print-color-adjust: exact; /* Prefixo Webkit */
+                print-color-adjust: exact;         /* Propriedade Padrão (CORREÇÃO) */
+            }
         }
     </style>
 </head>
 <body>
 
     <div class="nav-header">
-        <a href="/modulo-caritas.html" class="btn-voltar"><i class="fas fa-arrow-left"></i> Voltar ao Painel</a>
+        <a href="/modulo-caritas.html" class="btn-voltar"><i class="fas fa-arrow-left"></i> Painel Cáritas</a>
+    </header>
+
+    <div class="filtros-painel">
+        <div class="form-filtro">
+            <label>Data de Início</label>
+            <input type="date" id="data-inicio">
+        </div>
+        <div class="form-filtro">
+            <label>Data de Término</label>
+            <input type="date" id="data-fim">
+        </div>
+        <button class="btn-filtrar" onclick="carregarRelatorio()">
+            <i class="fas fa-filter"></i> ATUALIZAR RELATÓRIO
+        </button>
     </div>
 
     <div class="folha">
         <button class="btn-imprimir" onclick="window.print()">
-            <i class="fas fa-print"></i> IMPRIMIR RELATÓRIO DE GESTÃO
+            <i class="fas fa-print"></i> IMPRIMIR ESTA VISÃO
         </button>
 
         <header class="header">
             <img src="/logo-cepat.png" alt="Logo CEPAT">
-            <h2>Relatório de Gestão Social - Cáritas</h2>
-            <p id="label-competencia">Resumo de Atividades, Doações e Entregas</p>
+            <h2>Gestão Social - Cáritas</h2>
+            <p>Período: <span id="label-periodo">Todos os registros</span></p>
         </header>
 
         <section class="grid-stats">
             <div class="card-stat"><h4>Famílias Ativas</h4><p id="rep-familias">0</p></div>
-            <div class="card-stat"><h4>Entregas no Mês</h4><p id="rep-cestas">0</p></div>
-            <div class="card-stat"><h4>Itens em Estoque</h4><p id="rep-itens">0</p></div>
+            <div class="card-stat"><h4>Total de Entregas</h4><p id="rep-cestas">0</p></div>
+            <div class="card-stat"><h4>Itens no Estoque</h4><p id="rep-itens">0</p></div>
         </section>
 
         <section>
-            <h3><i class="fas fa-shopping-basket"></i> Relatório de Entregas (Cestas e Kits)</h3>
+            <h3><i class="fas fa-shopping-basket"></i> Registro de Atendimento e Entregas</h3>
             <table id="tabela-entregas">
                 <thead>
                     <tr>
-                        <th style="width: 15%;">Data</th>
-                        <th style="width: 25%;">Família</th>
-                        <th>Conteúdo Entregue / Observações</th>
+                        <th style="width: 12%;">Data</th>
+                        <th style="width: 25%;">Responsável</th>
+                        <th>Conteúdo e Observações de Entrega</th>
                     </tr>
                 </thead>
-                <tbody>
-                    <tr><td colspan="3" style="text-align:center; color:#999;">Buscando histórico de auxílio...</td></tr>
-                </tbody>
+                <tbody></tbody>
             </table>
         </section>
 
         <section>
-            <h3><i class="fas fa-hand-holding-heart"></i> Entradas de Doações (Logs de Estoque)</h3>
+            <h3><i class="fas fa-hand-holding-heart"></i> Entradas e Doações Recebidas</h3>
             <table id="tabela-doacoes">
                 <thead>
                     <tr>
-                        <th>Data</th>
+                        <th style="width: 12%;">Data</th>
                         <th>Doador / Origem</th>
-                        <th>Item</th>
-                        <th>Qtd</th>
-                        <th>Status</th>
+                        <th>Item e Quantidade</th>
+                        <th style="width: 10%;">Tipo</th>
                     </tr>
                 </thead>
-                <tbody>
-                    <tr><td colspan="5" style="text-align:center; color:#999;">Analisando registros de entrada...</td></tr>
-                </tbody>
-            </table>
-        </section>
-
-        <section>
-            <h3><i class="fas fa-exclamation-circle"></i> Alerta de Estoque Próximo ao Vencimento</h3>
-            <table id="tabela-vencimentos">
-                <thead>
-                    <tr>
-                        <th>Produto</th>
-                        <th>Validade</th>
-                        <th>Saldo Atual</th>
-                        <th>Recomendação</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    <tr><td colspan="4" style="text-align:center; color:#999;">Verificando prazos...</td></tr>
-                </tbody>
+                <tbody></tbody>
             </table>
         </section>
 
@@ -134,89 +132,79 @@
         const firebaseConfig = { apiKey: "AIzaSyBV7RPjk3cFTqL-aIpflJcUojKg1ZXMLuU", authDomain: "voluntarios-ativos---cepat.firebaseapp.com", projectId: "voluntarios-ativos---cepat", storageBucket: "voluntarios-ativos---cepat.firebasestorage.app", messagingSenderId: "66122858261", appId: "1:66122858261:web:7fa21f1805463b5c08331c" };
         const db = getFirestore(initializeApp(firebaseConfig));
 
+        window.onload = () => {
+            const agora = new Date();
+            const primeiroDia = new Date(agora.getFullYear(), agora.getMonth(), 1).toISOString().split('T')[0];
+            const hoje = agora.toISOString().split('T')[0];
+            document.getElementById('data-inicio').value = primeiroDia;
+            document.getElementById('data-fim').value = hoje;
+        };
+
         protegerPagina(['super-admin','diretor','caritas']).then(() => {
             document.getElementById('data-geracao').innerText = new Date().toLocaleString('pt-BR');
             carregarRelatorio();
         });
 
         async function carregarRelatorio() {
-            const agora = new Date();
-            const inicioMes = Timestamp.fromDate(new Date(agora.getFullYear(), agora.getMonth(), 1));
+            const strInicio = document.getElementById('data-inicio').value;
+            const strFim = document.getElementById('data-fim').value;
+
+            const dtInicio = Timestamp.fromDate(new Date(strInicio + "T00:00:00"));
+            const dtFim = Timestamp.fromDate(new Date(strFim + "T23:59:59"));
+
+            document.getElementById('label-periodo').innerText = `${new Date(strInicio + "T00:00:00").toLocaleDateString('pt-BR')} até ${new Date(strFim + "T00:00:00").toLocaleDateString('pt-BR')}`;
 
             try {
-                // 1. Estatísticas Gerais
                 const snapFams = await getDocs(query(collection(db, "familiasAssistidas"), where("statusGeral", "==", "Ativa")));
                 document.getElementById('rep-familias').innerText = snapFams.size;
 
-                const snapEntregas = await getDocs(query(collection(db, "entregasCestas"), where("data", ">=", inicioMes), orderBy("data", "desc")));
+                const snapItens = await getDocs(collection(db, "estoque_caritas"));
+                document.getElementById('rep-itens').innerText = snapItens.size;
+
+                const qEntregas = query(collection(db, "entregasCestas"), where("data", ">=", dtInicio), where("data", "<=", dtFim), orderBy("data", "desc"));
+                const snapEntregas = await getDocs(qEntregas);
                 document.getElementById('rep-cestas').innerText = snapEntregas.size;
 
-                const snapEstoque = await getDocs(collection(db, "estoque_caritas"));
-                document.getElementById('rep-itens').innerText = snapEstoque.size;
-
-                // 2. Tabela de Entregas (Cestas e Kits)
                 let htmlEntregas = "";
                 snapEntregas.forEach(doc => {
                     const e = doc.data();
                     htmlEntregas += `
                         <tr>
                             <td>${e.data.toDate().toLocaleDateString('pt-BR')}</td>
-                            <td><strong>${e.responsavel || 'Família'}</strong></td>
+                            <td><strong>${e.responsavel}</strong></td>
                             <td>
-                                <b>Itens:</b> ${e.itens ? e.itens.join(", ") : 'Cesta Padrão'}
-                                ${e.observacoes ? `<span class="obs-texto"><b>Obs:</b> ${e.observacoes}</span>` : ''}
+                                <b>Kit:</b> ${e.itens ? e.itens.join(", ") : "Cesta Padrão"}
+                                ${e.observacoes ? `<span class="obs-texto"><b>Nota:</b> ${e.observacoes}</span>` : ""}
                             </td>
                         </tr>`;
                 });
-                document.getElementById('tabela-entregas').querySelector('tbody').innerHTML = htmlEntregas || "<tr><td colspan='3' style='text-align:center;'>Nenhuma entrega realizada este mês.</td></tr>";
+                document.getElementById('tabela-entregas').querySelector('tbody').innerHTML = htmlEntregas || "<tr><td colspan='3' style='text-align:center;'>Nenhuma entrega neste período.</td></tr>";
 
-                // 3. Histórico de Entradas (Doações)
-                // Busca ações de entrada de estoque
-                const qLogs = query(collection(db, "log_auditoria"), where("acao", "in", ["ENTRADA", "ENTRADA_ESTOQUE"]), orderBy("timestamp", "desc"));
+                const qLogs = query(collection(db, "log_auditoria"), where("timestamp", ">=", dtInicio), where("timestamp", "<=", dtFim), where("acao", "in", ["ENTRADA", "ENTRADA_ESTOQUE"]), orderBy("timestamp", "desc"));
                 const snapLogs = await getDocs(qLogs);
+                
                 let htmlDoacoes = "";
-
                 snapLogs.forEach(doc => {
                     const l = doc.data();
-                    const det = l.detalhes || "";
-                    
-                    // Extração flexível dos dados do log
-                    const doador = det.includes('Doador:') ? det.split('Doador:')[1].split('.')[0].trim() : "Doador não identificado";
-                    const itemEQuant = det.includes(':') ? det.split(':')[1].trim() : det;
+                    const doador = l.detalhes.includes('Doador:') ? l.detalhes.split('Doador:')[1].split('.')[0].trim() : "Origem não citada";
+                    const item = l.detalhes.includes(':') ? l.detalhes.split(':')[1].trim() : l.detalhes;
 
                     htmlDoacoes += `
                         <tr>
                             <td>${l.timestamp.toDate().toLocaleDateString('pt-BR')}</td>
                             <td><strong>${doador}</strong></td>
-                            <td colspan="2">${itemEQuant}</td>
+                            <td>${item}</td>
                             <td><span class="badge-entrada">Entrada</span></td>
                         </tr>`;
                 });
-                document.getElementById('tabela-doacoes').querySelector('tbody').innerHTML = htmlDoacoes || "<tr><td colspan='5' style='text-align:center;'>Nenhum log de entrada encontrado.</td></tr>";
-
-                // 4. Analise de Vencimentos
-                let htmlVenc = "";
-                const itensCriticos = snapEstoque.docs.map(d => d.data())
-                    .filter(i => i.validade && i.quantidade > 0)
-                    .sort((a,b) => a.validade.localeCompare(b.validade));
-
-                itensCriticos.forEach(i => {
-                    const dataVenc = i.validade.split('-');
-                    htmlVenc += `
-                        <tr>
-                            <td>${i.nome}</td>
-                            <td class="alerta-val">${dataVenc[2]}/${dataVenc[1]}/${dataVenc[0]}</td>
-                            <td>${i.quantidade} un.</td>
-                            <td><span class="badge-saida">Priorizar Uso</span></td>
-                        </tr>`;
-                });
-                document.getElementById('tabela-vencimentos').querySelector('tbody').innerHTML = htmlVenc || "<tr><td colspan='4' style='text-align:center;'>Tudo em dia. Nenhum item próximo ao vencimento.</td></tr>";
+                document.getElementById('tabela-doacoes').querySelector('tbody').innerHTML = htmlDoacoes || "<tr><td colspan='4' style='text-align:center;'>Nenhuma doação registrada neste período.</td></tr>";
 
             } catch (err) {
-                console.error("Erro ao gerar relatório:", err);
-                alert("Erro ao ler dados do Firebase.");
+                console.error("Erro ao filtrar:", err);
+                alert("Verifique se as datas estão corretas.");
             }
         }
+        window.carregarRelatorio = carregarRelatorio;
     </script>
 </body>
 </html>
