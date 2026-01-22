@@ -31,37 +31,40 @@
         table { width: 100%; border-collapse: separate; border-spacing: 0; font-size: 0.8em; }
         th, td { border: 1px solid #dee2e6; padding: 8px; text-align: center; min-width: 85px; }
 
+        /* INTERCALAÇÃO DE CORES (ZEBRA STRIPING) */
+        /* Aplica cinza leve nas linhas pares */
+        tbody tr:nth-child(even) { background-color: #f2f2f2; }
+        /* Garante que a coluna de nomes (sticky) também fique cinza nas linhas pares */
+        tbody tr:nth-child(even) .nome-col { background-color: #f2f2f2; }
+
         /* Fixação de Cabeçalhos na Tela */
         thead th { position: sticky; top: 0; z-index: 20; background-color: #2c3e50; color: white; }
         thead tr:nth-child(2) th { top: 35px; background-color: #ecf0f1; color: #34495e; z-index: 20; }
+        
+        /* A célula do nome precisa de fundo branco por padrão para o efeito sticky não ser transparente */
         .nome-col { text-align: left; font-weight: bold; min-width: 200px; background-color: #fff; position: sticky; left: 0; z-index: 10; border-right: 3px solid #0277BD; }
         th.nome-col { z-index: 30; top: 0; left: 0; background-color: #34495e; }
 
         .check-box { width: 20px; height: 20px; cursor: pointer; }
-        .print-only-x { display: none; } /* Escondido na tela, aparece no papel */
+        .print-only-x { display: none; }
 
         #acesso-negado { display: none; text-align: center; padding: 50px; }
 
-        /* ============================================================
-           REGRAS DE IMPRESSÃO OTIMIZADAS (PODE COPIAR EXATAMENTE)
-        ============================================================ */
+        /* REGRAS DE IMPRESSÃO */
         @media print {
             @page { size: landscape; margin: 0.5cm; }
-            body { background-color: white; padding: 0; margin: 0; zoom: 0.65; /* Reduz a escala para caber o mês inteiro */ }
+            body { background-color: white; padding: 0; margin: 0; zoom: 0.65; }
             .nav-voltar, .controles, .btn-acao { display: none !important; }
             .container { box-shadow: none; border: none; width: 100%; max-width: 100%; padding: 0; margin: 0; }
             .table-responsive { max-height: none !important; overflow: visible !important; border: none; }
-            
             table { font-size: 8pt; width: 100%; border-collapse: collapse; table-layout: auto; }
             th, td { border: 1px solid #000 !important; padding: 3px !important; word-wrap: break-word; }
-            
-            /* Remove a fixação para o papel fluir corretamente entre páginas */
             thead th, .nome-col { position: static !important; background-color: #f0f0f0 !important; color: black !important; border-right: 1px solid #000 !important; }
             .nome-col { min-width: 140px !important; width: 140px !important; }
-
-            /* Lógica para mostrar "X" no lugar do checkbox */
             .check-box { display: none !important; }
             .print-only-x { display: block !important; font-weight: bold; font-size: 10pt; color: black; }
+            /* Mantém as listras na impressão para ajudar a leitura no papel */
+            tbody tr:nth-child(even) { background-color: #eee !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
         }
     </style>
 </head>
@@ -120,15 +123,7 @@
         import { getFirestore, collection, getDocs, doc, getDoc, setDoc, query, where, orderBy } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
         import { protegerPagina } from '/auth.js';
 
-        const firebaseConfig = {
-            apiKey: "AIzaSyBV7RPjk3cFTqL-aIpflJcUojKg1ZXMLuU",
-            authDomain: "voluntarios-ativos---cepat.firebaseapp.com",
-            projectId: "voluntarios-ativos---cepat",
-            storageBucket: "voluntarios-ativos---cepat.firebasestorage.app",
-            messagingSenderId: "66122858261",
-            appId: "1:66122858261:web:7fa21f1805463b5c08331c"
-        };
-
+        const firebaseConfig = { apiKey: "AIzaSyBV7RPjk3cFTqL-aIpflJcUojKg1ZXMLuU", authDomain: "voluntarios-ativos---cepat.firebaseapp.com", projectId: "voluntarios-ativos---cepat", storageBucket: "voluntarios-ativos---cepat.firebasestorage.app", messagingSenderId: "66122858261", appId: "1:66122858261:web:7fa21f1805463b5c08331c" };
         const app = initializeApp(firebaseConfig);
         const db = getFirestore(app);
 
@@ -213,7 +208,6 @@
                     d.jobs.forEach(j => {
                         const key = `${d.id}_${j.replace(/\s+/g, '_')}`;
                         const checked = dados[key] && dados[key].includes(m.id) ? 'checked' : '';
-                        // Adicionado o span .print-only-x para garantir que o X apareça na impressão
                         bodyHtml += `<td>
                             <input type="checkbox" class="check-box" data-uid="${m.id}" data-key="${key}" ${checked}>
                             <span class="print-only-x">${checked ? 'X' : ''}</span>
