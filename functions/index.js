@@ -341,7 +341,7 @@ exports.revogarAcessoSecretarioEscola = onCall(OPCOES_FUNCAO, async (request) =>
 // ### FIM DO AJUSTE 2 ###
 
 // ===================================================================
-// ## MÓDULO CÁRITAS: Promover e Revogar Acesso (CORRIGIDO) ##
+// ## MÓDULO CÁRITAS: Promover e Revogar Acesso (CORRIGIDO1S) ##
 // ===================================================================
 
 exports.promoverParaCaritas = onCall(OPCOES_FUNCAO, async (request) => {
