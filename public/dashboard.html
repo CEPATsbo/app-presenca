@@ -55,7 +55,7 @@
             gap: 25px;
             width: 100%;
             max-width: 1000px;
-            display: none; /* Inicia escondido, exibido pelo JS */
+            display: none; /* Exibido pelo JS após verificar login */
         }
         .card {
             background-color: white;
@@ -68,9 +68,6 @@
             transition: transform 0.2s, box-shadow 0.2s;
             position: relative;
             border-left: 5px solid transparent;
-        }
-        .card.hidden {
-            display: none; 
         }
         .card:hover {
             transform: translateY(-5px);
@@ -126,6 +123,15 @@
             justify-content: center;
             font-weight: bold;
             font-size: 0.9em;
+        }
+        .badge-live {
+            background-color: #27ae60;
+            color: white;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-size: 0.6em;
+            vertical-align: middle;
+            text-transform: uppercase;
         }
     </style>
 </head>
@@ -271,7 +277,7 @@
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
         import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-auth.js";
-        import { getFirestore, collection, query, where, onSnapshot, Timestamp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
+        import { getFirestore, collection, query, where, onSnapshot } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
 
         const firebaseConfig = {
             apiKey: "AIzaSyBV7RPjk3cFTqL-aIpflJcUojKg1ZXMLuU",
@@ -288,18 +294,25 @@
 
         onAuthStateChanged(auth, (user) => {
             if (user) {
+                // Força o refresh dos Custom Claims para garantir que o cargo 'caritas' seja lido corretamente
                 user.getIdTokenResult(true).then((idTokenResult) => {
-                    const userRole = idTokenResult.claims.role || 'voluntario';
+                    const claims = idTokenResult.claims || {};
+                    const userRole = claims.role || 'voluntario';
                     
                     document.querySelectorAll('.card').forEach(card => {
                         const rolesPermitidas = card.dataset.role.split(',');
 
-                        if (userRole === 'super-admin' || rolesPermitidas.includes(userRole)) {
+                        // Lógica Reforçada: Verifica o campo 'role' OU o claim booleano direto
+                        const temAcessoPeloRole = (userRole === 'super-admin' || rolesPermitidas.includes(userRole));
+                        const temAcessoPeloClaim = rolesPermitidas.some(role => claims[role] === true);
+
+                        if (temAcessoPeloRole || temAcessoPeloClaim) {
                             card.style.display = 'block';
                         } else {
                             card.style.display = 'none';
                         }
                     });
+
                     document.getElementById('main-content').style.display = 'grid';
 
                     const cardAE = document.getElementById('card-assistencia-espiritual');
@@ -322,7 +335,6 @@
 
         function monitorarEntrevistasPendentes() {
             const atendimentosRef = collection(db, 'atendimentos_ae');
-
             const qPendentes = query(
                 atendimentosRef,
                 where("detalhes_preenchidos", "==", false),
@@ -338,19 +350,13 @@
         }
 
         function atualizarCardNotificacao(count) {
-            const card = document.getElementById('card-assistencia-espiritual');
             const status = document.getElementById('card-ae-status');
             const warning = document.getElementById('card-ae-warning');
             const badge = document.getElementById('card-ae-badge');
 
-            if (!card || !status || !warning || !badge) {
-                console.error("Elementos do card AE não encontrados.");
-                return;
-            }
+            if (!status || !warning || !badge) return;
 
             status.textContent = 'Gerenciar todo o fluxo de atendimento Fraterno.';
-            card.style.borderLeftColor = '#2ecc71';
-
             if (count > 0) {
                 warning.textContent = `Atenção: ${count} entrevista(s) aguardando preenchimento.`;
                 warning.style.display = 'block';
