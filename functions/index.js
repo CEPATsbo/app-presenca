@@ -347,15 +347,14 @@ exports.revogarAcessoSecretarioEscola = onCall(OPCOES_FUNCAO, async (request) =>
 exports.promoverParaCaritas = onCall(OPCOES_FUNCAO, async (request) => {
     if (!request.auth) throw new HttpsError('unauthenticated', 'Login necessário.');
     
-    // Ajustado para 'uid', que é o que o seu front-end envia
     const { uid } = request.data; 
     const adminUid = request.auth.uid;
 
     if (!uid) throw new HttpsError('invalid-argument', 'O UID do voluntário é obrigatório.');
 
     try {
-        // 1. Define o Custom Claim no Firebase Auth
-        await admin.auth().setCustomUserClaims(uid, { caritas: true });
+        // ### AJUSTE: Grava como 'role' para manter consistência com o Dashboard ###
+        await admin.auth().setCustomUserClaims(uid, { role: 'caritas' });
 
         // 2. Busca o documento do voluntário no Firestore pelo authUid
         const voluntarioQuery = await db.collection('voluntarios').where('authUid', '==', uid).limit(1).get();
