@@ -82,7 +82,6 @@ let currentUserId = null;
 let cachedAtividades = null;
 let currentTurmaIdModal = null;
 let currentAulaIdModal = null;
-// ## VARIÁVEIS TRANSPLANTADAS DE PAINEL.JS ##
 let detalhesPendenciasCantina = [];
 let detalhesPendenciasBiblioteca = [];
 let detalhesEmprestimos = [];
@@ -119,10 +118,8 @@ onAuthStateChanged(auth, async (user) => {
                 moduleInformativo.classList.remove('hidden');
                 await carregarMinhaEscala(currentUserId);
             } else {
-                // Se não for médium, esconde o slide da escala e a navegação
                 document.getElementById('slide-escala').style.display = 'none';
                 document.getElementById('carousel-nav').classList.add('hidden');
-                // Mostra o carrossel (apenas mural) se houver mensagem
                 if (muralContent.innerText.trim() !== "" && muralContent.innerText !== "Carregando avisos...") {
                     moduleInformativo.classList.remove('hidden');
                 }
@@ -177,9 +174,8 @@ async function carregarMinhaEscala(userId) {
         const dados = snap.data().escalados || {};
         let meusTrabalhos = [];
 
-        // Filtra chaves no formato YYYY-MM-DD_Trabalho
         for (const [chave, listaUids] of Object.entries(dados)) {
-            const dataString = chave.split('_')[0]; // Pega o YYYY-MM-DD
+            const dataString = chave.split('_')[0];
             if (listaUids.includes(userId) && dataString >= hojeIso) {
                 meusTrabalhos.push({
                     data: dataString,
@@ -228,7 +224,7 @@ async function processarPapeisEExibirModulos(userId, userData, isAluno, isFacili
 
     const promises = [
         carregarModuloAcoesDoDia(userId, userData),
-        carregarModuloPessoal(userId, userData) // Agora carrega o módulo pessoal completo
+        carregarModuloPessoal(userId, userData)
     ]; 
 
     if (isAluno) {
@@ -260,35 +256,40 @@ async function verificarPapelFacilitador(userId) {
     return !snapshot.empty;
 }
 
+// CORREÇÃO: Função com Fallback para Voluntário Básico
 async function verificarPapelAdmin(user) {
     try {
-        const idTokenResult = await user.getIdTokenResult(true); // Força refresh do token
-        const claims = idTokenResult.claims || {}; // Pega o objeto claims inteiro
+        const idTokenResult = await user.getIdTokenResult(true);
+        const claims = idTokenResult.claims || {};
 
-        // ### AJUSTE AQUI: Lista de todos os cargos que devem ver o card "Acesso Administrativo" ###
-        const rolesComAcessoAdmin = ['super-admin', 'voluntario', 'diretor', 'entrevistador', 'bibliotecario', 'produtor-evento', 'conselheiro', 'irradiador', 'dirigente-escola', 'secretario-escola', 'recepcionista', 'tesoureiro', 'caritas'];
+        // Se o role estiver vazio (usuário novo), assumimos 'voluntario'
+        const userRole = claims.role || 'voluntario';
 
-        // Verifica se o 'role' principal está na lista OU se algum claim booleano relevante é true
+        const rolesComAcessoAdmin = [
+            'super-admin', 'voluntario', 'diretor', 'entrevistador', 'bibliotecario', 
+            'produtor-evento', 'conselheiro', 'irradiador', 'dirigente-escola', 
+            'secretario-escola', 'recepcionista', 'tesoureiro', 'caritas'
+        ];
+
         let temAcessoAdmin = false;
-        if (rolesComAcessoAdmin.includes(claims.role)) {
+        if (rolesComAcessoAdmin.includes(userRole)) {
             temAcessoAdmin = true;
         } else {
             for (const role of rolesComAcessoAdmin) {
-                // Verifica se existe um claim com o nome do cargo e se ele é true
                 if (claims[role] === true) {
                     temAcessoAdmin = true;
-                    break; // Encontrou um, pode parar
+                    break;
                 }
             }
         }
-
         return temAcessoAdmin;
 
     } catch (error) {
-        console.error("Erro ao verificar papel de admin no Meu CEPAT:", error);
-        return false; // Retorna false em caso de erro ao ler claims
+        console.error("Erro ao verificar papel de admin:", error);
+        return false;
     }
 }
+
 // --- LÓGICA DO MÓDULO ALUNO ---
 async function carregarModuloAluno(userId) {
     alunoContent.innerHTML = "<p>Buscando seus cursos...</p>";
@@ -588,7 +589,7 @@ async function salvarPresencaLogado(event) {
 // ## BLOCO TRANSPLANTADO E ADAPTADO DE PAINEL.JS ##
 // ===================================================================
 async function carregarModuloPessoal(userId, userData) {
-    pessoalContent.innerHTML = ''; // Limpa o "carregando"
+    pessoalContent.innerHTML = ''; 
 
     // Card 1: Meu Perfil
     const perfilCard = document.createElement('div');
@@ -625,12 +626,10 @@ async function carregarModuloPessoal(userId, userData) {
     `;
     pessoalContent.appendChild(historicoCard);
 
-    // Adiciona os eventos aos links recém-criados
     document.getElementById('link-editar-dados').addEventListener('click', abrirModalEdicao);
     document.getElementById('link-ver-detalhes').addEventListener('click', () => { preencherModalDetalhes(); modalOverlayDetalhes.classList.add('visible'); });
     document.getElementById('link-ver-historico').addEventListener('click', carregarHistoricoDePresenca);
 
-    // Dispara a busca pelas pendências
     await buscarPendenciasEEmprestimos(userId);
 }
 
@@ -744,7 +743,7 @@ async function salvarAlteracoesPerfil(event) {
         const voluntarioDocRef = doc(db, "voluntarios", currentUserId);
         await updateDoc(voluntarioDocRef, dadosAtualizados);
         currentUserData = { ...currentUserData, ...dadosAtualizados };
-        await carregarModuloPessoal(currentUserId, currentUserData); // Recarrega o módulo pessoal
+        await carregarModuloPessoal(currentUserId, currentUserData); 
         alert("Dados atualizados com sucesso!");
         modalOverlayEditarPerfil.classList.remove('visible');
     } catch (error) {
@@ -783,14 +782,11 @@ async function carregarHistoricoDePresenca() {
 // ===================================================================
 // ## LÓGICA DO TASV DIGITAL (TERMO DE ADESÃO) ##
 // ===================================================================
-
-// Elementos do TASV
 const modalTasv = document.getElementById('modal-tasv');
 const checkAceiteTasv = document.getElementById('check-aceite-tasv');
 const btnAssinarTasv = document.getElementById('btn-assinar-tasv');
 const spanTasvAno = document.getElementById('tasv-ano-atual');
 
-// 1. Função para verificar se o voluntário deve assinar
 async function verificarPendenciaTASV(userData, userId) {
     const anoAtual = new Date().getFullYear();
     if (userData.tasvAssinadoAno !== anoAtual) {
@@ -798,7 +794,6 @@ async function verificarPendenciaTASV(userData, userId) {
     }
 }
 
-// 2. Função para abrir o Modal (Bloqueante)
 function abrirModalTASV(ano) {
     if (spanTasvAno) spanTasvAno.textContent = ano;
     if (modalTasv) {
@@ -811,7 +806,6 @@ function abrirModalTASV(ano) {
     }
 }
 
-// 3. Listener do Checkbox (Habilita o botão)
 if (checkAceiteTasv) {
     checkAceiteTasv.addEventListener('change', (e) => {
         if (e.target.checked) {
@@ -824,7 +818,6 @@ if (checkAceiteTasv) {
     });
 }
 
-// 4. Ação de Assinar (Salvar no Banco e Log)
 if (btnAssinarTasv) {
     btnAssinarTasv.addEventListener('click', async () => {
         if (!currentUserId || !currentUserData) return;
@@ -858,9 +851,6 @@ if (btnAssinarTasv) {
         }
     });
 }
-// ===================================================================
-// ## FIM DO BLOCO TRANSPLANTADO ##
-// ===================================================================
 
 // --- EVENTOS ---
 btnLogout.addEventListener('click', async (e) => {
