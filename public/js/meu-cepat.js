@@ -266,7 +266,7 @@ async function verificarPapelAdmin(user) {
         const claims = idTokenResult.claims || {}; // Pega o objeto claims inteiro
 
         // ### AJUSTE AQUI: Lista de todos os cargos que devem ver o card "Acesso Administrativo" ###
-        const rolesComAcessoAdmin = ['super-admin', 'diretor', 'entrevistador', 'bibliotecario', 'produtor-evento', 'conselheiro', 'irradiador', 'dirigente-escola', 'secretario-escola', 'recepcionista', 'tesoureiro', 'caritas'];
+        const rolesComAcessoAdmin = ['super-admin', 'voluntario', 'diretor', 'entrevistador', 'bibliotecario', 'produtor-evento', 'conselheiro', 'irradiador', 'dirigente-escola', 'secretario-escola', 'recepcionista', 'tesoureiro', 'caritas'];
 
         // Verifica se o 'role' principal está na lista OU se algum claim booleano relevante é true
         let temAcessoAdmin = false;
