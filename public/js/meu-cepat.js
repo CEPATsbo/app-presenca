@@ -36,28 +36,24 @@ const diaContent = document.getElementById('dia-content');
 const presencaCardContent = document.getElementById('presenca-card-content');
 const pessoalContent = document.getElementById('pessoal-content');
 
-// Elementos do Carrossel Informativo
 const moduleInformativo = document.getElementById('module-informativo');
 const carouselInner = document.getElementById('carousel-inner');
 const carouselDots = document.querySelectorAll('.dot');
 const muralContent = document.getElementById('mural-content');
 const escalaContent = document.getElementById('escala-content');
 
-// Modais de Frequência (Facilitador)
 const modalFrequencia = document.getElementById('modal-frequencia');
 const closeModalFrequenciaBtn = document.getElementById('close-modal-frequencia');
 const modalFrequenciaTitulo = document.getElementById('modal-frequencia-titulo');
 const frequenciaListContainer = document.getElementById('frequencia-list-container');
 const btnSalvarFrequencia = document.getElementById('btn-salvar-frequencia');
 
-// Modais de Atividades (Presença)
 const modalAtividades = document.getElementById('modal-atividades-presenca');
 const closeModalAtividadesBtn = document.getElementById('close-modal-atividades');
 const formAtividadesPresenca = document.getElementById('form-atividades-presenca');
 const atividadesModalLista = document.getElementById('atividades-modal-lista');
 const btnConfirmarPresenca = document.getElementById('btn-confirmar-presenca');
 
-// ## ELEMENTOS TRANSPLANTADOS DE PAINEL.JS ##
 const modalOverlayDetalhes = document.getElementById('modal-detalhes');
 const closeModalDetalhesBtn = document.getElementById('close-modal-detalhes');
 const detalhesCantinaContainer = document.getElementById('detalhes-cantina-container');
@@ -75,8 +71,6 @@ const modalOverlayHistorico = document.getElementById('modal-historico');
 const closeModalHistoricoBtn = document.getElementById('close-modal-historico');
 const historyListContainer = document.getElementById('history-list-container');
 
-
-// --- VARIÁVEIS DE ESTADO ---
 let currentUserData = null;
 let currentUserId = null;
 let cachedAtividades = null;
@@ -86,7 +80,6 @@ let detalhesPendenciasCantina = [];
 let detalhesPendenciasBiblioteca = [];
 let detalhesEmprestimos = [];
 
-// --- LÓGICA PRINCIPAL ---
 onAuthStateChanged(auth, async (user) => {
     if (user) {
         mainContainer.style.display = 'block';
@@ -112,7 +105,6 @@ onAuthStateChanged(auth, async (user) => {
                 verificarPendenciaTASV(currentUserData, currentUserId);
             }
 
-            // --- NOVO: LÓGICA DO MURAL E ESCALA ---
             await carregarMural();
             if (currentUserData.isMedium) {
                 moduleInformativo.classList.remove('hidden');
@@ -142,7 +134,6 @@ onAuthStateChanged(auth, async (user) => {
     }
 });
 
-// --- LÓGICA DO MURAL (CONFIGURAÇÕES) ---
 async function carregarMural() {
     try {
         const configRef = doc(db, "configuracoes", "mural");
@@ -155,27 +146,22 @@ async function carregarMural() {
     } catch (e) { console.error("Erro mural:", e); muralContent.innerHTML = ""; }
 }
 
-// --- LÓGICA DA ESCALA MEDIÚNICA INDIVIDUAL ---
 async function carregarMinhaEscala(userId) {
     const hoje = new Date();
     hoje.setHours(0,0,0,0);
     const mesId = `${hoje.getFullYear()}-${String(hoje.getMonth() + 1).padStart(2, '0')}`;
     const hojeIso = hoje.toISOString().split('T')[0];
-
     try {
         const escalaRef = doc(db, "escalas_mediunicas", mesId);
         const snap = await getDoc(escalaRef);
-
         if (!snap.exists()) {
             escalaContent.innerHTML = "<p>A escala deste mês ainda não foi publicada.</p>";
             return;
         }
-
         const dados = snap.data().escalados || {};
         let meusTrabalhos = [];
-
         for (const [chave, listaUids] of Object.entries(dados)) {
-            const dataString = chave.split('_')[0];
+            const dataString = chave.split('_')[0]; 
             if (listaUids.includes(userId) && dataString >= hojeIso) {
                 meusTrabalhos.push({
                     data: dataString,
@@ -183,29 +169,21 @@ async function carregarMinhaEscala(userId) {
                 });
             }
         }
-
         if (meusTrabalhos.length === 0) {
-            escalaContent.innerHTML = "<p>Você não possui trabalhos escalados para o restante deste mês.</p>";
+            escalaContent.innerHTML = "<p>Você não possui trabalhos escalados.</p>";
         } else {
             meusTrabalhos.sort((a, b) => a.data.localeCompare(b.data));
             let html = '<ul class="escala-lista">';
             meusTrabalhos.forEach(t => {
                 const dataBR = t.data.split('-').reverse().join('/');
-                html += `<li class="escala-item">
-                            <span class="escala-data">${dataBR}</span>
-                            <span class="escala-trab">${t.trabalho}</span>
-                         </li>`;
+                html += `<li class="escala-item"><span class="escala-data">${dataBR}</span> <span class="escala-trab">${t.trabalho}</span></li>`;
             });
             html += '</ul>';
             escalaContent.innerHTML = html;
         }
-    } catch (e) {
-        console.error("Erro ao carregar escala:", e);
-        escalaContent.innerHTML = "<p>Não foi possível carregar sua escala.</p>";
-    }
+    } catch (e) { console.error(e); escalaContent.innerHTML = "<p>Erro ao carregar escala.</p>"; }
 }
 
-// --- CONTROLE DO CARROSSEL (DOTS) ---
 carouselDots.forEach(dot => {
     dot.addEventListener('click', () => {
         const index = dot.dataset.slide;
@@ -217,35 +195,17 @@ carouselDots.forEach(dot => {
 
 async function processarPapeisEExibirModulos(userId, userData, isAluno, isFacilitador, isAdmin) {
     loadingMessage.classList.add('hidden');
-    
     moduleDia.classList.remove('hidden');
     modulePessoal.classList.remove('hidden');
     moduleServicos.classList.remove('hidden');
-
-    const promises = [
-        carregarModuloAcoesDoDia(userId, userData),
-        carregarModuloPessoal(userId, userData)
-    ]; 
-
-    if (isAluno) {
-        moduleAluno.classList.remove('hidden');
-        promises.push(carregarModuloAluno(userId));
-    }
-    if (isFacilitador) {
-        moduleFacilitador.classList.remove('hidden');
-        promises.push(carregarModuloFacilitador(userId));
-    }
-    if (isAdmin) {
-        moduleGestao.classList.remove('hidden');
-    }
-    await Promise.all(promises);
+    await Promise.all([carregarModuloAcoesDoDia(userId, userData), carregarModuloPessoal(userId, userData)]); 
+    if (isAluno) { moduleAluno.classList.remove('hidden'); carregarModuloAluno(userId); }
+    if (isFacilitador) { moduleFacilitador.classList.remove('hidden'); carregarModuloFacilitador(userId); }
+    if (isAdmin) { moduleGestao.classList.remove('hidden'); }
 }
 
-
-// --- FUNÇÕES DE VERIFICAÇÃO DE PAPÉIS ---
 async function verificarPapelAluno(userId, origemBusca) {
-    const idParaBuscar = userId; 
-    const q = query(collectionGroup(db, 'participantes'), where('participanteId', '==', idParaBuscar), limit(1));
+    const q = query(collectionGroup(db, 'participantes'), where('participanteId', '==', userId), limit(1));
     const snapshot = await getDocs(q);
     return !snapshot.empty;
 }
@@ -261,8 +221,8 @@ async function verificarPapelAdmin(user) {
     try {
         const idTokenResult = await user.getIdTokenResult(true);
         const claims = idTokenResult.claims || {};
-
-        // Se o role estiver vazio (usuário novo), assumimos 'voluntario'
+        
+        // Se role for nulo, consideramos 'voluntario'
         const userRole = claims.role || 'voluntario';
 
         const rolesComAcessoAdmin = [
@@ -271,24 +231,17 @@ async function verificarPapelAdmin(user) {
             'secretario-escola', 'recepcionista', 'tesoureiro', 'caritas'
         ];
 
-        let temAcessoAdmin = false;
-        if (rolesComAcessoAdmin.includes(userRole)) {
-            temAcessoAdmin = true;
-        } else {
-            for (const role of rolesComAcessoAdmin) {
-                if (claims[role] === true) {
-                    temAcessoAdmin = true;
-                    break;
-                }
-            }
-        }
-        return temAcessoAdmin;
+        if (rolesComAcessoAdmin.includes(userRole)) return true;
 
-    } catch (error) {
-        console.error("Erro ao verificar papel de admin:", error);
+        for (const role of rolesComAcessoAdmin) {
+            if (claims[role] === true) return true;
+        }
         return false;
-    }
+    } catch (error) { console.error(error); return false; }
 }
+
+// ... (Restante das funções de UI e Geolocation preservadas do seu original) ...
+// (Ajustes de UI mantidos: carregarModuloAluno, carregarModuloFacilitador, carregarModuloAcoesDoDia, etc.)
 
 // --- LÓGICA DO MÓDULO ALUNO ---
 async function carregarModuloAluno(userId) {
