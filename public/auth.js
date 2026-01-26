@@ -27,7 +27,7 @@ function atualizarTimestampAtividade() {
 function verificarSessaoExpirada() {
     const ultimaAtividade = localStorage.getItem('ultimaAtividade');
     if (ultimaAtividade && ultimaAtividade !== getHojeString()) {
-        signOut(auth).catch((error) => console.error(error));
+        signOut(auth).catch((error) => console.error("Erro logout:", error));
         return true; 
     }
     return false;
@@ -40,39 +40,49 @@ window.addEventListener('mousemove', atualizarTimestampAtividade);
 export function protegerPagina(rolesPermitidas = []) {
     return new Promise((resolve, reject) => {
         const unsubscribe = onAuthStateChanged(auth, async (user) => {
-            unsubscribe(); 
-            if (user) {
-                if (verificarSessaoExpirada()) {
-                    alert('Sua sessão expirou por segurança.');
-                    window.location.href = `/login.html?redirectUrl=${encodeURIComponent(window.location.pathname)}`;
-                    reject(new Error('Sessão expirada.'));
-                    return; 
-                }
-                atualizarTimestampAtividade();
-                try {
-                    const q = query(collection(db, "voluntarios"), where("authUid", "==", user.uid));
-                    const querySnapshot = await getDocs(q);
-                    if (!querySnapshot.empty) {
-                        user.displayName = querySnapshot.docs[0].data().nome;
-                    }
-
-                    const idTokenResult = await user.getIdTokenResult(true);
-                    const claims = idTokenResult.claims || {};
-                    
-                    // CORREÇÃO: Fallback para Voluntário e suporte a claims individuais
-                    const userRole = claims.role || 'voluntario';
-
-                    const temCargoNecessario = rolesPermitidas.length === 0 || 
-                        rolesPermitidas.includes(userRole) ||
-                        rolesPermitidas.some(role => claims[role] === true) ||
-                        userRole === 'super-admin';
-
-                    if (temCargoNecessario) { resolve(user); } 
-                    else { reject(new Error('Acesso negado: cargo insuficiente.')); }
-                } catch (error) { reject(error); }
-            } else {
-                window.location.href = `/login.html?redirectUrl=${encodeURIComponent(window.location.pathname)}`;
+            if (!user) {
+                const redirectUrl = window.location.pathname;
+                window.location.href = `/login.html?redirectUrl=${encodeURIComponent(redirectUrl)}`;
                 reject(new Error('Usuário não autenticado.'));
+                return;
+            }
+
+            if (verificarSessaoExpirada()) {
+                alert('Sua sessão expirou por segurança.');
+                window.location.href = `/login.html?redirectUrl=${encodeURIComponent(window.location.pathname)}`;
+                reject(new Error('Sessão expirada.'));
+                return; 
+            }
+            
+            atualizarTimestampAtividade();
+
+            try {
+                // Força a atualização do Token para garantir que pegamos o cargo atualizado
+                const idTokenResult = await user.getIdTokenResult(true);
+                const claims = idTokenResult.claims || {};
+                user.claims = claims;
+
+                // Lógica de fallback: se não houver role, é voluntário
+                const userRole = claims.role || 'voluntario';
+
+                // Super Admin sempre tem acesso total
+                if (userRole === 'super-admin') {
+                    resolve(user);
+                    return;
+                }
+
+                const temCargoNecessario = rolesPermitidas.length === 0 || 
+                    rolesPermitidas.includes(userRole) ||
+                    rolesPermitidas.some(role => claims[role] === true);
+
+                if (temCargoNecessario) {
+                    resolve(user);
+                } else {
+                    reject(new Error('Acesso negado: cargo insuficiente.'));
+                }
+            } catch (error) {
+                console.error("Erro na proteção de página:", error);
+                reject(error);
             }
         });
     });
