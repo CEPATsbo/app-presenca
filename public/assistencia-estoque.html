@@ -195,18 +195,46 @@
             }
         }
 
+        // ## FUNÇÃO ATUALIZADA: Exibe Validade e Alerta de Margem de Segurança ##
         function renderizarListaEstoque() {
-            document.getElementById('lista-produtos').innerHTML = itensEstoque.map(i => `
+            const hoje = new Date();
+            const margemSeguranca = new Date();
+            margemSeguranca.setDate(hoje.getDate() + 30); // Define 30 dias de margem
+
+            document.getElementById('lista-produtos').innerHTML = itensEstoque.map(i => {
+                const validadeDate = i.validade ? new Date(i.validade) : null;
+                let styleValidade = "color: var(--grey);";
+                let textoAlerta = "";
+
+                if (validadeDate) {
+                    if (validadeDate < hoje) {
+                        styleValidade = "color: var(--red); font-weight: bold;";
+                        textoAlerta = " [⚠️ VENCIDO]";
+                    } else if (validadeDate < margemSeguranca) {
+                        styleValidade = "color: var(--orange); font-weight: bold;";
+                        textoAlerta = " [⚠️ VALIDADE CURTA]";
+                    }
+                }
+
+                const validadeFormatada = i.validade ? i.validade.split('-').reverse().join('/') : "N/D";
+
+                return `
                 <div class="estoque-item">
-                    <div><b>${i.nome}</b><p>Saldo: ${i.quantidade} un.</p></div>
+                    <div>
+                        <b style="font-size: 1.1em;">${i.nome}</b>
+                        <p style="margin: 5px 0 0 0; font-size: 0.85em; ${styleValidade}">
+                            Validade: ${validadeFormatada}${textoAlerta}
+                        </p>
+                        <p style="margin: 2px 0 0 0; font-size: 0.9em; color: var(--grey);">Saldo: ${i.quantidade} un.</p>
+                    </div>
                     <div class="controles">
                         <button class="btn-ajuste" style="background:var(--red)" onclick="ajustarEstoque('${i.id}', -1, '${i.nome}')">-</button>
                         <span style="font-weight:bold; min-width:30px; text-align:center;">${i.quantidade}</span>
                         <button class="btn-ajuste" style="background:var(--green)" onclick="ajustarEstoque('${i.id}', 1, '${i.nome}')">+</button>
                         <button onclick="abrirEdicaoItem('${i.id}')" style="background:none; border:none; color:var(--primary); cursor:pointer;"><i class="fas fa-edit"></i></button>
                     </div>
-                </div>
-            `).join('');
+                </div>`;
+            }).join('');
         }
 
         function calcularProximoDomingoSocial() {
@@ -263,7 +291,6 @@
                         <input type="number" class="input-receita" data-id="${id}" value="${qtd}" style="width:60px; padding:5px; border-radius:5px; border:1px solid #ccc;">
                     </div>`;
             }).join('');
-            
             const sel = document.getElementById('select-item-estoque');
             sel.innerHTML = '<option value="">Buscar no estoque...</option>' + itensEstoque.map(i => `<option value="${i.id}">${i.nome}</option>`).join('');
             document.getElementById('modal-config').style.display = 'flex';
@@ -301,44 +328,44 @@
             alert("Configurações atualizadas!");
         };
 
-        // ## FUNÇÃO AJUSTADA PARA REGISTRAR O DOADOR E ENVIAR PARA O RELATÓRIO ##
+        // ## FUNÇÃO COMPLETA: Registra Doador e Atualiza Validade se necessário ##
         window.ajustarEstoque = async (id, delta, nome) => {
             const item = itensEstoque.find(x => x.id === id);
             let n = 1;
             let doador = "";
+            let novaValidade = item.validade || "";
 
             if (delta > 0) {
-                // Pergunta a quantidade
                 const q = prompt(`Entrada de ${nome}. Qual a quantidade recebida?`, "1");
                 if (!q) return;
                 n = parseInt(q);
 
-                // Pergunta o Doador (Essencial para o relatório de gestão)
-                doador = prompt(`Quem é o doador de ${nome}? (Ex: Campanha de Rua, Fone do Cidadão, Nome da Pessoa...)`, "");
-                if (doador === null) return; // Se cancelar, interrompe o processo
+                doador = prompt(`Quem é o doador de ${nome}? (Ex: Campanha de Rua, Fone do Cidadão...)`, "");
+                if (doador === null) return;
                 if (doador.trim() === "") doador = "Não identificado";
+
+                const v = prompt(`Qual a data de validade deste lote? (AAAA-MM-DD)`, item.validade || "");
+                if (v !== null) novaValidade = v;
             }
 
-            // 1. Atualiza o saldo físico no estoque
+            // 1. Atualiza Estoque (Quantidade e Validade)
             await updateDoc(doc(db, "estoque_caritas", id), { 
-                quantidade: Math.max(0, item.quantidade + (delta * n)) 
+                quantidade: Math.max(0, item.quantidade + (delta * n)),
+                validade: novaValidade
             });
 
-            // 2. Se for uma ENTRADA (+), cria o log no formato que o relatório busca
+            // 2. Cria Log detalhado para o Relatório
             if (delta > 0) {
-                const detalhesRelatorio = `Entrada de ${n} un. de ${nome}. Doador: ${doador.trim()}.`;
+                const detalhesRelatorio = `Entrada de ${n} un. de ${nome}. Doador: ${doador.trim()}. Validade: ${novaValidade}`;
                 
                 await addDoc(collection(db, "log_auditoria"), {
                     acao: "ENTRADA_ESTOQUE",
                     detalhes: detalhesRelatorio,
                     timestamp: serverTimestamp(),
-                    autor: {
-                        nome: userLogado.displayName || userLogado.email,
-                        uid: userLogado.uid
-                    },
+                    autor: { nome: userLogado.displayName || userLogado.email, uid: userLogado.uid },
                     modulo: "CÁRITAS"
                 });
-                alert("Entrada registrada! O doador agora aparecerá no Relatório de Gestão.");
+                alert("Entrada registrada e saldo atualizado!");
             }
         };
 
