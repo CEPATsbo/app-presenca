@@ -34,12 +34,11 @@
         .form-group input, .form-group select { padding: 12px; border: 1px solid #ccc; border-radius: 8px; font-size: 1em; }
 
         .btn-acao { border: none; padding: 12px 20px; border-radius: 8px; cursor: pointer; font-weight: bold; display: flex; align-items: center; gap: 8px; }
+        .btn-ajuste { border: none; color: white; padding: 5px 12px; border-radius: 6px; font-weight: bold; cursor: pointer; font-size: 1.2em; }
+        .controles { display: flex; align-items: center; gap: 15px; }
         
         .linha-receita { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; padding: 10px; background: #f9f9f9; border-radius: 8px; border: 1px solid #eee; }
         .btn-remover-linha { background: none; border: none; color: var(--red); cursor: pointer; font-size: 1.1em; padding: 5px; }
-
-        .btn-ajuste { border: none; color: white; padding: 5px 12px; border-radius: 6px; font-weight: bold; cursor: pointer; font-size: 1.2em; }
-        .controles { display: flex; align-items: center; gap: 15px; }
         .badge-extra { background: #3498db; color: white; padding: 2px 5px; border-radius: 4px; font-size: 0.7em; font-weight: bold; }
     </style>
 </head>
@@ -79,6 +78,25 @@
         </div>
     </main>
 
+    <div id="modal-entrada-estoque" class="modal">
+        <div class="modal-content">
+            <h3 id="titulo-entrada">Registrar Entrada</h3>
+            <form id="form-entrada-estoque">
+                <input type="hidden" id="entrada-item-id">
+                <div class="form-group"><label>Quantidade Recebida</label><input type="number" id="entrada-qtd" value="1" required></div>
+                <div class="form-group"><label>Doador (Opcional)</label><input type="text" id="entrada-doador" placeholder="Deixe em branco para anônimo"></div>
+                <div class="form-group">
+                    <label>Data de Validade (DD/MM/AAAA)</label>
+                    <input type="text" id="entrada-validade-br" placeholder="00/00/0000" maxlength="10" inputmode="numeric">
+                </div>
+                <div style="display: flex; gap: 10px; margin-top: 20px;">
+                    <button type="button" onclick="fecharModais()" style="flex:1; padding: 12px; border-radius: 8px; border: 1px solid #ccc; cursor: pointer;">Cancelar</button>
+                    <button type="submit" style="flex:1; background: var(--green); color: white; border: none; border-radius: 8px; font-weight: bold; cursor: pointer;">Confirmar Entrada</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
     <div id="modal-novo-item" class="modal">
         <div class="modal-content">
             <h3 id="titulo-modal-item">Novo Item no Estoque</h3>
@@ -86,7 +104,7 @@
                 <input type="hidden" id="item-edit-id">
                 <div class="form-group"><label>Nome do Produto (Ex: Arroz 5kg)</label><input type="text" id="item-nome" required></div>
                 <div class="form-group"><label>Estoque Mínimo Individual</label><input type="number" id="item-minimo" value="5" required></div>
-                <div class="form-group"><label>Validade Próxima</label><input type="date" id="item-validade"></div>
+                <div class="form-group"><label>Validade Próxima (Lote atual)</label><input type="date" id="item-validade"></div>
                 <div style="display: flex; gap: 10px; margin-top: 20px;">
                     <button type="button" onclick="fecharModais()" style="flex:1; padding: 12px; border-radius: 8px; border: 1px solid #ccc; cursor: pointer;">Cancelar</button>
                     <button type="submit" style="flex:1; background: var(--green); color: white; border: none; border-radius: 8px; font-weight: bold; cursor: pointer;">Salvar Produto</button>
@@ -98,15 +116,12 @@
     <div id="modal-config" class="modal">
         <div class="modal-content">
             <h3>Configurar Entrega Social</h3>
-            
             <div class="form-group" style="background: #f0f4f8; padding: 15px; border-radius: 10px; margin-bottom: 20px;">
                 <label><i class="fas fa-users"></i> META DE ATENDIMENTO (Famílias)</label>
                 <input type="number" id="input-meta" value="14" style="font-size: 1.2em; font-weight: bold; text-align: center;">
             </div>
-
             <label style="font-weight: bold; font-size: 0.8em; color: #666;">ITENS NA RECEITA ATUAL:</label>
             <div id="lista-composicao" style="margin-top: 10px;"></div>
-
             <div style="border-top: 2px dashed #eee; margin-top: 20px; padding-top: 15px;">
                 <label style="font-weight: bold; font-size: 0.8em; color: var(--orange);">ADICIONAR ITEM NA CESTA:</label>
                 <div style="display: flex; gap: 8px; margin-top: 8px;">
@@ -114,7 +129,6 @@
                     <button type="button" onclick="adicionarLinhaCesta()" style="background: var(--orange); color: white; border: none; padding: 0 15px; border-radius: 6px; cursor: pointer;"><i class="fas fa-plus"></i></button>
                 </div>
             </div>
-
             <div style="display: flex; gap: 10px; margin-top: 30px;">
                 <button onclick="fecharModais()" style="flex:1; padding: 12px; border-radius: 8px; border: 1px solid #ccc; cursor: pointer;">Sair</button>
                 <button id="btn-salvar-receita" style="flex:1; background: var(--green); color: white; border: none; border-radius: 8px; font-weight: bold; cursor: pointer;">Salvar Configurações</button>
@@ -135,6 +149,15 @@
         protegerPagina(['super-admin','diretor','conselheiro','tesoureiro','caritas']).then(user => {
             userLogado = user;
             iniciarSincronizacao();
+        });
+
+        // MÁSCARA DE DATA (DD/MM/AAAA)
+        const inputValidadeBR = document.getElementById('entrada-validade-br');
+        inputValidadeBR.addEventListener('input', (e) => {
+            let v = e.target.value.replace(/\D/g, '');
+            if (v.length > 2) v = v.substring(0, 2) + '/' + v.substring(2);
+            if (v.length > 5) v = v.substring(0, 5) + '/' + v.substring(5, 9);
+            e.target.value = v;
         });
 
         function iniciarSincronizacao() {
@@ -195,37 +218,29 @@
             }
         }
 
-        // ## FUNÇÃO ATUALIZADA: Exibe Validade e Alerta de Margem de Segurança ##
+        // RENDERIZAÇÃO COM ALERTA DE VALIDADE (30 DIAS)
         function renderizarListaEstoque() {
             const hoje = new Date();
-            const margemSeguranca = new Date();
-            margemSeguranca.setDate(hoje.getDate() + 30); // Define 30 dias de margem
+            const margem = new Date();
+            margem.setDate(hoje.getDate() + 30);
 
             document.getElementById('lista-produtos').innerHTML = itensEstoque.map(i => {
-                const validadeDate = i.validade ? new Date(i.validade) : null;
-                let styleValidade = "color: var(--grey);";
-                let textoAlerta = "";
-
-                if (validadeDate) {
-                    if (validadeDate < hoje) {
-                        styleValidade = "color: var(--red); font-weight: bold;";
-                        textoAlerta = " [⚠️ VENCIDO]";
-                    } else if (validadeDate < margemSeguranca) {
-                        styleValidade = "color: var(--orange); font-weight: bold;";
-                        textoAlerta = " [⚠️ VALIDADE CURTA]";
-                    }
+                const dt = i.validade ? new Date(i.validade) : null;
+                let aviso = "", cor = "#7f8c8d";
+                if (dt) {
+                    if (dt < hoje) { aviso = " [VENCIDO! ⚠️]"; cor = "var(--red)"; }
+                    else if (dt < margem) { aviso = " [VALIDADE CURTA ⚠️]"; cor = "var(--orange)"; }
                 }
-
-                const validadeFormatada = i.validade ? i.validade.split('-').reverse().join('/') : "N/D";
-
+                const valFormat = i.validade ? i.validade.split('-').reverse().join('/') : "Não informada";
+                
                 return `
                 <div class="estoque-item">
-                    <div>
-                        <b style="font-size: 1.1em;">${i.nome}</b>
-                        <p style="margin: 5px 0 0 0; font-size: 0.85em; ${styleValidade}">
-                            Validade: ${validadeFormatada}${textoAlerta}
+                    <div style="flex:1">
+                        <b>${i.nome}</b>
+                        <p style="margin:5px 0; font-size:0.85em; color:${cor}; font-weight:bold;">
+                            <i class="fas fa-calendar-alt"></i> Validade: ${valFormat}${aviso}
                         </p>
-                        <p style="margin: 2px 0 0 0; font-size: 0.9em; color: var(--grey);">Saldo: ${i.quantidade} un.</p>
+                        <p style="margin:0; font-size:0.9em; color:var(--grey)">Saldo: ${i.quantidade} un.</p>
                     </div>
                     <div class="controles">
                         <button class="btn-ajuste" style="background:var(--red)" onclick="ajustarEstoque('${i.id}', -1, '${i.nome}')">-</button>
@@ -237,25 +252,56 @@
             }).join('');
         }
 
-        function calcularProximoDomingoSocial() {
-            const hoje = new Date();
-            function buscar(y, m) {
-                let dom = 0;
-                for (let d = 1; d <= 31; d++) {
-                    let dt = new Date(y, m, d);
-                    if (dt.getDay() === 0 && ++dom === 3) return dt;
-                }
+        // FUNÇÃO DE AJUSTE COM MODAL E REGISTRO DE DOADOR
+        window.ajustarEstoque = async (id, delta, nome) => {
+            const item = itensEstoque.find(x => x.id === id);
+            if (delta < 0) {
+                // Saída rápida de 1 unidade
+                await updateDoc(doc(db, "estoque_caritas", id), { quantidade: Math.max(0, item.quantidade - 1) });
+                return;
             }
-            let res = buscar(hoje.getFullYear(), hoje.getMonth());
-            if (hoje > res) res = buscar(hoje.getMonth() === 11 ? hoje.getFullYear()+1 : hoje.getFullYear(), (hoje.getMonth()+1)%12);
-            return res;
-        }
+            // Abre o modal para entrada (+)
+            document.getElementById('entrada-item-id').value = id;
+            document.getElementById('titulo-entrada').innerText = `Entrada de: ${nome}`;
+            document.getElementById('entrada-doador').value = "";
+            document.getElementById('entrada-validade-br').value = item.validade ? item.validade.split('-').reverse().join('/') : "";
+            document.getElementById('modal-entrada-estoque').style.display = 'flex';
+            document.getElementById('entrada-qtd').focus();
+        };
 
-        document.getElementById('btn-abrir-novo').onclick = () => {
-            document.getElementById('titulo-modal-item').innerText = "Novo Item";
-            document.getElementById('item-edit-id').value = "";
-            document.getElementById('form-item-estoque').reset();
-            document.getElementById('modal-novo-item').style.display = 'flex';
+        // SUBMISSÃO DO MODAL DE ENTRADA
+        document.getElementById('form-entrada-estoque').onsubmit = async (e) => {
+            e.preventDefault();
+            const id = document.getElementById('entrada-item-id').value;
+            const item = itensEstoque.find(x => x.id === id);
+            const qtd = parseInt(document.getElementById('entrada-qtd').value);
+            const doador = document.getElementById('entrada-doador').value.trim() || "Não identificado";
+            const valBR = document.getElementById('entrada-validade-br').value;
+            
+            // Converte DD/MM/AAAA para AAAA-MM-DD para o banco
+            let valISO = item.validade || "";
+            if (valBR.length === 10) {
+                const [d, m, a] = valBR.split('/');
+                valISO = `${a}-${m}-${d}`;
+            }
+
+            // 1. Atualiza Estoque
+            await updateDoc(doc(db, "estoque_caritas", id), { 
+                quantidade: item.quantidade + qtd, 
+                validade: valISO 
+            });
+            
+            // 2. Cria Log para Relatório
+            await addDoc(collection(db, "log_auditoria"), {
+                acao: "ENTRADA_ESTOQUE",
+                detalhes: `Entrada de ${qtd} un. de ${item.nome}. Doador: ${doador}. Validade: ${valISO}`,
+                timestamp: serverTimestamp(),
+                autor: { nome: userLogado.displayName || userLogado.email, uid: userLogado.uid },
+                modulo: "CÁRITAS"
+            });
+
+            fecharModais();
+            alert("Entrada registrada com sucesso!");
         };
 
         window.abrirEdicaoItem = (id) => {
@@ -271,12 +317,17 @@
         document.getElementById('form-item-estoque').onsubmit = async (e) => {
             e.preventDefault();
             const id = document.getElementById('item-edit-id').value;
-            const dados = { nome: document.getElementById('item-nome').value, minimo: parseInt(document.getElementById('item-minimo').value), validade: document.getElementById('item-validade').value };
+            const dados = { 
+                nome: document.getElementById('item-nome').value, 
+                minimo: parseInt(document.getElementById('item-minimo').value), 
+                validade: document.getElementById('item-validade').value 
+            };
             if (id) await updateDoc(doc(db, "estoque_caritas", id), dados);
             else await addDoc(collection(db, "estoque_caritas"), { ...dados, quantidade: 0 });
             fecharModais();
         };
 
+        // LÓGICA DE CONFIGURAÇÃO DA RECEITA (RESTAURADA INTEGRALMENTE)
         document.getElementById('btn-config-cesta').onclick = () => {
             document.getElementById('input-meta').value = metaGlobal;
             const lista = document.getElementById('lista-composicao');
@@ -328,45 +379,25 @@
             alert("Configurações atualizadas!");
         };
 
-        // ## FUNÇÃO COMPLETA: Registra Doador e Atualiza Validade se necessário ##
-        window.ajustarEstoque = async (id, delta, nome) => {
-            const item = itensEstoque.find(x => x.id === id);
-            let n = 1;
-            let doador = "";
-            let novaValidade = item.validade || "";
-
-            if (delta > 0) {
-                const q = prompt(`Entrada de ${nome}. Qual a quantidade recebida?`, "1");
-                if (!q) return;
-                n = parseInt(q);
-
-                doador = prompt(`Quem é o doador de ${nome}? (Ex: Campanha de Rua, Fone do Cidadão...)`, "");
-                if (doador === null) return;
-                if (doador.trim() === "") doador = "Não identificado";
-
-                const v = prompt(`Qual a data de validade deste lote? (AAAA-MM-DD)`, item.validade || "");
-                if (v !== null) novaValidade = v;
+        function calcularProximoDomingoSocial() {
+            const hoje = new Date();
+            function buscar(y, m) {
+                let dom = 0;
+                for (let d = 1; d <= 31; d++) {
+                    let dt = new Date(y, m, d);
+                    if (dt.getDay() === 0 && ++dom === 3) return dt;
+                }
             }
+            let res = buscar(hoje.getFullYear(), hoje.getMonth());
+            if (hoje > res) res = buscar(hoje.getMonth() === 11 ? hoje.getFullYear()+1 : hoje.getFullYear(), (hoje.getMonth()+1)%12);
+            return res;
+        }
 
-            // 1. Atualiza Estoque (Quantidade e Validade)
-            await updateDoc(doc(db, "estoque_caritas", id), { 
-                quantidade: Math.max(0, item.quantidade + (delta * n)),
-                validade: novaValidade
-            });
-
-            // 2. Cria Log detalhado para o Relatório
-            if (delta > 0) {
-                const detalhesRelatorio = `Entrada de ${n} un. de ${nome}. Doador: ${doador.trim()}. Validade: ${novaValidade}`;
-                
-                await addDoc(collection(db, "log_auditoria"), {
-                    acao: "ENTRADA_ESTOQUE",
-                    detalhes: detalhesRelatorio,
-                    timestamp: serverTimestamp(),
-                    autor: { nome: userLogado.displayName || userLogado.email, uid: userLogado.uid },
-                    modulo: "CÁRITAS"
-                });
-                alert("Entrada registrada e saldo atualizado!");
-            }
+        document.getElementById('btn-abrir-novo').onclick = () => {
+            document.getElementById('titulo-modal-item').innerText = "Novo Item";
+            document.getElementById('item-edit-id').value = "";
+            document.getElementById('form-item-estoque').reset();
+            document.getElementById('modal-novo-item').style.display = 'flex';
         };
 
         window.fecharModais = () => document.querySelectorAll('.modal').forEach(m => m.style.display = 'none');
