@@ -151,9 +151,9 @@
             iniciarSincronizacao();
         });
 
-        // MÁSCARA DE DATA (DD/MM/AAAA)
-        const inputValidadeBR = document.getElementById('entrada-validade-br');
-        inputValidadeBR.addEventListener('input', (e) => {
+        // MÁSCARA DE DATA BRASILEIRA (PRATICIDADE)
+        const inputValBR = document.getElementById('entrada-validade-br');
+        inputValBR.addEventListener('input', (e) => {
             let v = e.target.value.replace(/\D/g, '');
             if (v.length > 2) v = v.substring(0, 2) + '/' + v.substring(2);
             if (v.length > 5) v = v.substring(0, 5) + '/' + v.substring(5, 9);
@@ -218,7 +218,6 @@
             }
         }
 
-        // RENDERIZAÇÃO COM ALERTA DE VALIDADE (30 DIAS)
         function renderizarListaEstoque() {
             const hoje = new Date();
             const margem = new Date();
@@ -231,7 +230,7 @@
                     if (dt < hoje) { aviso = " [VENCIDO! ⚠️]"; cor = "var(--red)"; }
                     else if (dt < margem) { aviso = " [VALIDADE CURTA ⚠️]"; cor = "var(--orange)"; }
                 }
-                const valFormat = i.validade ? i.validade.split('-').reverse().join('/') : "Não informada";
+                const valFormat = i.validade ? i.validade.split('-').reverse().join('/') : "N/D";
                 
                 return `
                 <div class="estoque-item">
@@ -252,24 +251,23 @@
             }).join('');
         }
 
-        // FUNÇÃO DE AJUSTE COM MODAL E REGISTRO DE DOADOR
+        // FUNÇÃO DE AJUSTE COM MODAL, RESET DE QUANTIDADE E LOG
         window.ajustarEstoque = async (id, delta, nome) => {
             const item = itensEstoque.find(x => x.id === id);
             if (delta < 0) {
-                // Saída rápida de 1 unidade
                 await updateDoc(doc(db, "estoque_caritas", id), { quantidade: Math.max(0, item.quantidade - 1) });
                 return;
             }
-            // Abre o modal para entrada (+)
+            // SEMPRE RESETA QUANTIDADE PARA 1
             document.getElementById('entrada-item-id').value = id;
             document.getElementById('titulo-entrada').innerText = `Entrada de: ${nome}`;
+            document.getElementById('entrada-qtd').value = 1;
             document.getElementById('entrada-doador').value = "";
             document.getElementById('entrada-validade-br').value = item.validade ? item.validade.split('-').reverse().join('/') : "";
             document.getElementById('modal-entrada-estoque').style.display = 'flex';
             document.getElementById('entrada-qtd').focus();
         };
 
-        // SUBMISSÃO DO MODAL DE ENTRADA
         document.getElementById('form-entrada-estoque').onsubmit = async (e) => {
             e.preventDefault();
             const id = document.getElementById('entrada-item-id').value;
@@ -278,20 +276,15 @@
             const doador = document.getElementById('entrada-doador').value.trim() || "Não identificado";
             const valBR = document.getElementById('entrada-validade-br').value;
             
-            // Converte DD/MM/AAAA para AAAA-MM-DD para o banco
             let valISO = item.validade || "";
             if (valBR.length === 10) {
                 const [d, m, a] = valBR.split('/');
                 valISO = `${a}-${m}-${d}`;
             }
 
-            // 1. Atualiza Estoque
-            await updateDoc(doc(db, "estoque_caritas", id), { 
-                quantidade: item.quantidade + qtd, 
-                validade: valISO 
-            });
+            await updateDoc(doc(db, "estoque_caritas", id), { quantidade: item.quantidade + qtd, validade: valISO });
             
-            // 2. Cria Log para Relatório
+            // LOG PADRONIZADO PARA O RELATÓRIO
             await addDoc(collection(db, "log_auditoria"), {
                 acao: "ENTRADA_ESTOQUE",
                 detalhes: `Entrada de ${qtd} un. de ${item.nome}. Doador: ${doador}. Validade: ${valISO}`,
@@ -317,17 +310,12 @@
         document.getElementById('form-item-estoque').onsubmit = async (e) => {
             e.preventDefault();
             const id = document.getElementById('item-edit-id').value;
-            const dados = { 
-                nome: document.getElementById('item-nome').value, 
-                minimo: parseInt(document.getElementById('item-minimo').value), 
-                validade: document.getElementById('item-validade').value 
-            };
+            const dados = { nome: document.getElementById('item-nome').value, minimo: parseInt(document.getElementById('item-minimo').value), validade: document.getElementById('item-validade').value };
             if (id) await updateDoc(doc(db, "estoque_caritas", id), dados);
             else await addDoc(collection(db, "estoque_caritas"), { ...dados, quantidade: 0 });
             fecharModais();
         };
 
-        // LÓGICA DE CONFIGURAÇÃO DA RECEITA (RESTAURADA INTEGRALMENTE)
         document.getElementById('btn-config-cesta').onclick = () => {
             document.getElementById('input-meta').value = metaGlobal;
             const lista = document.getElementById('lista-composicao');
