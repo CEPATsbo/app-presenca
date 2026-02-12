@@ -13,7 +13,7 @@ const firebaseConfig = {
 };
 const CASA_ESPIRITA_LAT = -22.75553;
 const CASA_ESPIRITA_LON = -47.36945;
-const RAIO_EM_METROS = 40;
+const RAIO_EM_METROS = 70;
 const LOCAL_STORAGE_KEY_NOME = 'cepatPresencaNome';
 
 const app = initializeApp(firebaseConfig);
