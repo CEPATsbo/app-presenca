@@ -81,7 +81,7 @@ function getDataDeHojeSP() {
 async function registrarPresencaComGeolocalizacao(voluntarioParaRegistrar, atividadesSelecionadas) {
     if (!btnRegistrarPresenca || !registroRapidoSection || !statusRapidoSection || !statusNome || !statusAtividades || !feedbackGeoRapido) {
         console.error("Elementos do DOM ausentes para registro de presença.");
-        return false; // Retorna falha
+        return false;
     }
     btnRegistrarPresenca.disabled = true;
     btnRegistrarPresenca.textContent = 'Verificando localização...';
@@ -90,10 +90,9 @@ async function registrarPresencaComGeolocalizacao(voluntarioParaRegistrar, ativi
         alert("Geolocalização não é suportada pelo seu navegador.");
         btnRegistrarPresenca.disabled = false;
         btnRegistrarPresenca.textContent = 'Registrar Presença';
-        return false; // Falha
+        return false;
     }
 
-    // Retorna uma Promessa para que o 'submit' possa esperar
     return new Promise((resolve, reject) => {
         navigator.geolocation.getCurrentPosition(
             async (position) => {
@@ -114,48 +113,39 @@ async function registrarPresencaComGeolocalizacao(voluntarioParaRegistrar, ativi
                             primeiroCheckin: serverTimestamp(), 
                             ultimaAtualizacao: serverTimestamp(), 
                             status: 'presente',
-                            authUid: null,
+                            authUid: voluntarioParaRegistrar.authUid || null, // Garante que a presença herde o UID se houver
                             voluntarioId: voluntarioParaRegistrar.id
                         }, { merge: true });
 
-                        // A linha de salvar no localStorage foi MOVIDA para antes desta função (na lógica de submit)
-                        
                         statusNome.textContent = voluntarioParaRegistrar.nome;
                         statusAtividades.textContent = atividadesSelecionadas.join(', ');
                         feedbackGeoRapido.textContent = `Presença confirmada a ${distancia.toFixed(0)} metros.`;
                         registroRapidoSection.classList.add('hidden');
                         statusRapidoSection.classList.remove('hidden');
 
-                        resolve(true); // Sucesso
+                        resolve(true);
 
                     } catch (error) {
                         console.error("Erro ao registrar presença:", error);
                         alert("Ocorreu um erro ao salvar sua presença. Tente novamente.");
                         btnRegistrarPresenca.disabled = false;
                         btnRegistrarPresenca.textContent = 'Registrar Presença';
-                        reject(error); // Falha
+                        reject(error);
                     }
                 } else {
                     alert(`Você está a ${distancia.toFixed(0)} metros de distância. Por favor, aproxime-se da casa para registrar a presença.`);
                     btnRegistrarPresenca.disabled = false;
                     btnRegistrarPresenca.textContent = 'Registrar Presença';
-                    reject(new Error("Fora da área de geolocalização.")); // Falha
+                    reject(new Error("Fora da área de geolocalização."));
                 }
             },
             (error) => {
                 console.error("Erro de geolocalização:", error);
-                let msgErro = "Não foi possível obter sua localização. Verifique as permissões do navegador e tente novamente.";
-                if (error.code === error.PERMISSION_DENIED) {
-                     msgErro = "Você negou a permissão de localização. Habilite-a nas configurações do navegador para registrar a presença.";
-                } else if (error.code === error.POSITION_UNAVAILABLE) {
-                     msgErro = "Informação de localização indisponível no momento.";
-                } else if (error.code === error.TIMEOUT) {
-                     msgErro = "Tempo esgotado ao tentar obter a localização.";
-                }
+                let msgErro = "Não foi possível obter sua localização.";
                 alert(msgErro);
                 btnRegistrarPresenca.disabled = false;
                 btnRegistrarPresenca.textContent = 'Registrar Presença';
-                reject(error); // Falha
+                reject(error);
             }
         );
     });
@@ -163,7 +153,6 @@ async function registrarPresencaComGeolocalizacao(voluntarioParaRegistrar, ativi
 
 
 async function habilitarNotificacoes() {
-    // Esta é a sua NOVA Chave Pública VAPID (do arquivo .env)
     const VAPID_PUBLIC_KEY = 'BHvM-GJJ64ePBfttwFiCghI9wqLK6PjN0U2aIBhYAQPI5CdnOFswB4cejXp3AHhgw-I6rJBANaxlgvjTRn463L4'; 
 
     if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
@@ -172,20 +161,13 @@ async function habilitarNotificacoes() {
 
     try {
         const permissao = await Notification.requestPermission();
-        if (permissao !== 'granted') {
-            return alert("Permissão para notificações não concedida.");
-        }
+        if (permissao !== 'granted') return alert("Permissão não concedida.");
 
         const registration = await navigator.serviceWorker.ready;
         let subscription = await registration.pushManager.getSubscription(); 
 
-        if (subscription) {
-             console.log("Inscrição antiga encontrada. Removendo...");
-             await subscription.unsubscribe();
-             console.log("Inscrição antiga removida.");
-        }
+        if (subscription) await subscription.unsubscribe();
         
-        console.log("Criando nova inscrição com a chave VAPID atualizada...");
         subscription = await registration.pushManager.subscribe({
             userVisibleOnly: true,
             applicationServerKey: VAPID_PUBLIC_KEY
@@ -194,32 +176,24 @@ async function habilitarNotificacoes() {
         const subscriptionId = btoa(subscription.endpoint).replace(/=/g, '');
         await setDoc(doc(db, "inscricoes", subscriptionId), subscription.toJSON());
 
-        alert("Notificações ativadas com sucesso!");
-        if(btnAtivarNotificacoes) btnAtivarNotificacoes.style.display = 'none'; // Esconde o botão após sucesso
+        alert("Notificações ativadas!");
+        if(btnAtivarNotificacoes) btnAtivarNotificacoes.style.display = 'none';
 
     } catch (error) {
-        console.error("Erro ao se inscrever para notificações:", error);
-        alert("Ocorreu um erro ao ativar as notificações.");
+        console.error("Erro notificações:", error);
+        alert("Erro ao ativar notificações.");
     }
 }
 
 
-// --- INICIALIZAÇÃO DA PÁGINA ---
-
 carregarMural();
 
-// Carrega o nome salvo ao iniciar a página
 (function carregarNomeSalvo() {
     if (nomeInput) {
         try {
             const nomeSalvo = localStorage.getItem(LOCAL_STORAGE_KEY_NOME);
-            if (nomeSalvo) {
-                nomeInput.value = nomeSalvo;
-                console.log("Nome carregado do localStorage:", nomeSalvo);
-            }
-        } catch (e) {
-            console.warn("Não foi possível ler o nome do localStorage:", e);
-        }
+            if (nomeSalvo) nomeInput.value = nomeSalvo;
+        } catch (e) { console.warn("Erro localStorage:", e); }
     }
 })();
 
@@ -227,12 +201,10 @@ carregarMural();
 if (formLogin) {
     formLogin.addEventListener('submit', (event) => {
         event.preventDefault();
-        const emailInput = document.getElementById('email-login');
-        const senhaInput = document.getElementById('senha-login');
-        const email = emailInput ? emailInput.value : '';
-        const senha = senhaInput ? senhaInput.value : '';
+        const email = document.getElementById('email-login')?.value || '';
+        const senha = document.getElementById('senha-login')?.value || '';
 
-        if (!email || !senha) { return alert("Por favor, preencha email e senha."); }
+        if (!email || !senha) return alert("Preencha email e senha.");
 
         const btnEntrar = formLogin.querySelector('button[type="submit"]');
         if(btnEntrar) btnEntrar.disabled = true;
@@ -240,9 +212,8 @@ if (formLogin) {
         signInWithEmailAndPassword(auth, email, senha)
             .then(() => { window.location.href = '/meu-cepat.html'; })
             .catch((error) => {
-                console.error("Erro de login:", error.code);
-                alert("Email ou senha incorretos. Tente novamente.");
-                 if(btnEntrar) btnEntrar.disabled = false;
+                alert("Email ou senha incorretos.");
+                if(btnEntrar) btnEntrar.disabled = false;
             });
     });
 }
@@ -250,24 +221,11 @@ if (formLogin) {
 if (linkEsqueciSenha) {
     linkEsqueciSenha.addEventListener('click', (event) => {
         event.preventDefault(); 
-
-        const email = prompt("Digite seu endereço de email cadastrado para enviarmos o link de redefinição de senha:");
-
+        const email = prompt("Digite seu email para redefinição:");
         if (email) { 
              sendPasswordResetEmail(auth, email)
-                .then(() => {
-                    alert("Email de redefinição de senha enviado com sucesso para " + email + ". Verifique sua caixa de entrada (e spam).");
-                })
-                .catch((error) => {
-                    console.error("Erro ao enviar email de redefinição:", error);
-                    let mensagemErro = "Ocorreu um erro ao enviar o email de redefinição. Tente novamente.";
-                    if (error.code === 'auth/user-not-found') {
-                        mensagemErro = "Este endereço de email não foi encontrado em nosso sistema.";
-                    } else if (error.code === 'auth/invalid-email') {
-                         mensagemErro = "O endereço de email fornecido não é válido.";
-                    }
-                    alert(mensagemErro);
-                });
+                .then(() => alert("Email enviado!"))
+                .catch(() => alert("Erro ao enviar email."));
         }
     });
 }
@@ -280,21 +238,14 @@ if (formPresencaRapida) {
             const q = query(collection(db, "atividades"), where("ativo", "==", true), orderBy("nome"));
             const snapshot = await getDocs(q);
             atividadesContainer.innerHTML = ''; 
-            if (snapshot.empty) {
-                 atividadesContainer.innerHTML = '<p>Nenhuma atividade cadastrada.</p>';
-                 return;
-            }
+            if (snapshot.empty) return;
             snapshot.forEach(doc => {
                 const atividade = doc.data().nome;
                 const div = document.createElement('div');
-                const inputId = `atividade-${doc.id}`;
-                div.innerHTML = `<input type="checkbox" name="atividade" value="${atividade}" id="${inputId}"> <label for="${inputId}">${atividade}</label>`;
+                div.innerHTML = `<input type="checkbox" name="atividade" value="${atividade}" id="atv-${doc.id}"> <label for="atv-${doc.id}">${atividade}</label>`;
                 atividadesContainer.appendChild(div);
             });
-        } catch (e) { 
-            console.error("Erro ao buscar atividades:", e); 
-            if(atividadesContainer) atividadesContainer.innerHTML = '<p style="color:red;">Erro ao carregar atividades.</p>';
-        }
+        } catch (e) { console.error("Erro atividades:", e); }
     })();
 
     if(btnSelecionarAtividades && atividadesWrapper){
@@ -303,21 +254,19 @@ if (formPresencaRapida) {
         });
     }
 
-
     formPresencaRapida.addEventListener('submit', async (event) => {
         event.preventDefault();
-        const nomeDigitado = nomeInput ? nomeInput.value.trim() : '';
+        const nomeDigitado = nomeInput?.value.trim() || '';
         const atividadesSelecionadasNode = document.querySelectorAll('#form-presenca-rapida input[name="atividade"]:checked');
         const atividadesSelecionadas = Array.from(atividadesSelecionadasNode).map(cb => cb.value);
 
-        if (!nomeDigitado || nomeDigitado.split(' ').length < 2) { return alert("Por favor, digite seu nome completo."); }
-        if (atividadesSelecionadas.length === 0) { return alert("Por favor, selecione pelo menos uma atividade."); }
+        if (nomeDigitado.split(' ').length < 2) return alert("Digite seu nome completo.");
+        if (atividadesSelecionadas.length === 0) return alert("Selecione uma atividade.");
 
         try {
-            // Reabilita o botão aqui caso a lógica do Fuse.js falhe ou seja cancelada
             if(btnRegistrarPresenca) {
-                btnRegistrarPresenca.disabled = false;
-                btnRegistrarPresenca.textContent = 'Registrar Presença';
+                btnRegistrarPresenca.disabled = true;
+                btnRegistrarPresenca.textContent = 'Processando...';
             }
             
             const voluntariosSnapshot = await getDocs(query(collection(db, "voluntarios")));
@@ -326,83 +275,58 @@ if (formPresencaRapida) {
             const fuse = new Fuse(listaDeVoluntarios, {
                  keys: ['nome_normalizado', 'nome'],
                  includeScore: true,
-                 threshold: 0.4 // Limiar de busca
+                 threshold: 0.4 
              });
 
-             const nomeNormalizadoBusca = normalizarString(nomeDigitado);
+            const nomeNormalizadoBusca = normalizarString(nomeDigitado);
             const resultados = fuse.search(nomeNormalizadoBusca);
 
-            let voluntarioParaRegistrar = { id: null, nome: nomeDigitado };
+            let voluntarioParaRegistrar = { id: null, nome: nomeDigitado, authUid: null };
             let encontrado = false;
 
-            // ### INÍCIO DA LÓGICA CORRIGIDA DO FUSE.JS ###
             if (resultados.length > 0) {
-                // Fuse encontrou pelo menos uma correspondência
                 const melhorResultado = resultados[0].item;
-                const scoreDoMelhorResultado = resultados[0].score;
+                const score = resultados[0].score;
 
-                // É uma correspondência EXATA (normalizada)?
                 if (normalizarString(melhorResultado.nome) === nomeNormalizadoBusca) {
-                     console.log("Voluntário encontrado por correspondência exata (normalizada):", melhorResultado.nome);
                      voluntarioParaRegistrar = melhorResultado;
-                     if(nomeInput) nomeInput.value = melhorResultado.nome; // Garante que o nome oficial esteja no campo
+                     if(nomeInput) nomeInput.value = melhorResultado.nome;
                      encontrado = true;
                 } 
-                // NÃO é exata, mas é PARECIDA (score baixo)? Pergunta ao usuário.
-                // Isso pega o caso do "carlos souza" (autofill) que encontra "Carlos Eduardo de Souza Reis"
-                else if (scoreDoMelhorResultado < 0.45) { // Se o score for bom (baixo)
-                    if (confirm(`Encontramos um nome parecido: "${melhorResultado.nome}".\n\nÉ você?`)) {
-                        // Usuário confirmou
+                else if (score < 0.45) {
+                    if (confirm(`Você quis dizer: "${melhorResultado.nome}"?`)) {
                         voluntarioParaRegistrar = melhorResultado;
-                        if(nomeInput) nomeInput.value = melhorResultado.nome; // Atualiza o campo com o nome correto
+                        if(nomeInput) nomeInput.value = melhorResultado.nome;
                         encontrado = true;
                     } else {
-                        // Usuário negou a sugestão
-                        alert("Registro cancelado. Por favor, digite seu nome completo exatamente como no cadastro.");
-                        return; // Para a execução
+                        btnRegistrarPresenca.disabled = false;
+                        btnRegistrarPresenca.textContent = 'Registrar Presença';
+                        return;
                     }
                 }
             }
-            // ### FIM DA LÓGICA CORRIGIDA DO FUSE.JS ###
 
-            // Se, após tudo isso, 'encontrado' ainda for false, significa que:
-            // 1. O Fuse não encontrou NENHUM resultado (resultados.length === 0)
-            // 2. OU o resultado foi muito ruim (score > 0.45)
-            // Então, criamos um novo voluntário com o nome digitado.
             if (!encontrado) {
                 const nomeNormalizado = normalizarString(voluntarioParaRegistrar.nome);
-                console.log(`Criando novo voluntário órfão: ${voluntarioParaRegistrar.nome} (Normalizado: ${nomeNormalizado})`);
                 const novoVoluntarioDoc = await addDoc(collection(db, "voluntarios"), {
                     nome: voluntarioParaRegistrar.nome,
                     nome_normalizado: nomeNormalizado,
                     statusVoluntario: 'ativo',
+                    authUid: null, // MUDANÇA ESSENCIAL: Garante que o campo exista para o Cadastro encontrar
                     criadoEm: serverTimestamp()
                 });
                 voluntarioParaRegistrar.id = novoVoluntarioDoc.id;
             }
 
-            // Salva o nome (corrigido, novo, ou exato) no localStorage ANTES da geolocalização
             try {
                 localStorage.setItem(LOCAL_STORAGE_KEY_NOME, voluntarioParaRegistrar.nome);
-                console.log("Nome salvo no localStorage (antes do geo):", voluntarioParaRegistrar.nome);
-            } catch (e) {
-                console.warn("Não foi possível salvar o nome no localStorage:", e);
-            }
+            } catch (e) {}
 
-            // Chama a função de geolocalização (que agora retorna uma promessa)
             await registrarPresencaComGeolocalizacao(voluntarioParaRegistrar, atividadesSelecionadas);
 
         } catch (error) {
-            console.error("ERRO CRÍTICO no registro rápido:", error);
-            
-            if (error && error.message && (error.message.includes("Fora da área") || error.message.includes("permissão de localização"))) {
-                 // Erro de geolocalização já tratado, não faz nada
-            } else if (error && error.code && (error.code === error.PERMISSION_DENIED || error.code === error.POSITION_UNAVAILABLE || error.code === error.TIMEOUT)) {
-                 // Erro de geolocalização já tratado, não faz nada
-            } else if (error) {
-                 alert("Ocorreu um erro crítico. Verifique o console para mais detalhes.");
-            }
-            
+            console.error("Erro crítico:", error);
+            alert("Erro ao processar. Tente novamente.");
             if(btnRegistrarPresenca) { 
                 btnRegistrarPresenca.disabled = false;
                 btnRegistrarPresenca.textContent = 'Registrar Presença';
@@ -411,15 +335,9 @@ if (formPresencaRapida) {
     });
 }
 
-if (btnSairRapido && formPresencaRapida && atividadesWrapper && statusRapidoSection && registroRapidoSection && btnRegistrarPresenca) {
+if (btnSairRapido) {
     btnSairRapido.addEventListener('click', () => {
-        try {
-            localStorage.removeItem(LOCAL_STORAGE_KEY_NOME);
-            console.log("Nome removido do localStorage.");
-        } catch (e) {
-            console.warn("Não foi possível limpar o nome do localStorage:", e);
-        }
-
+        localStorage.removeItem(LOCAL_STORAGE_KEY_NOME);
         formPresencaRapida.reset();
         atividadesWrapper.style.display = 'none';
         statusRapidoSection.classList.add('hidden');
@@ -430,22 +348,11 @@ if (btnSairRapido && formPresencaRapida && atividadesWrapper && statusRapidoSect
     });
 }
 
-// ### AJUSTE: Lógica do Botão de Notificação SIMPLIFICADA (COMO VOCÊ PEDIU) ###
 if (btnAtivarNotificacoes) {
-    // 1. Adiciona o listener de clique
     btnAtivarNotificacoes.addEventListener('click', habilitarNotificacoes);
-    
-    // 2. Lógica de visibilidade SIMPLES:
-    // Mostra o botão SEMPRE, a menos que o navegador não suporte push.
     if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
-        // Navegador não suporta, esconde permanentemente
         btnAtivarNotificacoes.style.display = 'none';
-        console.log("Navegador não suporta Push, botão de notificação oculto.");
     } else {
-        // Navegador suporta, MOSTRA o botão.
-        // O HTML já o coloca no footer, apenas garantimos que ele apareça.
         btnAtivarNotificacoes.style.display = 'block'; 
-        console.log("Navegador suporta Push, botão de notificação visível.");
     }
 }
-// ### FIM DO AJUSTE ###
