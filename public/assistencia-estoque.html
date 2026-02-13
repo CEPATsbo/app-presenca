@@ -253,29 +253,35 @@
 
         // FUNÇÃO DE AJUSTE COM SUPORTE A LOTES INDIVIDUAIS
         window.ajustarEstoque = async (id, delta, nome) => {
-            const item = itensEstoque.find(x => x.id === id);
-            if (delta < 0) {
-                // Lógica de Saída rápida (-1): Baixa do lote mais antigo (FEFO)
-                const lotesSnap = await getDocs(query(collection(db, `estoque_caritas/${id}/lotes`), where("quantidade", ">", 0), orderBy("validade", "asc")));
-                if (!lotesSnap.empty) {
-                    const loteRef = lotesSnap.docs[0].ref;
-                    await updateDoc(loteRef, { quantidade: lotesSnap.docs[0].data().quantidade - 1 });
-                    await updateDoc(doc(db, "estoque_caritas", id), { quantidade: Math.max(0, item.quantidade - 1) });
-                } else {
-                    // Se não houver lotes cadastrados, baixa do saldo geral legado
-                    await updateDoc(doc(db, "estoque_caritas", id), { quantidade: Math.max(0, item.quantidade - 1) });
-                }
-                return;
-            }
-            // Abre o modal para entrada (+)
-            document.getElementById('entrada-item-id').value = id;
-            document.getElementById('titulo-entrada').innerText = `Entrada de: ${nome}`;
-            document.getElementById('entrada-qtd').value = 1;
-            document.getElementById('entrada-doador').value = "";
-            document.getElementById('entrada-validade-br').value = "";
-            document.getElementById('modal-entrada-estoque').style.display = 'flex';
-            document.getElementById('entrada-qtd').focus();
-        };
+    const item = itensEstoque.find(x => x.id === id);
+    if (delta < 0) {
+        // CORREÇÃO: Busca lotes e filtra no JS para evitar o erro de índice
+        const q = query(collection(db, `estoque_caritas/${id}/lotes`), orderBy("validade", "asc"));
+        const lotesSnap = await getDocs(q);
+        
+        // Pega o primeiro lote da fila (mais antigo) que ainda tenha saldo
+        const loteValido = lotesSnap.docs.map(d => ({id: d.id, ...d.data()})).find(l => l.quantidade > 0);
+
+        if (loteValido) {
+            const loteRef = doc(db, `estoque_caritas/${id}/lotes`, loteValido.id);
+            await updateDoc(loteRef, { quantidade: loteValido.quantidade - 1 });
+            await updateDoc(doc(db, "estoque_caritas", id), { quantidade: Math.max(0, item.quantidade - 1) });
+        } else {
+            // Caso não existam lotes (itens legados), baixa do saldo geral
+            await updateDoc(doc(db, "estoque_caritas", id), { quantidade: Math.max(0, item.quantidade - 1) });
+        }
+        return;
+    }
+    
+    // Interface do Modal de Entrada (+)
+    document.getElementById('entrada-item-id').value = id;
+    document.getElementById('titulo-entrada').innerText = `Entrada de: ${nome}`;
+    document.getElementById('entrada-qtd').value = 1; // Reset para 1
+    document.getElementById('entrada-doador').value = "";
+    document.getElementById('entrada-validade-br').value = "";
+    document.getElementById('modal-entrada-estoque').style.display = 'flex';
+    document.getElementById('entrada-qtd').focus();
+};
 
         // SUBMISSÃO DO MODAL DE ENTRADA (CRIAÇÃO DE LOTE ÚNICO)
         document.getElementById('form-entrada-estoque').onsubmit = async (e) => {
