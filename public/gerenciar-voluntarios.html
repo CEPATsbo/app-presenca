@@ -140,6 +140,15 @@
                 console.error(error.message);
             });
 
+        // Função de normalização para manter consistência com o restante do sistema
+        function normalizarString(str) {
+            if (!str) return "";
+            return str
+                .toLowerCase()
+                .normalize("NFD")
+                .replace(/[\u0300-\u036f]/g, "");
+        }
+
         function inicializarPagina(user) {
             const db = getFirestore();
             const functions = getFunctions(undefined, 'southamerica-east1');
@@ -369,8 +378,11 @@
                 ui.editTelefone.addEventListener('input', handlePhone);
 
                 ui.btnAdd.addEventListener('click', async () => {
+                    const nomeInformado = ui.nome.value.trim();
                     const novoVoluntario = { 
-                        nome: ui.nome.value.trim(), 
+                        nome: nomeInformado,
+                        nome_normalizado: normalizarString(nomeInformado), // ADICIONADO: Normalização de busca
+                        authUid: null, // ADICIONADO: Essencial para o vínculo do Meu-CEPAT via Fuse.js
                         endereco: ui.endereco.value.trim(), 
                         telefone: ui.telefone.value.trim(), 
                         aniversario: ui.aniversario.value.trim(), 
@@ -380,7 +392,9 @@
                         tasvAssinadoAno: null, 
                         criadoEm: serverTimestamp() 
                     };
+
                     if (!novoVoluntario.nome) return alert("O campo 'Nome Completo' é obrigatório.");
+                    
                     try {
                         const docRef = await addDoc(voluntariosCollection, novoVoluntario);
                         await registrarLog("CRIOU_VOLUNTARIO", { voluntarioId: docRef.id, nome: novoVoluntario.nome, isMedium: novoVoluntario.isMedium });
@@ -526,6 +540,9 @@
                                 } catch (error) {
                                     console.error(`Erro ao ${acaoTexto}:`, error);
                                     alert(`Erro: ${error.message}`);
+                                } finally {
+                                    // Após processar, recarregar para atualizar botões
+                                    target.disabled = false;
                                 }
                             }
                         }
@@ -536,8 +553,10 @@
                     if (!currentEditingId) return;
                     const docRef = doc(db, 'voluntarios', currentEditingId);
                     const docSnap = await getDoc(docRef);
+                    const nomeEditado = ui.editNome.value.trim();
                     const dadosNovos = { 
-                        nome: ui.editNome.value.trim(), 
+                        nome: nomeEditado,
+                        nome_normalizado: normalizarString(nomeEditado), // ADICIONADO: Atualiza normalização na edição
                         endereco: ui.editEndereco.value.trim(), 
                         telefone: ui.editTelefone.value.trim(), 
                         aniversario: ui.editAniversario.value.trim(),
