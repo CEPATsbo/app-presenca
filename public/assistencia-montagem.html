@@ -15,11 +15,11 @@
         .resumo-item h2 { margin: 0; color: var(--orange); font-size: 2em; }
         .resumo-item p { margin: 5px 0 0 0; font-weight: bold; color: var(--grey); text-transform: uppercase; font-size: 0.75em; }
         .grid-cestas { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 20px; width: 100%; }
-        .cesta-card { background: var(--white); border: 2px solid #ddd; border-radius: 12px; padding: 20px; transition: all 0.3s ease; }
+        .cesta-card { background: var(--white); border: 2px solid #ddd; border-radius: 12px; padding: 20px; transition: all 0.3s ease; margin-bottom: 10px; }
         .cesta-card.concluida { border-color: var(--green); background-color: var(--light-green); }
         .status-badge { font-size: 0.6em; padding: 4px 8px; border-radius: 20px; background: #eee; color: #666; }
         .item-montagem { display: flex; align-items: center; gap: 10px; padding: 10px 0; border-bottom: 1px solid #eee; cursor: pointer; }
-        .item-montagem input[type="checkbox"] { width: 20px; height: 20px; cursor: pointer; accent-color: var(--green); }
+        .item-montagem input[type="checkbox"] { width: 22px; height: 22px; cursor: pointer; accent-color: var(--green); }
         .validade-info { font-size: 0.75em; color: var(--grey); display: block; }
         .validade-curta { color: var(--orange) !important; font-weight: bold; }
         .vencido { color: var(--red) !important; font-weight: bold; }
@@ -39,7 +39,7 @@
             <div class="resumo-item"><h2 id="entregas-feitas">0</h2><p>Entregues</p></div>
             <div class="resumo-item"><h2 id="cestas-restantes" style="color: var(--green);">0</h2><p>A Montar</p></div>
         </div>
-        <div id="grid-cestas" class="grid-cestas"></div>
+        <div id="grid-cestas" class="grid-cestas">Carregando planejamento de picking...</div>
     </main>
 
     <script type="module">
@@ -56,16 +56,32 @@
             iniciarSincronizacao(); 
         });
 
-        async function carregarDadosCompletos() {
-            // 1. Puxa os produtos para saber os nomes
+        async function carregarLotesComRedeDeSeguranca() {
+            // 1. Pega os produtos atuais para saber os nomes e o saldo geral
             const prodSnap = await getDocs(collection(db, "estoque_caritas"));
-            prodSnap.forEach(d => { nomesProdutos[d.id] = d.data().nome; });
+            
+            for (const pDoc of prodSnap.docs) {
+                const pId = pDoc.id;
+                const pData = pDoc.data();
+                nomesProdutos[pId] = pData.nome;
 
-            // 2. CORREÇÃO: Puxa todos os lotes e filtra no JavaScript para evitar erro de índice
-            for (const pId of Object.keys(nomesProdutos)) {
+                // 2. Tenta buscar lotes individuais (Novos dados)
                 const qLotes = query(collection(db, `estoque_caritas/${pId}/lotes`), orderBy("validade", "asc"));
                 const lSnap = await getDocs(qLotes);
-                mapaLotes[pId] = lSnap.docs.map(d => d.data()).filter(l => l.quantidade > 0);
+                const lotesNovos = lSnap.docs.map(d => d.data()).filter(l => l.quantidade > 0);
+
+                if (lotesNovos.length > 0) {
+                    mapaLotes[pId] = lotesNovos;
+                } else if (pData.quantidade > 0) {
+                    // REDE DE SEGURANÇA (Fallback): Se não tem pasta de lotes, usa o saldo antigo
+                    mapaLotes[pId] = [{
+                        validade: pData.validade || "9999-12-31",
+                        quantidade: pData.quantidade,
+                        doador: "Saldo Anterior"
+                    }];
+                } else {
+                    mapaLotes[pId] = [];
+                }
             }
             renderizarInterface();
         }
@@ -75,13 +91,13 @@
                 if (d.exists()) { 
                     configCesta = d.data().itens || {}; 
                     metaGlobal = d.data().meta || 0; 
-                    carregarDadosCompletos(); 
+                    carregarLotesComRedeDeSeguranca(); 
                 }
             });
             const inicioMes = new Date(); inicioMes.setDate(1); inicioMes.setHours(0,0,0,0);
             onSnapshot(query(collection(db, "entregasCestas"), where("data", ">=", Timestamp.fromDate(inicioMes))), s => {
                 entregasNoMes = s.size; 
-                carregarDadosCompletos();
+                carregarLotesComRedeDeSeguranca();
             });
         }
 
@@ -109,7 +125,7 @@
 
                 Object.entries(configCesta).forEach(([pId, qtdNec]) => {
                     let faltam = qtdNec;
-                    let listaPicking = [];
+                    let picks = [];
 
                     if (lotesVirtuais[pId]) {
                         for (let lote of lotesVirtuais[pId]) {
@@ -117,14 +133,14 @@
                             const usar = Math.min(lote.quantidade, faltam);
                             lote.quantidade -= usar; 
                             faltam -= usar;
-                            listaPicking.push({ qtd: usar, val: lote.validade });
+                            picks.push({ qtd: usar, val: lote.validade });
                         }
                     }
 
-                    listaPicking.forEach(pick => {
-                        const valFormat = pick.val.split('-').reverse().join('/');
+                    picks.forEach(p => {
+                        const valFormat = (p.val && p.val !== "9999-12-31") ? p.val.split('-').reverse().join('/') : "N/D";
                         const hoje = new Date(); const margem = new Date(); margem.setDate(hoje.getDate() + 30);
-                        const valDate = new Date(pick.val);
+                        const valDate = new Date(p.val);
                         let classe = "";
                         if (valDate < hoje) classe = "vencido"; else if (valDate < margem) classe = "validade-curta";
 
@@ -132,7 +148,7 @@
                         <label class="item-montagem">
                             <input type="checkbox" onchange="checkCesta(${i})">
                             <span class="txt">
-                                <b>${pick.qtd}x</b> ${nomesProdutos[pId] || pId}
+                                <b>${p.qtd}x</b> ${nomesProdutos[pId] || pId}
                                 <small class="validade-info ${classe}">Validade: ${valFormat}</small>
                             </span>
                         </label>`;
