@@ -7,49 +7,30 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
     <style>
         :root { --bg: #f4f6f9; --white: #ffffff; --primary: #2c3e50; --orange: #e67e22; --green: #27ae60; --red: #e74c3c; --grey: #7f8c8d; --light-green: #e8f5e9; }
-        
         body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background-color: var(--bg); margin: 0; padding: 20px; display: flex; flex-direction: column; align-items: center; }
-        
         .nav-header { width: 100%; max-width: 1200px; display: flex; justify-content: space-between; margin-bottom: 20px; align-items: center; }
         .btn-voltar { background-color: var(--grey); color: white; padding: 10px 15px; border-radius: 8px; text-decoration: none; font-weight: bold; font-size: 0.9em; display: flex; align-items: center; gap: 8px; }
-        
         .container { width: 100%; max-width: 1200px; }
         h1 { color: var(--primary); margin: 0 0 20px 0; border-bottom: 2px solid var(--orange); padding-bottom: 10px; }
-
         .resumo-dia { background: var(--white); padding: 20px; border-radius: 12px; box-shadow: 0 4px 10px rgba(0,0,0,0.05); margin-bottom: 25px; display: flex; justify-content: space-around; text-align: center; }
         .resumo-item h2 { margin: 0; color: var(--orange); font-size: 2em; }
         .resumo-item p { margin: 5px 0 0 0; font-weight: bold; color: var(--grey); text-transform: uppercase; font-size: 0.75em; }
-
-        /* Grid de Cards de Cestas */
-        .grid-cestas { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 20px; width: 100%; }
-        
-        /* Estilo do Card Individual */
-        .cesta-card { background: var(--white); border: 2px solid #ddd; border-radius: 12px; padding: 20px; transition: all 0.3s ease; position: relative; }
+        .grid-cestas { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 20px; width: 100%; }
+        .cesta-card { background: var(--white); border: 2px solid #ddd; border-radius: 12px; padding: 20px; transition: all 0.3s ease; }
         .cesta-card.concluida { border-color: var(--green); background-color: var(--light-green); }
-        
         .cesta-card h3 { margin: 0 0 15px 0; color: var(--primary); display: flex; justify-content: space-between; align-items: center; }
         .status-badge { font-size: 0.6em; padding: 4px 8px; border-radius: 20px; background: #eee; color: #666; }
         .concluida .status-badge { background: var(--green); color: white; }
-
         .lista-itens-montagem { list-style: none; padding: 0; margin: 0; }
         .item-montagem { display: flex; align-items: center; gap: 10px; padding: 10px 0; border-bottom: 1px solid #eee; cursor: pointer; }
-        .item-montagem:last-child { border-bottom: none; }
-        
         .item-montagem input[type="checkbox"] { width: 20px; height: 20px; cursor: pointer; accent-color: var(--green); }
-        .item-montagem span { flex: 1; font-size: 0.95em; }
         .item-montagem .validade-info { font-size: 0.75em; color: var(--grey); display: block; }
-        
-        /* Alertas de FEFO */
         .validade-curta { color: var(--orange) !important; font-weight: bold; }
         .vencido { color: var(--red) !important; font-weight: bold; }
-
         .check-text.marcado { text-decoration: line-through; color: var(--grey); }
-
-        @media print { .nav-header, .btn-voltar { display: none !important; } }
     </style>
 </head>
 <body>
-
     <header class="nav-header">
         <a href="/modulo-caritas.html" class="btn-voltar"><i class="fas fa-arrow-left"></i> Painel Cáritas</a>
         <img src="/logo-cepat.png" alt="Logo" style="height: 50px;">
@@ -57,64 +38,49 @@
 
     <main class="container">
         <h1><i class="fas fa-clipboard-check"></i> Linha de Montagem de Cestas</h1>
-
         <div class="resumo-dia">
             <div class="resumo-item"><h2 id="meta-total">0</h2><p>Meta do Dia</p></div>
-            <div class="resumo-item"><h2 id="entregas-feitas">0</h2><p>Já Entregues (Baixa)</p></div>
+            <div class="resumo-item"><h2 id="entregas-feitas">0</h2><p>Entregues (Baixa)</p></div>
             <div class="resumo-item"><h2 id="cestas-restantes" style="color: var(--green);">0</h2><p>Cestas a Montar</p></div>
         </div>
-
-        <div id="grid-cestas" class="grid-cestas">
-            <p style="text-align: center; grid-column: 1/-1;">Carregando planejamento de montagem...</p>
-        </div>
+        <div id="grid-cestas" class="grid-cestas"><p style="text-align: center; grid-column: 1/-1;">Calculando lotes e validades...</p></div>
     </main>
 
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
-        import { getFirestore, collection, onSnapshot, doc, query, where, Timestamp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
+        import { getFirestore, collection, onSnapshot, doc, query, where, Timestamp, getDocs, orderBy } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
         import { protegerPagina } from '/auth.js';
 
         const firebaseConfig = { apiKey: "AIzaSyBV7RPjk3cFTqL-aIpflJcUojKg1ZXMLuU", authDomain: "voluntarios-ativos---cepat.firebaseapp.com", projectId: "voluntarios-ativos---cepat", storageBucket: "voluntarios-ativos---cepat.firebasestorage.app", messagingSenderId: "66122858261", appId: "1:66122858261:web:7fa21f1805463b5c08331c" };
         const db = getFirestore(initializeApp(firebaseConfig));
         
-        let itensEstoque = [], configCesta = {}, metaGlobal = 0, entregasNoMes = 0;
+        let configCesta = {}, metaGlobal = 0, entregasNoMes = 0;
+        let mapaLotes = {}; // { productId: [lotes] }
 
-        protegerPagina(['super-admin','diretor','conselheiro','tesoureiro','caritas']).then(() => {
-            iniciarSincronizacao();
-        });
+        protegerPagina(['super-admin','diretor','conselheiro','tesoureiro','caritas']).then(() => { iniciarSincronizacao(); });
+
+        async function carregarTodosLotes() {
+            const produtosSnap = await getDocs(collection(db, "estoque_caritas"));
+            for (const pDoc of produtosSnap.docs) {
+                const lotesSnap = await getDocs(query(collection(db, `estoque_caritas/${pDoc.id}/lotes`), where("quantidade", ">", 0), orderBy("validade", "asc")));
+                mapaLotes[pDoc.id] = lotesSnap.docs.map(l => ({ id: l.id, ...l.data() }));
+            }
+            renderizarInterface();
+        }
 
         function iniciarSincronizacao() {
-            // 1. Puxa estoque ordenado por FEFO (mais próximo vence primeiro)
-            onSnapshot(collection(db, "estoque_caritas"), snap => {
-                itensEstoque = snap.docs.map(d => ({ id: d.id, ...d.data() }))
-                    .sort((a,b) => {
-                        if (!a.validade) return 1;
-                        if (!b.validade) return -1;
-                        return new Date(a.validade) - new Date(b.validade);
-                    });
-                renderizarInterface();
-            });
-
-            // 2. Puxa Receita
             onSnapshot(doc(db, "configuracoes", "cesta_padrao"), d => {
-                if (d.exists()) {
-                    configCesta = d.data().itens || {};
-                    metaGlobal = d.data().meta || 0;
-                    renderizarInterface();
-                }
+                if (d.exists()) { configCesta = d.data().itens || {}; metaGlobal = d.data().meta || 0; carregarTodosLotes(); }
             });
-
-            // 3. Sincroniza Entregas (para baixar automático da lista)
             const inicioMes = new Date(); inicioMes.setDate(1); inicioMes.setHours(0,0,0,0);
             onSnapshot(query(collection(db, "entregasCestas"), where("data", ">=", Timestamp.fromDate(inicioMes))), s => {
                 entregasNoMes = s.size;
-                renderizarInterface();
+                carregarTodosLotes();
             });
         }
 
         function renderizarInterface() {
             if (Object.keys(configCesta).length === 0) return;
-
             const restantes = Math.max(0, metaGlobal - entregasNoMes);
             document.getElementById('meta-total').innerText = metaGlobal;
             document.getElementById('entregas-feitas').innerText = entregasNoMes;
@@ -124,74 +90,62 @@
             grid.innerHTML = "";
 
             if (restantes === 0) {
-                grid.innerHTML = `<div style="grid-column: 1/-1; text-align: center; padding: 40px; background: white; border-radius: 12px;">
-                    <i class="fas fa-check-circle" style="font-size: 3em; color: var(--green);"></i>
-                    <p style="margin-top: 15px; font-weight: bold;">Meta atingida! Todas as cestas do mês foram entregues.</p>
-                </div>`;
+                grid.innerHTML = `<div style="grid-column: 1/-1; text-align: center; padding: 40px; background: white; border-radius: 12px;"><i class="fas fa-check-circle" style="font-size: 3em; color: var(--green);"></i><p style="margin-top: 15px; font-weight: bold;">Todas as cestas do mês foram entregues!</p></div>`;
                 return;
             }
 
-            // Gera um card para cada cesta restante
+            // CLONE DO MAPA DE LOTES PARA DISTRIBUIÇÃO VIRTUAL
+            let lotesTemporarios = JSON.parse(JSON.stringify(mapaLotes));
+
             for (let i = 1; i <= restantes; i++) {
                 const card = document.createElement('div');
                 card.className = 'cesta-card';
                 card.id = `cesta-${i}`;
                 
                 let htmlItens = "";
-                Object.entries(configCesta).forEach(([id, qtd]) => {
-                    const produto = itensEstoque.find(p => p.id === id);
-                    const validadeStr = produto?.validade ? produto.validade.split('-').reverse().join('/') : "N/D";
-                    
-                    // Lógica de cores da validade (FEFO)
-                    const hoje = new Date();
-                    const margem = new Date(); margem.setDate(hoje.getDate() + 30);
-                    const valDate = produto?.validade ? new Date(produto.validade) : null;
-                    let classeVal = "";
-                    if (valDate && valDate < hoje) classeVal = "vencido";
-                    else if (valDate && valDate < margem) classeVal = "validade-curta";
+                Object.entries(configCesta).forEach(([prodId, qtdNecessaria]) => {
+                    let qtdFaltante = qtdNecessaria;
+                    let listaDestaLote = [];
 
-                    htmlItens += `
-                        <label class="item-montagem">
-                            <input type="checkbox" onchange="verificarConclusaoCesta(${i})">
-                            <span class="check-text">
-                                <b>${qtd}x</b> ${produto ? produto.nome : 'Item não encontrado'}
-                                <small class="validade-info ${classeVal}">Pegar o com validade: ${validadeStr}</small>
-                            </span>
-                        </label>
-                    `;
+                    // ALOCAÇÃO FEFO: Pega dos lotes mais antigos primeiro
+                    if (lotesTemporarios[prodId]) {
+                        for (let lote of lotesTemporarios[prodId]) {
+                            if (qtdFaltante <= 0) break;
+                            if (lote.quantidade > 0) {
+                                const usar = Math.min(lote.quantidade, qtdFaltante);
+                                lote.quantidade -= usar;
+                                qtdFaltante -= usar;
+                                const valFormat = lote.validade.split('-').reverse().join('/');
+                                listaDestaLote.push({ qtd: usar, val: valFormat, iso: lote.validade });
+                            }
+                        }
+                    }
+
+                    listaDestaLote.forEach(itemLote => {
+                        const hoje = new Date(); const margem = new Date(); margem.setDate(hoje.getDate() + 30);
+                        const valDate = new Date(itemLote.iso);
+                        let classeVal = "";
+                        if (valDate < hoje) classeVal = "vencido";
+                        else if (valDate < margem) classeVal = "validade-curta";
+
+                        htmlItens += `<label class="item-montagem"><input type="checkbox" onchange="verificarConclusaoCesta(${i})"><span class="check-text"><b>${itemLote.qtd}x</b> ${prodId.toUpperCase()}<small class="validade-info ${classeVal}">Pegar o com validade: ${itemLote.val}</small></span></label>`;
+                    });
                 });
 
-                card.innerHTML = `
-                    <h3>Cesta #${i} <span class="status-badge">Pendente</span></h3>
-                    <div class="lista-itens-montagem">${htmlItens}</div>
-                `;
+                card.innerHTML = `<h3>Cesta #${i} <span class="status-badge">Pendente</span></h3><div class="lista-itens-montagem">${htmlItens}</div>`;
                 grid.appendChild(card);
             }
         }
 
-        // Função que muda a cor do Box ao concluir
         window.verificarConclusaoCesta = (numCesta) => {
             const card = document.getElementById(`cesta-${numCesta}`);
             const checks = card.querySelectorAll('input[type="checkbox"]');
             const textos = card.querySelectorAll('.check-text');
             const todosMarcados = Array.from(checks).every(c => c.checked);
-
-            // Atualiza visual dos textos individuais
-            checks.forEach((c, idx) => {
-                if (c.checked) textos[idx].classList.add('marcado');
-                else textos[idx].classList.remove('marcado');
-            });
-
-            if (todosMarcados) {
-                card.classList.add('concluida');
-                card.querySelector('.status-badge').innerText = "Concluída";
-                // Efeito sonoro opcional ou feedback visual
-            } else {
-                card.classList.remove('concluida');
-                card.querySelector('.status-badge').innerText = "Pendente";
-            }
+            checks.forEach((c, idx) => { if (c.checked) textos[idx].classList.add('marcado'); else textos[idx].classList.remove('marcado'); });
+            if (todosMarcados) { card.classList.add('concluida'); card.querySelector('.status-badge').innerText = "Concluída"; } 
+            else { card.classList.remove('concluida'); card.querySelector('.status-badge').innerText = "Pendente"; }
         };
-
     </script>
 </body>
 </html>

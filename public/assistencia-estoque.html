@@ -86,7 +86,7 @@
                 <div class="form-group"><label>Quantidade Recebida</label><input type="number" id="entrada-qtd" value="1" required></div>
                 <div class="form-group"><label>Doador (Opcional)</label><input type="text" id="entrada-doador" placeholder="Deixe em branco para anônimo"></div>
                 <div class="form-group">
-                    <label>Data de Validade (DD/MM/AAAA)</label>
+                    <label>Data de Validade deste Lote (DD/MM/AAAA)</label>
                     <input type="text" id="entrada-validade-br" placeholder="00/00/0000" maxlength="10" inputmode="numeric">
                 </div>
                 <div style="display: flex; gap: 10px; margin-top: 20px;">
@@ -138,7 +138,7 @@
 
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
-        import { getFirestore, collection, onSnapshot, doc, updateDoc, setDoc, addDoc, serverTimestamp, query, where, Timestamp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
+        import { getFirestore, collection, onSnapshot, doc, updateDoc, setDoc, addDoc, serverTimestamp, query, where, Timestamp, getDocs, getDoc, orderBy } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
         import { protegerPagina } from '/auth.js';
 
         const firebaseConfig = { apiKey: "AIzaSyBV7RPjk3cFTqL-aIpflJcUojKg1ZXMLuU", authDomain: "voluntarios-ativos---cepat.firebaseapp.com", projectId: "voluntarios-ativos---cepat", storageBucket: "voluntarios-ativos---cepat.firebasestorage.app", messagingSenderId: "66122858261", appId: "1:66122858261:web:7fa21f1805463b5c08331c" };
@@ -230,16 +230,16 @@
                     if (dt < hoje) { aviso = " [VENCIDO! ⚠️]"; cor = "var(--red)"; }
                     else if (dt < margem) { aviso = " [VALIDADE CURTA ⚠️]"; cor = "var(--orange)"; }
                 }
-                const valFormat = i.validade ? i.validade.split('-').reverse().join('/') : "N/D";
+                const valFormat = i.validade ? i.validade.split('-').reverse().join('/') : "Múltiplos Lotes";
                 
                 return `
                 <div class="estoque-item">
                     <div style="flex:1">
                         <b>${i.nome}</b>
                         <p style="margin:5px 0; font-size:0.85em; color:${cor}; font-weight:bold;">
-                            <i class="fas fa-calendar-alt"></i> Validade: ${valFormat}${aviso}
+                            <i class="fas fa-calendar-alt"></i> Próx. Vencimento: ${valFormat}${aviso}
                         </p>
-                        <p style="margin:0; font-size:0.9em; color:var(--grey)">Saldo: ${i.quantidade} un.</p>
+                        <p style="margin:0; font-size:0.9em; color:var(--grey)">Saldo Total: ${i.quantidade} un.</p>
                     </div>
                     <div class="controles">
                         <button class="btn-ajuste" style="background:var(--red)" onclick="ajustarEstoque('${i.id}', -1, '${i.nome}')">-</button>
@@ -251,23 +251,33 @@
             }).join('');
         }
 
-        // FUNÇÃO DE AJUSTE COM MODAL, RESET DE QUANTIDADE E LOG
+        // FUNÇÃO DE AJUSTE COM SUPORTE A LOTES INDIVIDUAIS
         window.ajustarEstoque = async (id, delta, nome) => {
             const item = itensEstoque.find(x => x.id === id);
             if (delta < 0) {
-                await updateDoc(doc(db, "estoque_caritas", id), { quantidade: Math.max(0, item.quantidade - 1) });
+                // Lógica de Saída rápida (-1): Baixa do lote mais antigo (FEFO)
+                const lotesSnap = await getDocs(query(collection(db, `estoque_caritas/${id}/lotes`), where("quantidade", ">", 0), orderBy("validade", "asc")));
+                if (!lotesSnap.empty) {
+                    const loteRef = lotesSnap.docs[0].ref;
+                    await updateDoc(loteRef, { quantidade: lotesSnap.docs[0].data().quantidade - 1 });
+                    await updateDoc(doc(db, "estoque_caritas", id), { quantidade: Math.max(0, item.quantidade - 1) });
+                } else {
+                    // Se não houver lotes cadastrados, baixa do saldo geral legado
+                    await updateDoc(doc(db, "estoque_caritas", id), { quantidade: Math.max(0, item.quantidade - 1) });
+                }
                 return;
             }
-            // SEMPRE RESETA QUANTIDADE PARA 1
+            // Abre o modal para entrada (+)
             document.getElementById('entrada-item-id').value = id;
             document.getElementById('titulo-entrada').innerText = `Entrada de: ${nome}`;
             document.getElementById('entrada-qtd').value = 1;
             document.getElementById('entrada-doador').value = "";
-            document.getElementById('entrada-validade-br').value = item.validade ? item.validade.split('-').reverse().join('/') : "";
+            document.getElementById('entrada-validade-br').value = "";
             document.getElementById('modal-entrada-estoque').style.display = 'flex';
             document.getElementById('entrada-qtd').focus();
         };
 
+        // SUBMISSÃO DO MODAL DE ENTRADA (CRIAÇÃO DE LOTE ÚNICO)
         document.getElementById('form-entrada-estoque').onsubmit = async (e) => {
             e.preventDefault();
             const id = document.getElementById('entrada-item-id').value;
@@ -276,25 +286,39 @@
             const doador = document.getElementById('entrada-doador').value.trim() || "Não identificado";
             const valBR = document.getElementById('entrada-validade-br').value;
             
-            let valISO = item.validade || "";
+            let valISO = "9999-12-31"; // Sem validade vai para o fim da fila FEFO
             if (valBR.length === 10) {
                 const [d, m, a] = valBR.split('/');
                 valISO = `${a}-${m}-${d}`;
             }
 
-            await updateDoc(doc(db, "estoque_caritas", id), { quantidade: item.quantidade + qtd, validade: valISO });
+            // 1. Atualiza/Cria o Lote individual na sub-coleção
+            const loteId = valISO.replace(/-/g, '') + "_" + Date.now(); // ID único por data e tempo
+            await setDoc(doc(db, `estoque_caritas/${id}/lotes`, loteId), {
+                validade: valISO,
+                quantidade: qtd,
+                doador: doador,
+                dataEntrada: serverTimestamp()
+            });
+
+            // 2. Atualiza Saldo Global do Produto para compatibilidade com o Dashboard
+            const novaProximaValidade = (!item.validade || valISO < item.validade) ? valISO : item.validade;
+            await updateDoc(doc(db, "estoque_caritas", id), { 
+                quantidade: item.quantidade + qtd, 
+                validade: novaProximaValidade
+            });
             
-            // LOG PADRONIZADO PARA O RELATÓRIO
+            // 3. Cria Log para Relatório
             await addDoc(collection(db, "log_auditoria"), {
                 acao: "ENTRADA_ESTOQUE",
-                detalhes: `Entrada de ${qtd} un. de ${item.nome}. Doador: ${doador}. Validade: ${valISO}`,
+                detalhes: `Entrada de ${qtd} un. de ${item.nome}. Doador: ${doador}. Validade: ${valBR}`,
                 timestamp: serverTimestamp(),
                 autor: { nome: userLogado.displayName || userLogado.email, uid: userLogado.uid },
                 modulo: "CÁRITAS"
             });
 
             fecharModais();
-            alert("Entrada registrada com sucesso!");
+            alert("Lote registrado com sucesso!");
         };
 
         window.abrirEdicaoItem = (id) => {
@@ -310,7 +334,11 @@
         document.getElementById('form-item-estoque').onsubmit = async (e) => {
             e.preventDefault();
             const id = document.getElementById('item-edit-id').value;
-            const dados = { nome: document.getElementById('item-nome').value, minimo: parseInt(document.getElementById('item-minimo').value), validade: document.getElementById('item-validade').value };
+            const dados = { 
+                nome: document.getElementById('item-nome').value, 
+                minimo: parseInt(document.getElementById('item-minimo').value), 
+                validade: document.getElementById('item-validade').value 
+            };
             if (id) await updateDoc(doc(db, "estoque_caritas", id), dados);
             else await addDoc(collection(db, "estoque_caritas"), { ...dados, quantidade: 0 });
             fecharModais();
