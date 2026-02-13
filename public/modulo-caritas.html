@@ -80,9 +80,12 @@
         <section class="menu-grid">
             <a href="/assistencia-familias.html" class="menu-item"><i class="fas fa-users"></i><h3>Famílias</h3><p>Cadastros e prontuários sociais.</p></a>
             <a href="/assistencia-cestas.html" class="menu-item"><i class="fas fa-shopping-basket"></i><h3>Cestas Básicas</h3><p>Registrar entregas mensais.</p></a>
+            
+            <a href="/assistencia-montagem.html" class="menu-item"><i class="fas fa-clipboard-check"></i><h3>Linha de Montagem</h3><p>Checklist visual e ordem de validade (FEFO).</p></a>
+            
             <a href="/assistencia-padrinhos.html" class="menu-item"><i class="fas fa-gift"></i><h3>Padrinhos</h3><p>Gestão de apadrinhamento.</p></a>
             <a href="/assistencia-planner.html" class="menu-item"><i class="fas fa-calendar-check"></i><h3>Planner de Escala</h3><p>Escalar voluntários para o Domingo Social.</p></a>
-            <a href="/assistencia-estoque.html" class="menu-item"><i class="fas fa-boxes"></i><h3>Controle de Estoque</h3><p>Gestão FEFO e cálculo de cestas.</p></a>
+            <a href="/assistencia-estoque.html" class="menu-item"><i class="fas fa-boxes"></i><h3>Controle de Estoque</h3><p>Gestão de saldo e validades.</p></a>
             <a href="/assistencia-relatorios.html" class="menu-item"><i class="fas fa-file-invoice"></i><h3>Relatórios</h3><p>Prestação de contas mensal.</p></a>
             <a href="/estatisticas.html" class="menu-item"><i class="fas fa-chart-line"></i><h3>Estatísticas</h3><p>Indicadores e gráficos sociais.</p></a>
         </section>
@@ -103,26 +106,22 @@
 
             const limiteStr = new Date(domSoc.getTime() + 14 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
 
-            // VARIÁVEIS DE ESTADO DINÂMICO
             let estoqueGlobal = [];
             let configCesta = {};
             let metaGlobal = 14; 
             let entregasRealizadas = 0;
 
-            // 1. Contador de Famílias Ativas
             onSnapshot(query(collection(db, "familiasAssistidas"), where("statusGeral", "==", "Ativa")), s => {
                 document.getElementById('total-familias').innerText = s.size;
             });
             
-            // 2. Monitora Entregas e Atualiza Variável
             const inicioMes = new Date(); inicioMes.setDate(1); inicioMes.setHours(0,0,0,0);
             onSnapshot(query(collection(db, "entregasCestas"), where("data", ">=", Timestamp.fromDate(inicioMes))), s => {
                 entregasRealizadas = s.size;
                 document.getElementById('total-entregas').innerText = entregasRealizadas;
-                recalcularProntidao(); // Dispara o cálculo dinâmico
+                recalcularProntidao();
             });
 
-            // 3. Monitora Configuração e Meta
             onSnapshot(doc(db, "configuracoes", "cesta_padrao"), d => {
                 if (d.exists()) {
                     configCesta = d.data().itens || {};
@@ -131,7 +130,6 @@
                 }
             });
 
-            // 4. Monitora Estoque
             onSnapshot(collection(db, "estoque_caritas"), snap => {
                 estoqueGlobal = snap.docs.map(d => ({ id: d.id, ...d.data() }));
                 recalcularProntidao();
@@ -154,8 +152,6 @@
                 
                 let montaveis = Infinity;
                 let itemGargalo = "";
-                
-                // LÓGICA DINÂMICA: Meta Restante = Meta Total - Já Entregues
                 const metaRestante = Math.max(0, metaGlobal - entregasRealizadas);
 
                 Object.entries(configCesta).forEach(([id, qtdNecessaria]) => {
@@ -175,7 +171,6 @@
                 
                 display.innerText = `${total} Cestas`;
                 
-                // Só alerta se o estoque for menor que o que AINDA falta entregar
                 if (total < metaRestante) {
                     label.innerHTML = `⚠️ <b>${itemGargalo}</b> está limitando a montagem das ${metaRestante} cestas restantes.`;
                 } else {
