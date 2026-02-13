@@ -3,15 +3,14 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Cáritas - Linha de Montagem de Cestas</title>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    <title>Cáritas - Linha de Montagem</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <style>
         :root { --bg: #f4f6f9; --white: #ffffff; --primary: #2c3e50; --orange: #e67e22; --green: #27ae60; --red: #e74c3c; --grey: #7f8c8d; --light-green: #e8f5e9; }
         body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background-color: var(--bg); margin: 0; padding: 20px; display: flex; flex-direction: column; align-items: center; }
         .nav-header { width: 100%; max-width: 1200px; display: flex; justify-content: space-between; margin-bottom: 20px; align-items: center; }
         .btn-voltar { background-color: var(--grey); color: white; padding: 10px 15px; border-radius: 8px; text-decoration: none; font-weight: bold; font-size: 0.9em; display: flex; align-items: center; gap: 8px; }
         .container { width: 100%; max-width: 1200px; }
-        h1 { color: var(--primary); margin: 0 0 20px 0; border-bottom: 2px solid var(--orange); padding-bottom: 10px; }
         .resumo-dia { background: var(--white); padding: 20px; border-radius: 12px; box-shadow: 0 4px 10px rgba(0,0,0,0.05); margin-bottom: 25px; display: flex; justify-content: space-around; text-align: center; }
         .resumo-item h2 { margin: 0; color: var(--orange); font-size: 2em; }
         .resumo-item p { margin: 5px 0 0 0; font-weight: bold; color: var(--grey); text-transform: uppercase; font-size: 0.75em; }
@@ -19,7 +18,6 @@
         .cesta-card { background: var(--white); border: 2px solid #ddd; border-radius: 12px; padding: 20px; transition: all 0.3s ease; }
         .cesta-card.concluida { border-color: var(--green); background-color: var(--light-green); }
         .status-badge { font-size: 0.6em; padding: 4px 8px; border-radius: 20px; background: #eee; color: #666; }
-        .concluida .status-badge { background: var(--green); color: white; }
         .item-montagem { display: flex; align-items: center; gap: 10px; padding: 10px 0; border-bottom: 1px solid #eee; cursor: pointer; }
         .item-montagem input[type="checkbox"] { width: 20px; height: 20px; cursor: pointer; accent-color: var(--green); }
         .validade-info { font-size: 0.75em; color: var(--grey); display: block; }
@@ -30,7 +28,7 @@
 </head>
 <body>
     <header class="nav-header">
-        <a href="/modulo-caritas.html" class="btn-voltar"><i class="fas fa-arrow-left"></i> Painel Cáritas</a>
+        <a href="/modulo-caritas.html" class="btn-voltar"><i class="fas fa-arrow-left"></i> Voltar ao Painel</a>
         <img src="/logo-cepat.png" alt="Logo" style="height: 50px;">
     </header>
 
@@ -54,18 +52,19 @@
         
         let configCesta = {}, metaGlobal = 0, entregasNoMes = 0, mapaLotes = {}, nomesProdutos = {};
 
-        protegerPagina(['super-admin','diretor','conselheiro','tesoureiro','caritas']).then(() => { iniciarSincronizacao(); });
+        protegerPagina(['super-admin','diretor','conselheiro','tesoureiro','caritas']).then(() => { 
+            iniciarSincronizacao(); 
+        });
 
         async function carregarDadosCompletos() {
-            // 1. Carrega nomes amigáveis dos produtos
+            // 1. Puxa os produtos para saber os nomes
             const prodSnap = await getDocs(collection(db, "estoque_caritas"));
-            prodSnap.forEach(d => nomesProdutos[d.id] = d.data().nome);
+            prodSnap.forEach(d => { nomesProdutos[d.id] = d.data().nome; });
 
-            // 2. Carrega todos os lotes de todos os produtos
+            // 2. CORREÇÃO: Puxa todos os lotes e filtra no JavaScript para evitar erro de índice
             for (const pId of Object.keys(nomesProdutos)) {
                 const qLotes = query(collection(db, `estoque_caritas/${pId}/lotes`), orderBy("validade", "asc"));
                 const lSnap = await getDocs(qLotes);
-                // Filtra apenas o que tem saldo no JavaScript (Evita erro de índice!)
                 mapaLotes[pId] = lSnap.docs.map(d => d.data()).filter(l => l.quantidade > 0);
             }
             renderizarInterface();
@@ -73,11 +72,16 @@
 
         function iniciarSincronizacao() {
             onSnapshot(doc(db, "configuracoes", "cesta_padrao"), d => {
-                if (d.exists()) { configCesta = d.data().itens || {}; metaGlobal = d.data().meta || 0; carregarDadosCompletos(); }
+                if (d.exists()) { 
+                    configCesta = d.data().itens || {}; 
+                    metaGlobal = d.data().meta || 0; 
+                    carregarDadosCompletos(); 
+                }
             });
             const inicioMes = new Date(); inicioMes.setDate(1); inicioMes.setHours(0,0,0,0);
             onSnapshot(query(collection(db, "entregasCestas"), where("data", ">=", Timestamp.fromDate(inicioMes))), s => {
-                entregasNoMes = s.size; carregarDadosCompletos();
+                entregasNoMes = s.size; 
+                carregarDadosCompletos();
             });
         }
 
@@ -95,12 +99,12 @@
                 return;
             }
 
-            // Distribuição Virtual FEFO
             let lotesVirtuais = JSON.parse(JSON.stringify(mapaLotes));
 
             for (let i = 1; i <= restantes; i++) {
                 const card = document.createElement('div');
-                card.className = 'cesta-card'; card.id = `cesta-${i}`;
+                card.className = 'cesta-card'; 
+                card.id = `cesta-${i}`;
                 let htmlItens = "";
 
                 Object.entries(configCesta).forEach(([pId, qtdNec]) => {
@@ -111,7 +115,8 @@
                         for (let lote of lotesVirtuais[pId]) {
                             if (faltam <= 0) break;
                             const usar = Math.min(lote.quantidade, faltam);
-                            lote.quantidade -= usar; faltam -= usar;
+                            lote.quantidade -= usar; 
+                            faltam -= usar;
                             listaPicking.push({ qtd: usar, val: lote.validade });
                         }
                     }
@@ -141,12 +146,12 @@
 
         window.checkCesta = (n) => {
             const card = document.getElementById(`cesta-${n}`);
-            const chks = card.querySelectorAll('input');
-            const txts = card.querySelectorAll('.txt');
-            const total = Array.from(chks).every(c => c.checked);
-            chks.forEach((c, idx) => { if (c.checked) txts[idx].classList.add('marcado'); else txts[idx].classList.remove('marcado'); });
-            if (total) { card.classList.add('concluida'); card.querySelector('.status-badge').innerText = "Pronta"; }
-            else { card.classList.remove('concluida'); card.querySelector('.status-badge').innerText = "Pendente"; }
+            const total = Array.from(card.querySelectorAll('input')).every(c => c.checked);
+            card.querySelectorAll('input').forEach((c, idx) => {
+                const txt = card.querySelectorAll('.txt')[idx];
+                if (c.checked) txt.classList.add('marcado'); else txt.classList.remove('marcado');
+            });
+            if (total) card.classList.add('concluida'); else card.classList.remove('concluida');
         };
     </script>
 </body>
