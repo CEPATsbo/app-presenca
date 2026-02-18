@@ -57,36 +57,32 @@
         });
 
         async function carregarLotesComRedeDeSeguranca() {
-    const prodSnap = await getDocs(collection(db, "estoque_caritas"));
-    
-    for (const pDoc of prodSnap.docs) {
-        const pId = pDoc.id;
-        const pData = pDoc.data();
-        nomesProdutos[pId] = pData.nome;
+            const prodSnap = await getDocs(collection(db, "estoque_caritas"));
+            
+            for (const pDoc of prodSnap.docs) {
+                const pId = pDoc.id;
+                const pData = pDoc.data();
+                nomesProdutos[pId] = pData.nome;
 
-        // 1. Puxa os lotes individuais (novos dados)
-        const qLotes = query(collection(db, `estoque_caritas/${pId}/lotes`), orderBy("validade", "asc"));
-        const lSnap = await getDocs(qLotes);
-        let lotesEncontrados = lSnap.docs.map(d => ({ id: d.id, ...d.data() })).filter(l => l.quantidade > 0);
+                const qLotes = query(collection(db, `estoque_caritas/${pId}/lotes`), orderBy("validade", "asc"));
+                const lSnap = await getDocs(qLotes);
+                let lotesEncontrados = lSnap.docs.map(d => ({ id: d.id, ...d.data() })).filter(l => l.quantidade > 0);
 
-        // 2. CORREÇÃO DE QUANTIDADE (REDE DE SEGURANÇA)
-        const totalNosLotes = lotesEncontrados.reduce((acc, curr) => acc + curr.quantidade, 0);
-        const saldoSemLote = pData.quantidade - totalNosLotes;
+                const totalNosLotes = lotesEncontrados.reduce((acc, curr) => acc + curr.quantidade, 0);
+                const saldoSemLote = (pData.quantidade || 0) - totalNosLotes;
 
-        if (saldoSemLote > 0) {
-            // Se o saldo total (7) for maior que o somado nos lotes (2), 
-            // adiciona a diferença (5) como um lote genérico para não esvaziar a cesta
-            lotesEncontrados.push({
-                validade: pData.validade || "9999-12-31",
-                quantidade: saldoSemLote,
-                doador: "Saldo de Estoque Anterior"
-            });
+                if (saldoSemLote > 0) {
+                    lotesEncontrados.push({
+                        validade: pData.validade || "9999-12-31",
+                        quantidade: saldoSemLote,
+                        doador: "Saldo de Estoque Anterior"
+                    });
+                }
+
+                mapaLotes[pId] = lotesEncontrados;
+            }
+            renderizarInterface();
         }
-
-        mapaLotes[pId] = lotesEncontrados;
-    }
-    renderizarInterface();
-}
 
         function iniciarSincronizacao() {
             onSnapshot(doc(db, "configuracoes", "cesta_padrao"), d => {
@@ -113,7 +109,7 @@
             grid.innerHTML = "";
 
             if (restantes === 0) {
-                grid.innerHTML = `<div style="grid-column: 1/-1; text-align: center; padding: 40px; background: white; border-radius: 12px;">Meta Atingida!</div>`;
+                grid.innerHTML = `<div style="grid-column: 1/-1; text-align: center; padding: 40px; background: white; border-radius: 12px;">✅ Meta Atingida! Todas as cestas do mês foram entregues.</div>`;
                 return;
             }
 
@@ -133,27 +129,34 @@
                         for (let lote of lotesVirtuais[pId]) {
                             if (faltam <= 0) break;
                             const usar = Math.min(lote.quantidade, faltam);
-                            lote.quantidade -= usar; 
-                            faltam -= usar;
-                            picks.push({ qtd: usar, val: lote.validade });
+                            
+                            // SÓ ADICIONA SE A QUANTIDADE FOR MAIOR QUE ZERO
+                            if (usar > 0) {
+                                lote.quantidade -= usar; 
+                                faltam -= usar;
+                                picks.push({ qtd: usar, val: lote.validade });
+                            }
                         }
                     }
 
                     picks.forEach(p => {
-                        const valFormat = (p.val && p.val !== "9999-12-31") ? p.val.split('-').reverse().join('/') : "N/D";
-                        const hoje = new Date(); const margem = new Date(); margem.setDate(hoje.getDate() + 30);
-                        const valDate = new Date(p.val);
-                        let classe = "";
-                        if (valDate < hoje) classe = "vencido"; else if (valDate < margem) classe = "validade-curta";
+                        // FILTRO FINAL PARA SUMIR COM LINHAS 0x
+                        if (p.qtd > 0) {
+                            const valFormat = (p.val && p.val !== "9999-12-31") ? p.val.split('-').reverse().join('/') : "N/D";
+                            const hoje = new Date(); const margem = new Date(); margem.setDate(hoje.getDate() + 30);
+                            const valDate = new Date(p.val);
+                            let classe = "";
+                            if (valDate < hoje) classe = "vencido"; else if (valDate < margem) classe = "validade-curta";
 
-                        htmlItens += `
-                        <label class="item-montagem">
-                            <input type="checkbox" onchange="checkCesta(${i})">
-                            <span class="txt">
-                                <b>${p.qtd}x</b> ${nomesProdutos[pId] || pId}
-                                <small class="validade-info ${classe}">Validade: ${valFormat}</small>
-                            </span>
-                        </label>`;
+                            htmlItens += `
+                            <label class="item-montagem">
+                                <input type="checkbox" onchange="checkCesta(${i})">
+                                <span class="txt">
+                                    <b>${p.qtd}x</b> ${nomesProdutos[pId] || pId}
+                                    <small class="validade-info ${classe}">Validade: ${valFormat}</small>
+                                </span>
+                            </label>`;
+                        }
                     });
                 });
 

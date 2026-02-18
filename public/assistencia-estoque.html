@@ -151,6 +151,7 @@
             iniciarSincronizacao();
         });
 
+        // MÁSCARA DE DATA BRASILEIRA (PRATICIDADE)
         const inputValBR = document.getElementById('entrada-validade-br');
         inputValBR.addEventListener('input', (e) => {
             let v = e.target.value.replace(/\D/g, '');
@@ -223,7 +224,7 @@
                     if (dt < hoje) { aviso = " [VENCIDO! ⚠️]"; cor = "var(--red)"; }
                     else if (dt < margem) { aviso = " [VALIDADE CURTA ⚠️]"; cor = "var(--orange)"; }
                 }
-                const valFormat = i.validade ? i.validade.split('-').reverse().join('/') : "Vários Lotes";
+                const valFormat = i.validade ? i.validade.split('-').reverse().join('/') : "Múltiplos Lotes";
                 
                 return `
                 <div class="estoque-item">
@@ -248,7 +249,7 @@
         window.ajustarEstoque = async (id, delta, nome) => {
             const item = itensEstoque.find(x => x.id === id);
             if (delta < 0) {
-                // SAÍDA (-): Busca o lote mais antigo que tem saldo e subtrai
+                // SAÍDA (-): Busca o lote mais antigo que tem saldo e subtrai para garantir o picking FEFO
                 const q = query(collection(db, `estoque_caritas/${id}/lotes`), orderBy("validade", "asc"));
                 const lSnap = await getDocs(q);
                 const loteValido = lSnap.docs.map(d => ({id: d.id, ...d.data()})).find(l => l.quantidade > 0);
@@ -257,13 +258,13 @@
                     await updateDoc(doc(db, `estoque_caritas/${id}/lotes`, loteValido.id), { quantidade: loteValido.quantidade - 1 });
                     await updateDoc(doc(db, "estoque_caritas", id), { quantidade: Math.max(0, item.quantidade - 1) });
                 } else {
-                    // Se não houver lotes (itens antigos), tira do saldo geral
+                    // Se não houver lotes (itens legados), baixa do saldo geral
                     await updateDoc(doc(db, "estoque_caritas", id), { quantidade: Math.max(0, item.quantidade - 1) });
                 }
                 return;
             }
             
-            // ENTRADA (+): Abre modal configurado para novos lotes
+            // ENTRADA (+): Abre modal configurado para novos lotes com ID único
             document.getElementById('entrada-item-id').value = id;
             document.getElementById('titulo-entrada').innerText = `Entrada de: ${nome}`;
             document.getElementById('entrada-qtd').value = 1; 
@@ -285,7 +286,7 @@
             let valISO = "9999-12-31"; 
             if (valBR.length === 10) { const [d, m, a] = valBR.split('/'); valISO = `${a}-${m}-${d}`; }
 
-            // 1. Cria o Lote Individual (ID com milissegundos garante registro único)
+            // 1. Cria o Lote Individual (ID com milissegundos garante registro único para múltiplas entradas diárias)
             const loteId = valISO.replace(/-/g, '') + "_" + Date.now();
             await setDoc(doc(db, `estoque_caritas/${id}/lotes`, loteId), {
                 validade: valISO,
