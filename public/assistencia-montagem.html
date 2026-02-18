@@ -57,34 +57,36 @@
         });
 
         async function carregarLotesComRedeDeSeguranca() {
-            // 1. Pega os produtos atuais para saber os nomes e o saldo geral
-            const prodSnap = await getDocs(collection(db, "estoque_caritas"));
-            
-            for (const pDoc of prodSnap.docs) {
-                const pId = pDoc.id;
-                const pData = pDoc.data();
-                nomesProdutos[pId] = pData.nome;
+    const prodSnap = await getDocs(collection(db, "estoque_caritas"));
+    
+    for (const pDoc of prodSnap.docs) {
+        const pId = pDoc.id;
+        const pData = pDoc.data();
+        nomesProdutos[pId] = pData.nome;
 
-                // 2. Tenta buscar lotes individuais (Novos dados)
-                const qLotes = query(collection(db, `estoque_caritas/${pId}/lotes`), orderBy("validade", "asc"));
-                const lSnap = await getDocs(qLotes);
-                const lotesNovos = lSnap.docs.map(d => d.data()).filter(l => l.quantidade > 0);
+        // 1. Puxa os lotes individuais (novos dados)
+        const qLotes = query(collection(db, `estoque_caritas/${pId}/lotes`), orderBy("validade", "asc"));
+        const lSnap = await getDocs(qLotes);
+        let lotesEncontrados = lSnap.docs.map(d => ({ id: d.id, ...d.data() })).filter(l => l.quantidade > 0);
 
-                if (lotesNovos.length > 0) {
-                    mapaLotes[pId] = lotesNovos;
-                } else if (pData.quantidade > 0) {
-                    // REDE DE SEGURANÇA (Fallback): Se não tem pasta de lotes, usa o saldo antigo
-                    mapaLotes[pId] = [{
-                        validade: pData.validade || "9999-12-31",
-                        quantidade: pData.quantidade,
-                        doador: "Saldo Anterior"
-                    }];
-                } else {
-                    mapaLotes[pId] = [];
-                }
-            }
-            renderizarInterface();
+        // 2. CORREÇÃO DE QUANTIDADE (REDE DE SEGURANÇA)
+        const totalNosLotes = lotesEncontrados.reduce((acc, curr) => acc + curr.quantidade, 0);
+        const saldoSemLote = pData.quantidade - totalNosLotes;
+
+        if (saldoSemLote > 0) {
+            // Se o saldo total (7) for maior que o somado nos lotes (2), 
+            // adiciona a diferença (5) como um lote genérico para não esvaziar a cesta
+            lotesEncontrados.push({
+                validade: pData.validade || "9999-12-31",
+                quantidade: saldoSemLote,
+                doador: "Saldo de Estoque Anterior"
+            });
         }
+
+        mapaLotes[pId] = lotesEncontrados;
+    }
+    renderizarInterface();
+}
 
         function iniciarSincronizacao() {
             onSnapshot(doc(db, "configuracoes", "cesta_padrao"), d => {

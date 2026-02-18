@@ -151,7 +151,6 @@
             iniciarSincronizacao();
         });
 
-        // MÁSCARA DE DATA BRASILEIRA (PRATICIDADE)
         const inputValBR = document.getElementById('entrada-validade-br');
         inputValBR.addEventListener('input', (e) => {
             let v = e.target.value.replace(/\D/g, '');
@@ -184,11 +183,7 @@
 
         function calcularProntidao() {
             if (Object.keys(configCesta).length === 0) return;
-            const hoje = new Date();
-            const domSoc = calcularProximoDomingoSocial();
-            const ehDiaDeTrabalho = hoje.toDateString() === domSoc.toDateString();
             const metaRestante = Math.max(0, metaGlobal - entregasNoMes);
-
             let cestasPossiveis = Infinity;
             let pendencias = [];
 
@@ -198,23 +193,21 @@
                 const capacidade = Math.floor(saldo / qtd);
                 if (capacidade < cestasPossiveis) cestasPossiveis = capacidade;
                 const falta = (metaRestante * qtd) - saldo;
-                if (falta > 0 && !ehDiaDeTrabalho) pendencias.push(`Faltam ${falta} de <b>${item ? item.nome : 'Item'}</b>.`);
+                if (falta > 0) pendencias.push(`Faltam ${falta} de <b>${item ? item.nome : 'Item'}</b>.`);
             });
 
             const resultado = cestasPossiveis === Infinity ? 0 : cestasPossiveis;
             document.getElementById('qtd-cestas-montaveis').innerText = resultado;
-            const statusMeta = document.getElementById('status-meta');
             const box = document.getElementById('box-pendencias');
+            const statusMeta = document.getElementById('status-meta');
 
-            if (ehDiaDeTrabalho) {
-                statusMeta.innerHTML = `<span style="color:var(--orange)"><b>TRABALHO HOJE:</b> ${entregasNoMes} de ${metaGlobal} atendidas.</span>`;
-                box.style.display = 'none';
+            if (pendencias.length > 0 && resultado < metaRestante) {
+                box.style.display = 'block';
+                document.getElementById('lista-pendencias').innerHTML = pendencias.map(p => `<div class="pendencia-item"><i class="fas fa-exclamation-triangle"></i> ${p}</div>`).join('');
+                statusMeta.innerHTML = `Meta: ${metaGlobal} | <b>Faltam ${metaRestante} cestas</b>`;
             } else {
-                statusMeta.innerHTML = `Meta: ${metaGlobal} | Atendidas: ${entregasNoMes} | <b>Restam: ${metaRestante}</b>`;
-                if (pendencias.length > 0 && resultado < metaRestante) {
-                    box.style.display = 'block';
-                    document.getElementById('lista-pendencias').innerHTML = pendencias.map(p => `<div class="pendencia-item"><i class="fas fa-exclamation-triangle"></i> ${p}</div>`).join('');
-                } else { box.style.display = 'none'; }
+                box.style.display = 'none';
+                statusMeta.innerHTML = `<span style="color:var(--green)">✅ Estoque completo para as ${metaRestante} famílias restantes!</span>`;
             }
         }
 
@@ -230,7 +223,7 @@
                     if (dt < hoje) { aviso = " [VENCIDO! ⚠️]"; cor = "var(--red)"; }
                     else if (dt < margem) { aviso = " [VALIDADE CURTA ⚠️]"; cor = "var(--orange)"; }
                 }
-                const valFormat = i.validade ? i.validade.split('-').reverse().join('/') : "Múltiplos Lotes";
+                const valFormat = i.validade ? i.validade.split('-').reverse().join('/') : "Vários Lotes";
                 
                 return `
                 <div class="estoque-item">
@@ -251,39 +244,36 @@
             }).join('');
         }
 
-        // FUNÇÃO DE AJUSTE COM SUPORTE A LOTES INDIVIDUAIS
+        // FUNÇÃO AJUSTADA: Registra Lote Único e Prioriza FEFO na Saída
         window.ajustarEstoque = async (id, delta, nome) => {
-    const item = itensEstoque.find(x => x.id === id);
-    if (delta < 0) {
-        // CORREÇÃO: Busca lotes e filtra no JS para evitar o erro de índice
-        const q = query(collection(db, `estoque_caritas/${id}/lotes`), orderBy("validade", "asc"));
-        const lotesSnap = await getDocs(q);
-        
-        // Pega o primeiro lote da fila (mais antigo) que ainda tenha saldo
-        const loteValido = lotesSnap.docs.map(d => ({id: d.id, ...d.data()})).find(l => l.quantidade > 0);
+            const item = itensEstoque.find(x => x.id === id);
+            if (delta < 0) {
+                // SAÍDA (-): Busca o lote mais antigo que tem saldo e subtrai
+                const q = query(collection(db, `estoque_caritas/${id}/lotes`), orderBy("validade", "asc"));
+                const lSnap = await getDocs(q);
+                const loteValido = lSnap.docs.map(d => ({id: d.id, ...d.data()})).find(l => l.quantidade > 0);
 
-        if (loteValido) {
-            const loteRef = doc(db, `estoque_caritas/${id}/lotes`, loteValido.id);
-            await updateDoc(loteRef, { quantidade: loteValido.quantidade - 1 });
-            await updateDoc(doc(db, "estoque_caritas", id), { quantidade: Math.max(0, item.quantidade - 1) });
-        } else {
-            // Caso não existam lotes (itens legados), baixa do saldo geral
-            await updateDoc(doc(db, "estoque_caritas", id), { quantidade: Math.max(0, item.quantidade - 1) });
-        }
-        return;
-    }
-    
-    // Interface do Modal de Entrada (+)
-    document.getElementById('entrada-item-id').value = id;
-    document.getElementById('titulo-entrada').innerText = `Entrada de: ${nome}`;
-    document.getElementById('entrada-qtd').value = 1; // Reset para 1
-    document.getElementById('entrada-doador').value = "";
-    document.getElementById('entrada-validade-br').value = "";
-    document.getElementById('modal-entrada-estoque').style.display = 'flex';
-    document.getElementById('entrada-qtd').focus();
-};
+                if (loteValido) {
+                    await updateDoc(doc(db, `estoque_caritas/${id}/lotes`, loteValido.id), { quantidade: loteValido.quantidade - 1 });
+                    await updateDoc(doc(db, "estoque_caritas", id), { quantidade: Math.max(0, item.quantidade - 1) });
+                } else {
+                    // Se não houver lotes (itens antigos), tira do saldo geral
+                    await updateDoc(doc(db, "estoque_caritas", id), { quantidade: Math.max(0, item.quantidade - 1) });
+                }
+                return;
+            }
+            
+            // ENTRADA (+): Abre modal configurado para novos lotes
+            document.getElementById('entrada-item-id').value = id;
+            document.getElementById('titulo-entrada').innerText = `Entrada de: ${nome}`;
+            document.getElementById('entrada-qtd').value = 1; 
+            document.getElementById('entrada-doador').value = "";
+            document.getElementById('entrada-validade-br').value = "";
+            document.getElementById('modal-entrada-estoque').style.display = 'flex';
+            document.getElementById('entrada-qtd').focus();
+        };
 
-        // SUBMISSÃO DO MODAL DE ENTRADA (CRIAÇÃO DE LOTE ÚNICO)
+        // SUBMISSÃO: Cria o Lote com ID Único por Segundo para não sobrescrever
         document.getElementById('form-entrada-estoque').onsubmit = async (e) => {
             e.preventDefault();
             const id = document.getElementById('entrada-item-id').value;
@@ -292,14 +282,11 @@
             const doador = document.getElementById('entrada-doador').value.trim() || "Não identificado";
             const valBR = document.getElementById('entrada-validade-br').value;
             
-            let valISO = "9999-12-31"; // Sem validade vai para o fim da fila FEFO
-            if (valBR.length === 10) {
-                const [d, m, a] = valBR.split('/');
-                valISO = `${a}-${m}-${d}`;
-            }
+            let valISO = "9999-12-31"; 
+            if (valBR.length === 10) { const [d, m, a] = valBR.split('/'); valISO = `${a}-${m}-${d}`; }
 
-            // 1. Atualiza/Cria o Lote individual na sub-coleção
-            const loteId = valISO.replace(/-/g, '') + "_" + Date.now(); // ID único por data e tempo
+            // 1. Cria o Lote Individual (ID com milissegundos garante registro único)
+            const loteId = valISO.replace(/-/g, '') + "_" + Date.now();
             await setDoc(doc(db, `estoque_caritas/${id}/lotes`, loteId), {
                 validade: valISO,
                 quantidade: qtd,
@@ -307,14 +294,17 @@
                 dataEntrada: serverTimestamp()
             });
 
-            // 2. Atualiza Saldo Global do Produto para compatibilidade com o Dashboard
-            const novaProximaValidade = (!item.validade || valISO < item.validade) ? valISO : item.validade;
+            // 2. Atualiza Saldo Global (Soma o que já tinha + o novo)
+            const novoTotal = (item.quantidade || 0) + qtd;
+            // Mantém no documento principal a validade do que vence primeiro para o Dashboard
+            const novaProxVal = (!item.validade || valISO < item.validade) ? valISO : item.validade;
+            
             await updateDoc(doc(db, "estoque_caritas", id), { 
-                quantidade: item.quantidade + qtd, 
-                validade: novaProximaValidade
+                quantidade: novoTotal, 
+                validade: novaProxVal
             });
             
-            // 3. Cria Log para Relatório
+            // 3. Log de Auditoria para o Relatório
             await addDoc(collection(db, "log_auditoria"), {
                 acao: "ENTRADA_ESTOQUE",
                 detalhes: `Entrada de ${qtd} un. de ${item.nome}. Doador: ${doador}. Validade: ${valBR}`,
@@ -340,11 +330,7 @@
         document.getElementById('form-item-estoque').onsubmit = async (e) => {
             e.preventDefault();
             const id = document.getElementById('item-edit-id').value;
-            const dados = { 
-                nome: document.getElementById('item-nome').value, 
-                minimo: parseInt(document.getElementById('item-minimo').value), 
-                validade: document.getElementById('item-validade').value 
-            };
+            const dados = { nome: document.getElementById('item-nome').value, minimo: parseInt(document.getElementById('item-minimo').value), validade: document.getElementById('item-validade').value };
             if (id) await updateDoc(doc(db, "estoque_caritas", id), dados);
             else await addDoc(collection(db, "estoque_caritas"), { ...dados, quantidade: 0 });
             fecharModais();
@@ -355,50 +341,31 @@
             const lista = document.getElementById('lista-composicao');
             lista.innerHTML = Object.entries(configCesta).map(([id, qtd]) => {
                 const item = itensEstoque.find(i => i.id === id);
-                return `
-                    <div class="linha-receita" id="receita-${id}">
-                        <div style="display:flex; align-items:center; gap:10px;">
-                            <button type="button" class="btn-remover-linha" onclick="removerLinhaDaReceita('${id}')"><i class="fas fa-trash-alt"></i></button>
-                            <span>${item ? item.nome : 'Item Removido'}</span>
-                        </div>
-                        <input type="number" class="input-receita" data-id="${id}" value="${qtd}" style="width:60px; padding:5px; border-radius:5px; border:1px solid #ccc;">
-                    </div>`;
+                return `<div class="linha-receita" id="receita-${id}"><div style="display:flex; align-items:center; gap:10px;"><button type="button" class="btn-remover-linha" onclick="removerLinhaDaReceita('${id}')"><i class="fas fa-trash-alt"></i></button><span>${item ? item.nome : 'Item Removido'}</span></div><input type="number" class="input-receita" data-id="${id}" value="${qtd}" style="width:60px; padding:5px; border-radius:5px; border:1px solid #ccc;"></div>`;
             }).join('');
             const sel = document.getElementById('select-item-estoque');
             sel.innerHTML = '<option value="">Buscar no estoque...</option>' + itensEstoque.map(i => `<option value="${i.id}">${i.nome}</option>`).join('');
             document.getElementById('modal-config').style.display = 'flex';
         };
 
-        window.removerLinhaDaReceita = (id) => {
-            const el = document.getElementById(`receita-${id}`);
-            if (el) el.remove();
-        };
-
+        window.removerLinhaDaReceita = (id) => { const el = document.getElementById(`receita-${id}`); if (el) el.remove(); };
         window.adicionarLinhaCesta = () => {
             const id = document.getElementById('select-item-estoque').value;
             if (!id || document.querySelector(`.input-receita[data-id="${id}"]`)) return;
             const item = itensEstoque.find(x => x.id === id);
             const div = document.createElement('div');
-            div.className = "linha-receita";
-            div.id = `receita-${id}`;
-            div.innerHTML = `
-                <div style="display:flex; align-items:center; gap:10px;">
-                    <button type="button" class="btn-remover-linha" onclick="removerLinhaDaReceita('${id}')"><i class="fas fa-trash-alt"></i></button>
-                    <span><span class="badge-extra">EXTRA</span> ${item.nome}</span>
-                </div>
-                <input type="number" class="input-receita" data-id="${id}" value="1" style="width:60px; padding:5px;">`;
+            div.className = "linha-receita"; div.id = `receita-${id}`;
+            div.innerHTML = `<div style="display:flex; align-items:center; gap:10px;"><button type="button" class="btn-remover-linha" onclick="removerLinhaDaReceita('${id}')"><i class="fas fa-trash-alt"></i></button><span><span class="badge-extra">EXTRA</span> ${item.nome}</span></div><input type="number" class="input-receita" data-id="${id}" value="1" style="width:60px; padding:5px;">`;
             document.getElementById('lista-composicao').appendChild(div);
         };
 
         document.getElementById('btn-salvar-receita').onclick = async () => {
             const novosItens = {};
-            document.querySelectorAll('.input-receita').forEach(inp => {
-                const v = parseInt(inp.value); if (v > 0) novosItens[inp.dataset.id] = v;
-            });
+            document.querySelectorAll('.input-receita').forEach(inp => { const v = parseInt(inp.value); if (v > 0) novosItens[inp.dataset.id] = v; });
             const novaMeta = parseInt(document.getElementById('input-meta').value) || 14;
             await setDoc(doc(db, "configuracoes", "cesta_padrao"), { itens: novosItens, meta: novaMeta, atualizadoEm: serverTimestamp() });
             fecharModais();
-            alert("Configurações atualizadas!");
+            alert("Receita e Meta atualizadas!");
         };
 
         function calcularProximoDomingoSocial() {
