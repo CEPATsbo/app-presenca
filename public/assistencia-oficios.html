@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cáritas - Gerador de Ofícios Institucionais</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.25/jspdf.plugin.autotable.min.js"></script>
+    <style>
+        :root { --bg: #f4f6f9; --white: #ffffff; --primary: #2c3e50; --orange: #e67e22; --green: #27ae60; --grey: #7f8c8d; }
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background-color: var(--bg); margin: 0; padding: 20px; display: flex; flex-direction: column; align-items: center; }
+        .nav-header { width: 100%; max-width: 800px; display: flex; justify-content: space-between; margin-bottom: 20px; align-items: center; }
+        .btn-voltar { background-color: var(--grey); color: white; padding: 10px 15px; border-radius: 8px; text-decoration: none; font-weight: bold; font-size: 0.9em; display: flex; align-items: center; gap: 8px; }
+        .container { background: var(--white); padding: 30px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1); width: 100%; max-width: 800px; box-sizing: border-box; }
+        h1 { color: var(--primary); margin-top: 0; border-bottom: 2px solid var(--orange); padding-bottom: 10px; }
+        .form-group { display: flex; flex-direction: column; gap: 8px; margin-bottom: 20px; }
+        label { font-weight: bold; font-size: 0.9em; color: var(--primary); }
+        input, select, textarea { padding: 12px; border: 1px solid #ddd; border-radius: 8px; font-size: 1em; width: 100%; box-sizing: border-box; }
+        .btn-gerar { background: var(--green); color: white; border: none; padding: 15px; border-radius: 8px; width: 100%; font-size: 1.1em; font-weight: bold; cursor: pointer; display: flex; justify-content: center; align-items: center; gap: 10px; transition: 0.3s; }
+        .btn-gerar:hover { background: #219150; }
+        .alert-info { background: #e8f4fd; border-left: 4px solid #3498db; padding: 15px; margin-bottom: 20px; font-size: 0.85em; color: #2c3e50; }
+    </style>
+</head>
+<body>
+
+    <header class="nav-header">
+        <a href="/modulo-caritas.html" class="btn-voltar"><i class="fas fa-arrow-left"></i> Painel Cáritas</a>
+        <img src="/logo-cepat.png" alt="Logo" style="height: 50px;">
+    </header>
+
+    <main class="container">
+        <h1><i class="fas fa-file-signature"></i> Emissor de Ofícios</h1>
+        
+        <div class="alert-info">
+            O sistema gerará um número sequencial automático e incluirá o papel timbrado com os dados da <b>Casa Espírita Paulo de Tarso</b> e assinatura da presidente <b>Márcia Camacho</b>.
+        </div>
+
+        <form id="form-oficio">
+            <div class="form-group">
+                <label>Destinatário (Ex: Gerente do Supermercado X)</label>
+                <input type="text" id="destinatario" placeholder="Aos cuidados de..." required>
+            </div>
+
+            <div class="form-group">
+                <label>Tipo de Listagem de Itens</label>
+                <select id="tipo-lista">
+                    <option value="faltantes">Pedir apenas o que falta no estoque (Meta vs Saldo)</option>
+                    <option value="completa">Listar todos os itens que compõem a cesta padrão</option>
+                </select>
+            </div>
+
+            <div class="form-group">
+                <label>Texto Adicional / Observações (Opcional)</label>
+                <textarea id="observacoes" rows="3" placeholder="Ex: Informamos que a entrega será realizada no próximo domingo social..."></textarea>
+            </div>
+
+            <button type="submit" class="btn-gerar" id="btn-submit">
+                <i class="fas fa-file-pdf"></i> GERAR OFÍCIO E SALVAR NÚMERO
+            </button>
+        </form>
+    </main>
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
+        import { getFirestore, doc, getDoc, updateDoc, setDoc, runTransaction, collection, serverTimestamp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
+        import { getStorage, ref, getDownloadURL } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-storage.js";
+        import { protegerPagina } from '/auth.js';
+
+        const firebaseConfig = { apiKey: "AIzaSyBV7RPjk3cFTqL-aIpflJcUojKg1ZXMLuU", authDomain: "voluntarios-ativos---cepat.firebaseapp.com", projectId: "voluntarios-ativos---cepat", storageBucket: "voluntarios-ativos---cepat.firebasestorage.app", messagingSenderId: "66122858261", appId: "1:66122858261:web:7fa21f1805463b5c08331c" };
+        const app = initializeApp(firebaseConfig);
+        const db = getFirestore(app);
+        const storage = getStorage(app);
+
+        const DADOS_CASA = {
+            nome: "CASA ESPÍRITA PAULO DE TARSO",
+            cnpj: "12.253.749/0001-20",
+            endereco: "RUA DO CROMO, 780, VL. PANTANO II - SANTA BÁRBARA D'OESTE - SP",
+            cidade: "Santa Bárbara D'Oeste"
+        };
+
+        protegerPagina(['super-admin', 'diretor', 'caritas']);
+
+        document.getElementById('form-oficio').onsubmit = async (e) => {
+            e.preventDefault();
+            const btn = document.getElementById('btn-submit');
+            btn.disabled = true;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> PROCESSANDO...';
+
+            try {
+                // 1. GERAÇÃO DO NÚMERO AUTOMÁTICO (TRANSACTION)
+                const counterRef = doc(db, "counters", "oficios_caritas");
+                let numeroOficio = 0;
+
+                await runTransaction(db, async (transaction) => {
+                    const counterDoc = await transaction.get(counterRef);
+                    if (!counterDoc.exists()) {
+                        transaction.set(counterRef, { lastNumber: 1 });
+                        numeroOficio = 1;
+                    } else {
+                        numeroOficio = counterDoc.data().lastNumber + 1;
+                        transaction.update(counterRef, { lastNumber: numeroOficio });
+                    }
+                });
+
+                // 2. BUSCA DADOS DE ESTOQUE E RECEITA
+                const configSnap = await getDoc(doc(db, "configuracoes", "cesta_padrao"));
+                const estoqueSnap = await getDocs(collection(db, "estoque_caritas"));
+                
+                const meta = configSnap.data()?.meta || 14;
+                const itensCesta = configSnap.data()?.itens || {};
+                const saldoEstoque = {};
+                const nomesProdutos = {};
+                
+                estoqueSnap.forEach(d => {
+                    saldoEstoque[d.id] = d.data().quantidade || 0;
+                    nomesProdutos[d.id] = d.data().nome;
+                });
+
+                // 3. PREPARA LISTA DE ITENS
+                let listaParaOficio = [];
+                const tipo = document.getElementById('tipo-lista').value;
+
+                Object.entries(itensCesta).forEach(([id, qtdPorCesta]) => {
+                    const totalNecessario = qtdPorCesta * meta;
+                    const saldo = saldoEstoque[id] || 0;
+                    const falta = Math.max(0, totalNecessario - saldo);
+
+                    if (tipo === 'completa' || (tipo === 'faltantes' && falta > 0)) {
+                        listaParaOficio.push({
+                            nome: nomesProdutos[id] || id,
+                            qtd: tipo === 'completa' ? totalNecessario : falta
+                        });
+                    }
+                });
+
+                // 4. GERAÇÃO DO PDF
+                await gerarPDF(numeroOficio, listaParaOficio);
+
+                // 5. SALVA HISTÓRICO
+                await setDoc(doc(db, "oficios_emitidos", `OF_${numeroOficio}_2026`), {
+                    numero: numeroOficio,
+                    ano: 2026,
+                    destinatario: document.getElementById('destinatario').value,
+                    data: serverTimestamp(),
+                    itens: listaParaOficio
+                });
+
+                alert(`Ofício nº ${numeroOficio}/2026 gerado com sucesso!`);
+            } catch (err) {
+                console.error(err);
+                alert("Erro ao gerar ofício: " + err.message);
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = '<i class="fas fa-file-pdf"></i> GERAR OFÍCIO E SALVAR NÚMERO';
+            }
+        };
+
+        async function gerarPDF(num, itens) {
+            const { jsPDF } = window.jspdf;
+            const docPdf = new jsPDF();
+            const dataAtual = new Date().toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' });
+
+            // CABEÇALHO
+            docPdf.setFontSize(14);
+            docPdf.setFont("helvetica", "bold");
+            docPdf.text(DADOS_CASA.nome, 105, 20, { align: "center" });
+            docPdf.setFontSize(10);
+            docPdf.setFont("helvetica", "normal");
+            docPdf.text(`CNPJ: ${DADOS_CASA.cnpj}`, 105, 26, { align: "center" });
+            docPdf.text(DADOS_CASA.endereco, 105, 31, { align: "center" });
+            docPdf.line(20, 35, 190, 35);
+
+            // TÍTULO E DATA
+            docPdf.setFontSize(12);
+            docPdf.text(`${DADOS_CASA.cidade}, ${dataAtual}`, 190, 45, { align: "right" });
+            docPdf.setFont("helvetica", "bold");
+            docPdf.text(`OFÍCIO CÁRITAS Nº ${num}/2026`, 20, 55);
+
+            // CORPO
+            docPdf.setFont("helvetica", "normal");
+            docPdf.text(`Ao Sr(a).`, 20, 65);
+            docPdf.setFont("helvetica", "bold");
+            docPdf.text(document.getElementById('destinatario').value, 20, 70);
+
+            const textoBase = "Vimos, por meio deste, solicitar a valorosa colaboração desta empresa para o projeto CÁRITAS, mantido por nossa instituição, que assiste famílias em situação de vulnerabilidade social em nossa região. Para a manutenção de nossas atividades e montagem das cestas básicas, necessitamos dos itens abaixo relacionados:";
+            const splitTexto = docPdf.splitTextToSize(textoBase, 170);
+            docPdf.setFont("helvetica", "normal");
+            docPdf.text(splitTexto, 20, 85);
+
+            // TABELA DE ITENS
+            const rows = itens.map(i => [i.nome, `${i.qtd} unidades`]);
+            docPdf.autoTable({
+                startY: 105,
+                head: [['Produto', 'Quantidade Necessária']],
+                body: rows,
+                theme: 'grid',
+                headStyles: { fillGray: 200, textColor: 0, fontStyle: 'bold' }
+            });
+
+            const finalY = docPdf.lastAutoTable.finalY + 15;
+            const obs = document.getElementById('observacoes').value;
+            if (obs) {
+                const splitObs = docPdf.splitTextToSize(obs, 170);
+                docPdf.text(splitObs, 20, finalY);
+            }
+
+            // ASSINATURA
+            try {
+                const sigUrl = await getDownloadURL(ref(storage, "handwritten-tcfTNx.png"));
+                docPdf.addImage(sigUrl, 'PNG', 75, 230, 60, 20); // Ajuste de posição conforme o fim do documento
+            } catch (e) {
+                console.warn("Assinatura não encontrada no storage. Gerando apenas texto.");
+            }
+            
+            docPdf.setFont("helvetica", "bold");
+            docPdf.text("Márcia Camacho", 105, 255, { align: "center" });
+            docPdf.setFont("helvetica", "normal");
+            docPdf.text("Presidente - Casa Espírita Paulo de Tarso", 105, 260, { align: "center" });
+
+            docPdf.save(`Oficio_Caritas_${num}_2026.pdf`);
+        }
+    </script>
+</body>
+</html>
