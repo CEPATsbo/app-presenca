@@ -19,7 +19,7 @@
         input, select, textarea { padding: 12px; border: 1px solid #ddd; border-radius: 8px; font-size: 1em; width: 100%; box-sizing: border-box; }
         .btn-gerar { background: var(--green); color: white; border: none; padding: 15px; border-radius: 8px; width: 100%; font-size: 1.1em; font-weight: bold; cursor: pointer; display: flex; justify-content: center; align-items: center; gap: 10px; transition: 0.3s; }
         .btn-gerar:hover { background: #219150; }
-        .alert-info { background: #e8f4fd; border-left: 4px solid #3498db; padding: 15px; margin-bottom: 20px; font-size: 0.85em; color: #2c3e50; }
+        .alert-warm { background: #fff3e0; border-left: 4px solid var(--orange); padding: 15px; margin-bottom: 20px; font-size: 0.9em; color: #5d4037; }
     </style>
 </head>
 <body>
@@ -30,33 +30,33 @@
     </header>
 
     <main class="container">
-        <h1><i class="fas fa-file-signature"></i> Emissor de Ofícios</h1>
+        <h1><i class="fas fa-heart"></i> Emissor de Ofícios Solidários</h1>
         
-        <div class="alert-info">
-            Ofícios de <b>Lista Completa</b> não exibem quantidades. Ofícios de <b>Itens Faltantes</b> detalham a necessidade exata do estoque.
+        <div class="alert-warm">
+            Este modelo utiliza uma linguagem mais acolhedora, focada na missão de amparo às famílias da nossa região.
         </div>
 
         <form id="form-oficio">
             <div class="form-group">
-                <label>Destinatário (Ex: Gerente do Supermercado Crema)</label>
-                <input type="text" id="destinatario" placeholder="Aos cuidados de..." required>
+                <label>Estabelecimento / Destinatário</label>
+                <input type="text" id="destinatario" placeholder="Ex: À Gerência do Supermercado Crema" required>
             </div>
 
             <div class="form-group">
-                <label>Estratégia do Ofício</label>
+                <label>Estratégia do Pedido</label>
                 <select id="tipo-lista">
-                    <option value="completa">Listagem Institucional (Apenas nomes dos itens)</option>
-                    <option value="faltantes">Pedido de Urgência (Exibir quantidades que faltam)</option>
+                    <option value="completa">Lista Institucional (Apresentar todos os itens necessários)</option>
+                    <option value="faltantes">Lista de Urgência (Focar apenas no que falta no estoque)</option>
                 </select>
             </div>
 
             <div class="form-group">
-                <label>Texto Adicional (Opcional)</label>
-                <textarea id="observacoes" rows="3" placeholder="Informações extras para o doador..."></textarea>
+                <label>Mensagem Personalizada (Opcional)</label>
+                <textarea id="observacoes" rows="3" placeholder="Algo específico sobre esta entrega ou agradecimento especial..."></textarea>
             </div>
 
             <button type="submit" class="btn-gerar" id="btn-submit">
-                <i class="fas fa-file-pdf"></i> GERAR PDF OFICIAL
+                <i class="fas fa-file-pdf"></i> GERAR OFÍCIO HUMANIZADO
             </button>
         </form>
     </main>
@@ -72,7 +72,12 @@
         const db = getFirestore(app);
         const storage = getStorage(app);
 
-        const DADOS_CASA = { nome: "CASA ESPÍRITA PAULO DE TARSO", cnpj: "12.253.749/0001-20", endereco: "RUA DO CROMO, 780, VL. PANTANO II - SANTA BÁRBARA D'OESTE - SP", cidade: "Santa Bárbara D'Oeste" };
+        const DADOS_CASA = { 
+            nome: "CASA ESPÍRITA PAULO DE TARSO", 
+            cnpj: "12.253.749/0001-20", 
+            endereco: "RUA DO CROMO, 780, VL. PANTANO II - SANTA BÁRBARA D'OESTE - SP", 
+            cidade: "Santa Bárbara D'Oeste" 
+        };
 
         protegerPagina(['super-admin', 'diretor', 'caritas']);
 
@@ -82,7 +87,6 @@
             btn.disabled = true;
 
             try {
-                // 1. TRANSACTION PARA NUMERAÇÃO
                 const counterRef = doc(db, "counters", "oficios_caritas");
                 let num = 0;
                 await runTransaction(db, async (t) => {
@@ -91,7 +95,6 @@
                     t.set(counterRef, { lastNumber: num });
                 });
 
-                // 2. BUSCA DADOS DE ESTOQUE
                 const configSnap = await getDoc(doc(db, "configuracoes", "cesta_padrao"));
                 const estoqueSnap = await getDocs(collection(db, "estoque_caritas"));
                 
@@ -100,30 +103,26 @@
                 const saldoEstoque = {}; const nomesProdutos = {};
                 estoqueSnap.forEach(d => { saldoEstoque[d.id] = d.data().quantidade || 0; nomesProdutos[d.id] = d.data().nome; });
 
-                // 3. LOGICA DE FILTRO (SEM QUANTIDADE NA COMPLETA)
                 const tipo = document.getElementById('tipo-lista').value;
                 let lista = [];
 
                 Object.entries(itensCesta).forEach(([id, qtdPorCesta]) => {
                     const totalNec = qtdPorCesta * meta;
                     const falta = Math.max(0, totalNec - (saldoEstoque[id] || 0));
-
                     if (tipo === 'completa') {
-                        lista.push({ nome: nomesProdutos[id] || id, qtd: "" }); // Vazio para não mostrar
+                        lista.push({ nome: nomesProdutos[id] || id, qtd: "" });
                     } else if (tipo === 'faltantes' && falta > 0) {
-                        lista.push({ nome: nomesProdutos[id] || id, qtd: `${falta} unidades` });
+                        lista.push({ nome: nomesProdutos[id] || id, qtd: `${falta} un.` });
                     }
                 });
 
-                // 4. GERAÇÃO PDF
                 await gerarPDF(num, lista, tipo);
 
-                // 5. HISTÓRICO
                 await setDoc(doc(db, "oficios_emitidos", `OF_${num}_2026`), {
                     numero: num, ano: 2026, destinatario: document.getElementById('destinatario').value, data: serverTimestamp(), tipo: tipo
                 });
 
-                alert(`Ofício ${num}/2026 gerado!`);
+                alert(`Ofício Solidário ${num}/2026 gerado com sucesso!`);
             } catch (err) { alert("Erro: " + err.message); }
             finally { btn.disabled = false; }
         };
@@ -133,7 +132,7 @@
             const docPdf = new jsPDF();
             const dataStr = new Date().toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' });
 
-            // TIMBRADO
+            // CABEÇALHO INSTITUCIONAL
             docPdf.setFontSize(14).setFont("helvetica", "bold").text(DADOS_CASA.nome, 105, 20, { align: "center" });
             docPdf.setFontSize(10).setFont("helvetica", "normal").text(`CNPJ: ${DADOS_CASA.cnpj}`, 105, 26, { align: "center" });
             docPdf.text(DADOS_CASA.endereco, 105, 31, { align: "center" });
@@ -142,38 +141,55 @@
             docPdf.setFontSize(12).text(`${DADOS_CASA.cidade}, ${dataStr}`, 190, 45, { align: "right" });
             docPdf.setFont("helvetica", "bold").text(`OFÍCIO CÁRITAS Nº ${num}/2026`, 20, 55);
 
-            docPdf.setFont("helvetica", "normal").text(`Ao Sr(a).`, 20, 65);
+            // CORPO DA MENSAGEM (ESTILO CATIVANTE)
+            docPdf.setFont("helvetica", "normal").text(`Ao Sr(a). Responsável do`, 20, 65);
             docPdf.setFont("helvetica", "bold").text(document.getElementById('destinatario').value, 20, 70);
 
-            const texto = "Vimos, por meio deste, solicitar a valorosa colaboração desta empresa para o projeto CÁRITAS, que assiste famílias em situação de vulnerabilidade. Para a manutenção de nossas atividades, necessitamos dos itens abaixo:";
-            docPdf.setFont("helvetica", "normal").text(docPdf.splitTextToSize(texto, 170), 20, 85);
+            const textoAbertura = "Ao cumprimentá-lo(a) cordialmente, a Casa Espírita Paulo de Tarso, instituição sem fins lucrativos, vem, por meio deste, solicitar a valorosa colaboração de sua conceituada empresa para a nossa obra de caridade.";
+            const textoMissao = "Nossa instituição desenvolve um trabalho contínuo de assistência social em Santa Bárbara D'Oeste, visando amparar famílias em situação de vulnerabilidade com a distribuição de cestas básicas e itens de primeira necessidade através do projeto CÁRITAS.";
+            const textoAcao = "Com o objetivo de fortalecer nossas ações e garantir o atendimento digno àqueles que mais precisam, necessitamos de doações dos itens abaixo relacionados:";
 
-            // TABELA DINÂMICA (COLUNA DE QTD SÓ APARECE SE FOR NECESSÁRIO)
-            const head = tipo === 'completa' ? [['Produto']] : [['Produto', 'Necessidade Atual']];
+            let cursorY = 85;
+            [textoAbertura, textoMissao, textoAcao].forEach(txt => {
+                const lines = docPdf.splitTextToSize(txt, 170);
+                docPdf.text(lines, 20, cursorY);
+                cursorY += (lines.length * 7);
+            });
+
+            // TABELA
+            const head = tipo === 'completa' ? [['Item']] : [['Item', 'Necessidade Atual']];
             const body = itens.map(i => tipo === 'completa' ? [i.nome] : [i.nome, i.qtd]);
 
             docPdf.autoTable({
-                startY: 105,
+                startY: cursorY + 5,
                 head: head,
                 body: body,
                 theme: 'grid',
-                headStyles: { fillGray: 220, textColor: 0 }
+                headStyles: { fillGray: 230, textColor: 0, fontStyle: 'bold' },
+                styles: { fontSize: 10 }
             });
 
-            const obs = document.getElementById('observacoes').value;
-            if (obs) docPdf.text(docPdf.splitTextToSize(`Obs: ${obs}`, 170), 20, docPdf.lastAutoTable.finalY + 10);
+            const posTabelaY = docPdf.lastAutoTable.finalY + 10;
+            
+            const textoFechamento = "Toda a doação recebida será destinada integralmente às famílias assistidas. Certos de sua generosidade e compromisso com o bem-estar da nossa comunidade, agradecemos antecipadamente pela atenção e apoio.";
+            const linesFim = docPdf.splitTextToSize(textoFechamento, 170);
+            docPdf.text(linesFim, 20, posTabelaY);
 
-            // ASSINATURA (TAMANHO REDUZIDO PARA GANHO DE QUALIDADE)
+            const obs = document.getElementById('observacoes').value;
+            if (obs) {
+                docPdf.setFont("helvetica", "italic").text(docPdf.splitTextToSize(`Observação: ${obs}`, 170), 20, posTabelaY + 20);
+            }
+
+            // ASSINATURA (TAMANHO REDUZIDO PARA QUALIDADE)
             try {
                 const sigUrl = await getDownloadURL(ref(storage, "handwritten-tcfTNx.png"));
-                // Reduzido de 60x20 para 40x13 para evitar distorção
-                docPdf.addImage(sigUrl, 'PNG', 85, 235, 40, 13); 
-            } catch (e) { console.warn("Assinatura offline."); }
+                docPdf.addImage(sigUrl, 'PNG', 85, 238, 40, 12); 
+            } catch (e) { console.warn("Assinatura não carregada."); }
             
-            docPdf.setFont("helvetica", "bold").text("Márcia Camacho", 105, 255, { align: "center" });
+            docPdf.setFont("helvetica", "bold").setFontSize(11).text("Márcia Camacho", 105, 255, { align: "center" });
             docPdf.setFontSize(9).setFont("helvetica", "normal").text("Presidente - Casa Espírita Paulo de Tarso", 105, 260, { align: "center" });
 
-            docPdf.save(`Oficio_Caritas_${num}_2026.pdf`);
+            docPdf.save(`Oficio_Solidario_Caritas_${num}.pdf`);
         }
     </script>
 </body>
