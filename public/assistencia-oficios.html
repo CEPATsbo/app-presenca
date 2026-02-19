@@ -33,38 +33,37 @@
         <h1><i class="fas fa-file-signature"></i> Emissor de Ofícios</h1>
         
         <div class="alert-info">
-            O sistema gerará um número sequencial automático e incluirá o papel timbrado com os dados da <b>Casa Espírita Paulo de Tarso</b> e assinatura da presidente <b>Márcia Camacho</b>.
+            Ofícios de <b>Lista Completa</b> não exibem quantidades. Ofícios de <b>Itens Faltantes</b> detalham a necessidade exata do estoque.
         </div>
 
         <form id="form-oficio">
             <div class="form-group">
-                <label>Destinatário (Ex: Gerente do Supermercado X)</label>
+                <label>Destinatário (Ex: Gerente do Supermercado Crema)</label>
                 <input type="text" id="destinatario" placeholder="Aos cuidados de..." required>
             </div>
 
             <div class="form-group">
-                <label>Tipo de Listagem de Itens</label>
+                <label>Estratégia do Ofício</label>
                 <select id="tipo-lista">
-                    <option value="faltantes">Pedir apenas o que falta no estoque (Meta vs Saldo)</option>
-                    <option value="completa">Listar todos os itens que compõem a cesta padrão</option>
+                    <option value="completa">Listagem Institucional (Apenas nomes dos itens)</option>
+                    <option value="faltantes">Pedido de Urgência (Exibir quantidades que faltam)</option>
                 </select>
             </div>
 
             <div class="form-group">
-                <label>Texto Adicional / Observações (Opcional)</label>
-                <textarea id="observacoes" rows="3" placeholder="Ex: Informamos que a entrega será realizada no próximo domingo social..."></textarea>
+                <label>Texto Adicional (Opcional)</label>
+                <textarea id="observacoes" rows="3" placeholder="Informações extras para o doador..."></textarea>
             </div>
 
             <button type="submit" class="btn-gerar" id="btn-submit">
-                <i class="fas fa-file-pdf"></i> GERAR OFÍCIO E SALVAR NÚMERO
+                <i class="fas fa-file-pdf"></i> GERAR PDF OFICIAL
             </button>
         </form>
     </main>
 
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
-        // ADICIONADO getDocs ABAIXO
-        import { getFirestore, doc, getDoc, getDocs, updateDoc, setDoc, runTransaction, collection, serverTimestamp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
+        import { getFirestore, doc, getDoc, getDocs, setDoc, runTransaction, collection, serverTimestamp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
         import { getStorage, ref, getDownloadURL } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-storage.js";
         import { protegerPagina } from '/auth.js';
 
@@ -73,12 +72,7 @@
         const db = getFirestore(app);
         const storage = getStorage(app);
 
-        const DADOS_CASA = {
-            nome: "CASA ESPÍRITA PAULO DE TARSO",
-            cnpj: "12.253.749/0001-20",
-            endereco: "RUA DO CROMO, 780, VL. PANTANO II - SANTA BÁRBARA D'OESTE - SP",
-            cidade: "Santa Bárbara D'Oeste"
-        };
+        const DADOS_CASA = { nome: "CASA ESPÍRITA PAULO DE TARSO", cnpj: "12.253.749/0001-20", endereco: "RUA DO CROMO, 780, VL. PANTANO II - SANTA BÁRBARA D'OESTE - SP", cidade: "Santa Bárbara D'Oeste" };
 
         protegerPagina(['super-admin', 'diretor', 'caritas']);
 
@@ -86,138 +80,98 @@
             e.preventDefault();
             const btn = document.getElementById('btn-submit');
             btn.disabled = true;
-            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> PROCESSANDO...';
 
             try {
-                // 1. GERAÇÃO DO NÚMERO AUTOMÁTICO
+                // 1. TRANSACTION PARA NUMERAÇÃO
                 const counterRef = doc(db, "counters", "oficios_caritas");
-                let numeroOficio = 0;
-
-                await runTransaction(db, async (transaction) => {
-                    const counterDoc = await transaction.get(counterRef);
-                    if (!counterDoc.exists()) {
-                        transaction.set(counterRef, { lastNumber: 1 });
-                        numeroOficio = 1;
-                    } else {
-                        numeroOficio = counterDoc.data().lastNumber + 1;
-                        transaction.update(counterRef, { lastNumber: numeroOficio });
-                    }
+                let num = 0;
+                await runTransaction(db, async (t) => {
+                    const snap = await t.get(counterRef);
+                    num = snap.exists() ? snap.data().lastNumber + 1 : 1;
+                    t.set(counterRef, { lastNumber: num });
                 });
 
-                // 2. BUSCA DADOS DE ESTOQUE E RECEITA
+                // 2. BUSCA DADOS DE ESTOQUE
                 const configSnap = await getDoc(doc(db, "configuracoes", "cesta_padrao"));
                 const estoqueSnap = await getDocs(collection(db, "estoque_caritas"));
                 
                 const meta = configSnap.data()?.meta || 14;
                 const itensCesta = configSnap.data()?.itens || {};
-                const saldoEstoque = {};
-                const nomesProdutos = {};
-                
-                estoqueSnap.forEach(d => {
-                    saldoEstoque[d.id] = d.data().quantidade || 0;
-                    nomesProdutos[d.id] = d.data().nome;
-                });
+                const saldoEstoque = {}; const nomesProdutos = {};
+                estoqueSnap.forEach(d => { saldoEstoque[d.id] = d.data().quantidade || 0; nomesProdutos[d.id] = d.data().nome; });
 
-                // 3. PREPARA LISTA DE ITENS
-                let listaParaOficio = [];
+                // 3. LOGICA DE FILTRO (SEM QUANTIDADE NA COMPLETA)
                 const tipo = document.getElementById('tipo-lista').value;
+                let lista = [];
 
                 Object.entries(itensCesta).forEach(([id, qtdPorCesta]) => {
-                    const totalNecessario = qtdPorCesta * meta;
-                    const saldo = saldoEstoque[id] || 0;
-                    const falta = Math.max(0, totalNecessario - saldo);
+                    const totalNec = qtdPorCesta * meta;
+                    const falta = Math.max(0, totalNec - (saldoEstoque[id] || 0));
 
-                    if (tipo === 'completa' || (tipo === 'faltantes' && falta > 0)) {
-                        listaParaOficio.push({
-                            nome: nomesProdutos[id] || id,
-                            qtd: tipo === 'completa' ? totalNecessario : falta
-                        });
+                    if (tipo === 'completa') {
+                        lista.push({ nome: nomesProdutos[id] || id, qtd: "" }); // Vazio para não mostrar
+                    } else if (tipo === 'faltantes' && falta > 0) {
+                        lista.push({ nome: nomesProdutos[id] || id, qtd: `${falta} unidades` });
                     }
                 });
 
-                // 4. GERAÇÃO DO PDF
-                await gerarPDF(numeroOficio, listaParaOficio);
+                // 4. GERAÇÃO PDF
+                await gerarPDF(num, lista, tipo);
 
-                // 5. SALVA HISTÓRICO
-                await setDoc(doc(db, "oficios_emitidos", `OF_${numeroOficio}_2026`), {
-                    numero: numeroOficio,
-                    ano: 2026,
-                    destinatario: document.getElementById('destinatario').value,
-                    data: serverTimestamp(),
-                    itens: listaParaOficio
+                // 5. HISTÓRICO
+                await setDoc(doc(db, "oficios_emitidos", `OF_${num}_2026`), {
+                    numero: num, ano: 2026, destinatario: document.getElementById('destinatario').value, data: serverTimestamp(), tipo: tipo
                 });
 
-                alert(`Ofício nº ${numeroOficio}/2026 gerado com sucesso!`);
-            } catch (err) {
-                console.error(err);
-                alert("Erro ao gerar ofício: " + err.message);
-            } finally {
-                btn.disabled = false;
-                btn.innerHTML = '<i class="fas fa-file-pdf"></i> GERAR OFÍCIO E SALVAR NÚMERO';
-            }
+                alert(`Ofício ${num}/2026 gerado!`);
+            } catch (err) { alert("Erro: " + err.message); }
+            finally { btn.disabled = false; }
         };
 
-        async function gerarPDF(num, itens) {
+        async function gerarPDF(num, itens, tipo) {
             const { jsPDF } = window.jspdf;
             const docPdf = new jsPDF();
-            const dataAtual = new Date().toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' });
+            const dataStr = new Date().toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' });
 
-            // CABEÇALHO
-            docPdf.setFontSize(14);
-            docPdf.setFont("helvetica", "bold");
-            docPdf.text(DADOS_CASA.nome, 105, 20, { align: "center" });
-            docPdf.setFontSize(10);
-            docPdf.setFont("helvetica", "normal");
-            docPdf.text(`CNPJ: ${DADOS_CASA.cnpj}`, 105, 26, { align: "center" });
+            // TIMBRADO
+            docPdf.setFontSize(14).setFont("helvetica", "bold").text(DADOS_CASA.nome, 105, 20, { align: "center" });
+            docPdf.setFontSize(10).setFont("helvetica", "normal").text(`CNPJ: ${DADOS_CASA.cnpj}`, 105, 26, { align: "center" });
             docPdf.text(DADOS_CASA.endereco, 105, 31, { align: "center" });
             docPdf.line(20, 35, 190, 35);
 
-            // TÍTULO E DATA
-            docPdf.setFontSize(12);
-            docPdf.text(`${DADOS_CASA.cidade}, ${dataAtual}`, 190, 45, { align: "right" });
-            docPdf.setFont("helvetica", "bold");
-            docPdf.text(`OFÍCIO CÁRITAS Nº ${num}/2026`, 20, 55);
+            docPdf.setFontSize(12).text(`${DADOS_CASA.cidade}, ${dataStr}`, 190, 45, { align: "right" });
+            docPdf.setFont("helvetica", "bold").text(`OFÍCIO CÁRITAS Nº ${num}/2026`, 20, 55);
 
-            // CORPO
-            docPdf.setFont("helvetica", "normal");
-            docPdf.text(`Ao Sr(a).`, 20, 65);
-            docPdf.setFont("helvetica", "bold");
-            docPdf.text(document.getElementById('destinatario').value, 20, 70);
+            docPdf.setFont("helvetica", "normal").text(`Ao Sr(a).`, 20, 65);
+            docPdf.setFont("helvetica", "bold").text(document.getElementById('destinatario').value, 20, 70);
 
-            const textoBase = "Vimos, por meio deste, solicitar a valorosa colaboração desta empresa para o projeto CÁRITAS, mantido por nossa instituição, que assiste famílias em situação de vulnerabilidade social em nossa região. Atualmente, necessitamos dos itens abaixo relacionados:";
-            const splitTexto = docPdf.splitTextToSize(textoBase, 170);
-            docPdf.setFont("helvetica", "normal");
-            docPdf.text(splitTexto, 20, 85);
+            const texto = "Vimos, por meio deste, solicitar a valorosa colaboração desta empresa para o projeto CÁRITAS, que assiste famílias em situação de vulnerabilidade. Para a manutenção de nossas atividades, necessitamos dos itens abaixo:";
+            docPdf.setFont("helvetica", "normal").text(docPdf.splitTextToSize(texto, 170), 20, 85);
 
-            // TABELA DE ITENS
-            const rows = itens.map(i => [i.nome, `${i.qtd} unidades`]);
+            // TABELA DINÂMICA (COLUNA DE QTD SÓ APARECE SE FOR NECESSÁRIO)
+            const head = tipo === 'completa' ? [['Produto']] : [['Produto', 'Necessidade Atual']];
+            const body = itens.map(i => tipo === 'completa' ? [i.nome] : [i.nome, i.qtd]);
+
             docPdf.autoTable({
                 startY: 105,
-                head: [['Produto', 'Quantidade Necessária']],
-                body: rows,
+                head: head,
+                body: body,
                 theme: 'grid',
-                headStyles: { fillGray: 200, textColor: 0, fontStyle: 'bold' }
+                headStyles: { fillGray: 220, textColor: 0 }
             });
 
-            const finalY = docPdf.lastAutoTable.finalY + 15;
             const obs = document.getElementById('observacoes').value;
-            if (obs) {
-                const splitObs = docPdf.splitTextToSize(obs, 170);
-                docPdf.text(splitObs, 20, finalY);
-            }
+            if (obs) docPdf.text(docPdf.splitTextToSize(`Obs: ${obs}`, 170), 20, docPdf.lastAutoTable.finalY + 10);
 
-            // ASSINATURA
+            // ASSINATURA (TAMANHO REDUZIDO PARA GANHO DE QUALIDADE)
             try {
                 const sigUrl = await getDownloadURL(ref(storage, "handwritten-tcfTNx.png"));
-                docPdf.addImage(sigUrl, 'PNG', 75, 230, 60, 20);
-            } catch (e) {
-                console.warn("Assinatura não encontrada no storage.");
-            }
+                // Reduzido de 60x20 para 40x13 para evitar distorção
+                docPdf.addImage(sigUrl, 'PNG', 85, 235, 40, 13); 
+            } catch (e) { console.warn("Assinatura offline."); }
             
-            docPdf.setFont("helvetica", "bold");
-            docPdf.text("Márcia Camacho", 105, 255, { align: "center" });
-            docPdf.setFont("helvetica", "normal");
-            docPdf.text("Presidente - Casa Espírita Paulo de Tarso", 105, 260, { align: "center" });
+            docPdf.setFont("helvetica", "bold").text("Márcia Camacho", 105, 255, { align: "center" });
+            docPdf.setFontSize(9).setFont("helvetica", "normal").text("Presidente - Casa Espírita Paulo de Tarso", 105, 260, { align: "center" });
 
             docPdf.save(`Oficio_Caritas_${num}_2026.pdf`);
         }
