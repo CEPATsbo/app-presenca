@@ -63,7 +63,8 @@
 
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
-        import { getFirestore, doc, getDoc, updateDoc, setDoc, runTransaction, collection, serverTimestamp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
+        // ADICIONADO getDocs ABAIXO
+        import { getFirestore, doc, getDoc, getDocs, updateDoc, setDoc, runTransaction, collection, serverTimestamp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
         import { getStorage, ref, getDownloadURL } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-storage.js";
         import { protegerPagina } from '/auth.js';
 
@@ -88,7 +89,7 @@
             btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> PROCESSANDO...';
 
             try {
-                // 1. GERAÇÃO DO NÚMERO AUTOMÁTICO (TRANSACTION)
+                // 1. GERAÇÃO DO NÚMERO AUTOMÁTICO
                 const counterRef = doc(db, "counters", "oficios_caritas");
                 let numeroOficio = 0;
 
@@ -183,7 +184,7 @@
             docPdf.setFont("helvetica", "bold");
             docPdf.text(document.getElementById('destinatario').value, 20, 70);
 
-            const textoBase = "Vimos, por meio deste, solicitar a valorosa colaboração desta empresa para o projeto CÁRITAS, mantido por nossa instituição, que assiste famílias em situação de vulnerabilidade social em nossa região. Para a manutenção de nossas atividades e montagem das cestas básicas, necessitamos dos itens abaixo relacionados:";
+            const textoBase = "Vimos, por meio deste, solicitar a valorosa colaboração desta empresa para o projeto CÁRITAS, mantido por nossa instituição, que assiste famílias em situação de vulnerabilidade social em nossa região. Atualmente, necessitamos dos itens abaixo relacionados:";
             const splitTexto = docPdf.splitTextToSize(textoBase, 170);
             docPdf.setFont("helvetica", "normal");
             docPdf.text(splitTexto, 20, 85);
@@ -208,9 +209,9 @@
             // ASSINATURA
             try {
                 const sigUrl = await getDownloadURL(ref(storage, "handwritten-tcfTNx.png"));
-                docPdf.addImage(sigUrl, 'PNG', 75, 230, 60, 20); // Ajuste de posição conforme o fim do documento
+                docPdf.addImage(sigUrl, 'PNG', 75, 230, 60, 20);
             } catch (e) {
-                console.warn("Assinatura não encontrada no storage. Gerando apenas texto.");
+                console.warn("Assinatura não encontrada no storage.");
             }
             
             docPdf.setFont("helvetica", "bold");
