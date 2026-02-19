@@ -128,69 +128,74 @@
         };
 
         async function gerarPDF(num, itens, tipo) {
-            const { jsPDF } = window.jspdf;
-            const docPdf = new jsPDF();
-            const dataStr = new Date().toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' });
+        const { jsPDF } = window.jspdf;
+        const docPdf = new jsPDF();
+        const dataStr = new Date().toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' });
 
-            // CABEÇALHO INSTITUCIONAL
-            docPdf.setFontSize(14).setFont("helvetica", "bold").text(DADOS_CASA.nome, 105, 20, { align: "center" });
-            docPdf.setFontSize(10).setFont("helvetica", "normal").text(`CNPJ: ${DADOS_CASA.cnpj}`, 105, 26, { align: "center" });
-            docPdf.text(DADOS_CASA.endereco, 105, 31, { align: "center" });
-            docPdf.line(20, 35, 190, 35);
+        // CABEÇALHO (Papel Timbrado)
+        docPdf.setFontSize(14).setFont("helvetica", "bold").text(DADOS_CASA.nome, 105, 20, { align: "center" });
+        docPdf.setFontSize(10).setFont("helvetica", "normal").text(`CNPJ: ${DADOS_CASA.cnpj}`, 105, 26, { align: "center" });
+        docPdf.text(DADOS_CASA.endereco, 105, 31, { align: "center" });
+        docPdf.line(20, 35, 190, 35);
 
-            docPdf.setFontSize(12).text(`${DADOS_CASA.cidade}, ${dataStr}`, 190, 45, { align: "right" });
-            docPdf.setFont("helvetica", "bold").text(`OFÍCIO CÁRITAS Nº ${num}/2026`, 20, 55);
+        docPdf.setFontSize(12).text(`${DADOS_CASA.cidade}, ${dataStr}`, 190, 45, { align: "right" });
+        docPdf.setFont("helvetica", "bold").text(`OFÍCIO CÁRITAS Nº ${num}/2026`, 20, 55);
 
-            // CORPO DA MENSAGEM (ESTILO CATIVANTE)
-            docPdf.setFont("helvetica", "normal").text(`Ao Sr(a). Responsável do`, 20, 65);
-            docPdf.setFont("helvetica", "bold").text(document.getElementById('destinatario').value, 20, 70);
+        docPdf.setFont("helvetica", "normal").text(`Ao Sr(a). Responsável do`, 20, 65);
+        docPdf.setFont("helvetica", "bold").text(document.getElementById('destinatario').value, 20, 70);
 
-            const textoAbertura = "Ao cumprimentá-lo(a) cordialmente, a Casa Espírita Paulo de Tarso, instituição sem fins lucrativos, vem, por meio deste, solicitar a valorosa colaboração de sua conceituada empresa para a nossa obra de caridade.";
-            const textoMissao = "Nossa instituição desenvolve um trabalho contínuo de assistência social em Santa Bárbara D'Oeste, visando amparar famílias em situação de vulnerabilidade com a distribuição de cestas básicas e itens de primeira necessidade através do projeto CÁRITAS.";
-            const textoAcao = "Com o objetivo de fortalecer nossas ações e garantir o atendimento digno àqueles que mais precisam, necessitamos de doações dos itens abaixo relacionados:";
+        const textoAbertura = "Ao cumprimentá-lo(a) cordialmente, a Casa Espírita Paulo de Tarso, instituição sem fins lucrativos, vem, por meio deste, solicitar a valorosa colaboração de sua conceituada empresa para a nossa obra de caridade.";
+        const textoMissao = "Nossa instituição desenvolve um trabalho contínuo de assistência social em Santa Bárbara D'Oeste, visando amparar famílias em situação de vulnerabilidade através do projeto CÁRITAS.";
+        const textoAcao = "Para fortalecer nossas ações e garantir o atendimento digno, necessitamos de doações dos itens abaixo relacionados:";
 
-            let cursorY = 85;
-            [textoAbertura, textoMissao, textoAcao].forEach(txt => {
-                const lines = docPdf.splitTextToSize(txt, 170);
-                docPdf.text(lines, 20, cursorY);
-                cursorY += (lines.length * 7);
-            });
+        let cursorY = 85;
+        [textoAbertura, textoMissao, textoAcao].forEach(txt => {
+            const lines = docPdf.splitTextToSize(txt, 170);
+            docPdf.text(lines, 20, cursorY);
+            cursorY += (lines.length * 7);
+        });
 
-            // TABELA
-            const head = tipo === 'completa' ? [['Item']] : [['Item', 'Necessidade Atual']];
-            const body = itens.map(i => tipo === 'completa' ? [i.nome] : [i.nome, i.qtd]);
+        const head = tipo === 'completa' ? [['Item']] : [['Item', 'Necessidade Atual']];
+        const body = itens.map(i => tipo === 'completa' ? [i.nome] : [i.nome, i.qtd]);
 
-            docPdf.autoTable({
-                startY: cursorY + 5,
-                head: head,
-                body: body,
-                theme: 'grid',
-                headStyles: { fillGray: 230, textColor: 0, fontStyle: 'bold' },
-                styles: { fontSize: 10 }
-            });
+        docPdf.autoTable({
+            startY: cursorY + 5,
+            head: head,
+            body: body,
+            theme: 'grid',
+            headStyles: { fillGray: 230, textColor: 0, fontStyle: 'bold' }
+        });
 
-            const posTabelaY = docPdf.lastAutoTable.finalY + 10;
-            
-            const textoFechamento = "Toda a doação recebida será destinada integralmente às famílias assistidas. Certos de sua generosidade e compromisso com o bem-estar da nossa comunidade, agradecemos antecipadamente pela atenção e apoio.";
-            const linesFim = docPdf.splitTextToSize(textoFechamento, 170);
-            docPdf.text(linesFim, 20, posTabelaY);
+        // FECHAMENTO DINÂMICO (CORREÇÃO DE SOBREPOSIÇÃO)
+        let currentY = docPdf.lastAutoTable.finalY + 15;
+        const textoFechamento = "Toda a doação recebida será destinada integralmente às famílias assistidas. Certos de sua generosidade e compromisso com o bem-estar da nossa comunidade, agradecemos antecipadamente pela atenção e apoio.";
+        const linesFim = docPdf.splitTextToSize(textoFechamento, 170);
+        
+        // Verifica se cabe na página antes de escrever
+        if (currentY + 40 > 280) { docPdf.addPage(); currentY = 25; }
+        
+        docPdf.setFont("helvetica", "normal").text(linesFim, 20, currentY);
+        currentY += (linesFim.length * 7) + 5;
 
-            const obs = document.getElementById('observacoes').value;
-            if (obs) {
-                docPdf.setFont("helvetica", "italic").text(docPdf.splitTextToSize(`Observação: ${obs}`, 170), 20, posTabelaY + 20);
-            }
-
-            // ASSINATURA (TAMANHO REDUZIDO PARA QUALIDADE)
-            try {
-                const sigUrl = await getDownloadURL(ref(storage, "handwritten-tcfTNx.png"));
-                docPdf.addImage(sigUrl, 'PNG', 85, 238, 40, 12); 
-            } catch (e) { console.warn("Assinatura não carregada."); }
-            
-            docPdf.setFont("helvetica", "bold").setFontSize(11).text("Márcia Camacho", 105, 255, { align: "center" });
-            docPdf.setFontSize(9).setFont("helvetica", "normal").text("Presidente - Casa Espírita Paulo de Tarso", 105, 260, { align: "center" });
-
-            docPdf.save(`Oficio_Solidario_Caritas_${num}.pdf`);
+        const obs = document.getElementById('observacoes').value;
+        if (obs) {
+            docPdf.setFont("helvetica", "italic").text(docPdf.splitTextToSize(`Obs: ${obs}`, 170), 20, currentY);
+            currentY += 15;
         }
-    </script>
+
+        // ASSINATURA (POSIÇÃO DINÂMICA E TAMANHO REDUZIDO)
+        const sigY = Math.max(currentY + 20, 245); // Tenta manter no fundo, mas respeita o texto
+        try {
+            const sigUrl = await getDownloadURL(ref(storage, "handwritten-tcfTNx.png"));
+            // Tamanho menor (35x11) para evitar pixelado e sobreposição
+            docPdf.addImage(sigUrl, 'PNG', 88, sigY - 18, 35, 11); 
+        } catch (e) { console.warn("Assinatura offline."); }
+        
+        docPdf.setFont("helvetica", "bold").setFontSize(11).text("Márcia Camacho", 105, sigY, { align: "center" });
+        docPdf.setFontSize(9).setFont("helvetica", "normal").text("Presidente - Casa Espírita Paulo de Tarso", 105, sigY + 5, { align: "center" });
+
+        docPdf.save(`Oficio_Solidario_Caritas_${num}.pdf`);
+    }
+</script>
 </body>
 </html>
