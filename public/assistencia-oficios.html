@@ -64,7 +64,8 @@
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
         import { getFirestore, doc, getDoc, getDocs, setDoc, runTransaction, collection, serverTimestamp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
-        import { getStorage, ref, getDownloadURL } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-storage.app.js";
+        // CORREÇÃO DO LINK DE IMPORTAÇÃO ABAIXO (Removido .app)
+        import { getStorage, ref, getDownloadURL } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-storage.js";
         import { protegerPagina } from '/auth.js';
 
         const firebaseConfig = { apiKey: "AIzaSyBV7RPjk3cFTqL-aIpflJcUojKg1ZXMLuU", authDomain: "voluntarios-ativos---cepat.firebaseapp.com", projectId: "voluntarios-ativos---cepat", storageBucket: "voluntarios-ativos---cepat.firebasestorage.app", messagingSenderId: "66122858261", appId: "1:66122858261:web:7fa21f1805463b5c08331c" };
@@ -145,13 +146,12 @@
             docPdf.setFont("helvetica", "normal").text(`Ao Sr(a). Responsável do`, 20, 50);
             docPdf.setFont("helvetica", "bold").text(document.getElementById('destinatario').value, 20, 55);
 
-            // TEXTOS HUMANIZADOS
             const textoAbertura = "Ao cumprimentá-lo(a) cordialmente, a Casa Espírita Paulo de Tarso, instituição sem fins lucrativos, vem, por meio deste, solicitar a valorosa colaboração de sua conceituada empresa para a nossa obra de caridade.";
             const textoMissao = "Nossa instituição desenvolve um trabalho contínuo de assistência social em Santa Bárbara D\'Oeste, visando amparar famílias em situação de vulnerabilidade através do projeto CÁRITAS.";
             const textoAcao = "Para fortalecer nossas ações e garantir o atendimento digno, necessitamos de doações dos itens abaixo relacionados:";
 
             let cursorY = 65;
-            // CORREÇÃO: Ponto e vírgula adicionado para evitar ReferenceError
+            // PONTO E VÍRGULA ADICIONADO PARA EVITAR ERRO DE SINTAXE
             ;[textoAbertura, textoMissao, textoAcao].forEach(txt => {
                 const lines = docPdf.splitTextToSize(txt, 170);
                 docPdf.text(lines, 20, cursorY);
@@ -187,7 +187,7 @@
                 currentY += 10;
             }
 
-            // ASSINATURA DINÂMICA
+            // ASSINATURA
             currentY += 15;
             try {
                 const sigUrl = await getDownloadURL(ref(storage, "handwritten-tcfTNx.png"));
