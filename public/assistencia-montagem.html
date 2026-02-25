@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Cáritas - Linha de Montagem</title>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
     <style>
         :root { --bg: #f4f6f9; --white: #ffffff; --primary: #2c3e50; --orange: #e67e22; --green: #27ae60; --red: #e74c3c; --grey: #7f8c8d; --light-green: #e8f5e9; }
         body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background-color: var(--bg); margin: 0; padding: 20px; display: flex; flex-direction: column; align-items: center; }
@@ -17,7 +17,8 @@
         .grid-cestas { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 20px; width: 100%; }
         .cesta-card { background: var(--white); border: 2px solid #ddd; border-radius: 12px; padding: 20px; transition: all 0.3s ease; margin-bottom: 10px; }
         .cesta-card.concluida { border-color: var(--green); background-color: var(--light-green); }
-        .status-badge { font-size: 0.6em; padding: 4px 8px; border-radius: 20px; background: #eee; color: #666; }
+        .status-badge { font-size: 0.6em; padding: 4px 8px; border-radius: 20px; background: #eee; color: #666; font-weight: bold; }
+        .badge-completa { background-color: #d1f2eb; color: #16a085; }
         .item-montagem { display: flex; align-items: center; gap: 10px; padding: 10px 0; border-bottom: 1px solid #eee; cursor: pointer; }
         .item-montagem input[type="checkbox"] { width: 22px; height: 22px; cursor: pointer; accent-color: var(--green); }
         .validade-info { font-size: 0.75em; color: var(--grey); display: block; }
@@ -58,27 +59,16 @@
 
         async function carregarLotesComRedeDeSeguranca() {
             const prodSnap = await getDocs(collection(db, "estoque_caritas"));
-            
             for (const pDoc of prodSnap.docs) {
-                const pId = pDoc.id;
-                const pData = pDoc.data();
-                nomesProdutos[pId] = pData.nome;
-
+                const pId = pDoc.id; const pData = pDoc.data(); nomesProdutos[pId] = pData.nome;
                 const qLotes = query(collection(db, `estoque_caritas/${pId}/lotes`), orderBy("validade", "asc"));
                 const lSnap = await getDocs(qLotes);
                 let lotesEncontrados = lSnap.docs.map(d => ({ id: d.id, ...d.data() })).filter(l => l.quantidade > 0);
-
                 const totalNosLotes = lotesEncontrados.reduce((acc, curr) => acc + curr.quantidade, 0);
                 const saldoSemLote = (pData.quantidade || 0) - totalNosLotes;
-
                 if (saldoSemLote > 0) {
-                    lotesEncontrados.push({
-                        validade: pData.validade || "9999-12-31",
-                        quantidade: saldoSemLote,
-                        doador: "Saldo de Estoque Anterior"
-                    });
+                    lotesEncontrados.push({ validade: pData.validade || "9999-12-31", quantidade: saldoSemLote, doador: "Saldo de Estoque Anterior" });
                 }
-
                 mapaLotes[pId] = lotesEncontrados;
             }
             renderizarInterface();
@@ -86,16 +76,11 @@
 
         function iniciarSincronizacao() {
             onSnapshot(doc(db, "configuracoes", "cesta_padrao"), d => {
-                if (d.exists()) { 
-                    configCesta = d.data().itens || {}; 
-                    metaGlobal = d.data().meta || 0; 
-                    carregarLotesComRedeDeSeguranca(); 
-                }
+                if (d.exists()) { configCesta = d.data().itens || {}; metaGlobal = d.data().meta || 0; carregarLotesComRedeDeSeguranca(); }
             });
             const inicioMes = new Date(); inicioMes.setDate(1); inicioMes.setHours(0,0,0,0);
             onSnapshot(query(collection(db, "entregasCestas"), where("data", ">=", Timestamp.fromDate(inicioMes))), s => {
-                entregasNoMes = s.size; 
-                carregarLotesComRedeDeSeguranca();
+                entregasNoMes = s.size; carregarLotesComRedeDeSeguranca();
             });
         }
 
@@ -120,6 +105,7 @@
                 card.className = 'cesta-card'; 
                 card.id = `cesta-${i}`;
                 let htmlItens = "";
+                let cestaDisponivel = true; // Inteligência de estoque
 
                 Object.entries(configCesta).forEach(([pId, qtdNec]) => {
                     let faltam = qtdNec;
@@ -129,8 +115,6 @@
                         for (let lote of lotesVirtuais[pId]) {
                             if (faltam <= 0) break;
                             const usar = Math.min(lote.quantidade, faltam);
-                            
-                            // SÓ ADICIONA SE A QUANTIDADE FOR MAIOR QUE ZERO
                             if (usar > 0) {
                                 lote.quantidade -= usar; 
                                 faltam -= usar;
@@ -139,40 +123,60 @@
                         }
                     }
 
-                    picks.forEach(p => {
-                        // FILTRO FINAL PARA SUMIR COM LINHAS 0x
-                        if (p.qtd > 0) {
-                            const valFormat = (p.val && p.val !== "9999-12-31") ? p.val.split('-').reverse().join('/') : "N/D";
-                            const hoje = new Date(); const margem = new Date(); margem.setDate(hoje.getDate() + 30);
-                            const valDate = new Date(p.val);
-                            let classe = "";
-                            if (valDate < hoje) classe = "vencido"; else if (valDate < margem) classe = "validade-curta";
+                    if (faltam > 0) cestaDisponivel = false; // Se faltou algum item da receita, não está completa
 
-                            htmlItens += `
-                            <label class="item-montagem">
-                                <input type="checkbox" onchange="checkCesta(${i})">
-                                <span class="txt">
-                                    <b>${p.qtd}x</b> ${nomesProdutos[pId] || pId}
-                                    <small class="validade-info ${classe}">Validade: ${valFormat}</small>
-                                </span>
-                            </label>`;
-                        }
+                    picks.forEach(p => {
+                        const valFormat = (p.val && p.val !== "9999-12-31") ? p.val.split('-').reverse().join('/') : "N/D";
+                        const hoje = new Date(); const valDate = new Date(p.val);
+                        let classe = valDate < hoje ? "vencido" : "";
+
+                        htmlItens += `
+                        <label class="item-montagem">
+                            <input type="checkbox" onchange="checkCesta(${i})">
+                            <span class="txt">
+                                <b>${p.qtd}x</b> ${nomesProdutos[pId] || pId}
+                                <small class="validade-info ${classe}">Validade: ${valFormat}</small>
+                            </span>
+                        </label>`;
                     });
                 });
 
-                card.innerHTML = `<h3>Cesta #${i} <span class="status-badge">Pendente</span></h3>${htmlItens}`;
+                // Define o status inicial baseado na disponibilidade do estoque
+                const statusInicial = cestaDisponivel ? "Completa" : "Pendente";
+                const classeBadge = cestaDisponivel ? "status-badge badge-completa" : "status-badge";
+                
+                // Guardamos a disponibilidade num atributo para o checkCesta saber voltar ao status certo
+                card.setAttribute('data-disponivel', cestaDisponivel);
+
+                card.innerHTML = `<h3>Cesta #${i} <span class="${classeBadge}">${statusInicial}</span></h3>${htmlItens}`;
                 grid.appendChild(card);
             }
         }
 
         window.checkCesta = (n) => {
             const card = document.getElementById(`cesta-${n}`);
+            const badge = card.querySelector('.status-badge');
             const total = Array.from(card.querySelectorAll('input')).every(c => c.checked);
+            const disponivel = card.getAttribute('data-disponivel') === "true";
+
             card.querySelectorAll('input').forEach((c, idx) => {
                 const txt = card.querySelectorAll('.txt')[idx];
                 if (c.checked) txt.classList.add('marcado'); else txt.classList.remove('marcado');
             });
-            if (total) card.classList.add('concluida'); else card.classList.remove('concluida');
+
+            if (total) {
+                // Se o picking foi concluído, adicionamos a mensagem "Montada"
+                card.classList.add('concluida');
+                badge.innerText = "Completa - Montada";
+                badge.style.backgroundColor = "var(--green)";
+                badge.style.color = "white";
+            } else {
+                card.classList.remove('concluida');
+                // Se desmarcar, volta para "Completa" (se houver estoque) ou "Pendente"
+                badge.innerText = disponivel ? "Completa" : "Pendente";
+                badge.style.backgroundColor = disponivel ? "#d1f2eb" : "#eee";
+                badge.style.color = disponivel ? "#16a085" : "#666";
+            }
         };
     </script>
 </body>

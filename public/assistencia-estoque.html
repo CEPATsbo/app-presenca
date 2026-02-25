@@ -183,34 +183,39 @@
         }
 
         function calcularProntidao() {
-            if (Object.keys(configCesta).length === 0) return;
-            const metaRestante = Math.max(0, metaGlobal - entregasNoMes);
-            let cestasPossiveis = Infinity;
-            let pendencias = [];
+    if (Object.keys(configCesta).length === 0) return;
+    const metaRestanteParaEntregar = Math.max(0, metaGlobal - entregasNoMes);
+    
+    let cestasPossiveisComEstoque = Infinity;
+    let pendencias = [];
 
-            Object.entries(configCesta).forEach(([id, qtd]) => {
-                const item = itensEstoque.find(i => i.id === id);
-                const saldo = item ? item.quantidade : 0;
-                const capacidade = Math.floor(saldo / qtd);
-                if (capacidade < cestasPossiveis) cestasPossiveis = capacidade;
-                const falta = (metaRestante * qtd) - saldo;
-                if (falta > 0) pendencias.push(`Faltam ${falta} de <b>${item ? item.nome : 'Item'}</b>.`);
-            });
+    Object.entries(configCesta).forEach(([id, qtd]) => {
+        const item = itensEstoque.find(i => i.id === id);
+        const saldo = item ? item.quantidade : 0;
+        const capacidade = Math.floor(saldo / qtd);
+        if (capacidade < cestasPossiveisComEstoque) cestasPossiveisComEstoque = capacidade;
+        const falta = (metaRestanteParaEntregar * qtd) - saldo;
+        if (falta > 0) pendencias.push(`Faltam ${falta} de <b>${item ? item.nome : 'Item'}</b>.`);
+    });
 
-            const resultado = cestasPossiveis === Infinity ? 0 : cestasPossiveis;
-            document.getElementById('qtd-cestas-montaveis').innerText = resultado;
-            const box = document.getElementById('box-pendencias');
-            const statusMeta = document.getElementById('status-meta');
+    const prontas = cestasPossiveisComEstoque === Infinity ? 0 : cestasPossiveisComEstoque;
+    document.getElementById('qtd-cestas-montaveis').innerText = prontas;
+    
+    // CORREÇÃO DA CONTA: Meta Restante - O que já está pronto
+    const faltamMontar = Math.max(0, metaRestanteParaEntregar - prontas);
+    
+    const box = document.getElementById('box-pendencias');
+    const statusMeta = document.getElementById('status-meta');
 
-            if (pendencias.length > 0 && resultado < metaRestante) {
-                box.style.display = 'block';
-                document.getElementById('lista-pendencias').innerHTML = pendencias.map(p => `<div class="pendencia-item"><i class="fas fa-exclamation-triangle"></i> ${p}</div>`).join('');
-                statusMeta.innerHTML = `Meta: ${metaGlobal} | <b>Faltam ${metaRestante} cestas</b>`;
-            } else {
-                box.style.display = 'none';
-                statusMeta.innerHTML = `<span style="color:var(--green)">✅ Estoque completo para as ${metaRestante} famílias restantes!</span>`;
-            }
-        }
+    if (faltamMontar > 0) {
+        box.style.display = 'block';
+        document.getElementById('lista-pendencias').innerHTML = pendencias.map(p => `<div class="pendencia-item"><i class="fas fa-exclamation-triangle"></i> ${p}</div>`).join('');
+        statusMeta.innerHTML = `Meta: ${metaGlobal} | Já Prontas: ${prontas} | <b>Faltam montar: ${faltamMontar}</b>`;
+    } else {
+        box.style.display = 'none';
+        statusMeta.innerHTML = `<span style="color:var(--green)">✅ Estoque pronto para atender as ${metaRestanteParaEntregar} famílias restantes!</span>`;
+    }
+}
 
         function renderizarListaEstoque() {
             const hoje = new Date();
