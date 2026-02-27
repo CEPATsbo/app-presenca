@@ -29,7 +29,6 @@
         .controles { display: flex; align-items: center; gap: 15px; }
         .linha-receita { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; padding: 10px; background: #f9f9f9; border-radius: 8px; border: 1px solid #eee; }
         .btn-remover-linha { background: none; border: none; color: var(--red); cursor: pointer; font-size: 1.1em; padding: 5px; }
-        .badge-extra { background: #3498db; color: white; padding: 2px 5px; border-radius: 4px; font-size: 0.7em; font-weight: bold; }
     </style>
 </head>
 <body>
@@ -43,89 +42,42 @@
         <h1><i class="fas fa-boxes"></i> Almoxarifado Social</h1>
 
         <div id="painel-prontidao" class="cesta-pronta-card">
-            <h2 id="qtd-cestas-montaveis">0</h2>
+            <h2 id="qtd-cestas-montaveis">--</h2>
             <p>Cestas Prontas para Entrega</p>
-            <div id="status-meta" style="margin-top: 10px; color: #1b5e20; font-weight: bold; font-size: 0.9em;">
-                Sincronizando dados...
-            </div>
-            <div id="box-pendencias" class="lista-pendencias" style="display: none;">
-                <div id="lista-pendencias"></div>
-            </div>
+            <div id="status-meta" style="margin-top: 10px; color: #1b5e20; font-weight: bold; font-size: 0.9em;">Iniciando...</div>
+            <div id="box-pendencias" class="lista-pendencias" style="display: none;"><div id="lista-pendencias"></div></div>
         </div>
 
         <div style="display: flex; gap: 10px; margin-bottom: 30px; justify-content: center; flex-wrap: wrap;">
-            <button id="btn-config-cesta" class="btn-acao" style="background: var(--primary); color: white;">
-                <i class="fas fa-cog"></i> Configurar Receita e Meta
-            </button>
-            <button id="btn-abrir-novo" class="btn-acao" style="background: var(--orange); color: white;">
-                <i class="fas fa-plus"></i> + Novo Item no Estoque
-            </button>
+            <button id="btn-config-cesta" class="btn-acao" style="background: var(--primary); color: white;"><i class="fas fa-cog"></i> Configurar Receita e Meta</button>
+            <button id="btn-abrir-novo" class="btn-acao" style="background: var(--orange); color: white;"><i class="fas fa-plus"></i> + Novo Item</button>
         </div>
 
         <div class="secao-estoque">
             <h3 style="color: #2980b9; margin: 0 0 15px 0;"><i class="fas fa-list"></i> Saldo de Insumos Individuais</h3>
-            <div id="lista-produtos">Carregando estoque...</div>
+            <div id="lista-produtos">Buscando banco de dados...</div>
         </div>
     </main>
 
-    <div id="modal-entrada-estoque" class="modal">
-        <div class="modal-content">
-            <h3 id="titulo-entrada">Registrar Entrada</h3>
-            <form id="form-entrada-estoque">
-                <input type="hidden" id="entrada-item-id">
-                <div class="form-group"><label>Quantidade Recebida</label><input type="number" id="entrada-qtd" value="1" required></div>
-                <div class="form-group"><label>Doador (Opcional)</label><input type="text" id="entrada-doador"></div>
-                <div class="form-group"><label>Validade deste Lote (DD/MM/AAAA)</label><input type="text" id="entrada-validade-br" maxlength="10" placeholder="00/00/0000"></div>
-                <div style="display: flex; gap: 10px; margin-top: 20px;">
-                    <button type="button" onclick="fecharModais()" style="flex:1; padding: 12px; border-radius: 8px; border: 1px solid #ccc;">Cancelar</button>
-                    <button type="submit" style="flex:1; background: var(--green); color: white; border: none; border-radius: 8px; font-weight: bold;">Confirmar</button>
-                </div>
-            </form>
-        </div>
-    </div>
-
-    <div id="modal-novo-item" class="modal">
-        <div class="modal-content">
-            <h3 id="titulo-modal-item">Novo Item no Estoque</h3>
-            <form id="form-item-estoque">
-                <input type="hidden" id="item-edit-id">
-                <div class="form-group"><label>Nome do Produto</label><input type="text" id="item-nome" required></div>
-                <div class="form-group"><label>Estoque Mínimo Individual</label><input type="number" id="item-minimo" value="5" required></div>
-                <div class="form-group"><label>Validade Próxima (Opcional)</label><input type="date" id="item-validade"></div>
-                <div style="display: flex; gap: 10px; margin-top: 20px;">
-                    <button type="button" onclick="fecharModais()" style="flex:1; padding: 12px; border-radius: 8px; border: 1px solid #ccc;">Cancelar</button>
-                    <button type="submit" style="flex:1; background: var(--green); color: white; border: none; border-radius: 8px; font-weight: bold;">Salvar Produto</button>
-                </div>
-            </form>
-        </div>
-    </div>
-
     <div id="modal-config" class="modal">
         <div class="modal-content">
-            <h3>Configurar Entrega Social</h3>
-            <div class="form-group" style="background: #f0f4f8; padding: 15px; border-radius: 10px; margin-bottom: 20px;">
-                <label>META DE ATENDIMENTO (Famílias)</label>
-                <input type="number" id="input-meta" value="14" style="font-size: 1.2em; font-weight: bold; text-align: center;">
+            <h3>Configurações da Cesta</h3>
+            <div class="form-group"><label>Meta de Atendimento</label><input type="number" id="input-meta"></div>
+            <div id="lista-composicao"></div>
+            <div style="margin-top:20px; border-top:1px dashed #ccc; padding-top:10px;">
+                <select id="select-item-estoque" style="width:100%; margin-bottom:10px; padding:10px;"></select>
+                <button type="button" onclick="adicionarLinhaCesta()" style="width:100%; background:var(--orange); color:white; border:none; padding:10px; border-radius:8px;">+ Adicionar na Receita</button>
             </div>
-            <label style="font-weight: bold; font-size: 0.8em; color: #666;">ITENS NA RECEITA ATUAL:</label>
-            <div id="lista-composicao" style="margin-top: 10px;"></div>
-            <div style="border-top: 2px dashed #eee; margin-top: 20px; padding-top: 15px;">
-                <label style="font-weight: bold; font-size: 0.8em; color: var(--orange);">ADICIONAR ITEM NA CESTA:</label>
-                <div style="display: flex; gap: 8px; margin-top: 8px;">
-                    <select id="select-item-estoque" style="flex: 1; padding: 10px; border-radius: 6px;"></select>
-                    <button type="button" onclick="adicionarLinhaCesta()" style="background: var(--orange); color: white; border: none; padding: 0 15px; border-radius: 6px;"><i class="fas fa-plus"></i></button>
-                </div>
-            </div>
-            <div style="display: flex; gap: 10px; margin-top: 30px;">
-                <button onclick="fecharModais()" style="flex:1; padding: 12px; border-radius: 8px; border: 1px solid #ccc;">Sair</button>
-                <button id="btn-salvar-receita" style="flex:1; background: var(--green); color: white; border: none; border-radius: 8px; font-weight: bold;">Salvar Configurações</button>
+            <div style="display:flex; gap:10px; margin-top:20px;">
+                <button onclick="fecharModais()" style="flex:1; padding:10px;">Fechar</button>
+                <button id="btn-salvar-receita" style="flex:1; background:var(--green); color:white; border:none; border-radius:8px;">Salvar Tudo</button>
             </div>
         </div>
     </div>
 
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
-        import { getFirestore, collection, onSnapshot, doc, updateDoc, setDoc, addDoc, serverTimestamp, query, where, Timestamp, getDocs, orderBy } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
+        import { getFirestore, collection, onSnapshot, doc, updateDoc, setDoc, Timestamp, query, where } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
         import { protegerPagina } from '/auth.js';
 
         const firebaseConfig = { apiKey: "AIzaSyBV7RPjk3cFTqL-aIpflJcUojKg1ZXMLuU", authDomain: "voluntarios-ativos---cepat.firebaseapp.com", projectId: "voluntarios-ativos---cepat", storageBucket: "voluntarios-ativos---cepat.firebasestorage.app", messagingSenderId: "66122858261", appId: "1:66122858261:web:7fa21f1805463b5c08331c" };
@@ -133,74 +85,51 @@
         
         let itensEstoque = [], configCesta = {}, metaGlobal = 14, entregasNoMes = 0;
 
-        protegerPagina(['super-admin','diretor','conselheiro','tesoureiro','caritas']).then(user => {
-            iniciarSincronizacao();
-        });
-
-        function iniciarSincronizacao() {
-            // Sincroniza Estoque
+        protegerPagina(['super-admin','diretor','conselheiro','tesoureiro','caritas']).then(() => {
+            // Escuta Estoque Real
             onSnapshot(collection(db, "estoque_caritas"), snap => {
-                itensEstoque = snap.docs.map(d => ({ id: d.id, ...d.data() })).sort((a,b) => a.nome.localeCompare(b.nome));
-                renderizarListaEstoque();
-                calcularProntidao();
+                itensEstoque = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+                renderizarEstoque();
+                calcular();
             });
 
-            // Sincroniza Receita
+            // Escuta Receita e Meta
             onSnapshot(doc(db, "configuracoes", "cesta_padrao"), d => {
-                if (d.exists()) {
+                if(d.exists()){
                     configCesta = d.data().itens || {};
                     metaGlobal = d.data().meta || 14;
-                    calcularProntidao();
+                    calcular();
                 }
             });
+        });
 
-            // Sincroniza Entregas
-            const inicioMes = new Date(); inicioMes.setDate(1); inicioMes.setHours(0,0,0,0);
-            onSnapshot(query(collection(db, "entregasCestas"), where("data", ">=", Timestamp.fromDate(inicioMes))), s => {
-                entregasNoMes = s.size;
-                calcularProntidao();
-            });
-        }
-
-        function calcularProntidao() {
-            if (Object.keys(configCesta).length === 0 || itensEstoque.length === 0) return;
-            const metaRestante = Math.max(0, metaGlobal - entregasNoMes);
-            let prontas = Infinity;
-            let pendencias = [];
-
+        function calcular() {
+            if (!configCesta || itensEstoque.length === 0) return;
+            let prontas = Infinity, pendencias = [];
             Object.entries(configCesta).forEach(([id, qtd]) => {
                 const item = itensEstoque.find(i => i.id === id);
                 const saldo = item ? (item.quantidade || 0) : 0;
-                const capacidade = Math.floor(saldo / qtd);
-                if (capacidade < prontas) prontas = capacidade;
-                
-                const falta = (metaRestante * qtd) - saldo;
-                if (falta > 0) pendencias.push(`Faltam ${falta} de <b>${item ? item.nome : 'ID:'+id}</b>.`);
+                const cap = Math.floor(saldo / qtd);
+                if (cap < prontas) prontas = cap;
+                if ((metaGlobal * qtd) > saldo) pendencias.push(`Faltam ${(metaGlobal * qtd) - saldo} de ${item ? item.nome : id}`);
             });
-
-            prontas = prontas === Infinity ? 0 : prontas;
-            document.getElementById('qtd-cestas-montaveis').innerText = prontas;
-            const faltamMontar = Math.max(0, metaRestante - prontas);
-            const statusMeta = document.getElementById('status-meta');
+            const total = prontas === Infinity ? 0 : prontas;
+            document.getElementById('qtd-cestas-montaveis').innerText = total;
+            document.getElementById('status-meta').innerText = `Meta: ${metaGlobal} | Prontas: ${total}`;
             const box = document.getElementById('box-pendencias');
-
-            if (faltamMontar > 0) {
+            if (pendencias.length > 0) {
                 box.style.display = 'block';
-                document.getElementById('lista-pendencias').innerHTML = pendencias.map(p => `<div class="pendencia-item"><i class="fas fa-exclamation-triangle"></i> ${p}</div>`).join('');
-                statusMeta.innerHTML = `Meta: ${metaGlobal} | Prontas: ${prontas} | <b>Faltam: ${faltamMontar}</b>`;
-            } else {
-                box.style.display = 'none';
-                statusMeta.innerHTML = `<span style="color:var(--green)">✅ Estoque pronto para atender as ${metaRestante} famílias!</span>`;
-            }
+                document.getElementById('lista-pendencias').innerHTML = pendencias.map(p => `<div class="pendencia-item">${p}</div>`).join('');
+            } else { box.style.display = 'none'; }
         }
 
-        function renderizarListaEstoque() {
+        function renderizarEstoque() {
             document.getElementById('lista-produtos').innerHTML = itensEstoque.map(i => `
                 <div class="estoque-item">
-                    <div style="flex:1"><b>${i.nome}</b><p style="margin:0; font-size:0.9em; color:#7f8c8d">Saldo Total: ${i.quantidade} un.</p></div>
+                    <div style="flex:1"><b>${i.nome}</b><p style="margin:0; font-size:0.8em; color:#777">Saldo: ${i.quantidade} un.</p></div>
                     <div class="controles">
                         <button class="btn-ajuste" style="background:var(--red)" onclick="ajustarEstoque('${i.id}', -1)">-</button>
-                        <span style="font-weight:bold; min-width:30px; text-align:center;">${i.quantidade}</span>
+                        <span>${i.quantidade}</span>
                         <button class="btn-ajuste" style="background:var(--green)" onclick="ajustarEstoque('${i.id}', 1)">+</button>
                     </div>
                 </div>`).join('');
@@ -213,24 +142,13 @@
 
         document.getElementById('btn-config-cesta').onclick = () => {
             document.getElementById('input-meta').value = metaGlobal;
-            const lista = document.getElementById('lista-composicao');
-            lista.innerHTML = Object.entries(configCesta).map(([id, qtd]) => {
+            document.getElementById('lista-composicao').innerHTML = Object.entries(configCesta).map(([id, qtd]) => {
                 const item = itensEstoque.find(i => i.id === id);
-                return `<div class="linha-receita" id="receita-${id}"><button type="button" class="btn-remover-linha" onclick="removerLinhaDaReceita('${id}')"><i class="fas fa-trash-alt"></i></button><span>${item ? item.nome : 'ID:'+id}</span><input type="number" class="input-receita" data-id="${id}" value="${qtd}" style="width:60px;"></div>`;
+                return `<div class="linha-receita" id="receita-${id}"><span>${item ? item.nome : id}</span><input type="number" class="input-receita" data-id="${id}" value="${qtd}" style="width:50px;"></div>`;
             }).join('');
             const sel = document.getElementById('select-item-estoque');
-            sel.innerHTML = '<option value="">Selecionar...</option>' + itensEstoque.map(i => `<option value="${i.id}">${i.nome}</option>`).join('');
+            sel.innerHTML = itensEstoque.map(i => `<option value="${i.id}">${i.nome}</option>`).join('');
             document.getElementById('modal-config').style.display = 'flex';
-        };
-
-        window.removerLinhaDaReceita = (id) => document.getElementById(`receita-${id}`).remove();
-        window.adicionarLinhaCesta = () => {
-            const id = document.getElementById('select-item-estoque').value;
-            if (!id || document.querySelector(`.input-receita[data-id="${id}"]`)) return;
-            const item = itensEstoque.find(x => x.id === id);
-            const div = document.createElement('div'); div.className = "linha-receita"; div.id = `receita-${id}`;
-            div.innerHTML = `<button type="button" class="btn-remover-linha" onclick="removerLinhaDaReceita('${id}')"><i class="fas fa-trash-alt"></i></button><span>${item.nome}</span><input type="number" class="input-receita" data-id="${id}" value="1" style="width:60px;">`;
-            document.getElementById('lista-composicao').appendChild(div);
         };
 
         document.getElementById('btn-salvar-receita').onclick = async () => {
