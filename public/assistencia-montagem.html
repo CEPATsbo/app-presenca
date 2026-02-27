@@ -20,9 +20,9 @@
         .item-montagem input[type="checkbox"] { width: 18px; height: 18px; cursor: pointer; accent-color: var(--green); }
         .marcado { text-decoration: line-through; color: var(--grey); opacity: 0.6; }
         .txt-falta { color: var(--red); font-weight: bold; font-size: 0.85em; }
-        .btn-reset { margin-top: 15px; background: none; border: none; color: var(--grey); cursor: pointer; font-size: 0.85em; text-decoration: underline; font-weight: 500; transition: 0.3s; }
+        .controles-sessao { width: 100%; max-width: 1200px; display: flex; justify-content: flex-end; margin-top: -15px; margin-bottom: 15px; }
+        .btn-reset { background: none; border: none; color: var(--grey); cursor: pointer; font-size: 0.85em; text-decoration: underline; font-weight: 500; }
         .btn-reset:hover { color: var(--red); }
-        .controles-sessao { display: flex; flex-direction: column; align-items: flex-end; width: 100%; max-width: 1200px; margin-top: -10px; margin-bottom: 20px; }
     </style>
 </head>
 <body>
@@ -44,7 +44,7 @@
             <button id="trigger-reset" class="btn-reset"><i class="fas fa-sync-alt"></i> Finalizar Ciclo / Reset Mensal</button>
         </div>
 
-        <div id="grid-cestas" class="grid-cestas">Carregando informações...</div>
+        <div id="grid-cestas" class="grid-cestas">Carregando informações do estoque...</div>
     </main>
 
     <script type="module">
@@ -60,17 +60,17 @@
         protegerPagina(['super-admin','diretor','caritas']).then(() => { 
             iniciarSincronizacao();
             document.getElementById('trigger-reset').onclick = resetarPicking;
-        }).catch(err => console.error("Erro de autenticação:", err));
+        });
 
         function iniciarSincronizacao() {
-            // Tenta ler o estado do picking com tratamento de erro de permissão
+            // Monitora marcações do picking com tratamento de erro
             onSnapshot(collection(db, "picking_estado"), snap => {
                 pickingMarcados = {};
                 snap.docs.forEach(d => pickingMarcados[d.id] = d.data());
                 renderizar();
             }, err => {
-                console.error("Erro nas permissões do picking_estado:", err);
-                document.getElementById('grid-cestas').innerHTML = "<div style='color:red; padding:20px;'>Erro de permissão no banco de dados. Verifique as regras do Firestore.</div>";
+                console.error("Permissão negada na coleção picking_estado:", err);
+                document.getElementById('grid-cestas').innerHTML = "<div style='color:red; padding:20px; background:white; border-radius:10px;'>Atenção: Adicione a regra do 'picking_estado' no Firebase para habilitar a montagem.</div>";
             });
 
             onSnapshot(collection(db, "estoque_caritas"), snap => {
@@ -110,8 +110,7 @@
                     if (extra > 0) lotes.push({ validade: "9999-12-31", quantidade: extra });
                     
                     mapaLotes[pId] = lotes;
-                } catch (e) {
-                    console.warn(`Erro ao ler lotes de ${pId}:`, e);
+                } catch(e) { 
                     mapaLotes[pId] = [{ validade: "9999-12-31", quantidade: saldoEstoque[pId] || 0 }];
                 }
             }
@@ -131,7 +130,7 @@
             
             const totalCestasExibir = Math.max(0, metaGlobal - entregasNoMes);
             if (totalCestasExibir === 0 && metaGlobal > 0) {
-                grid.innerHTML = "<div style='grid-column: 1/-1; text-align: center; padding: 50px;'><h2>✅ Meta mensal atingida e entregue!</h2></div>";
+                grid.innerHTML = "<div style='grid-column: 1/-1; text-align: center; padding: 50px;'><h2>✅ Todas as cestas do ciclo foram entregues!</h2></div>";
                 return;
             }
 
@@ -145,8 +144,8 @@
                 card.className = `cesta-card ${est.concluida ? 'concluida' : ''}`;
                 let html = `<h3>Cesta #${entregasNoMes + i}</h3>`;
 
-                // ORDENAR ITENS POR NOME (ALFABÉTICA)
-                const itensOrdenados = Object.entries(configCesta).sort((a, b) => {
+                // ORDENAÇÃO ALFABÉTICA DOS ITENS
+                const itensOrdenados = Object.entries(configCesta).sort((a,b) => {
                     const nomeA = nomesProdutos[a[0]] || "";
                     const nomeB = nomesProdutos[b[0]] || "";
                     return nomeA.localeCompare(nomeB);
@@ -190,24 +189,22 @@
             const atual = pickingMarcados[cestaId] || { itens: {}, concluida: false };
             atual.itens[itemKey] = status;
             
-            // Verifica conclusão
-            const totalItensNecessarios = Object.keys(configCesta).length;
             const marcados = Object.values(atual.itens).filter(v => v).length;
-            atual.concluida = marcados >= totalItensNecessarios;
+            atual.concluida = marcados >= Object.keys(configCesta).length;
 
             await setDoc(docRef, atual);
         };
 
         async function resetarPicking() {
-            const confirmacao = confirm("ATENÇÃO: Isso limpará todas as cestas montadas para iniciar o próximo ciclo. Confirmar reset?");
+            const confirmacao = confirm("ATENÇÃO: Isso limpará todas as cestas montadas no Picking para iniciar o próximo mês. Confirmar reset?");
             if (confirmacao) {
                 try {
                     const snap = await getDocs(collection(db, "picking_estado"));
                     const promises = snap.docs.map(d => deleteDoc(d.ref));
                     await Promise.all(promises);
-                    alert("Linha de montagem reiniciada!");
+                    alert("Picking reiniciado!");
                 } catch (e) {
-                    alert("Erro ao resetar: Verifique as permissões do Firebase.");
+                    alert("Erro ao resetar: Verifique as regras do Firebase.");
                 }
             }
         }
