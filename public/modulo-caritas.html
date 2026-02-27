@@ -41,11 +41,13 @@
         <a href="/dashboard.html" class="btn-painel"><i class="fas fa-arrow-left"></i> Painel Geral</a>
         <img src="/logo-cepat.png" alt="Logo CEPAT" style="height: 50px;">
     </header>
+
     <main class="container">
         <div class="header-titulo">
             <h1>Módulo Cáritas</h1>
             <p>Gestão da Assistência Social e Acolhimento Fraterno</p>
         </div>
+
         <section class="stats-grid">
             <div class="stat-card card-prontidao" onclick="window.location='/assistencia-estoque.html'">
                 <div class="info-prontidao">
@@ -56,15 +58,18 @@
                     <b id="item-limitante">Sincronizando...</b>
                 </div>
             </div>
+
             <div class="stat-card"><h4>Famílias Ativas</h4><p id="total-familias">--</p></div>
             <div class="stat-card"><h4>Cestas Entregues (Mês)</h4><p id="total-entregas">0</p></div>
             <div class="stat-card"><h4>Próximo Domingo</h4><p id="data-domingo">--/--</p></div>
         </section>
+
         <section id="painel-validade-viva" style="display: none;">
             <h3 class="alerta-titulo"><i class="fas fa-exclamation-triangle fa-beat"></i> ALERTA: VENCIMENTO CRÍTICO</h3>
             <span class="alerta-subtitulo">Itens com validade crítica para a entrega de <b id="data-ref-domingo">--/--</b>:</span>
             <div id="lista-alertas-vivos" class="grid-alertas-vivos"></div>
         </section>
+
         <section class="menu-grid">
             <a href="/assistencia-familias.html" class="menu-item"><i class="fas fa-users"></i><h3>Famílias</h3><p>Cadastros e prontuários sociais.</p></a>
             <a href="/assistencia-cestas.html" class="menu-item"><i class="fas fa-shopping-basket"></i><h3>Cestas Básicas</h3><p>Registrar entregas mensais.</p></a>
@@ -76,27 +81,38 @@
             <a href="/estatisticas.html" class="menu-item"><i class="fas fa-chart-line"></i><h3>Estatísticas</h3><p>Indicadores e gráficos sociais.</p></a>
         </section>
     </main>
+
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
         import { getFirestore, collection, onSnapshot, query, where, Timestamp, doc } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
         import { protegerPagina } from '/auth.js';
+
         const firebaseConfig = { apiKey: "AIzaSyBV7RPjk3cFTqL-aIpflJcUojKg1ZXMLuU", authDomain: "voluntarios-ativos---cepat.firebaseapp.com", projectId: "voluntarios-ativos---cepat", storageBucket: "voluntarios-ativos---cepat.firebasestorage.app", messagingSenderId: "66122858261", appId: "1:66122858261:web:7fa21f1805463b5c08331c" };
         const db = getFirestore(initializeApp(firebaseConfig));
+
         protegerPagina(['super-admin','diretor','tesoureiro','conselheiro','recepcionista','bibliotecario','irradiador','dirigente-escola','secretario-escola','produtor-eventos','entrevistador','caritas']).then(() => {
             const domSoc = calcularProximoDomingoSocial();
             document.getElementById('data-domingo').innerText = domSoc.toLocaleDateString('pt-BR').substring(0, 5);
             document.getElementById('data-ref-domingo').innerText = domSoc.toLocaleDateString('pt-BR');
+
             const limiteStr = new Date(domSoc.getTime() + 14 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
-            let estoqueGlobal = [], configCesta = {}, metaGlobal = 14, entregasRealizadas = 0;
+
+            let estoqueGlobal = [];
+            let configCesta = null;
+            let metaGlobal = 14; 
+            let entregasRealizadas = 0;
+
             onSnapshot(query(collection(db, "familiasAssistidas"), where("statusGeral", "==", "Ativa")), s => {
                 document.getElementById('total-familias').innerText = s.size;
             });
+            
             const inicioMes = new Date(); inicioMes.setDate(1); inicioMes.setHours(0,0,0,0);
             onSnapshot(query(collection(db, "entregasCestas"), where("data", ">=", Timestamp.fromDate(inicioMes))), s => {
                 entregasRealizadas = s.size;
                 document.getElementById('total-entregas').innerText = entregasRealizadas;
                 recalcularProntidao();
             });
+
             onSnapshot(doc(db, "configuracoes", "cesta_padrao"), d => {
                 if (d.exists()) {
                     configCesta = d.data().itens || {};
@@ -104,12 +120,15 @@
                     recalcularProntidao();
                 }
             });
+
             onSnapshot(collection(db, "estoque_caritas"), snap => {
                 estoqueGlobal = snap.docs.map(d => ({ id: d.id, ...d.data() }));
                 recalcularProntidao();
+                
                 const painel = document.getElementById('painel-validade-viva');
                 const lista = document.getElementById('lista-alertas-vivos');
                 let criticos = estoqueGlobal.filter(i => i.validade && i.validade <= limiteStr && i.quantidade > 0);
+
                 if (criticos.length > 0) {
                     painel.style.display = 'block';
                     lista.innerHTML = criticos.map(i => {
@@ -118,29 +137,40 @@
                     }).join('');
                 } else { painel.style.display = 'none'; }
             });
+
             function recalcularProntidao() {
-                if (Object.keys(configCesta).length === 0 || estoqueGlobal.length === 0) return;
-                let montaveis = Infinity, itemGargalo = "";
+                // SÓ CALCULA SE JÁ TIVER CARREGADO A CONFIGURAÇÃO E O ESTOQUE
+                if (!configCesta || estoqueGlobal.length === 0) return;
+                
+                let montaveis = Infinity;
+                let itemGargalo = "";
                 const metaRestante = Math.max(0, metaGlobal - entregasRealizadas);
+
                 Object.entries(configCesta).forEach(([id, qtdNecessaria]) => {
                     const item = estoqueGlobal.find(i => i.id === id);
                     const saldo = item ? (item.quantidade || 0) : 0;
                     const capacidade = Math.floor(saldo / qtdNecessaria);
+                    
                     if (capacidade < montaveis) {
                         montaveis = capacidade;
                         itemGargalo = item ? item.nome : "Item Indefinido";
                     }
                 });
+
                 const total = montaveis === Infinity ? 0 : montaveis;
-                document.getElementById('total-cestas-prontas').innerText = `${total} Cestas`;
+                const display = document.getElementById('total-cestas-prontas');
                 const label = document.getElementById('item-limitante');
+                
+                display.innerText = `${total} Cestas`;
+                
                 if (total < metaRestante) {
                     label.innerHTML = `⚠️ <b>${itemGargalo}</b> limita a meta de ${metaRestante} restantes.`;
                 } else {
-                    label.innerHTML = `<span style="color:#2e7d32">✅ Estoque pronto para atender as ${metaRestante} famílias restantes!</span>`;
+                    label.innerHTML = `<span style="color:#2e7d32">✅ Estoque OK para as ${metaRestante} famílias!</span>`;
                 }
             }
         });
+
         function calcularProximoDomingoSocial() {
             const hoje = new Date();
             function buscar(y, m) {

@@ -56,6 +56,7 @@
             });
         }
         async function atualizarTudo() {
+            // SÓ ATUALIZA SE JÁ TIVER CARREGADO NOMES E RECEITA
             if (Object.keys(nomesProdutos).length === 0 || Object.keys(configCesta).length === 0) return;
             for (const pId of Object.keys(nomesProdutos)) {
                 const qLotes = query(collection(db, `estoque_caritas/${pId}/lotes`), orderBy("validade", "asc"));
@@ -91,7 +92,7 @@
                     if (faltam > 0) disponivel = false;
                     picks.forEach(p => {
                         const valF = (p.val && p.val !== "9999-12-31") ? p.val.split('-').reverse().join('/') : "Estoque";
-                        htmlItens += `<label class="item-montagem"><input type="checkbox" onchange="checkCesta(${i})"><span class="txt"><b>${p.qtd}x</b> ${nomesProdutos[pId]} <small class="validade-info">Val: ${valF}</small></span></label>`;
+                        htmlItens += `<label class="item-montagem"><input type="checkbox" onchange="checkCesta(${i})"><span class="txt"><b>${p.qtd}x</b> ${nomesProdutos[pId] || 'Item'} <small class="validade-info">Val: ${valF}</small></span></label>`;
                     });
                 });
                 card.innerHTML = `<h3>Cesta #${i}</h3>${htmlItens}`;
