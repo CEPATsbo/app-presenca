@@ -20,8 +20,9 @@
         .item-montagem input[type="checkbox"] { width: 18px; height: 18px; cursor: pointer; accent-color: var(--green); }
         .marcado { text-decoration: line-through; color: var(--grey); opacity: 0.6; }
         .txt-falta { color: var(--red); font-weight: bold; font-size: 0.85em; }
-        .btn-reset { position: absolute; bottom: -40px; right: 0; background: none; border: none; color: var(--grey); cursor: pointer; font-size: 0.85em; text-decoration: underline; font-weight: 500; }
+        .btn-reset { margin-top: 15px; background: none; border: none; color: var(--grey); cursor: pointer; font-size: 0.85em; text-decoration: underline; font-weight: 500; transition: 0.3s; }
         .btn-reset:hover { color: var(--red); }
+        .controles-sessao { display: flex; flex-direction: column; align-items: flex-end; width: 100%; max-width: 1200px; margin-top: -10px; margin-bottom: 20px; }
     </style>
 </head>
 <body>
@@ -37,10 +38,13 @@
             <div class="resumo-item"><h2 id="meta-total">0</h2><p>Meta do Mês</p></div>
             <div class="resumo-item"><h2 id="entregas-feitas">0</h2><p>Entregues</p></div>
             <div class="resumo-item"><h2 id="cestas-restantes" style="color: var(--green);">0</h2><p>Restam Montar</p></div>
-            <button id="trigger-reset" class="btn-reset">Finalizar Ciclo / Reset Mensal</button>
         </div>
 
-        <div id="grid-cestas" class="grid-cestas">Iniciando monitoramento de estoque...</div>
+        <div class="controles-sessao">
+            <button id="trigger-reset" class="btn-reset"><i class="fas fa-sync-alt"></i> Finalizar Ciclo / Reset Mensal</button>
+        </div>
+
+        <div id="grid-cestas" class="grid-cestas">Carregando informações...</div>
     </main>
 
     <script type="module">
@@ -56,13 +60,17 @@
         protegerPagina(['super-admin','diretor','caritas']).then(() => { 
             iniciarSincronizacao();
             document.getElementById('trigger-reset').onclick = resetarPicking;
-        });
+        }).catch(err => console.error("Erro de autenticação:", err));
 
         function iniciarSincronizacao() {
+            // Tenta ler o estado do picking com tratamento de erro de permissão
             onSnapshot(collection(db, "picking_estado"), snap => {
                 pickingMarcados = {};
                 snap.docs.forEach(d => pickingMarcados[d.id] = d.data());
                 renderizar();
+            }, err => {
+                console.error("Erro nas permissões do picking_estado:", err);
+                document.getElementById('grid-cestas').innerHTML = "<div style='color:red; padding:20px;'>Erro de permissão no banco de dados. Verifique as regras do Firestore.</div>";
             });
 
             onSnapshot(collection(db, "estoque_caritas"), snap => {
@@ -92,15 +100,20 @@
             if (Object.keys(nomesProdutos).length === 0 || Object.keys(configCesta).length === 0) return;
             
             for (const pId of Object.keys(nomesProdutos)) {
-                const qLotes = query(collection(db, `estoque_caritas/${pId}/lotes`), orderBy("validade", "asc"));
-                const lSnap = await getDocs(qLotes);
-                let lotes = lSnap.docs.map(d => ({ ...d.data() })).filter(l => l.quantidade > 0);
-                
-                const totalLotes = lotes.reduce((acc, curr) => acc + curr.quantidade, 0);
-                const extra = (saldoEstoque[pId] || 0) - totalLotes;
-                if (extra > 0) lotes.push({ validade: "9999-12-31", quantidade: extra });
-                
-                mapaLotes[pId] = lotes;
+                try {
+                    const qLotes = query(collection(db, `estoque_caritas/${pId}/lotes`), orderBy("validade", "asc"));
+                    const lSnap = await getDocs(qLotes);
+                    let lotes = lSnap.docs.map(d => ({ ...d.data() })).filter(l => l.quantidade > 0);
+                    
+                    const totalLotes = lotes.reduce((acc, curr) => acc + curr.quantidade, 0);
+                    const extra = (saldoEstoque[pId] || 0) - totalLotes;
+                    if (extra > 0) lotes.push({ validade: "9999-12-31", quantidade: extra });
+                    
+                    mapaLotes[pId] = lotes;
+                } catch (e) {
+                    console.warn(`Erro ao ler lotes de ${pId}:`, e);
+                    mapaLotes[pId] = [{ validade: "9999-12-31", quantidade: saldoEstoque[pId] || 0 }];
+                }
             }
             renderizar();
         }
@@ -117,7 +130,7 @@
             grid.innerHTML = "";
             
             const totalCestasExibir = Math.max(0, metaGlobal - entregasNoMes);
-            if (totalCestasExibir === 0) {
+            if (totalCestasExibir === 0 && metaGlobal > 0) {
                 grid.innerHTML = "<div style='grid-column: 1/-1; text-align: center; padding: 50px;'><h2>✅ Meta mensal atingida e entregue!</h2></div>";
                 return;
             }
@@ -132,7 +145,14 @@
                 card.className = `cesta-card ${est.concluida ? 'concluida' : ''}`;
                 let html = `<h3>Cesta #${entregasNoMes + i}</h3>`;
 
-                Object.entries(configCesta).forEach(([pId, qtdNec]) => {
+                // ORDENAR ITENS POR NOME (ALFABÉTICA)
+                const itensOrdenados = Object.entries(configCesta).sort((a, b) => {
+                    const nomeA = nomesProdutos[a[0]] || "";
+                    const nomeB = nomesProdutos[b[0]] || "";
+                    return nomeA.localeCompare(nomeB);
+                });
+
+                itensOrdenados.forEach(([pId, qtdNec]) => {
                     let faltam = qtdNec, picks = [];
                     if (lotesVirtuais[pId]) {
                         for (let lote of lotesVirtuais[pId]) {
@@ -157,7 +177,7 @@
                     });
 
                     if (faltam > 0) {
-                        html += `<div class="item-montagem"><span class="txt-falta">⚠️ FALTA ${faltam}x ${nomesProdutos[pId]}</span></div>`;
+                        html += `<div class="item-montagem"><span class="txt-falta">⚠️ FALTA ${faltam}x ${nomesProdutos[pId] || 'Item'}</span></div>`;
                     }
                 });
                 card.innerHTML = html;
@@ -170,24 +190,24 @@
             const atual = pickingMarcados[cestaId] || { itens: {}, concluida: false };
             atual.itens[itemKey] = status;
             
-            const totalItensNaReceita = Object.keys(configCesta).length;
+            // Verifica conclusão
+            const totalItensNecessarios = Object.keys(configCesta).length;
             const marcados = Object.values(atual.itens).filter(v => v).length;
-            atual.concluida = marcados >= totalItensNaReceita;
+            atual.concluida = marcados >= totalItensNecessarios;
 
             await setDoc(docRef, atual);
         };
 
         async function resetarPicking() {
-            const confirmacao = confirm("ATENÇÃO: Isso limpará todas as cestas montadas no Picking para iniciar o próximo mês. Esta ação não pode ser desfeita. Confirmar reset?");
-            
+            const confirmacao = confirm("ATENÇÃO: Isso limpará todas as cestas montadas para iniciar o próximo ciclo. Confirmar reset?");
             if (confirmacao) {
                 try {
                     const snap = await getDocs(collection(db, "picking_estado"));
                     const promises = snap.docs.map(d => deleteDoc(d.ref));
                     await Promise.all(promises);
-                    alert("Picking reiniciado com sucesso para o novo ciclo!");
+                    alert("Linha de montagem reiniciada!");
                 } catch (e) {
-                    alert("Erro ao resetar: " + e.message);
+                    alert("Erro ao resetar: Verifique as permissões do Firebase.");
                 }
             }
         }
