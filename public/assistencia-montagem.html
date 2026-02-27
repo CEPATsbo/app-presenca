@@ -38,7 +38,7 @@
             <div class="resumo-item"><h2 id="entregas-feitas">0</h2><p>Entregues</p></div>
             <div class="resumo-item"><h2 id="cestas-restantes" style="color: var(--green);">0</h2><p>A Montar</p></div>
         </div>
-        <div id="grid-cestas" class="grid-cestas">Carregando planejamento...</div>
+        <div id="grid-cestas" class="grid-cestas">Aguardando dados...</div>
     </main>
 
     <script type="module">
@@ -48,7 +48,7 @@
 
         const firebaseConfig = { apiKey: "AIzaSyBV7RPjk3cFTqL-aIpflJcUojKg1ZXMLuU", authDomain: "voluntarios-ativos---cepat.firebaseapp.com", projectId: "voluntarios-ativos---cepat", storageBucket: "voluntarios-ativos---cepat.firebasestorage.app", messagingSenderId: "66122858261", appId: "1:66122858261:web:7fa21f1805463b5c08331c" };
         const db = getFirestore(initializeApp(firebaseConfig));
-        let configCesta = {}, metaGlobal = 0, entregasNoMes = 0, mapaLotes = {}, nomesProdutos = {}, saldoEstoque = {};
+        let configCesta = null, metaGlobal = 0, entregasNoMes = 0, mapaLotes = {}, nomesProdutos = {}, saldoEstoque = {};
 
         protegerPagina(['super-admin','diretor','caritas']).then(() => { iniciarSincronizacaoGlobal(); });
 
@@ -67,16 +67,18 @@
         }
 
         async function atualizarTudo() {
-            if (Object.keys(nomesProdutos).length === 0) return;
-            for (const pId of Object.keys(nomesProdutos)) {
+            if (Object.keys(nomesProdutos).length === 0 || !configCesta) return;
+            mapaLotes = {};
+            const promessas = Object.keys(nomesProdutos).map(async (pId) => {
                 const qLotes = query(collection(db, `estoque_caritas/${pId}/lotes`), orderBy("validade", "asc"));
                 const lSnap = await getDocs(qLotes);
                 let lotes = lSnap.docs.map(d => ({ id: d.id, ...d.data() })).filter(l => l.quantidade > 0);
                 const totalLotes = lotes.reduce((acc, curr) => acc + curr.quantidade, 0);
-                const saldoAnterior = (saldoEstoque[pId] || 0) - totalLotes;
-                if (saldoAnterior > 0) lotes.push({ validade: "9999-12-31", quantidade: saldoAnterior, doador: "Saldo Anterior" });
+                const extra = (saldoEstoque[pId] || 0) - totalLotes;
+                if (extra > 0) lotes.push({ validade: "9999-12-31", quantidade: extra, doador: "Estoque Geral" });
                 mapaLotes[pId] = lotes;
-            }
+            });
+            await Promise.all(promessas);
             renderizarInterface();
         }
 
@@ -84,14 +86,12 @@
             const restantes = Math.max(0, metaGlobal - entregasNoMes);
             document.getElementById('meta-total').innerText = metaGlobal; document.getElementById('entregas-feitas').innerText = entregasNoMes; document.getElementById('cestas-restantes').innerText = restantes;
             const grid = document.getElementById('grid-cestas'); grid.innerHTML = "";
-            if (restantes === 0) { grid.innerHTML = `<div style="grid-column: 1/-1; text-align: center; padding: 40px; background: white; border-radius: 12px;">✅ Meta Atingida!</div>`; return; }
+            if (restantes === 0) { grid.innerHTML = `<div style="grid-column: 1/-1; text-align: center; padding: 40px; background: white; border-radius: 12px;">✅ Meta Mensal Atingida!</div>`; return; }
 
             let lotesVirtuais = JSON.parse(JSON.stringify(mapaLotes));
-
             for (let i = 1; i <= restantes; i++) {
                 const card = document.createElement('div'); card.className = 'cesta-card'; card.id = `cesta-${i}`;
-                let htmlItens = "", cestaDisponivel = true;
-
+                let htmlItens = "", disponivel = true;
                 Object.entries(configCesta).forEach(([pId, qtdNec]) => {
                     let faltam = qtdNec, picks = [];
                     if (lotesVirtuais[pId]) {
@@ -101,16 +101,14 @@
                             if (usar > 0) { lote.quantidade -= usar; faltam -= usar; picks.push({ qtd: usar, val: lote.validade }); }
                         }
                     }
-                    if (faltam > 0) cestaDisponivel = false;
+                    if (faltam > 0) disponivel = false;
                     picks.forEach(p => {
                         const valF = (p.val && p.val !== "9999-12-31") ? p.val.split('-').reverse().join('/') : "N/D";
-                        htmlItens += `<label class="item-montagem"><input type="checkbox" onchange="checkCesta(${i})"><span class="txt"><b>${p.qtd}x</b> ${nomesProdutos[pId] || pId} <small class="validade-info">Validade: ${valF}</small></span></label>`;
+                        htmlItens += `<label class="item-montagem"><input type="checkbox" onchange="checkCesta(${i})"><span class="txt"><b>${p.qtd}x</b> ${nomesProdutos[pId] || pId} <small class="validade-info">Val: ${valF}</small></span></label>`;
                     });
                 });
-
-                const badgeClass = cestaDisponivel ? "status-badge badge-completa" : "status-badge";
-                card.setAttribute('data-disponivel', cestaDisponivel);
-                card.innerHTML = `<h3>Cesta #${i} <span class="${badgeClass}">${cestaDisponivel ? "Completa" : "Pendente"}</span></h3>${htmlItens}`;
+                card.setAttribute('data-disponivel', disponivel);
+                card.innerHTML = `<h3>Cesta #${i} <span class="${disponivel ? "status-badge badge-completa" : "status-badge"}">${disponivel ? "Completa" : "Pendente"}</span></h3>${htmlItens}`;
                 grid.appendChild(card);
             }
         }
@@ -119,7 +117,7 @@
             const card = document.getElementById(`cesta-${n}`), badge = card.querySelector('.status-badge');
             const total = Array.from(card.querySelectorAll('input')).every(c => c.checked), disponivel = card.getAttribute('data-disponivel') === "true";
             card.querySelectorAll('input').forEach((c, idx) => { if (c.checked) card.querySelectorAll('.txt')[idx].classList.add('marcado'); else card.querySelectorAll('.txt')[idx].classList.remove('marcado'); });
-            if (total) { card.classList.add('concluida'); badge.innerText = "Completa - Montada"; badge.style.backgroundColor = "var(--green)"; badge.style.color = "white"; }
+            if (total) { card.classList.add('concluida'); badge.innerText = "Pronta"; badge.style.backgroundColor = "var(--green)"; badge.style.color = "white"; }
             else { card.classList.remove('concluida'); badge.innerText = disponivel ? "Completa" : "Pendente"; badge.className = disponivel ? "status-badge badge-completa" : "status-badge"; badge.style = ""; }
         };
     </script>
