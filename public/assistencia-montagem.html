@@ -6,21 +6,22 @@
     <title>Cáritas - Linha de Montagem</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
     <style>
-        :root { --bg: #f4f6f9; --white: #ffffff; --orange: #e67e22; --green: #27ae60; --red: #e74c3c; --grey: #7f8c8d; }
+        :root { --bg: #f4f6f9; --white: #ffffff; --orange: #e67e22; --green: #27ae60; --red: #e74c3c; --grey: #7f8c8d; --primary: #2c3e50; }
         body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background-color: var(--bg); margin: 0; padding: 20px; display: flex; flex-direction: column; align-items: center; }
         .nav-header { width: 100%; max-width: 1200px; display: flex; justify-content: space-between; margin-bottom: 20px; align-items: center; }
         .btn-voltar { background-color: var(--grey); color: white; padding: 10px 15px; border-radius: 8px; text-decoration: none; font-weight: bold; font-size: 0.9em; display: flex; align-items: center; gap: 8px; }
         .container { width: 100%; max-width: 1200px; }
-        .resumo-dia { background: var(--white); padding: 20px; border-radius: 12px; box-shadow: 0 4px 10px rgba(0,0,0,0.05); margin-bottom: 25px; display: flex; justify-content: space-around; width: 100%; text-align: center; }
+        .resumo-dia { background: var(--white); padding: 20px; border-radius: 12px; box-shadow: 0 4px 10px rgba(0,0,0,0.05); margin-bottom: 25px; display: flex; justify-content: space-around; width: 100%; text-align: center; position: relative; }
         .resumo-item h2 { margin: 0; color: var(--orange); font-size: 2.2em; }
         .grid-cestas { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 20px; width: 100%; }
         .cesta-card { background: var(--white); border: 2px solid #ddd; border-radius: 12px; padding: 20px; transition: all 0.3s ease; position: relative; }
         .cesta-card.concluida { border-color: var(--green); background-color: #e8f5e9; }
         .item-montagem { display: flex; align-items: center; gap: 10px; padding: 10px 0; border-bottom: 1px solid #eee; cursor: pointer; }
         .item-montagem input[type="checkbox"] { width: 18px; height: 18px; cursor: pointer; accent-color: var(--green); }
-        .validade-info { font-size: 0.75em; color: var(--grey); display: block; }
         .marcado { text-decoration: line-through; color: var(--grey); opacity: 0.6; }
-        .txt-falta { color: var(--red); font-weight: bold; font-size: 0.85em; text-transform: uppercase; display: flex; align-items: center; gap: 5px; }
+        .txt-falta { color: var(--red); font-weight: bold; font-size: 0.85em; }
+        .btn-reset { position: absolute; bottom: -40px; right: 0; background: none; border: none; color: var(--grey); cursor: pointer; font-size: 0.85em; text-decoration: underline; font-weight: 500; }
+        .btn-reset:hover { color: var(--red); }
     </style>
 </head>
 <body>
@@ -30,107 +31,111 @@
     </header>
 
     <main class="container">
-        <h1><i class="fas fa-clipboard-list"></i> Linha de Montagem</h1>
+        <h1><i class="fas fa-clipboard-check"></i> Linha de Montagem</h1>
         
         <div class="resumo-dia">
             <div class="resumo-item"><h2 id="meta-total">0</h2><p>Meta do Mês</p></div>
-            <div class="resumo-item"><h2 id="entregas-realizadas">0</h2><p>Já Entregues</p></div>
+            <div class="resumo-item"><h2 id="entregas-feitas">0</h2><p>Entregues</p></div>
             <div class="resumo-item"><h2 id="cestas-restantes" style="color: var(--green);">0</h2><p>Restam Montar</p></div>
+            <button id="trigger-reset" class="btn-reset">Finalizar Ciclo / Reset Mensal</button>
         </div>
 
-        <div id="grid-cestas" class="grid-cestas">Calculando lotes e validades...</div>
+        <div id="grid-cestas" class="grid-cestas">Iniciando monitoramento de estoque...</div>
     </main>
 
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
-        import { getFirestore, collection, onSnapshot, doc, query, where, Timestamp, getDocs, orderBy } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
+        import { getFirestore, collection, onSnapshot, doc, query, where, Timestamp, getDocs, orderBy, setDoc, deleteDoc } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
         import { protegerPagina } from '/auth.js';
 
         const firebaseConfig = { apiKey: "AIzaSyBV7RPjk3cFTqL-aIpflJcUojKg1ZXMLuU", authDomain: "voluntarios-ativos---cepat.firebaseapp.com", projectId: "voluntarios-ativos---cepat", storageBucket: "voluntarios-ativos---cepat.firebasestorage.app", messagingSenderId: "66122858261", appId: "1:66122858261:web:7fa21f1805463b5c08331c" };
         const db = getFirestore(initializeApp(firebaseConfig));
 
-        let configCesta = {}, metaGlobal = 0, entregasNoMes = 0, mapaLotes = {}, nomesProdutos = {}, saldoEstoque = {};
+        let configCesta = {}, metaGlobal = 0, entregasNoMes = 0, pickingMarcados = {}, mapaLotes = {}, nomesProdutos = {}, saldoEstoque = {};
 
         protegerPagina(['super-admin','diretor','caritas']).then(() => { 
-            iniciarEscutaGlobal(); 
+            iniciarSincronizacao();
+            document.getElementById('trigger-reset').onclick = resetarPicking;
         });
 
-        function iniciarEscutaGlobal() {
-            // 1. Escuta o estoque geral
+        function iniciarSincronizacao() {
+            onSnapshot(collection(db, "picking_estado"), snap => {
+                pickingMarcados = {};
+                snap.docs.forEach(d => pickingMarcados[d.id] = d.data());
+                renderizar();
+            });
+
             onSnapshot(collection(db, "estoque_caritas"), snap => {
                 snap.docs.forEach(d => { 
                     saldoEstoque[d.id] = d.data().quantidade || 0; 
                     nomesProdutos[d.id] = d.data().nome; 
                 });
-                sincronizarLotesERenderizar();
+                atualizarTudo();
             });
 
-            // 2. Escuta a receita e meta
             onSnapshot(doc(db, "configuracoes", "cesta_padrao"), d => {
                 if (d.exists()) { 
-                    configCesta = d.data().itens || {}; 
                     metaGlobal = d.data().meta || 0; 
-                    sincronizarLotesERenderizar(); 
+                    configCesta = d.data().itens || {}; 
+                    atualizarTudo(); 
                 }
             });
 
-            // 3. Escuta entregas do mês para diminuir as cestas do painel
             const inicioMes = new Date(); inicioMes.setDate(1); inicioMes.setHours(0,0,0,0);
             onSnapshot(query(collection(db, "entregasCestas"), where("data", ">=", Timestamp.fromDate(inicioMes))), s => {
                 entregasNoMes = s.size; 
-                sincronizarLotesERenderizar();
+                atualizarTudo();
             });
         }
 
-        async function sincronizarLotesERenderizar() {
+        async function atualizarTudo() {
             if (Object.keys(nomesProdutos).length === 0 || Object.keys(configCesta).length === 0) return;
             
-            // Busca validades para o FEFO
             for (const pId of Object.keys(nomesProdutos)) {
                 const qLotes = query(collection(db, `estoque_caritas/${pId}/lotes`), orderBy("validade", "asc"));
                 const lSnap = await getDocs(qLotes);
                 let lotes = lSnap.docs.map(d => ({ ...d.data() })).filter(l => l.quantidade > 0);
                 
-                // Se o saldo geral for maior que a soma dos lotes, cria um lote "Estoque Geral"
                 const totalLotes = lotes.reduce((acc, curr) => acc + curr.quantidade, 0);
-                const saldoSemLote = (saldoEstoque[pId] || 0) - totalLotes;
-                if (saldoSemLote > 0) {
-                    lotes.push({ validade: "9999-12-31", quantidade: saldoSemLote });
-                }
+                const extra = (saldoEstoque[pId] || 0) - totalLotes;
+                if (extra > 0) lotes.push({ validade: "9999-12-31", quantidade: extra });
+                
                 mapaLotes[pId] = lotes;
             }
-            renderizarGrid();
+            renderizar();
         }
 
-        function renderizarGrid() {
-            const restantes = Math.max(0, metaGlobal - entregasNoMes);
+        function renderizar() {
+            const montadasNoPicking = Object.values(pickingMarcados).filter(p => p.concluida).length;
+            const restantesParaMontar = Math.max(0, metaGlobal - entregasNoMes - montadasNoPicking);
+            
             document.getElementById('meta-total').innerText = metaGlobal;
-            document.getElementById('entregas-realizadas').innerText = entregasNoMes;
-            document.getElementById('cestas-restantes').innerText = restantes;
+            document.getElementById('entregas-feitas').innerText = entregasNoMes;
+            document.getElementById('cestas-restantes').innerText = restantesParaMontar;
 
             const grid = document.getElementById('grid-cestas');
             grid.innerHTML = "";
-
-            if (restantes === 0) {
-                grid.innerHTML = "<div style='grid-column: 1/-1; text-align: center; padding: 50px;'><h2>✅ Todas as cestas da meta foram entregues!</h2></div>";
+            
+            const totalCestasExibir = Math.max(0, metaGlobal - entregasNoMes);
+            if (totalCestasExibir === 0) {
+                grid.innerHTML = "<div style='grid-column: 1/-1; text-align: center; padding: 50px;'><h2>✅ Meta mensal atingida e entregue!</h2></div>";
                 return;
             }
 
-            // Clone para simulação de picking
-            let lotesSimulados = JSON.parse(JSON.stringify(mapaLotes));
+            let lotesVirtuais = JSON.parse(JSON.stringify(mapaLotes));
 
-            for (let i = 1; i <= restantes; i++) {
+            for (let i = 1; i <= totalCestasExibir; i++) {
+                const cestaId = `cesta_v_${i}`;
+                const est = pickingMarcados[cestaId] || { itens: {}, concluida: false };
+                
                 const card = document.createElement('div');
-                card.className = 'cesta-card';
-                card.id = `cesta-${i}`;
-                let html = `<h3 style="margin-top:0; color:var(--primary)">Cesta #${entregasNoMes + i}</h3>`;
+                card.className = `cesta-card ${est.concluida ? 'concluida' : ''}`;
+                let html = `<h3>Cesta #${entregasNoMes + i}</h3>`;
 
                 Object.entries(configCesta).forEach(([pId, qtdNec]) => {
-                    let faltam = qtdNec;
-                    let picks = [];
-
-                    if (lotesSimulados[pId]) {
-                        for (let lote of lotesSimulados[pId]) {
+                    let faltam = qtdNec, picks = [];
+                    if (lotesVirtuais[pId]) {
+                        for (let lote of lotesVirtuais[pId]) {
                             if (faltam <= 0) break;
                             const usar = Math.min(lote.quantidade, faltam);
                             if (usar > 0) {
@@ -141,42 +146,51 @@
                         }
                     }
 
-                    picks.forEach(p => {
-                        const dataFormatada = p.val === "9999-12-31" ? "Estoque Geral" : p.val.split('-').reverse().join('/');
+                    picks.forEach((p, idx) => {
+                        const itemKey = `${pId}_${idx}`;
+                        const isChecked = est.itens[itemKey] || false;
                         html += `
-                            <label class="item-montagem">
-                                <input type="checkbox" onchange="verificarCesta(${i})">
-                                <span>
-                                    <b>${p.qtd}x</b> ${nomesProdutos[pId] || pId}
-                                    <small class="validade-info">Lote/Validade: ${dataFormatada}</small>
-                                </span>
+                            <label class="item-montagem ${isChecked ? 'marcado' : ''}">
+                                <input type="checkbox" ${isChecked ? 'checked' : ''} onchange="salvarProgresso('${cestaId}', '${itemKey}', this.checked)">
+                                <span><b>${p.qtd}x</b> ${nomesProdutos[pId]}</span>
                             </label>`;
                     });
 
                     if (faltam > 0) {
-                        html += `<div class="item-montagem"><span class="txt-falta"><i class="fas fa-exclamation-circle"></i> FALTA ${faltam}x ${nomesProdutos[pId] || pId}</span></div>`;
+                        html += `<div class="item-montagem"><span class="txt-falta">⚠️ FALTA ${faltam}x ${nomesProdutos[pId]}</span></div>`;
                     }
                 });
-
                 card.innerHTML = html;
                 grid.appendChild(card);
             }
         }
 
-        window.verificarCesta = (index) => {
-            const card = document.getElementById(`cesta-${index}`);
-            const inputs = card.querySelectorAll('input[type="checkbox"]');
-            const spans = card.querySelectorAll('.item-montagem span');
+        window.salvarProgresso = async (cestaId, itemKey, status) => {
+            const docRef = doc(db, "picking_estado", cestaId);
+            const atual = pickingMarcados[cestaId] || { itens: {}, concluida: false };
+            atual.itens[itemKey] = status;
             
-            inputs.forEach((input, i) => {
-                if (input.checked) spans[i].classList.add('marcado');
-                else spans[i].classList.remove('marcado');
-            });
+            const totalItensNaReceita = Object.keys(configCesta).length;
+            const marcados = Object.values(atual.itens).filter(v => v).length;
+            atual.concluida = marcados >= totalItensNaReceita;
 
-            const todasMarcadas = Array.from(inputs).every(inp => inp.checked);
-            if (todasMarcadas) card.classList.add('concluida');
-            else card.classList.remove('concluida');
+            await setDoc(docRef, atual);
         };
+
+        async function resetarPicking() {
+            const confirmacao = confirm("ATENÇÃO: Isso limpará todas as cestas montadas no Picking para iniciar o próximo mês. Esta ação não pode ser desfeita. Confirmar reset?");
+            
+            if (confirmacao) {
+                try {
+                    const snap = await getDocs(collection(db, "picking_estado"));
+                    const promises = snap.docs.map(d => deleteDoc(d.ref));
+                    await Promise.all(promises);
+                    alert("Picking reiniciado com sucesso para o novo ciclo!");
+                } catch (e) {
+                    alert("Erro ao resetar: " + e.message);
+                }
+            }
+        }
     </script>
 </body>
 </html>
