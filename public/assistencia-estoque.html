@@ -7,36 +7,26 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
     <style>
         :root { --bg: #f4f6f9; --white: #ffffff; --primary: #2c3e50; --orange: #e67e22; --green: #27ae60; --red: #e74c3c; --grey: #7f8c8d; }
-        
         body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background-color: var(--bg); margin: 0; padding: 20px; display: flex; flex-direction: column; align-items: center; }
-        
         .nav-header { width: 100%; max-width: 1000px; display: flex; justify-content: space-between; margin-bottom: 20px; align-items: center; }
         .btn-voltar { background-color: var(--grey); color: white; padding: 10px 15px; border-radius: 8px; text-decoration: none; font-weight: bold; font-size: 0.9em; display: flex; align-items: center; gap: 8px; }
-        
         .container { background: var(--white); padding: 30px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1); width: 100%; max-width: 1000px; box-sizing: border-box; }
         h1 { color: var(--primary); margin-top: 0; border-bottom: 2px solid var(--orange); padding-bottom: 10px; margin-bottom: 25px; }
-
         .cesta-pronta-card { background: #e8f5e9; border: 2px solid var(--green); padding: 25px; border-radius: 12px; text-align: center; margin-bottom: 25px; }
         .cesta-pronta-card h2 { margin: 0; color: #1b5e20; font-size: 3.5em; }
         .cesta-pronta-card p { margin: 5px 0 0 0; font-weight: bold; color: #2e7d32; text-transform: uppercase; }
-        
         .lista-pendencias { margin-top: 15px; text-align: left; background: rgba(255,255,255,0.7); padding: 15px; border-radius: 8px; border: 1px dashed var(--green); }
         .pendencia-item { color: var(--red); font-size: 0.9em; font-weight: bold; margin-bottom: 5px; display: flex; align-items: center; gap: 8px; }
-
         .secao-estoque { border: 1px solid #eee; padding: 20px; border-radius: 10px; background: #fafafa; margin-bottom: 20px; }
         .estoque-item { background: white; padding: 15px; border-radius: 8px; border: 1px solid #ddd; margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center; }
-        
         .modal { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); display: none; justify-content: center; align-items: center; z-index: 1000; }
         .modal-content { background: white; padding: 30px; border-radius: 12px; width: 95%; max-width: 500px; max-height: 85vh; overflow-y: auto; }
-        
         .form-group { display: flex; flex-direction: column; gap: 5px; margin-bottom: 15px; }
         .form-group label { font-size: 0.8em; font-weight: bold; color: #666; }
         .form-group input, .form-group select { padding: 12px; border: 1px solid #ccc; border-radius: 8px; font-size: 1em; }
-
         .btn-acao { border: none; padding: 12px 20px; border-radius: 8px; cursor: pointer; font-weight: bold; display: flex; align-items: center; gap: 8px; }
         .btn-ajuste { border: none; color: white; padding: 5px 12px; border-radius: 6px; font-weight: bold; cursor: pointer; font-size: 1.2em; }
         .controles { display: flex; align-items: center; gap: 15px; }
-        
         .linha-receita { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; padding: 10px; background: #f9f9f9; border-radius: 8px; border: 1px solid #eee; }
         .btn-remover-linha { background: none; border: none; color: var(--red); cursor: pointer; font-size: 1.1em; padding: 5px; }
         .badge-extra { background: #3498db; color: white; padding: 2px 5px; border-radius: 4px; font-size: 0.7em; font-weight: bold; }
@@ -151,7 +141,6 @@
             iniciarSincronizacao();
         });
 
-        // MÁSCARA DE DATA BRASILEIRA (PRATICIDADE)
         const inputValBR = document.getElementById('entrada-validade-br');
         inputValBR.addEventListener('input', (e) => {
             let v = e.target.value.replace(/\D/g, '');
@@ -183,39 +172,39 @@
         }
 
         function calcularProntidao() {
-    if (Object.keys(configCesta).length === 0) return;
-    const metaRestanteParaEntregar = Math.max(0, metaGlobal - entregasNoMes);
-    
-    let cestasPossiveisComEstoque = Infinity;
-    let pendencias = [];
+            if (Object.keys(configCesta).length === 0) return;
+            const metaRestanteParaEntregar = Math.max(0, metaGlobal - entregasNoMes);
+            
+            let cestasPossiveisComEstoque = Infinity;
+            let pendencias = [];
 
-    Object.entries(configCesta).forEach(([id, qtd]) => {
-        const item = itensEstoque.find(i => i.id === id);
-        const saldo = item ? item.quantidade : 0;
-        const capacidade = Math.floor(saldo / qtd);
-        if (capacidade < cestasPossiveisComEstoque) cestasPossiveisComEstoque = capacidade;
-        const falta = (metaRestanteParaEntregar * qtd) - saldo;
-        if (falta > 0) pendencias.push(`Faltam ${falta} de <b>${item ? item.nome : 'Item'}</b>.`);
-    });
+            Object.entries(configCesta).forEach(([id, qtd]) => {
+                const item = itensEstoque.find(i => i.id === id);
+                const saldo = item ? item.quantidade : 0;
+                const capacidade = Math.floor(saldo / qtd);
+                if (capacidade < cestasPossiveisComEstoque) cestasPossiveisComEstoque = capacidade;
+                const falta = (metaRestanteParaEntregar * qtd) - saldo;
+                if (falta > 0) pendencias.push(`Faltam ${falta} de <b>${item ? item.nome : 'Item'}</b>.`);
+            });
 
-    const prontas = cestasPossiveisComEstoque === Infinity ? 0 : cestasPossiveisComEstoque;
-    document.getElementById('qtd-cestas-montaveis').innerText = prontas;
-    
-    // CORREÇÃO DA CONTA: Meta Restante - O que já está pronto
-    const faltamMontar = Math.max(0, metaRestanteParaEntregar - prontas);
-    
-    const box = document.getElementById('box-pendencias');
-    const statusMeta = document.getElementById('status-meta');
+            const prontas = cestasPossiveisComEstoque === Infinity ? 0 : cestasPossiveisComEstoque;
+            document.getElementById('qtd-cestas-montaveis').innerText = prontas;
+            
+            // CORREÇÃO DA CONTA: Meta Mensal Restante - O que já está pronto
+            const faltamMontar = Math.max(0, metaRestanteParaEntregar - prontas);
+            
+            const box = document.getElementById('box-pendencias');
+            const statusMeta = document.getElementById('status-meta');
 
-    if (faltamMontar > 0) {
-        box.style.display = 'block';
-        document.getElementById('lista-pendencias').innerHTML = pendencias.map(p => `<div class="pendencia-item"><i class="fas fa-exclamation-triangle"></i> ${p}</div>`).join('');
-        statusMeta.innerHTML = `Meta: ${metaGlobal} | Já Prontas: ${prontas} | <b>Faltam montar: ${faltamMontar}</b>`;
-    } else {
-        box.style.display = 'none';
-        statusMeta.innerHTML = `<span style="color:var(--green)">✅ Estoque pronto para atender as ${metaRestanteParaEntregar} famílias restantes!</span>`;
-    }
-}
+            if (faltamMontar > 0) {
+                box.style.display = 'block';
+                document.getElementById('lista-pendencias').innerHTML = pendencias.map(p => `<div class="pendencia-item"><i class="fas fa-exclamation-triangle"></i> ${p}</div>`).join('');
+                statusMeta.innerHTML = `Meta: ${metaGlobal} | Já Prontas: ${prontas} | <b>Faltam montar: ${faltamMontar}</b>`;
+            } else {
+                box.style.display = 'none';
+                statusMeta.innerHTML = `<span style="color:var(--green)">✅ Estoque pronto para atender as ${metaRestanteParaEntregar} famílias restantes!</span>`;
+            }
+        }
 
         function renderizarListaEstoque() {
             const hoje = new Date();
@@ -250,11 +239,9 @@
             }).join('');
         }
 
-        // FUNÇÃO AJUSTADA: Registra Lote Único e Prioriza FEFO na Saída
         window.ajustarEstoque = async (id, delta, nome) => {
             const item = itensEstoque.find(x => x.id === id);
             if (delta < 0) {
-                // SAÍDA (-): Busca o lote mais antigo que tem saldo e subtrai para garantir o picking FEFO
                 const q = query(collection(db, `estoque_caritas/${id}/lotes`), orderBy("validade", "asc"));
                 const lSnap = await getDocs(q);
                 const loteValido = lSnap.docs.map(d => ({id: d.id, ...d.data()})).find(l => l.quantidade > 0);
@@ -263,13 +250,11 @@
                     await updateDoc(doc(db, `estoque_caritas/${id}/lotes`, loteValido.id), { quantidade: loteValido.quantidade - 1 });
                     await updateDoc(doc(db, "estoque_caritas", id), { quantidade: Math.max(0, item.quantidade - 1) });
                 } else {
-                    // Se não houver lotes (itens legados), baixa do saldo geral
                     await updateDoc(doc(db, "estoque_caritas", id), { quantidade: Math.max(0, item.quantidade - 1) });
                 }
                 return;
             }
             
-            // ENTRADA (+): Abre modal configurado para novos lotes com ID único
             document.getElementById('entrada-item-id').value = id;
             document.getElementById('titulo-entrada').innerText = `Entrada de: ${nome}`;
             document.getElementById('entrada-qtd').value = 1; 
@@ -279,7 +264,6 @@
             document.getElementById('entrada-qtd').focus();
         };
 
-        // SUBMISSÃO: Cria o Lote com ID Único por Segundo para não sobrescrever
         document.getElementById('form-entrada-estoque').onsubmit = async (e) => {
             e.preventDefault();
             const id = document.getElementById('entrada-item-id').value;
@@ -291,7 +275,6 @@
             let valISO = "9999-12-31"; 
             if (valBR.length === 10) { const [d, m, a] = valBR.split('/'); valISO = `${a}-${m}-${d}`; }
 
-            // 1. Cria o Lote Individual (ID com milissegundos garante registro único para múltiplas entradas diárias)
             const loteId = valISO.replace(/-/g, '') + "_" + Date.now();
             await setDoc(doc(db, `estoque_caritas/${id}/lotes`, loteId), {
                 validade: valISO,
@@ -300,9 +283,7 @@
                 dataEntrada: serverTimestamp()
             });
 
-            // 2. Atualiza Saldo Global (Soma o que já tinha + o novo)
             const novoTotal = (item.quantidade || 0) + qtd;
-            // Mantém no documento principal a validade do que vence primeiro para o Dashboard
             const novaProxVal = (!item.validade || valISO < item.validade) ? valISO : item.validade;
             
             await updateDoc(doc(db, "estoque_caritas", id), { 
@@ -310,7 +291,6 @@
                 validade: novaProxVal
             });
             
-            // 3. Log de Auditoria para o Relatório
             await addDoc(collection(db, "log_auditoria"), {
                 acao: "ENTRADA_ESTOQUE",
                 detalhes: `Entrada de ${qtd} un. de ${item.nome}. Doador: ${doador}. Validade: ${valBR}`,
@@ -371,7 +351,7 @@
             const novaMeta = parseInt(document.getElementById('input-meta').value) || 14;
             await setDoc(doc(db, "configuracoes", "cesta_padrao"), { itens: novosItens, meta: novaMeta, atualizadoEm: serverTimestamp() });
             fecharModais();
-            alert("Receita e Meta atualizadas!");
+            alert("Configurações atualizadas!");
         };
 
         function calcularProximoDomingoSocial() {

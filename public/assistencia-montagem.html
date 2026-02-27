@@ -105,7 +105,7 @@
                 card.className = 'cesta-card'; 
                 card.id = `cesta-${i}`;
                 let htmlItens = "";
-                let cestaDisponivel = true; // Inteligência de estoque
+                let cestaDisponivelNoEstoque = true; // Inteligência Per Basket
 
                 Object.entries(configCesta).forEach(([pId, qtdNec]) => {
                     let faltam = qtdNec;
@@ -123,7 +123,7 @@
                         }
                     }
 
-                    if (faltam > 0) cestaDisponivel = false; // Se faltou algum item da receita, não está completa
+                    if (faltam > 0) cestaDisponivelNoEstoque = false;
 
                     picks.forEach(p => {
                         const valFormat = (p.val && p.val !== "9999-12-31") ? p.val.split('-').reverse().join('/') : "N/D";
@@ -141,14 +141,11 @@
                     });
                 });
 
-                // Define o status inicial baseado na disponibilidade do estoque
-                const statusInicial = cestaDisponivel ? "Completa" : "Pendente";
-                const classeBadge = cestaDisponivel ? "status-badge badge-completa" : "status-badge";
-                
-                // Guardamos a disponibilidade num atributo para o checkCesta saber voltar ao status certo
-                card.setAttribute('data-disponivel', cestaDisponivel);
+                const statusTxt = cestaDisponivelNoEstoque ? "Completa" : "Pendente";
+                const badgeClass = cestaDisponivelNoEstoque ? "status-badge badge-completa" : "status-badge";
+                card.setAttribute('data-disponivel', cestaDisponivelNoEstoque);
 
-                card.innerHTML = `<h3>Cesta #${i} <span class="${classeBadge}">${statusInicial}</span></h3>${htmlItens}`;
+                card.innerHTML = `<h3>Cesta #${i} <span class="${badgeClass}">${statusTxt}</span></h3>${htmlItens}`;
                 grid.appendChild(card);
             }
         }
@@ -156,7 +153,7 @@
         window.checkCesta = (n) => {
             const card = document.getElementById(`cesta-${n}`);
             const badge = card.querySelector('.status-badge');
-            const total = Array.from(card.querySelectorAll('input')).every(c => c.checked);
+            const totalMarcados = Array.from(card.querySelectorAll('input')).every(c => c.checked);
             const disponivel = card.getAttribute('data-disponivel') === "true";
 
             card.querySelectorAll('input').forEach((c, idx) => {
@@ -164,15 +161,13 @@
                 if (c.checked) txt.classList.add('marcado'); else txt.classList.remove('marcado');
             });
 
-            if (total) {
-                // Se o picking foi concluído, adicionamos a mensagem "Montada"
+            if (totalMarcados) {
                 card.classList.add('concluida');
                 badge.innerText = "Completa - Montada";
                 badge.style.backgroundColor = "var(--green)";
                 badge.style.color = "white";
             } else {
                 card.classList.remove('concluida');
-                // Se desmarcar, volta para "Completa" (se houver estoque) ou "Pendente"
                 badge.innerText = disponivel ? "Completa" : "Pendente";
                 badge.style.backgroundColor = disponivel ? "#d1f2eb" : "#eee";
                 badge.style.color = disponivel ? "#16a085" : "#666";
