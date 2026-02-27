@@ -16,6 +16,7 @@
         #input-busca { flex-grow: 1; padding: 12px; border: 1px solid #ddd; border-radius: 8px; font-size: 1em; }
         .familia-row { display: grid; grid-template-columns: 1fr auto; gap: 20px; padding: 15px; border-bottom: 1px solid #eee; align-items: center; }
         .info-nome { font-weight: bold; color: #34495e; font-size: 1.1em; }
+        .info-dependentes { color: #27ae60; font-weight: 600; font-size: 0.9em; margin-top: 3px; display: block; }
         .btn-entregar { background-color: var(--green); color: white; border: none; padding: 10px 20px; border-radius: 8px; cursor: pointer; font-weight: bold; }
         .btn-entregar:disabled { background-color: #bdc3c7; cursor: not-allowed; }
         .modal { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.6); display: none; justify-content: center; align-items: center; z-index: 1000; }
@@ -44,19 +45,19 @@
             <h3 id="modal-titulo">Confirmar Entrega</h3>
             <p id="modal-info"></p>
             <div class="form-group">
-                <label><b>Observações:</b></label>
-                <textarea id="obs-entrega" rows="3" placeholder="Algo a relatar sobre esta entrega?"></textarea>
+                <label><b>Observações da Entrega:</b></label>
+                <textarea id="obs-entrega" rows="3" placeholder="Ex: Entregue item extra devido ao número de dependentes..."></textarea>
             </div>
             <div style="margin-top: 25px; display: flex; gap: 10px;">
                 <button onclick="fecharModal()" style="flex:1; padding: 12px; border-radius: 8px; border: 1px solid #ccc; cursor:pointer;">Cancelar</button>
-                <button id="btn-finalizar" style="flex:1; background: var(--green); color: white; border: none; border-radius: 8px; font-weight: bold; cursor: pointer;">Confirmar e Dar Baixa</button>
+                <button id="btn-finalizar" style="flex:1; background: var(--green); color: white; border: none; border-radius: 8px; font-weight: bold; cursor: pointer;">Finalizar</button>
             </div>
         </div>
     </div>
 
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
-        import { getFirestore, collection, addDoc, onSnapshot, query, where, serverTimestamp, doc, updateDoc, getDoc, Timestamp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
+        import { getFirestore, collection, addDoc, onSnapshot, query, where, serverTimestamp, doc, updateDoc, getDoc } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
         import { protegerPagina } from '/auth.js';
 
         const firebaseConfig = { apiKey: "AIzaSyBV7RPjk3cFTqL-aIpflJcUojKg1ZXMLuU", authDomain: "voluntarios-ativos---cepat.firebaseapp.com", projectId: "voluntarios-ativos---cepat", storageBucket: "voluntarios-ativos---cepat.firebasestorage.app", messagingSenderId: "66122858261", appId: "1:66122858261:web:7fa21f1805463b5c08331c" };
@@ -69,12 +70,10 @@
         });
 
         function inicializar(user) {
-            // Carrega receita para saber o que descontar do estoque
             onSnapshot(doc(db, "configuracoes", "cesta_padrao"), d => {
                 if (d.exists()) configCesta = d.data().itens;
             });
 
-            // Carrega famílias ativas
             onSnapshot(query(collection(db, "familiasAssistidas"), where("statusGeral", "==", "Ativa")), snap => {
                 todasFamilias = snap.docs.map(d => ({ id: d.id, ...d.data() }));
                 renderizar(todasFamilias);
@@ -88,7 +87,7 @@
             window.abrirModal = (id, nome) => {
                 familiaSelecionada = { id, nome };
                 document.getElementById('modal-titulo').innerText = `Entrega: ${nome}`;
-                document.getElementById('modal-info').innerText = "Ao confirmar, o sistema dará baixa automática no estoque conforme a receita configurada.";
+                document.getElementById('modal-info').innerText = "Confirme a entrega para atualizar o estoque automaticamente.";
                 document.getElementById('modal-confirmacao').style.display = 'flex';
                 document.getElementById('btn-finalizar').onclick = () => finalizarEntrega(user);
             };
@@ -100,7 +99,6 @@
             btn.innerText = "Processando...";
 
             try {
-                // 1. REGISTRAR ENTREGA
                 await addDoc(collection(db, "entregasCestas"), {
                     familiaId: familiaSelecionada.id,
                     responsavel: familiaSelecionada.nome,
@@ -109,30 +107,25 @@
                     observacoes: document.getElementById('obs-entrega').value
                 });
 
-                // 2. ATUALIZAR ÚLTIMA ENTREGA NO CADASTRO DA FAMÍLIA
                 await updateDoc(doc(db, "familiasAssistidas", familiaSelecionada.id), {
                     ultimaCesta: serverTimestamp()
                 });
 
-                // 3. DAR BAIXA NO ESTOQUE (PRODUTOS DA RECEITA)
                 for (const [prodId, qtdParaBaixa] of Object.entries(configCesta)) {
                     const docRef = doc(db, "estoque_caritas", prodId);
                     const docSnap = await getDoc(docRef);
-                    
                     if (docSnap.exists()) {
                         const saldoAtual = docSnap.data().quantidade || 0;
-                        await updateDoc(docRef, {
-                            quantidade: Math.max(0, saldoAtual - qtdParaBaixa)
-                        });
+                        await updateDoc(docRef, { quantidade: Math.max(0, saldoAtual - qtdParaBaixa) });
                     }
                 }
 
-                alert("Entrega confirmada! O estoque foi atualizado e o picking recalculado.");
+                alert("Entrega realizada com sucesso!");
                 fecharModal();
             } catch (e) {
-                alert("Erro ao processar: " + e.message);
+                alert("Erro: " + e.message);
                 btn.disabled = false;
-                btn.innerText = "Confirmar e Dar Baixa";
+                btn.innerText = "Finalizar";
             }
         }
 
@@ -142,11 +135,13 @@
             container.innerHTML = dados.map(f => {
                 const dataEntrega = f.ultimaCesta ? f.ultimaCesta.toDate() : null;
                 const jaEntregue = dataEntrega && dataEntrega.getMonth() === hoje.getMonth() && dataEntrega.getFullYear() === hoje.getFullYear();
+                const numDependentes = f.filhos ? f.filhos.length : 0;
                 
                 return `
                     <div class="familia-row">
                         <div>
                             <div class="info-nome">${f.responsavel1.nome}</div>
+                            <span class="info-dependentes"><i class="fas fa-child"></i> ${numDependentes} dependentes</span>
                             <small>Última: ${dataEntrega ? dataEntrega.toLocaleDateString() : 'Nunca'}</small>
                         </div>
                         <button class="btn-entregar" onclick="abrirModal('${f.id}', '${f.responsavel1.nome}')" ${jaEntregue ? 'disabled' : ''}>
