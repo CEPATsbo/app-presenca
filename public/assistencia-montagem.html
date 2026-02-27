@@ -22,8 +22,6 @@
         .item-montagem { display: flex; align-items: center; gap: 10px; padding: 10px 0; border-bottom: 1px solid #eee; cursor: pointer; }
         .item-montagem input[type="checkbox"] { width: 22px; height: 22px; cursor: pointer; accent-color: var(--green); }
         .validade-info { font-size: 0.75em; color: var(--grey); display: block; }
-        .validade-curta { color: var(--orange) !important; font-weight: bold; }
-        .vencido { color: var(--red) !important; font-weight: bold; }
         .marcado { text-decoration: line-through; color: var(--grey); }
     </style>
 </head>
@@ -40,7 +38,7 @@
             <div class="resumo-item"><h2 id="entregas-feitas">0</h2><p>Entregues</p></div>
             <div class="resumo-item"><h2 id="cestas-restantes" style="color: var(--green);">0</h2><p>A Montar</p></div>
         </div>
-        <div id="grid-cestas" class="grid-cestas">Carregando planejamento de picking...</div>
+        <div id="grid-cestas" class="grid-cestas">Carregando planejamento...</div>
     </main>
 
     <script type="module">
@@ -50,128 +48,79 @@
 
         const firebaseConfig = { apiKey: "AIzaSyBV7RPjk3cFTqL-aIpflJcUojKg1ZXMLuU", authDomain: "voluntarios-ativos---cepat.firebaseapp.com", projectId: "voluntarios-ativos---cepat", storageBucket: "voluntarios-ativos---cepat.firebasestorage.app", messagingSenderId: "66122858261", appId: "1:66122858261:web:7fa21f1805463b5c08331c" };
         const db = getFirestore(initializeApp(firebaseConfig));
-        
-        let configCesta = {}, metaGlobal = 0, entregasNoMes = 0, mapaLotes = {}, nomesProdutos = {};
+        let configCesta = {}, metaGlobal = 0, entregasNoMes = 0, mapaLotes = {}, nomesProdutos = {}, saldoEstoque = {};
 
-        protegerPagina(['super-admin','diretor','conselheiro','tesoureiro','caritas']).then(() => { 
-            iniciarSincronizacao(); 
-        });
+        protegerPagina(['super-admin','diretor','caritas']).then(() => { iniciarSincronizacaoGlobal(); });
 
-        async function carregarLotesComRedeDeSeguranca() {
-            const prodSnap = await getDocs(collection(db, "estoque_caritas"));
-            for (const pDoc of prodSnap.docs) {
-                const pId = pDoc.id; const pData = pDoc.data(); nomesProdutos[pId] = pData.nome;
+        function iniciarSincronizacaoGlobal() {
+            onSnapshot(collection(db, "estoque_caritas"), snap => {
+                snap.docs.forEach(d => { saldoEstoque[d.id] = d.data().quantidade || 0; nomesProdutos[d.id] = d.data().nome; });
+                atualizarTudo();
+            });
+            onSnapshot(doc(db, "configuracoes", "cesta_padrao"), d => {
+                if (d.exists()) { configCesta = d.data().itens || {}; metaGlobal = d.data().meta || 0; atualizarTudo(); }
+            });
+            const inicioMes = new Date(); inicioMes.setDate(1); inicioMes.setHours(0,0,0,0);
+            onSnapshot(query(collection(db, "entregasCestas"), where("data", ">=", Timestamp.fromDate(inicioMes))), s => {
+                entregasNoMes = s.size; atualizarTudo();
+            });
+        }
+
+        async function atualizarTudo() {
+            if (Object.keys(nomesProdutos).length === 0) return;
+            for (const pId of Object.keys(nomesProdutos)) {
                 const qLotes = query(collection(db, `estoque_caritas/${pId}/lotes`), orderBy("validade", "asc"));
                 const lSnap = await getDocs(qLotes);
-                let lotesEncontrados = lSnap.docs.map(d => ({ id: d.id, ...d.data() })).filter(l => l.quantidade > 0);
-                const totalNosLotes = lotesEncontrados.reduce((acc, curr) => acc + curr.quantidade, 0);
-                const saldoSemLote = (pData.quantidade || 0) - totalNosLotes;
-                if (saldoSemLote > 0) {
-                    lotesEncontrados.push({ validade: pData.validade || "9999-12-31", quantidade: saldoSemLote, doador: "Saldo de Estoque Anterior" });
-                }
-                mapaLotes[pId] = lotesEncontrados;
+                let lotes = lSnap.docs.map(d => ({ id: d.id, ...d.data() })).filter(l => l.quantidade > 0);
+                const totalLotes = lotes.reduce((acc, curr) => acc + curr.quantidade, 0);
+                const saldoAnterior = (saldoEstoque[pId] || 0) - totalLotes;
+                if (saldoAnterior > 0) lotes.push({ validade: "9999-12-31", quantidade: saldoAnterior, doador: "Saldo Anterior" });
+                mapaLotes[pId] = lotes;
             }
             renderizarInterface();
         }
 
-        function iniciarSincronizacao() {
-            onSnapshot(doc(db, "configuracoes", "cesta_padrao"), d => {
-                if (d.exists()) { configCesta = d.data().itens || {}; metaGlobal = d.data().meta || 0; carregarLotesComRedeDeSeguranca(); }
-            });
-            const inicioMes = new Date(); inicioMes.setDate(1); inicioMes.setHours(0,0,0,0);
-            onSnapshot(query(collection(db, "entregasCestas"), where("data", ">=", Timestamp.fromDate(inicioMes))), s => {
-                entregasNoMes = s.size; carregarLotesComRedeDeSeguranca();
-            });
-        }
-
         function renderizarInterface() {
             const restantes = Math.max(0, metaGlobal - entregasNoMes);
-            document.getElementById('meta-total').innerText = metaGlobal;
-            document.getElementById('entregas-feitas').innerText = entregasNoMes;
-            document.getElementById('cestas-restantes').innerText = restantes;
-
-            const grid = document.getElementById('grid-cestas');
-            grid.innerHTML = "";
-
-            if (restantes === 0) {
-                grid.innerHTML = `<div style="grid-column: 1/-1; text-align: center; padding: 40px; background: white; border-radius: 12px;">✅ Meta Atingida! Todas as cestas do mês foram entregues.</div>`;
-                return;
-            }
+            document.getElementById('meta-total').innerText = metaGlobal; document.getElementById('entregas-feitas').innerText = entregasNoMes; document.getElementById('cestas-restantes').innerText = restantes;
+            const grid = document.getElementById('grid-cestas'); grid.innerHTML = "";
+            if (restantes === 0) { grid.innerHTML = `<div style="grid-column: 1/-1; text-align: center; padding: 40px; background: white; border-radius: 12px;">✅ Meta Atingida!</div>`; return; }
 
             let lotesVirtuais = JSON.parse(JSON.stringify(mapaLotes));
 
             for (let i = 1; i <= restantes; i++) {
-                const card = document.createElement('div');
-                card.className = 'cesta-card'; 
-                card.id = `cesta-${i}`;
-                let htmlItens = "";
-                let cestaDisponivelNoEstoque = true; // Inteligência Per Basket
+                const card = document.createElement('div'); card.className = 'cesta-card'; card.id = `cesta-${i}`;
+                let htmlItens = "", cestaDisponivel = true;
 
                 Object.entries(configCesta).forEach(([pId, qtdNec]) => {
-                    let faltam = qtdNec;
-                    let picks = [];
-
+                    let faltam = qtdNec, picks = [];
                     if (lotesVirtuais[pId]) {
                         for (let lote of lotesVirtuais[pId]) {
                             if (faltam <= 0) break;
                             const usar = Math.min(lote.quantidade, faltam);
-                            if (usar > 0) {
-                                lote.quantidade -= usar; 
-                                faltam -= usar;
-                                picks.push({ qtd: usar, val: lote.validade });
-                            }
+                            if (usar > 0) { lote.quantidade -= usar; faltam -= usar; picks.push({ qtd: usar, val: lote.validade }); }
                         }
                     }
-
-                    if (faltam > 0) cestaDisponivelNoEstoque = false;
-
+                    if (faltam > 0) cestaDisponivel = false;
                     picks.forEach(p => {
-                        const valFormat = (p.val && p.val !== "9999-12-31") ? p.val.split('-').reverse().join('/') : "N/D";
-                        const hoje = new Date(); const valDate = new Date(p.val);
-                        let classe = valDate < hoje ? "vencido" : "";
-
-                        htmlItens += `
-                        <label class="item-montagem">
-                            <input type="checkbox" onchange="checkCesta(${i})">
-                            <span class="txt">
-                                <b>${p.qtd}x</b> ${nomesProdutos[pId] || pId}
-                                <small class="validade-info ${classe}">Validade: ${valFormat}</small>
-                            </span>
-                        </label>`;
+                        const valF = (p.val && p.val !== "9999-12-31") ? p.val.split('-').reverse().join('/') : "N/D";
+                        htmlItens += `<label class="item-montagem"><input type="checkbox" onchange="checkCesta(${i})"><span class="txt"><b>${p.qtd}x</b> ${nomesProdutos[pId] || pId} <small class="validade-info">Validade: ${valF}</small></span></label>`;
                     });
                 });
 
-                const statusTxt = cestaDisponivelNoEstoque ? "Completa" : "Pendente";
-                const badgeClass = cestaDisponivelNoEstoque ? "status-badge badge-completa" : "status-badge";
-                card.setAttribute('data-disponivel', cestaDisponivelNoEstoque);
-
-                card.innerHTML = `<h3>Cesta #${i} <span class="${badgeClass}">${statusTxt}</span></h3>${htmlItens}`;
+                const badgeClass = cestaDisponivel ? "status-badge badge-completa" : "status-badge";
+                card.setAttribute('data-disponivel', cestaDisponivel);
+                card.innerHTML = `<h3>Cesta #${i} <span class="${badgeClass}">${cestaDisponivel ? "Completa" : "Pendente"}</span></h3>${htmlItens}`;
                 grid.appendChild(card);
             }
         }
 
         window.checkCesta = (n) => {
-            const card = document.getElementById(`cesta-${n}`);
-            const badge = card.querySelector('.status-badge');
-            const totalMarcados = Array.from(card.querySelectorAll('input')).every(c => c.checked);
-            const disponivel = card.getAttribute('data-disponivel') === "true";
-
-            card.querySelectorAll('input').forEach((c, idx) => {
-                const txt = card.querySelectorAll('.txt')[idx];
-                if (c.checked) txt.classList.add('marcado'); else txt.classList.remove('marcado');
-            });
-
-            if (totalMarcados) {
-                card.classList.add('concluida');
-                badge.innerText = "Completa - Montada";
-                badge.style.backgroundColor = "var(--green)";
-                badge.style.color = "white";
-            } else {
-                card.classList.remove('concluida');
-                badge.innerText = disponivel ? "Completa" : "Pendente";
-                badge.style.backgroundColor = disponivel ? "#d1f2eb" : "#eee";
-                badge.style.color = disponivel ? "#16a085" : "#666";
-            }
+            const card = document.getElementById(`cesta-${n}`), badge = card.querySelector('.status-badge');
+            const total = Array.from(card.querySelectorAll('input')).every(c => c.checked), disponivel = card.getAttribute('data-disponivel') === "true";
+            card.querySelectorAll('input').forEach((c, idx) => { if (c.checked) card.querySelectorAll('.txt')[idx].classList.add('marcado'); else card.querySelectorAll('.txt')[idx].classList.remove('marcado'); });
+            if (total) { card.classList.add('concluida'); badge.innerText = "Completa - Montada"; badge.style.backgroundColor = "var(--green)"; badge.style.color = "white"; }
+            else { card.classList.remove('concluida'); badge.innerText = disponivel ? "Completa" : "Pendente"; badge.className = disponivel ? "status-badge badge-completa" : "status-badge"; badge.style = ""; }
         };
     </script>
 </body>
