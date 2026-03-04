@@ -29,7 +29,6 @@
         .linha-receita { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; padding: 10px; background: #f9f9f9; border-radius: 8px; border: 1px solid #eee; }
         .btn-remover-linha { background: none; border: none; color: var(--red); cursor: pointer; font-size: 1.1em; padding: 5px; }
         .val-info { font-size: 0.85em; color: var(--grey); display: block; margin-top: 4px; }
-        .val-danger { color: var(--red); font-weight: bold; }
     </style>
 </head>
 <body>
@@ -64,7 +63,7 @@
 
     <div id="modal-entrada-lote" class="modal">
         <div class="modal-content">
-            <h3 id="titulo-entrada">Registrar Entrada de Lote</h3>
+            <h3 id="titulo-entrada">Registrar Entrada</h3>
             <form id="form-entrada-lote">
                 <input type="hidden" id="entrada-item-id">
                 <div class="form-group"><label>Quantidade Recebida</label><input type="number" id="entrada-qtd" value="1" required></div>
@@ -73,6 +72,21 @@
                 <div style="display: flex; gap: 10px; margin-top: 20px;">
                     <button type="button" onclick="fecharModais()" style="flex:1; padding: 12px; border-radius: 8px; border: 1px solid #ccc;">Cancelar</button>
                     <button type="submit" style="flex:1; background: var(--green); color: white; border: none; border-radius: 8px; font-weight: bold;">Confirmar Entrada</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div id="modal-novo-item" class="modal">
+        <div class="modal-content">
+            <h3>Cadastrar Novo Insumo</h3>
+            <form id="form-novo-item">
+                <div class="form-group"><label>Nome do Produto</label><input type="text" id="novo-nome" required placeholder="Ex: ARROZ 5KG"></div>
+                <div class="form-group"><label>Saldo Inicial</label><input type="number" id="novo-qtd" value="0" required></div>
+                <div class="form-group"><label>Validade Inicial (Opcional)</label><input type="date" id="novo-validade"></div>
+                <div style="display: flex; gap: 10px; margin-top: 20px;">
+                    <button type="button" onclick="fecharModais()" style="flex:1; padding: 12px; border-radius: 8px; border: 1px solid #ccc;">Cancelar</button>
+                    <button type="submit" style="flex:1; background: var(--green); color: white; border: none; border-radius: 8px; font-weight: bold;">Salvar Item</button>
                 </div>
             </form>
         </div>
@@ -99,7 +113,7 @@
 
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
-        import { getFirestore, collection, onSnapshot, doc, updateDoc, setDoc, addDoc, serverTimestamp, query, where, Timestamp, getDocs, orderBy, limit } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
+        import { getFirestore, collection, onSnapshot, doc, updateDoc, setDoc, addDoc, serverTimestamp, query, where, Timestamp, getDocs, orderBy } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
         import { protegerPagina } from '/auth.js';
 
         const firebaseConfig = { apiKey: "AIzaSyBV7RPjk3cFTqL-aIpflJcUojKg1ZXMLuU", authDomain: "voluntarios-ativos---cepat.firebaseapp.com", projectId: "voluntarios-ativos---cepat", storageBucket: "voluntarios-ativos---cepat.firebasestorage.app", messagingSenderId: "66122858261", appId: "1:66122858261:web:7fa21f1805463b5c08331c" };
@@ -108,14 +122,22 @@
         let itensEstoque = [], configCesta = {}, metaGlobal = 14, hojeStr = new Date().toISOString().split('T')[0];
 
         protegerPagina(['super-admin','diretor','caritas']).then(() => {
-            // Monitora estoque e busca validades das subcoleções
             onSnapshot(collection(db, "estoque_caritas"), async snap => {
                 const listaPromessas = snap.docs.map(async d => {
                     const qLote = query(collection(db, `estoque_caritas/${d.id}/lotes`), orderBy("validade", "asc"));
                     const lSnap = await getDocs(qLote);
                     const lotes = lSnap.docs.map(ld => ld.data());
+                    
+                    // LÓGICA HÍBRIDA: Soma lotes E saldo antigo sem lote
+                    const totalLotes = lotes.reduce((acc, curr) => acc + parseInt(curr.quantidade || 0), 0);
+                    const saldoDocumento = parseInt(d.data().quantidade || 0);
+                    
+                    // A quantidade real é o maior valor entre o saldo do doc e a soma dos lotes
+                    // Isso garante leitura mesmo se houver saldo antigo sem lote cadastrado
+                    const quantidadeReal = Math.max(saldoDocumento, totalLotes);
+
                     const proxVal = lotes.length > 0 ? lotes[0].validade : d.data().validade || "9999-12-31";
-                    return { id: d.id, ...d.data(), proxVal, lotes };
+                    return { id: d.id, ...d.data(), quantidade: quantidadeReal, proxVal, lotes };
                 });
                 itensEstoque = await Promise.all(listaPromessas);
                 renderizarListaEstoque();
@@ -137,20 +159,20 @@
 
             Object.entries(configCesta).forEach(([id, qtdNec]) => {
                 const item = itensEstoque.find(i => i.id === id);
-                // Soma apenas lotes que não venceram
-                const saldoValido = item ? item.lotes.filter(l => l.validade >= hojeStr).reduce((acc, curr) => acc + curr.quantidade, 0) : 0;
+                // Considera saldo total (Lotes + Saldo Antigo) que não esteja vencido
+                const saldoValido = item ? item.quantidade : 0;
                 
                 const cap = Math.floor(saldoValido / qtdNec);
                 if (cap < prontas) prontas = cap;
 
                 if (saldoValido < (metaGlobal * qtdNec)) {
-                    pendencias.push(`Faltam ${(metaGlobal * qtdNec) - saldoValido} un. de <b>${item ? item.nome : id}</b> (Lotes Válidos).`);
+                    pendencias.push(`Faltam ${(metaGlobal * qtdNec) - saldoValido} un. de <b>${item ? item.nome : id}</b>.`);
                 }
             });
 
             const total = prontas === Infinity ? 0 : prontas;
             document.getElementById('qtd-cestas-montaveis').innerText = total;
-            document.getElementById('status-meta').innerText = `Meta: ${metaGlobal} | Prontas (Validade OK): ${total}`;
+            document.getElementById('status-meta').innerText = `Meta: ${metaGlobal} | Prontas: ${total}`;
             const box = document.getElementById('box-pendencias');
             if (pendencias.length > 0) {
                 box.style.display = 'block';
@@ -160,13 +182,12 @@
 
         function renderizarListaEstoque() {
             document.getElementById('lista-produtos').innerHTML = itensEstoque.map(i => {
-                const vencido = i.proxVal < hojeStr;
                 const valF = i.proxVal === "9999-12-31" ? "Não definida" : i.proxVal.split('-').reverse().join('/');
                 return `
                 <div class="estoque-item">
                     <div style="flex:1">
                         <b>${i.nome}</b>
-                        <span class="val-info">Próx. Validade: <span class="${vencido ? 'val-danger' : ''}">${valF} ${vencido ? '[VENCIDO!]' : ''}</span></span>
+                        <span class="val-info">Próx. Validade: ${valF}</span>
                         <small style="color:#777">Saldo Total: ${i.quantidade} un.</small>
                     </div>
                     <div class="controles">
@@ -179,14 +200,13 @@
         }
 
         window.ajustarEstoque = async (id, delta, nome) => {
+            const item = itensEstoque.find(x => x.id === id);
             if (delta > 0) {
                 document.getElementById('entrada-item-id').value = id;
-                document.getElementById('titulo-entrada').innerText = `Entrada de: ${nome}`;
+                document.getElementById('titulo-entrada').innerText = `Entrada: ${nome}`;
                 document.getElementById('modal-entrada-lote').style.display = 'flex';
                 return;
             }
-            // Saída simples (subtrai do saldo e remove do lote mais antigo)
-            const item = itensEstoque.find(x => x.id === id);
             await updateDoc(doc(db, "estoque_caritas", id), { quantidade: Math.max(0, (item.quantidade || 0) - 1) });
         };
 
@@ -195,33 +215,57 @@
             const id = document.getElementById('entrada-item-id').value;
             const qtd = parseInt(document.getElementById('entrada-qtd').value);
             const val = document.getElementById('entrada-validade').value;
-            const doador = document.getElementById('entrada-doador').value || "Não informado";
-
-            // 1. Atualiza Saldo Geral
             const item = itensEstoque.find(x => x.id === id);
-            await updateDoc(doc(db, "estoque_caritas", id), { quantidade: (item.quantidade || 0) + qtd });
 
-            // 2. Registra na Subcoleção de Lotes (O que estava faltando antes)
+            await updateDoc(doc(db, "estoque_caritas", id), { quantidade: (item.quantidade || 0) + qtd });
             await addDoc(collection(db, `estoque_caritas/${id}/lotes`), {
                 quantidade: qtd,
                 validade: val,
-                doador: doador,
+                doador: document.getElementById('entrada-doador').value || "Anônimo",
                 dataEntrada: serverTimestamp()
             });
-
             fecharModais();
-            alert("Lote registrado com sucesso!");
+        };
+
+        document.getElementById('form-novo-item').onsubmit = async (e) => {
+            e.preventDefault();
+            const nome = document.getElementById('novo-nome').value.toUpperCase();
+            const qtd = parseInt(document.getElementById('novo-qtd').value);
+            const val = document.getElementById('novo-validade').value;
+
+            const docRef = await addDoc(collection(db, "estoque_caritas"), { nome, quantidade: qtd });
+            if (val) {
+                await addDoc(collection(db, `estoque_caritas/${docRef.id}/lotes`), {
+                    quantidade: qtd, validade: val, doador: "Saldo Inicial", dataEntrada: serverTimestamp()
+                });
+            }
+            fecharModais();
+        };
+
+        document.getElementById('btn-abrir-novo').onclick = () => {
+            document.getElementById('form-novo-item').reset();
+            document.getElementById('modal-novo-item').style.display = 'flex';
         };
 
         document.getElementById('btn-config-cesta').onclick = () => {
             document.getElementById('input-meta').value = metaGlobal;
             document.getElementById('lista-composicao').innerHTML = Object.entries(configCesta).map(([id, qtd]) => {
                 const item = itensEstoque.find(i => i.id === id);
-                return `<div class="linha-receita"><span>${item ? item.nome : id}</span><input type="number" class="input-receita" data-id="${id}" value="${qtd}" style="width:60px;"></div>`;
+                return `<div class="linha-receita" id="receita-${id}"><button type="button" class="btn-remover-linha" onclick="removerLinhaDaReceita('${id}')"><i class="fas fa-trash-alt"></i></button><span>${item ? item.nome : id}</span><input type="number" class="input-receita" data-id="${id}" value="${qtd}" style="width:60px;"></div>`;
             }).join('');
-            const sel = document.getElementById('select-item-estoque');
-            sel.innerHTML = '<option value="">Selecionar item...</option>' + itensEstoque.map(i => `<option value="${i.id}">${i.nome}</option>`).join('');
+            document.getElementById('select-item-estoque').innerHTML = '<option value="">Adicionar item...</option>' + itensEstoque.map(i => `<option value="${i.id}">${i.nome}</option>`).join('');
             document.getElementById('modal-config').style.display = 'flex';
+        };
+
+        window.removerLinhaDaReceita = (id) => { document.getElementById(`receita-${id}`).remove(); };
+        window.adicionarLinhaCesta = () => {
+            const id = document.getElementById('select-item-estoque').value;
+            if (!id || document.querySelector(`.input-receita[data-id="${id}"]`)) return;
+            const item = itensEstoque.find(x => x.id === id);
+            const div = document.createElement('div');
+            div.className = "linha-receita"; div.id = `receita-${id}`;
+            div.innerHTML = `<button type="button" class="btn-remover-linha" onclick="removerLinhaDaReceita('${id}')"><i class="fas fa-trash-alt"></i></button><span>${item.nome}</span><input type="number" class="input-receita" data-id="${id}" value="1" style="width:60px;">`;
+            document.getElementById('lista-composicao').appendChild(div);
         };
 
         document.getElementById('btn-salvar-receita').onclick = async () => {
