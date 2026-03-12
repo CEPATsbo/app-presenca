@@ -117,64 +117,45 @@
         const firebaseConfig = { apiKey: "AIzaSyBV7RPjk3cFTqL-aIpflJcUojKg1ZXMLuU", authDomain: "voluntarios-ativos---cepat.firebaseapp.com", projectId: "voluntarios-ativos---cepat", storageBucket: "voluntarios-ativos---cepat.firebasestorage.app", messagingSenderId: "66122858261", appId: "1:66122858261:web:7fa21f1805463b5c08331c" };
         const db = getFirestore(initializeApp(firebaseConfig));
         
-        let itensEstoque = [], configCesta = {}, metaGlobal = 14, hojeStr = new Date().toISOString().split('T')[0];
+        let itensEstoque = [], configCesta = {}, metaGlobal = 14;
 
         protegerPagina(['super-admin','diretor','caritas']).then(() => {
             onSnapshot(collection(db, "estoque_caritas"), async snap => {
                 const listaPromessas = snap.docs.map(async d => {
                     const qLote = query(collection(db, `estoque_caritas/${d.id}/lotes`), orderBy("validade", "asc"));
                     const lSnap = await getDocs(qLote);
-                    const lotes = lSnap.docs.map(ld => ld.data());
+                    const lotes = lSnap.docs.map(ld => ({ id: ld.id, ...ld.data() }));
                     const totalLotes = lotes.reduce((acc, curr) => acc + parseInt(curr.quantidade || 0), 0);
                     const quantidadeReal = Math.max(parseInt(d.data().quantidade || 0), totalLotes);
                     const proxVal = lotes.length > 0 ? lotes[0].validade : d.data().validade || "9999-12-31";
-                    return { id: d.id, ...d.data(), quantidade: quantidadeReal, proxVal, lotes };
+                    return { id: d.id.trim(), ...d.data(), quantidade: quantidadeReal, proxVal, lotes };
                 });
                 itensEstoque = await Promise.all(listaPromessas);
-                renderizarListaEstoque();
-                calcular();
+                renderizarListaEstoque(); calcular();
             });
-
             onSnapshot(doc(db, "configuracoes", "cesta_padrao"), d => {
-                if(d.exists()){
-                    configCesta = d.data().itens || {};
-                    metaGlobal = d.data().meta || 14;
-                    calcular();
-                }
+                if(d.exists()){ configCesta = d.data().itens || {}; metaGlobal = d.data().meta || 14; calcular(); }
             });
         });
 
-        // CORREÇÃO DOS BOTÕES VINCULADOS AO WINDOW
         window.ajustarEstoque = async (id, delta, nome) => {
-            if (!id) return;
+            const cleanId = id.trim();
+            if (!cleanId) return;
             if (delta > 0) {
-                document.getElementById('entrada-item-id').value = id;
+                document.getElementById('entrada-item-id').value = cleanId;
                 document.getElementById('titulo-entrada').innerText = `Entrada: ${nome}`;
                 document.getElementById('modal-entrada-lote').style.display = 'flex';
                 return;
             }
             try {
-                const docRef = doc(db, "estoque_caritas", id);
-                await updateDoc(docRef, { quantidade: increment(-1) });
-            } catch (e) { alert("Erro ao subtrair."); }
+                await updateDoc(doc(db, "estoque_caritas", cleanId), { quantidade: increment(-1) });
+            } catch (e) { alert("Erro ao subtrair de: " + nome); }
         };
 
         function renderizarListaEstoque() {
             document.getElementById('lista-produtos').innerHTML = itensEstoque.map(i => {
                 const valF = i.proxVal === "9999-12-31" ? "Não definida" : i.proxVal.split('-').reverse().join('/');
-                return `
-                <div class="estoque-item">
-                    <div style="flex:1">
-                        <b>${i.nome}</b>
-                        <span class="val-info">Próx. Validade: ${valF}</span>
-                        <small style="color:#777">Saldo Total: ${i.quantidade} un.</small>
-                    </div>
-                    <div class="controles">
-                        <button class="btn-ajuste" style="background:var(--red)" onclick="window.ajustarEstoque('${i.id}', -1, '${i.nome}')">-</button>
-                        <span style="font-weight:bold; min-width:30px; text-align:center;">${i.quantidade}</span>
-                        <button class="btn-ajuste" style="background:var(--green)" onclick="window.ajustarEstoque('${i.id}', 1, '${i.nome}')">+</button>
-                    </div>
-                </div>`;
+                return `<div class="estoque-item"><div style="flex:1"><b>${i.nome}</b><span class="val-info">Próx. Validade: ${valF}</span><small style="color:#777">Saldo Total: ${i.quantidade} un.</small></div><div class="controles"><button class="btn-ajuste" style="background:var(--red)" onclick="window.ajustarEstoque('${i.id}', -1, '${i.nome}')">-</button><span style="font-weight:bold; min-width:30px; text-align:center;">${i.quantidade}</span><button class="btn-ajuste" style="background:var(--green)" onclick="window.ajustarEstoque('${i.id}', 1, '${i.nome}')">+</button></div></div>`;
             }).join('');
         }
 
@@ -183,14 +164,13 @@
             let prontas = Infinity, pendencias = [];
             Object.entries(configCesta).forEach(([id, qtdNec]) => {
                 const item = itensEstoque.find(i => i.id === id);
-                const saldoValido = item ? item.quantidade : 0;
-                const cap = Math.floor(saldoValido / qtdNec);
+                const saldo = item ? item.quantidade : 0;
+                const cap = Math.floor(saldo / qtdNec);
                 if (cap < prontas) prontas = cap;
-                if (saldoValido < (metaGlobal * qtdNec)) pendencias.push(`Faltam ${(metaGlobal * qtdNec) - saldoValido} un. de <b>${item ? item.nome : id}</b>.`);
+                if (saldo < (metaGlobal * qtdNec)) pendencias.push(`Faltam ${(metaGlobal * qtdNec) - saldo} un. de <b>${item ? item.nome : id}</b>.`);
             });
-            const total = prontas === Infinity ? 0 : prontas;
-            document.getElementById('qtd-cestas-montaveis').innerText = total;
-            document.getElementById('status-meta').innerText = `Meta: ${metaGlobal} | Prontas: ${total}`;
+            document.getElementById('qtd-cestas-montaveis').innerText = prontas === Infinity ? 0 : prontas;
+            document.getElementById('status-meta').innerText = `Meta: ${metaGlobal} | Prontas: ${prontas === Infinity ? 0 : prontas}`;
             const box = document.getElementById('box-pendencias');
             if (pendencias.length > 0) {
                 box.style.display = 'block';
@@ -221,7 +201,6 @@
         };
 
         document.getElementById('btn-abrir-novo').onclick = () => { document.getElementById('form-novo-item').reset(); document.getElementById('modal-novo-item').style.display = 'flex'; };
-        
         document.getElementById('btn-config-cesta').onclick = () => {
             document.getElementById('input-meta').value = metaGlobal;
             document.getElementById('lista-composicao').innerHTML = Object.entries(configCesta).map(([id, qtd]) => {
