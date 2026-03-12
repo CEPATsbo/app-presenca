@@ -22,9 +22,12 @@
         .modal { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); display: none; justify-content: center; align-items: center; z-index: 1000; }
         .modal-content { background: white; padding: 30px; border-radius: 12px; width: 95%; max-width: 500px; max-height: 85vh; overflow-y: auto; }
         .form-group { display: flex; flex-direction: column; gap: 5px; margin-bottom: 15px; }
+        .form-group label { font-size: 0.8em; font-weight: bold; color: #666; }
+        .form-group input, .form-group select { padding: 12px; border: 1px solid #ccc; border-radius: 8px; font-size: 1em; }
         .btn-acao { border: none; padding: 12px 20px; border-radius: 8px; cursor: pointer; font-weight: bold; display: flex; align-items: center; gap: 8px; }
         .btn-ajuste { border: none; color: white; padding: 5px 12px; border-radius: 6px; font-weight: bold; cursor: pointer; font-size: 1.2em; }
         .linha-receita { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; padding: 10px; background: #f9f9f9; border-radius: 8px; border: 1px solid #eee; }
+        .btn-remover-linha { background: none; border: none; color: var(--red); cursor: pointer; font-size: 1.1em; padding: 5px; }
         .val-info { font-size: 0.85em; color: var(--grey); display: block; margin-top: 4px; }
     </style>
 </head>
@@ -41,12 +44,12 @@
         <div id="painel-prontidao" class="cesta-pronta-card">
             <h2 id="qtd-cestas-montaveis">0</h2>
             <p>Cestas Prontas para Entrega</p>
-            <div id="status-meta" style="margin-top: 10px; color: #1b5e20; font-weight: bold; font-size: 0.9em;">Aguardando Firebase...</div>
+            <div id="status-meta" style="margin-top: 10px; color: #1b5e20; font-weight: bold; font-size: 0.9em;">Sincronizando dados...</div>
             <div id="box-pendencias" class="lista-pendencias" style="display: none;"><div id="lista-pendencias"></div></div>
         </div>
 
         <div style="display: flex; gap: 10px; margin-bottom: 30px; justify-content: center;">
-            <button id="btn-config-cesta" class="btn-acao" style="background: var(--primary); color: white;"><i class="fas fa-cog"></i> Receita e Meta</button>
+            <button id="btn-config-cesta" class="btn-acao" style="background: var(--primary); color: white;"><i class="fas fa-cog"></i> Configurar Receita e Meta</button>
             <button id="btn-abrir-novo" class="btn-acao" style="background: var(--orange); color: white;"><i class="fas fa-plus"></i> + Novo Item</button>
         </div>
 
@@ -65,8 +68,8 @@
                 <div class="form-group"><label>Doador (Opcional)</label><input type="text" id="entrada-doador" placeholder="Ex: Mesa Brasil"></div>
                 <div class="form-group"><label>Data de Validade</label><input type="date" id="entrada-validade" required></div>
                 <div style="display: flex; gap: 10px; margin-top: 20px;">
-                    <button type="button" onclick="fecharModais()" style="flex:1; padding: 12px; border-radius: 8px; border: 1px solid #ccc;">Cancelar</button>
-                    <button type="submit" style="flex:1; background: var(--green); color: white; border: none; border-radius: 8px; font-weight: bold;">Confirmar Entrada</button>
+                    <button type="button" onclick="fecharModais()" style="flex:1; padding: 12px; border-radius: 8px; border: 1px solid #ccc;">Sair</button>
+                    <button type="submit" style="flex:1; background: var(--green); color: white; border: none; border-radius: 8px; font-weight: bold;">Confirmar</button>
                 </div>
             </form>
         </div>
@@ -80,7 +83,7 @@
                 <div class="form-group"><label>Saldo Inicial</label><input type="number" id="novo-qtd" value="0" required></div>
                 <div class="form-group"><label>Validade Inicial (Opcional)</label><input type="date" id="novo-validade"></div>
                 <div style="display: flex; gap: 10px; margin-top: 20px;">
-                    <button type="button" onclick="fecharModais()" style="flex:1; padding: 12px; border-radius: 8px; border: 1px solid #ccc;">Cancelar</button>
+                    <button type="button" onclick="fecharModais()" style="flex:1; padding: 12px; border-radius: 8px; border: 1px solid #ccc;">Sair</button>
                     <button type="submit" style="flex:1; background: var(--green); color: white; border: none; border-radius: 8px; font-weight: bold;">Salvar Item</button>
                 </div>
             </form>
@@ -100,7 +103,7 @@
                 <button type="button" onclick="adicionarLinhaCesta()" style="width:100%; background:var(--orange); color:white; border:none; padding:12px; border-radius:8px;">+ Adicionar na Receita</button>
             </div>
             <div style="display:flex; gap:10px; margin-top:20px;">
-                <button onclick="fecharModais()" style="flex:1; border-radius:8px; border: 1px solid #ccc;">Sair</button>
+                <button onclick="fecharModais()" style="flex:1; border: 1px solid #ccc;">Sair</button>
                 <button id="btn-salvar-receita" style="flex:1; background:var(--green); color:white; border:none; border-radius:8px; font-weight:bold;">Salvar Tudo</button>
             </div>
         </div>
@@ -108,23 +111,22 @@
 
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
-        import { getFirestore, collection, onSnapshot, doc, runTransaction, setDoc, addDoc, serverTimestamp, query, where, Timestamp, getDocs, orderBy } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
+        import { getFirestore, collection, onSnapshot, doc, updateDoc, setDoc, addDoc, serverTimestamp, query, where, Timestamp, getDocs, orderBy, increment } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
         import { protegerPagina } from '/auth.js';
 
         const firebaseConfig = { apiKey: "AIzaSyBV7RPjk3cFTqL-aIpflJcUojKg1ZXMLuU", authDomain: "voluntarios-ativos---cepat.firebaseapp.com", projectId: "voluntarios-ativos---cepat", storageBucket: "voluntarios-ativos---cepat.firebasestorage.app", messagingSenderId: "66122858261", appId: "1:66122858261:web:7fa21f1805463b5c08331c" };
         const db = getFirestore(initializeApp(firebaseConfig));
         
-        let itensEstoque = [], configCesta = {}, metaGlobal = 14;
+        let itensEstoque = [], configCesta = {}, metaGlobal = 14, hojeStr = new Date().toISOString().split('T')[0];
 
         protegerPagina(['super-admin','diretor','caritas']).then(() => {
             onSnapshot(collection(db, "estoque_caritas"), async snap => {
                 const listaPromessas = snap.docs.map(async d => {
                     const qLote = query(collection(db, `estoque_caritas/${d.id}/lotes`), orderBy("validade", "asc"));
                     const lSnap = await getDocs(qLote);
-                    const lotes = lSnap.docs.map(ld => ({ id: ld.id, ...ld.data() }));
+                    const lotes = lSnap.docs.map(ld => ld.data());
                     const totalLotes = lotes.reduce((acc, curr) => acc + parseInt(curr.quantidade || 0), 0);
-                    const saldoDoc = parseInt(d.data().quantidade || 0);
-                    const quantidadeReal = Math.max(saldoDoc, totalLotes);
+                    const quantidadeReal = Math.max(parseInt(d.data().quantidade || 0), totalLotes);
                     const proxVal = lotes.length > 0 ? lotes[0].validade : d.data().validade || "9999-12-31";
                     return { id: d.id, ...d.data(), quantidade: quantidadeReal, proxVal, lotes };
                 });
@@ -141,6 +143,40 @@
                 }
             });
         });
+
+        // CORREÇÃO DOS BOTÕES VINCULADOS AO WINDOW
+        window.ajustarEstoque = async (id, delta, nome) => {
+            if (!id) return;
+            if (delta > 0) {
+                document.getElementById('entrada-item-id').value = id;
+                document.getElementById('titulo-entrada').innerText = `Entrada: ${nome}`;
+                document.getElementById('modal-entrada-lote').style.display = 'flex';
+                return;
+            }
+            try {
+                const docRef = doc(db, "estoque_caritas", id);
+                await updateDoc(docRef, { quantidade: increment(-1) });
+            } catch (e) { alert("Erro ao subtrair."); }
+        };
+
+        function renderizarListaEstoque() {
+            document.getElementById('lista-produtos').innerHTML = itensEstoque.map(i => {
+                const valF = i.proxVal === "9999-12-31" ? "Não definida" : i.proxVal.split('-').reverse().join('/');
+                return `
+                <div class="estoque-item">
+                    <div style="flex:1">
+                        <b>${i.nome}</b>
+                        <span class="val-info">Próx. Validade: ${valF}</span>
+                        <small style="color:#777">Saldo Total: ${i.quantidade} un.</small>
+                    </div>
+                    <div class="controles">
+                        <button class="btn-ajuste" style="background:var(--red)" onclick="window.ajustarEstoque('${i.id}', -1, '${i.nome}')">-</button>
+                        <span style="font-weight:bold; min-width:30px; text-align:center;">${i.quantidade}</span>
+                        <button class="btn-ajuste" style="background:var(--green)" onclick="window.ajustarEstoque('${i.id}', 1, '${i.nome}')">+</button>
+                    </div>
+                </div>`;
+            }).join('');
+        }
 
         function calcular() {
             if (Object.keys(configCesta).length === 0 || itensEstoque.length === 0) return;
@@ -162,63 +198,16 @@
             } else { box.style.display = 'none'; }
         }
 
-        function renderizarListaEstoque() {
-            document.getElementById('lista-produtos').innerHTML = itensEstoque.map(i => {
-                const valF = i.proxVal === "9999-12-31" ? "Não definida" : i.proxVal.split('-').reverse().join('/');
-                return `
-                <div class="estoque-item">
-                    <div style="flex:1">
-                        <b>${i.nome}</b>
-                        <span class="val-info">Próx. Validade: ${valF}</span>
-                        <small style="color:#777">Saldo Total: ${i.quantidade} un.</small>
-                    </div>
-                    <div class="controles">
-                        <button class="btn-ajuste" style="background:var(--red)" onclick="window.ajustarEstoque('${i.id}', -1, '${i.nome}')">-</button>
-                        <span style="font-weight:bold; min-width:30px; text-align:center;">${i.quantidade}</span>
-                        <button class="btn-ajuste" style="background:var(--green)" onclick="window.ajustarEstoque('${i.id}', 1, '${i.nome}')">+</button>
-                    </div>
-                </div>`;
-            }).join('');
-        }
-
-        window.ajustarEstoque = async (id, delta, nome) => {
-            if (!id) return;
-            if (delta > 0) {
-                document.getElementById('entrada-item-id').value = id;
-                document.getElementById('titulo-entrada').innerText = `Entrada: ${nome}`;
-                document.getElementById('modal-entrada-lote').style.display = 'flex';
-                return;
-            }
-            try {
-                // USO DE TRANSAÇÃO PARA EVITAR ERRO 400 E GARANTIR SUBTRAÇÃO
-                await runTransaction(db, async (transaction) => {
-                    const sfDoc = await transaction.get(doc(db, "estoque_caritas", id));
-                    if (!sfDoc.exists()) throw "Documento não existe!";
-                    const novoSaldo = Math.max(0, (sfDoc.data().quantidade || 0) - 1);
-                    transaction.update(doc(db, "estoque_caritas", id), { quantidade: novoSaldo });
-                });
-            } catch (e) { 
-                console.error("Falha no ajuste:", e);
-                alert("Erro ao atualizar o item: " + nome + ". Tente recarregar a página.");
-            }
-        };
-
         document.getElementById('form-entrada-lote').onsubmit = async (e) => {
             e.preventDefault();
             const id = document.getElementById('entrada-item-id').value;
             const qtd = parseInt(document.getElementById('entrada-qtd').value);
             const val = document.getElementById('entrada-validade').value;
-            try {
-                await runTransaction(db, async (transaction) => {
-                    const sfDoc = await transaction.get(doc(db, "estoque_caritas", id));
-                    const novoSaldo = (sfDoc.data().quantidade || 0) + qtd;
-                    transaction.update(doc(db, "estoque_caritas", id), { quantidade: novoSaldo });
-                });
-                await addDoc(collection(db, `estoque_caritas/${id}/lotes`), {
-                    quantidade: qtd, validade: val, doador: document.getElementById('entrada-doador').value || "Anônimo", dataEntrada: serverTimestamp()
-                });
-                fecharModais();
-            } catch (e) { alert("Erro na entrada."); }
+            await updateDoc(doc(db, "estoque_caritas", id), { quantidade: increment(qtd) });
+            await addDoc(collection(db, `estoque_caritas/${id}/lotes`), {
+                quantidade: qtd, validade: val, doador: document.getElementById('entrada-doador').value || "Anônimo", dataEntrada: serverTimestamp()
+            });
+            fecharModais();
         };
 
         document.getElementById('form-novo-item').onsubmit = async (e) => {
@@ -232,6 +221,7 @@
         };
 
         document.getElementById('btn-abrir-novo').onclick = () => { document.getElementById('form-novo-item').reset(); document.getElementById('modal-novo-item').style.display = 'flex'; };
+        
         document.getElementById('btn-config-cesta').onclick = () => {
             document.getElementById('input-meta').value = metaGlobal;
             document.getElementById('lista-composicao').innerHTML = Object.entries(configCesta).map(([id, qtd]) => {
@@ -242,13 +232,13 @@
             document.getElementById('modal-config').style.display = 'flex';
         };
 
-        window.removerLinhaDaReceita = (id) => { const el = document.getElementById(`receita-${id}`); if (el) el.remove(); };
+        window.removerLinhaDaReceita = (id) => { document.getElementById(`receita-${id}`).remove(); };
         window.adicionarLinhaCesta = () => {
             const id = document.getElementById('select-item-estoque').value;
             if (!id || document.querySelector(`.input-receita[data-id="${id}"]`)) return;
             const item = itensEstoque.find(x => x.id === id);
             const div = document.createElement('div'); div.className = "linha-receita"; div.id = `receita-${id}`;
-            div.innerHTML = `<button type="button" class="btn-remover-linha" onclick="removerLinhaDaReceita('${id}')"><i class="fas fa-trash-alt"></i></button><span>${item.nome}</span><input type="number" class="input-receita" data-id="${id}" value="1" style="width:50px;">`;
+            div.innerHTML = `<button type="button" class="btn-remover-linha" onclick="removerLinhaDaReceita('${id}')"><i class="fas fa-trash-alt"></i></button><span>${item.nome}</span><input type="number" class="input-receita" data-id="${id}" value="1" style="width:60px;">`;
             document.getElementById('lista-composicao').appendChild(div);
         };
 
