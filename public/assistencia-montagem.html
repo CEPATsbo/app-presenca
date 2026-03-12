@@ -37,7 +37,7 @@
         
         <div class="resumo-dia">
             <div class="resumo-item"><h2 id="meta-total">0</h2><p>Meta do Mês</p></div>
-            <div class="resumo-item"><h2 id="entregas-feitas">0</h2><p>Entregues</p></div>
+            <div class="resumo-item"><h2 id="entregas-feitas">0</h2><p>Já Entregues</p></div>
             <div class="resumo-item"><h2 id="cestas-restantes" style="color: var(--green);">0</h2><p>Restam Montar</p></div>
         </div>
 
@@ -96,19 +96,14 @@
         async function atualizarTudo() {
             if (Object.keys(nomesProdutos).length === 0 || Object.keys(configCesta).length === 0) return;
             
-            // BUSCA LOTES POR VALIDADE (FEFO) PARA TODOS OS ITENS
             for (const pId of Object.keys(nomesProdutos)) {
                 try {
                     const qLotes = query(collection(db, `estoque_caritas/${pId}/lotes`), orderBy("validade", "asc"));
                     const lSnap = await getDocs(qLotes);
                     let lotes = lSnap.docs.map(d => ({ id: d.id, ...d.data() })).filter(l => l.quantidade > 0);
-                    
                     const totalLotes = lotes.reduce((acc, curr) => acc + curr.quantidade, 0);
                     const extra = (saldoEstoque[pId] || 0) - totalLotes;
-                    
-                    // Se houver saldo sem lote definido, adiciona como validade futura
                     if (extra > 0) lotes.push({ validade: "9999-12-31", quantidade: extra, doador: "Saldo Geral" });
-                    
                     mapaLotes[pId] = lotes;
                 } catch(e) { 
                     mapaLotes[pId] = [{ validade: "9999-12-31", quantidade: saldoEstoque[pId] || 0 }];
@@ -127,32 +122,26 @@
 
             const grid = document.getElementById('grid-cestas');
             grid.innerHTML = "";
-            
             const totalCestasExibir = Math.max(0, metaGlobal - entregasNoMes);
             if (totalCestasExibir === 0 && metaGlobal > 0) {
                 grid.innerHTML = "<div style='grid-column: 1/-1; text-align: center; padding: 50px;'><h2>✅ Meta mensal atingida e entregue!</h2></div>";
                 return;
             }
 
-            // SIMULAÇÃO DE PICKING COM LÓGICA DE VALIDADE
             let lotesVirtuais = JSON.parse(JSON.stringify(mapaLotes));
 
             for (let i = 1; i <= totalCestasExibir; i++) {
                 const cestaId = `cesta_v_${i}`;
                 const est = pickingMarcados[cestaId] || { itens: {}, concluida: false };
-                
                 const card = document.createElement('div');
+                card.id = `card-${cestaId}`;
                 card.className = `cesta-card ${est.concluida ? 'concluida' : ''}`;
                 let html = `<h3>Cesta #${entregasNoMes + i}</h3>`;
 
-                // Ordenar itens da receita por nome para facilitar localização visual
                 const itensOrdenados = Object.entries(configCesta).sort((a,b) => (nomesProdutos[a[0]] || "").localeCompare(nomesProdutos[b[0]] || ""));
 
                 itensOrdenados.forEach(([pId, qtdNec]) => {
-                    let faltam = qtdNec;
-                    let picksDestaCesta = [];
-
-                    // PEGA DO LOTE MAIS PRÓXIMO DO VENCIMENTO PRIMEIRO
+                    let faltam = qtdNec, picksDestaCesta = [];
                     if (lotesVirtuais[pId]) {
                         for (let lote of lotesVirtuais[pId]) {
                             if (faltam <= 0) break;
@@ -169,20 +158,13 @@
                         const itemKey = `${pId}_${idx}`;
                         const isChecked = est.itens[itemKey] || false;
                         const dataF = p.val === "9999-12-31" ? "Estoque Geral" : p.val.split('-').reverse().join('/');
-                        
                         html += `
                             <label class="item-montagem ${isChecked ? 'marcado' : ''}">
                                 <input type="checkbox" ${isChecked ? 'checked' : ''} onchange="salvarProgresso('${cestaId}', '${itemKey}', this.checked)">
-                                <span>
-                                    <b>${p.qtd}x</b> ${nomesProdutos[pId] || pId}
-                                    <small class="validade-info">Validade: ${dataF}</small>
-                                </span>
+                                <span><b>${p.qtd}x</b> ${nomesProdutos[pId] || pId}<small class="validade-info">Validade: ${dataF}</small></span>
                             </label>`;
                     });
-
-                    if (faltam > 0) {
-                        html += `<span class="txt-falta">⚠️ FALTA ${faltam}x ${nomesProdutos[pId] || 'Item'}</span>`;
-                    }
+                    if (faltam > 0) html += `<span class="txt-falta">⚠️ FALTA ${faltam}x ${nomesProdutos[pId] || 'Item'}</span>`;
                 });
                 card.innerHTML = html;
                 grid.appendChild(card);
@@ -194,26 +176,23 @@
             const atual = pickingMarcados[cestaId] || { itens: {}, concluida: false };
             atual.itens[itemKey] = status;
             
-            // Cálculo dinâmico de conclusão da cesta
-            const card = document.querySelector(`[onchange*="${cestaId}"]`).closest('.cesta-card');
-            const totalChecks = card.querySelectorAll('input[type="checkbox"]').length;
-            const marcados = Object.values(atual.itens).filter(v => v).length;
-            atual.concluida = marcados >= totalChecks;
+            // Lógica Corrigida: Só conclui se TODOS os quadradinhos do card estiverem marcados
+            const card = document.getElementById(`card-${cestaId}`);
+            const totalInputs = card.querySelectorAll('input[type="checkbox"]').length;
+            const marcados = card.querySelectorAll('input[type="checkbox"]:checked').length;
+            atual.concluida = marcados === totalInputs;
 
             await setDoc(docRef, atual);
         };
 
         async function resetarPicking() {
-            const confirmacao = confirm("ATENÇÃO: Isso limpará todas as cestas montadas no Picking para iniciar o próximo ciclo. Confirmar reset?");
-            if (confirmacao) {
+            if (confirm("ATENÇÃO: Isso limpará todas as cestas montadas no Picking para iniciar o próximo ciclo. Confirmar reset?")) {
                 try {
                     const snap = await getDocs(collection(db, "picking_estado"));
                     const promises = snap.docs.map(d => deleteDoc(d.ref));
                     await Promise.all(promises);
                     alert("Linha de montagem reiniciada!");
-                } catch (e) {
-                    alert("Erro ao resetar: Verifique as regras do Firebase.");
-                }
+                } catch (e) { alert("Erro ao resetar: Verifique as regras do Firebase."); }
             }
         }
     </script>
