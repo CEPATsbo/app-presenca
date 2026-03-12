@@ -68,7 +68,7 @@
                 <div class="form-group"><label>Doador (Opcional)</label><input type="text" id="entrada-doador" placeholder="Ex: Mesa Brasil"></div>
                 <div class="form-group"><label>Data de Validade</label><input type="date" id="entrada-validade" required></div>
                 <div style="display: flex; gap: 10px; margin-top: 20px;">
-                    <button type="button" onclick="fecharModais()" style="flex:1; padding: 12px; border: 1px solid #ccc;">Sair</button>
+                    <button type="button" onclick="fecharModais()" style="flex:1; border: 1px solid #ccc; border-radius: 8px;">Sair</button>
                     <button type="submit" style="flex:1; background: var(--green); color: white; border: none; border-radius: 8px; font-weight: bold;">Confirmar</button>
                 </div>
             </form>
@@ -83,8 +83,8 @@
                 <div class="form-group"><label>Saldo Inicial</label><input type="number" id="novo-qtd" value="0"></div>
                 <div class="form-group"><label>Validade Inicial</label><input type="date" id="novo-validade"></div>
                 <div style="display: flex; gap: 10px; margin-top: 20px;">
-                    <button type="button" onclick="fecharModais()" style="flex:1; border: 1px solid #ccc;">Sair</button>
-                    <button type="submit" style="flex:1; background: var(--green); color: white; border: none; font-weight: bold;">Salvar</button>
+                    <button type="button" onclick="fecharModais()" style="flex:1; border: 1px solid #ccc; border-radius: 8px;">Sair</button>
+                    <button type="submit" style="flex:1; background: var(--green); color: white; border: none; border-radius: 8px; font-weight: bold;">Salvar</button>
                 </div>
             </form>
         </div>
@@ -103,20 +103,19 @@
                 <button type="button" onclick="adicionarLinhaCesta()" style="width:100%; background:var(--orange); color:white; border:none; padding:12px; border-radius:8px;">+ Adicionar na Receita</button>
             </div>
             <div style="display:flex; gap:10px; margin-top:20px;">
-                <button onclick="fecharModais()" style="flex:1; border: 1px solid #ccc;">Sair</button>
-                <button id="btn-salvar-receita" style="flex:1; background:var(--green); color:white; border:none; font-weight:bold;">Salvar Tudo</button>
+                <button onclick="fecharModais()" style="flex:1; border: 1px solid #ccc; border-radius: 8px;">Sair</button>
+                <button id="btn-salvar-receita" style="flex:1; background:var(--green); color:white; border:none; border-radius:8px; font-weight:bold;">Salvar Tudo</button>
             </div>
         </div>
     </div>
 
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
-        import { getFirestore, collection, onSnapshot, doc, updateDoc, setDoc, addDoc, serverTimestamp, query, getDocs, orderBy, increment } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
+        import { getFirestore, collection, onSnapshot, doc, updateDoc, setDoc, addDoc, serverTimestamp, query, getDocs, orderBy, increment, limit, deleteDoc } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
         import { protegerPagina } from '/auth.js';
 
         const firebaseConfig = { apiKey: "AIzaSyBV7RPjk3cFTqL-aIpflJcUojKg1ZXMLuU", authDomain: "voluntarios-ativos---cepat.firebaseapp.com", projectId: "voluntarios-ativos---cepat", storageBucket: "voluntarios-ativos---cepat.firebasestorage.app", messagingSenderId: "66122858261", appId: "1:66122858261:web:7fa21f1805463b5c08331c" };
         const db = getFirestore(initializeApp(firebaseConfig));
-        
         let itensEstoque = [], configCesta = {}, metaGlobal = 14;
 
         protegerPagina(['super-admin','diretor','caritas']).then(() => {
@@ -125,20 +124,20 @@
                     const qLote = query(collection(db, `estoque_caritas/${d.id}/lotes`), orderBy("validade", "asc"));
                     const lSnap = await getDocs(qLote);
                     const lotes = lSnap.docs.map(ld => ({ id: ld.id, ...ld.data() }));
-                    const quantidadeReal = Math.max(parseInt(d.data().quantidade || 0), lotes.reduce((acc, curr) => acc + parseInt(curr.quantidade || 0), 0));
-                    return { id: d.id, ...d.data(), quantidade: quantidadeReal, proxVal: lotes.length > 0 ? lotes[0].validade : "9999-12-31", lotes };
+                    const totalLotes = lotes.reduce((acc, curr) => acc + parseInt(curr.quantidade || 0), 0);
+                    const saldoDoc = parseInt(d.data().quantidade || 0);
+                    const quantidadeReal = Math.max(saldoDoc, totalLotes); // SOMA HÍBRIDA MANTIDA
+                    return { id: d.id.trim(), ...d.data(), quantidade: quantidadeReal, proxVal: lotes.length > 0 ? lotes[0].validade : "9999-12-31", lotes };
                 });
                 itensEstoque = await Promise.all(listaPromessas);
-                renderizarListaEstoque();
-                calcular();
+                renderizarListaEstoque(); calcular();
             });
-
             onSnapshot(doc(db, "configuracoes", "cesta_padrao"), d => {
                 if(d.exists()){ configCesta = d.data().itens || {}; metaGlobal = d.data().meta || 14; calcular(); }
             });
         });
 
-        // FUNÇÃO DE AJUSTE GLOBAL - AGORA COM TRATAMENTO DE ID RIGOROSO
+        // BAIXA COMPLETA: SALDO + LOTE (FEFO)
         window.ajustarEstoque = async (id, delta, nome) => {
             if (!id) return;
             const targetId = id.trim();
@@ -149,38 +148,30 @@
                 return;
             }
             try {
-                const docRef = doc(db, "estoque_caritas", targetId);
-                await updateDoc(docRef, { quantidade: increment(-1) });
-                console.log("Baixa realizada:", nome);
-            } catch (e) { console.error("Erro na baixa:", e); }
+                // 1. Baixa no Saldo Geral
+                await updateDoc(doc(db, "estoque_caritas", targetId), { quantidade: increment(-1) });
+
+                // 2. Baixa no Lote mais antigo (FEFO)
+                const qLote = query(collection(db, `estoque_caritas/${targetId}/lotes`), orderBy("validade", "asc"), limit(1));
+                const lSnap = await getDocs(qLote);
+                if (!lSnap.empty) {
+                    const loteDoc = lSnap.docs[0];
+                    const novaQtdLote = (loteDoc.data().quantidade || 0) - 1;
+                    if (novaQtdLote <= 0) await deleteDoc(doc(db, `estoque_caritas/${targetId}/lotes`, loteDoc.id));
+                    else await updateDoc(doc(db, `estoque_caritas/${targetId}/lotes`, loteDoc.id), { quantidade: novaQtdLote });
+                }
+                console.log("Baixa realizada com sucesso no Saldo e Lote:", nome);
+            } catch (e) { alert("Erro na baixa."); }
         };
 
         function renderizarListaEstoque() {
             const container = document.getElementById('lista-produtos');
             container.innerHTML = itensEstoque.map(i => {
                 const valF = i.proxVal === "9999-12-31" ? "Não definida" : i.proxVal.split('-').reverse().join('/');
-                return `
-                <div class="estoque-item">
-                    <div style="flex:1">
-                        <b>${i.nome}</b>
-                        <span class="val-info">Próx. Validade: ${valF}</span>
-                        <small style="color:#777">Saldo Total: ${i.quantidade} un.</small>
-                    </div>
-                    <div class="controles">
-                        <button class="btn-ajuste" style="background:var(--red)" data-btn-minus="${i.id}" data-nome="${i.nome}">-</button>
-                        <span style="font-weight:bold; min-width:30px; text-align:center;">${i.quantidade}</span>
-                        <button class="btn-ajuste" style="background:var(--green)" data-btn-plus="${i.id}" data-nome="${i.nome}">+</button>
-                    </div>
-                </div>`;
+                return `<div class="estoque-item"><div style="flex:1"><b>${i.nome}</b><span class="val-info">Próx. Validade: ${valF}</span><small style="color:#777">Saldo Total: ${i.quantidade} un.</small></div><div class="controles"><button class="btn-ajuste" style="background:var(--red)" data-btn-minus="${i.id}" data-nome="${i.nome}">-</button><span style="font-weight:bold; min-width:30px; text-align:center;">${i.quantidade}</span><button class="btn-ajuste" style="background:var(--green)" data-btn-plus="${i.id}" data-nome="${i.nome}">+</button></div></div>`;
             }).join('');
-
-            // VINCULAÇÃO DE EVENTOS ROBUSTA (Resolve o problema do Sal, Arroz e Leite)
-            document.querySelectorAll('[data-btn-minus]').forEach(btn => {
-                btn.onclick = () => window.ajustarEstoque(btn.getAttribute('data-btn-minus'), -1, btn.getAttribute('data-nome'));
-            });
-            document.querySelectorAll('[data-btn-plus]').forEach(btn => {
-                btn.onclick = () => window.ajustarEstoque(btn.getAttribute('data-btn-plus'), 1, btn.getAttribute('data-nome'));
-            });
+            document.querySelectorAll('[data-btn-minus]').forEach(btn => { btn.onclick = () => window.ajustarEstoque(btn.getAttribute('data-btn-minus'), -1, btn.getAttribute('data-nome')); });
+            document.querySelectorAll('[data-btn-plus]').forEach(btn => { btn.onclick = () => window.ajustarEstoque(btn.getAttribute('data-btn-plus'), 1, btn.getAttribute('data-nome')); });
         }
 
         function calcular() {
@@ -196,10 +187,7 @@
             document.getElementById('qtd-cestas-montaveis').innerText = prontas === Infinity ? 0 : prontas;
             document.getElementById('status-meta').innerText = `Meta: ${metaGlobal} | Prontas: ${prontas === Infinity ? 0 : prontas}`;
             const box = document.getElementById('box-pendencias');
-            if (pendencias.length > 0) {
-                box.style.display = 'block';
-                document.getElementById('lista-pendencias').innerHTML = pendencias.map(p => `<div class="pendencia-item">${p}</div>`).join('');
-            } else { box.style.display = 'none'; }
+            if (pendencias.length > 0) { box.style.display = 'block'; document.getElementById('lista-pendencias').innerHTML = pendencias.map(p => `<div class="pendencia-item">${p}</div>`).join(''); } else { box.style.display = 'none'; }
         }
 
         document.getElementById('form-entrada-lote').onsubmit = async (e) => {
