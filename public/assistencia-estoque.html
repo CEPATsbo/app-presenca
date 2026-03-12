@@ -44,9 +44,7 @@
         <div id="painel-prontidao" class="cesta-pronta-card">
             <h2 id="qtd-cestas-montaveis">0</h2>
             <p>Cestas Prontas para Entrega</p>
-            <div id="status-meta" style="margin-top: 10px; color: #1b5e20; font-weight: bold; font-size: 0.9em;">
-                Sincronizando dados...
-            </div>
+            <div id="status-meta" style="margin-top: 10px; color: #1b5e20; font-weight: bold; font-size: 0.9em;">Sincronizando dados...</div>
             <div id="box-pendencias" class="lista-pendencias" style="display: none;"><div id="lista-pendencias"></div></div>
         </div>
 
@@ -126,10 +124,12 @@
                 const listaPromessas = snap.docs.map(async d => {
                     const qLote = query(collection(db, `estoque_caritas/${d.id}/lotes`), orderBy("validade", "asc"));
                     const lSnap = await getDocs(qLote);
-                    const lotes = lSnap.docs.map(ld => ld.data());
+                    const lotes = lSnap.docs.map(ld => ({ id: ld.id, ...ld.data() }));
+                    
                     const totalLotes = lotes.reduce((acc, curr) => acc + parseInt(curr.quantidade || 0), 0);
-                    const saldoDocumento = parseInt(d.data().quantidade || 0);
-                    const quantidadeReal = Math.max(saldoDocumento, totalLotes);
+                    const saldoDoc = parseInt(d.data().quantidade || 0);
+                    const quantidadeReal = Math.max(saldoDoc, totalLotes);
+
                     const proxVal = lotes.length > 0 ? lotes[0].validade : d.data().validade || "9999-12-31";
                     return { id: d.id, ...d.data(), quantidade: quantidadeReal, proxVal, lotes };
                 });
@@ -150,17 +150,13 @@
         function calcular() {
             if (Object.keys(configCesta).length === 0 || itensEstoque.length === 0) return;
             let prontas = Infinity, pendencias = [];
-
             Object.entries(configCesta).forEach(([id, qtdNec]) => {
                 const item = itensEstoque.find(i => i.id === id);
                 const saldoValido = item ? item.quantidade : 0;
                 const cap = Math.floor(saldoValido / qtdNec);
                 if (cap < prontas) prontas = cap;
-                if (saldoValido < (metaGlobal * qtdNec)) {
-                    pendencias.push(`Faltam ${(metaGlobal * qtdNec) - saldoValido} un. de <b>${item ? item.nome : id}</b>.`);
-                }
+                if (saldoValido < (metaGlobal * qtdNec)) pendencias.push(`Faltam ${(metaGlobal * qtdNec) - saldoValido} un. de <b>${item ? item.nome : id}</b>.`);
             });
-
             const total = prontas === Infinity ? 0 : prontas;
             document.getElementById('qtd-cestas-montaveis').innerText = total;
             document.getElementById('status-meta').innerText = `Meta: ${metaGlobal} | Prontas: ${total}`;
@@ -182,23 +178,27 @@
                         <small style="color:#777">Saldo Total: ${i.quantidade} un.</small>
                     </div>
                     <div class="controles">
-                        <button class="btn-ajuste" style="background:var(--red)" onclick="ajustarEstoque('${i.id}', -1)">-</button>
+                        <button class="btn-ajuste" style="background:var(--red)" onclick="window.ajustarEstoque('${i.id}', -1, '${i.nome}')">-</button>
                         <span style="font-weight:bold; min-width:30px; text-align:center;">${i.quantidade}</span>
-                        <button class="btn-ajuste" style="background:var(--green)" onclick="ajustarEstoque('${i.id}', 1, '${i.nome}')">+</button>
+                        <button class="btn-ajuste" style="background:var(--green)" onclick="window.ajustarEstoque('${i.id}', 1, '${i.nome}')">+</button>
                     </div>
                 </div>`;
             }).join('');
         }
 
         window.ajustarEstoque = async (id, delta, nome) => {
-            const item = itensEstoque.find(x => x.id === id);
+            if (!id) return;
             if (delta > 0) {
                 document.getElementById('entrada-item-id').value = id;
                 document.getElementById('titulo-entrada').innerText = `Entrada: ${nome}`;
                 document.getElementById('modal-entrada-lote').style.display = 'flex';
                 return;
             }
-            await updateDoc(doc(db, "estoque_caritas", id), { quantidade: Math.max(0, (item.quantidade || 0) - 1) });
+            try {
+                const item = itensEstoque.find(x => x.id === id);
+                if (!item || item.quantidade <= 0) return;
+                await updateDoc(doc(db, "estoque_caritas", id), { quantidade: item.quantidade - 1 });
+            } catch (e) { console.error("Erro ao subtrair:", e); }
         };
 
         document.getElementById('form-entrada-lote').onsubmit = async (e) => {
@@ -206,6 +206,7 @@
             const id = document.getElementById('entrada-item-id').value;
             const qtd = parseInt(document.getElementById('entrada-qtd').value);
             const val = document.getElementById('entrada-validade').value;
+            if (!id) return;
             const item = itensEstoque.find(x => x.id === id);
             await updateDoc(doc(db, "estoque_caritas", id), { quantidade: (item.quantidade || 0) + qtd });
             await addDoc(collection(db, `estoque_caritas/${id}/lotes`), {
@@ -220,19 +221,11 @@
             const qtd = parseInt(document.getElementById('novo-qtd').value);
             const val = document.getElementById('novo-validade').value;
             const docRef = await addDoc(collection(db, "estoque_caritas"), { nome, quantidade: qtd });
-            if (val) {
-                await addDoc(collection(db, `estoque_caritas/${docRef.id}/lotes`), {
-                    quantidade: qtd, validade: val, doador: "Saldo Inicial", dataEntrada: serverTimestamp()
-                });
-            }
+            if (val) await addDoc(collection(db, `estoque_caritas/${docRef.id}/lotes`), { quantidade: qtd, validade: val, doador: "Saldo Inicial", dataEntrada: serverTimestamp() });
             fecharModais();
         };
 
-        document.getElementById('btn-abrir-novo').onclick = () => {
-            document.getElementById('form-novo-item').reset();
-            document.getElementById('modal-novo-item').style.display = 'flex';
-        };
-
+        document.getElementById('btn-abrir-novo').onclick = () => { document.getElementById('form-novo-item').reset(); document.getElementById('modal-novo-item').style.display = 'flex'; };
         document.getElementById('btn-config-cesta').onclick = () => {
             document.getElementById('input-meta').value = metaGlobal;
             document.getElementById('lista-composicao').innerHTML = Object.entries(configCesta).map(([id, qtd]) => {
@@ -243,13 +236,12 @@
             document.getElementById('modal-config').style.display = 'flex';
         };
 
-        window.removerLinhaDaReceita = (id) => { document.getElementById(`receita-${id}`).remove(); };
+        window.removerLinhaDaReceita = (id) => { const el = document.getElementById(`receita-${id}`); if (el) el.remove(); };
         window.adicionarLinhaCesta = () => {
             const id = document.getElementById('select-item-estoque').value;
             if (!id || document.querySelector(`.input-receita[data-id="${id}"]`)) return;
             const item = itensEstoque.find(x => x.id === id);
-            const div = document.createElement('div');
-            div.className = "linha-receita"; div.id = `receita-${id}`;
+            const div = document.createElement('div'); div.className = "linha-receita"; div.id = `receita-${id}`;
             div.innerHTML = `<button type="button" class="btn-remover-linha" onclick="removerLinhaDaReceita('${id}')"><i class="fas fa-trash-alt"></i></button><span>${item.nome}</span><input type="number" class="input-receita" data-id="${id}" value="1" style="width:50px;">`;
             document.getElementById('lista-composicao').appendChild(div);
         };
