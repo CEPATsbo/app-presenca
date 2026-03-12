@@ -57,7 +57,7 @@
 
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
-        import { getFirestore, collection, addDoc, onSnapshot, query, where, serverTimestamp, doc, updateDoc, getDoc } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
+        import { getFirestore, collection, addDoc, onSnapshot, query, where, serverTimestamp, doc, updateDoc, getDoc, getDocs, orderBy, limit, deleteDoc } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
         import { protegerPagina } from '/auth.js';
 
         const firebaseConfig = { apiKey: "AIzaSyBV7RPjk3cFTqL-aIpflJcUojKg1ZXMLuU", authDomain: "voluntarios-ativos---cepat.firebaseapp.com", projectId: "voluntarios-ativos---cepat", storageBucket: "voluntarios-ativos---cepat.firebasestorage.app", messagingSenderId: "66122858261", appId: "1:66122858261:web:7fa21f1805463b5c08331c" };
@@ -99,6 +99,7 @@
             btn.innerText = "Processando...";
 
             try {
+                // 1. REGISTRAR ENTREGA
                 await addDoc(collection(db, "entregasCestas"), {
                     familiaId: familiaSelecionada.id,
                     responsavel: familiaSelecionada.nome,
@@ -107,20 +108,42 @@
                     observacoes: document.getElementById('obs-entrega').value
                 });
 
+                // 2. ATUALIZAR FAMÍLIA
                 await updateDoc(doc(db, "familiasAssistidas", familiaSelecionada.id), {
                     ultimaCesta: serverTimestamp()
                 });
 
+                // 3. BAIXA NO ESTOQUE (HÍBRIDA E FEFO)
                 for (const [prodId, qtdParaBaixa] of Object.entries(configCesta)) {
+                    // Baixa no Saldo Geral
                     const docRef = doc(db, "estoque_caritas", prodId);
                     const docSnap = await getDoc(docRef);
                     if (docSnap.exists()) {
                         const saldoAtual = docSnap.data().quantidade || 0;
                         await updateDoc(docRef, { quantidade: Math.max(0, saldoAtual - qtdParaBaixa) });
                     }
+
+                    // Baixa no Lote (FEFO - Mais antigo primeiro)
+                    const lotesRef = collection(db, `estoque_caritas/${prodId}/lotes`);
+                    const qLotes = query(lotesRef, orderBy("validade", "asc"), limit(1));
+                    const loteSnap = await getDocs(qLotes);
+                    
+                    if (!loteSnap.empty) {
+                        const loteDoc = loteSnap.docs[0];
+                        const loteDados = loteDoc.data();
+                        const novoSaldoLote = (loteDados.quantidade || 0) - qtdParaBaixa;
+                        
+                        if (novoSaldoLote <= 0) {
+                            await deleteDoc(doc(db, `estoque_caritas/${prodId}/lotes`, loteDoc.id));
+                        } else {
+                            await updateDoc(doc(db, `estoque_caritas/${prodId}/lotes`, loteDoc.id), {
+                                quantidade: novoSaldoLote
+                            });
+                        }
+                    }
                 }
 
-                alert("Entrega realizada com sucesso!");
+                alert("Entrega realizada com sucesso! Estoque e lotes atualizados.");
                 fecharModal();
             } catch (e) {
                 alert("Erro: " + e.message);

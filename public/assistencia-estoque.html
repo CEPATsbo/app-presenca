@@ -127,15 +127,9 @@
                     const qLote = query(collection(db, `estoque_caritas/${d.id}/lotes`), orderBy("validade", "asc"));
                     const lSnap = await getDocs(qLote);
                     const lotes = lSnap.docs.map(ld => ld.data());
-                    
-                    // LÓGICA HÍBRIDA: Soma lotes E saldo antigo sem lote
                     const totalLotes = lotes.reduce((acc, curr) => acc + parseInt(curr.quantidade || 0), 0);
                     const saldoDocumento = parseInt(d.data().quantidade || 0);
-                    
-                    // A quantidade real é o maior valor entre o saldo do doc e a soma dos lotes
-                    // Isso garante leitura mesmo se houver saldo antigo sem lote cadastrado
                     const quantidadeReal = Math.max(saldoDocumento, totalLotes);
-
                     const proxVal = lotes.length > 0 ? lotes[0].validade : d.data().validade || "9999-12-31";
                     return { id: d.id, ...d.data(), quantidade: quantidadeReal, proxVal, lotes };
                 });
@@ -159,12 +153,9 @@
 
             Object.entries(configCesta).forEach(([id, qtdNec]) => {
                 const item = itensEstoque.find(i => i.id === id);
-                // Considera saldo total (Lotes + Saldo Antigo) que não esteja vencido
                 const saldoValido = item ? item.quantidade : 0;
-                
                 const cap = Math.floor(saldoValido / qtdNec);
                 if (cap < prontas) prontas = cap;
-
                 if (saldoValido < (metaGlobal * qtdNec)) {
                     pendencias.push(`Faltam ${(metaGlobal * qtdNec) - saldoValido} un. de <b>${item ? item.nome : id}</b>.`);
                 }
@@ -216,13 +207,9 @@
             const qtd = parseInt(document.getElementById('entrada-qtd').value);
             const val = document.getElementById('entrada-validade').value;
             const item = itensEstoque.find(x => x.id === id);
-
             await updateDoc(doc(db, "estoque_caritas", id), { quantidade: (item.quantidade || 0) + qtd });
             await addDoc(collection(db, `estoque_caritas/${id}/lotes`), {
-                quantidade: qtd,
-                validade: val,
-                doador: document.getElementById('entrada-doador').value || "Anônimo",
-                dataEntrada: serverTimestamp()
+                quantidade: qtd, validade: val, doador: document.getElementById('entrada-doador').value || "Anônimo", dataEntrada: serverTimestamp()
             });
             fecharModais();
         };
@@ -232,7 +219,6 @@
             const nome = document.getElementById('novo-nome').value.toUpperCase();
             const qtd = parseInt(document.getElementById('novo-qtd').value);
             const val = document.getElementById('novo-validade').value;
-
             const docRef = await addDoc(collection(db, "estoque_caritas"), { nome, quantidade: qtd });
             if (val) {
                 await addDoc(collection(db, `estoque_caritas/${docRef.id}/lotes`), {
@@ -264,7 +250,7 @@
             const item = itensEstoque.find(x => x.id === id);
             const div = document.createElement('div');
             div.className = "linha-receita"; div.id = `receita-${id}`;
-            div.innerHTML = `<button type="button" class="btn-remover-linha" onclick="removerLinhaDaReceita('${id}')"><i class="fas fa-trash-alt"></i></button><span>${item.nome}</span><input type="number" class="input-receita" data-id="${id}" value="1" style="width:60px;">`;
+            div.innerHTML = `<button type="button" class="btn-remover-linha" onclick="removerLinhaDaReceita('${id}')"><i class="fas fa-trash-alt"></i></button><span>${item.nome}</span><input type="number" class="input-receita" data-id="${id}" value="1" style="width:50px;">`;
             document.getElementById('lista-composicao').appendChild(div);
         };
 
