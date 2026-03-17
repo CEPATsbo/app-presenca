@@ -119,25 +119,28 @@
         let itensEstoque = [], configCesta = {}, metaGlobal = 14;
 
         protegerPagina(['super-admin','diretor','caritas']).then(() => {
+            // SINCRONIZAÇÃO EM TEMPO REAL INDIVIDUAL
             onSnapshot(collection(db, "estoque_caritas"), async snap => {
-                const listaPromessas = snap.docs.map(async d => {
+                const promessas = snap.docs.map(async d => {
                     const qLote = query(collection(db, `estoque_caritas/${d.id}/lotes`), orderBy("validade", "asc"));
                     const lSnap = await getDocs(qLote);
                     const lotes = lSnap.docs.map(ld => ({ id: ld.id, ...ld.data() }));
                     const totalLotes = lotes.reduce((acc, curr) => acc + parseInt(curr.quantidade || 0), 0);
                     const saldoDoc = parseInt(d.data().quantidade || 0);
-                    const quantidadeReal = Math.max(saldoDoc, totalLotes); // SOMA HÍBRIDA MANTIDA
+                    const quantidadeReal = Math.max(saldoDoc, totalLotes); 
                     return { id: d.id.trim(), ...d.data(), quantidade: quantidadeReal, proxVal: lotes.length > 0 ? lotes[0].validade : "9999-12-31", lotes };
                 });
-                itensEstoque = await Promise.all(listaPromessas);
-                renderizarListaEstoque(); calcular();
+                
+                itensEstoque = await Promise.all(promessas);
+                renderizarListaEstoque(); 
+                calcular();
             });
+
             onSnapshot(doc(db, "configuracoes", "cesta_padrao"), d => {
                 if(d.exists()){ configCesta = d.data().itens || {}; metaGlobal = d.data().meta || 14; calcular(); }
             });
         });
 
-        // BAIXA COMPLETA: SALDO + LOTE (FEFO)
         window.ajustarEstoque = async (id, delta, nome) => {
             if (!id) return;
             const targetId = id.trim();
@@ -148,10 +151,8 @@
                 return;
             }
             try {
-                // 1. Baixa no Saldo Geral
+                // ATUALIZAÇÃO ATÔMICA PARA REFLETIR NA HORA
                 await updateDoc(doc(db, "estoque_caritas", targetId), { quantidade: increment(-1) });
-
-                // 2. Baixa no Lote mais antigo (FEFO)
                 const qLote = query(collection(db, `estoque_caritas/${targetId}/lotes`), orderBy("validade", "asc"), limit(1));
                 const lSnap = await getDocs(qLote);
                 if (!lSnap.empty) {
@@ -160,8 +161,7 @@
                     if (novaQtdLote <= 0) await deleteDoc(doc(db, `estoque_caritas/${targetId}/lotes`, loteDoc.id));
                     else await updateDoc(doc(db, `estoque_caritas/${targetId}/lotes`, loteDoc.id), { quantidade: novaQtdLote });
                 }
-                console.log("Baixa realizada com sucesso no Saldo e Lote:", nome);
-            } catch (e) { alert("Erro na baixa."); }
+            } catch (e) { console.error("Erro na baixa."); }
         };
 
         function renderizarListaEstoque() {
@@ -170,8 +170,13 @@
                 const valF = i.proxVal === "9999-12-31" ? "Não definida" : i.proxVal.split('-').reverse().join('/');
                 return `<div class="estoque-item"><div style="flex:1"><b>${i.nome}</b><span class="val-info">Próx. Validade: ${valF}</span><small style="color:#777">Saldo Total: ${i.quantidade} un.</small></div><div class="controles"><button class="btn-ajuste" style="background:var(--red)" data-btn-minus="${i.id}" data-nome="${i.nome}">-</button><span style="font-weight:bold; min-width:30px; text-align:center;">${i.quantidade}</span><button class="btn-ajuste" style="background:var(--green)" data-btn-plus="${i.id}" data-nome="${i.nome}">+</button></div></div>`;
             }).join('');
-            document.querySelectorAll('[data-btn-minus]').forEach(btn => { btn.onclick = () => window.ajustarEstoque(btn.getAttribute('data-btn-minus'), -1, btn.getAttribute('data-nome')); });
-            document.querySelectorAll('[data-btn-plus]').forEach(btn => { btn.onclick = () => window.ajustarEstoque(btn.getAttribute('data-btn-plus'), 1, btn.getAttribute('data-nome')); });
+            
+            document.querySelectorAll('[data-btn-minus]').forEach(btn => { 
+                btn.onclick = (e) => { e.preventDefault(); window.ajustarEstoque(btn.getAttribute('data-btn-minus'), -1, btn.getAttribute('data-nome')); }; 
+            });
+            document.querySelectorAll('[data-btn-plus]').forEach(btn => { 
+                btn.onclick = (e) => { e.preventDefault(); window.ajustarEstoque(btn.getAttribute('data-btn-plus'), 1, btn.getAttribute('data-nome')); }; 
+            });
         }
 
         function calcular() {
@@ -187,7 +192,10 @@
             document.getElementById('qtd-cestas-montaveis').innerText = prontas === Infinity ? 0 : prontas;
             document.getElementById('status-meta').innerText = `Meta: ${metaGlobal} | Prontas: ${prontas === Infinity ? 0 : prontas}`;
             const box = document.getElementById('box-pendencias');
-            if (pendencias.length > 0) { box.style.display = 'block'; document.getElementById('lista-pendencias').innerHTML = pendencias.map(p => `<div class="pendencia-item">${p}</div>`).join(''); } else { box.style.display = 'none'; }
+            if (pendencias.length > 0) {
+                box.style.display = 'block';
+                document.getElementById('lista-pendencias').innerHTML = pendencias.map(p => `<div class="pendencia-item">${p}</div>`).join('');
+            } else { box.style.display = 'none'; }
         }
 
         document.getElementById('form-entrada-lote').onsubmit = async (e) => {
@@ -195,8 +203,9 @@
             const id = document.getElementById('entrada-item-id').value;
             const qtd = parseInt(document.getElementById('entrada-qtd').value);
             const val = document.getElementById('entrada-validade').value;
+            const doador = document.getElementById('entrada-doador').value || "Anônimo";
             await updateDoc(doc(db, "estoque_caritas", id), { quantidade: increment(qtd) });
-            await addDoc(collection(db, `estoque_caritas/${id}/lotes`), { quantidade: qtd, validade: val, doador: document.getElementById('entrada-doador').value || "Anônimo", dataEntrada: serverTimestamp() });
+            await addDoc(collection(db, `estoque_caritas/${id}/lotes`), { quantidade: qtd, validade: val, doador: doador, dataEntrada: serverTimestamp() });
             fecharModais();
         };
 
