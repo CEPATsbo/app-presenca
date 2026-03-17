@@ -24,6 +24,8 @@
         .controles-sessao { width: 100%; max-width: 1200px; display: flex; justify-content: flex-end; margin-top: -15px; margin-bottom: 15px; }
         .btn-reset { background: none; border: none; color: var(--grey); cursor: pointer; font-size: 0.85em; text-decoration: underline; font-weight: 500; }
         .btn-reset:hover { color: var(--red); }
+        /* NOVO ESTILO PARA O AVISO DE PRÓXIMO CICLO */
+        .alerta-proximo-ciclo { background: #fff3cd; border: 1px solid #ffeeba; color: #856404; padding: 30px; border-radius: 12px; text-align: center; margin-top: 20px; }
     </style>
 </head>
 <body>
@@ -95,7 +97,6 @@
 
         async function atualizarTudo() {
             if (Object.keys(nomesProdutos).length === 0 || Object.keys(configCesta).length === 0) return;
-            
             for (const pId of Object.keys(nomesProdutos)) {
                 try {
                     const qLotes = query(collection(db, `estoque_caritas/${pId}/lotes`), orderBy("validade", "asc"));
@@ -123,8 +124,25 @@
             const grid = document.getElementById('grid-cestas');
             grid.innerHTML = "";
             const totalCestasExibir = Math.max(0, metaGlobal - entregasNoMes);
+
+            // AQUI ESTÁ A FUNÇÃO COM A MENSAGEM SOLICITADA
             if (totalCestasExibir === 0 && metaGlobal > 0) {
-                grid.innerHTML = "<div style='grid-column: 1/-1; text-align: center; padding: 50px;'><h2>✅ Meta mensal atingida e entregue!</h2></div>";
+                const hoje = new Date();
+                const ultimoDiaMes = new Date(hoje.getFullYear(), hoje.getMonth() + 1, 0);
+                const diasFaltantes = ultimoDiaMes.getDate() - hoje.getDate();
+                const meses = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
+                const proximoMes = meses[(hoje.getMonth() + 1) % 12];
+
+                grid.innerHTML = `
+                    <div style='grid-column: 1/-1;'>
+                        <div class="alerta-proximo-ciclo">
+                            <i class="fas fa-calendar-check" style="font-size: 3em; color: var(--green); margin-bottom: 15px; display: block;"></i>
+                            <h2>Meta mensal atingida e entregue!</h2>
+                            <p>O picking está bloqueado para garantir a integridade dos dados de março.</p>
+                            <hr style="border: 0; border-top: 1px solid #ffeeba; margin: 20px 0;">
+                            <p><strong>Faltam ${diasFaltantes} dias</strong> para a abertura automática do ciclo de ${proximoMes}.</p>
+                        </div>
+                    </div>`;
                 return;
             }
 
@@ -176,7 +194,6 @@
             const atual = pickingMarcados[cestaId] || { itens: {}, concluida: false };
             atual.itens[itemKey] = status;
             
-            // Lógica Corrigida: Só conclui se TODOS os quadradinhos do card estiverem marcados
             const card = document.getElementById(`card-${cestaId}`);
             const totalInputs = card.querySelectorAll('input[type="checkbox"]').length;
             const marcados = card.querySelectorAll('input[type="checkbox"]:checked').length;
@@ -186,12 +203,12 @@
         };
 
         async function resetarPicking() {
-            if (confirm("ATENÇÃO: Isso limpará todas as cestas montadas no Picking para iniciar o próximo ciclo. Confirmar reset?")) {
+            if (confirm("ATENÇÃO: Isso limpará apenas as marcações (quadradinhos) do Picking para o ciclo atual. Confirmar reset?")) {
                 try {
                     const snap = await getDocs(collection(db, "picking_estado"));
                     const promises = snap.docs.map(d => deleteDoc(d.ref));
                     await Promise.all(promises);
-                    alert("Linha de montagem reiniciada!");
+                    alert("Marcações de montagem reiniciadas!");
                 } catch (e) { alert("Erro ao resetar: Verifique as regras do Firebase."); }
             }
         }
