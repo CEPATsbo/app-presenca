@@ -169,7 +169,6 @@
                 return;
             }
             try {
-                console.log(`[FIREBASE] Iniciando baixa: ${nome}`);
                 await updateDoc(doc(db, "estoque_caritas", cleanId), { quantidade: increment(-1) });
                 const qLote = query(collection(db, `estoque_caritas/${cleanId}/lotes`), orderBy("validade", "asc"), limit(1));
                 const lSnap = await getDocs(qLote);
@@ -179,7 +178,6 @@
                     if (novaQtd <= 0) await deleteDoc(doc(db, `estoque_caritas/${cleanId}/lotes`, loteDoc.id));
                     else await updateDoc(doc(db, `estoque_caritas/${cleanId}/lotes`, loteDoc.id), { quantidade: novaQtd });
                 }
-                console.log(`[SUCCESS] Baixa confirmada: ${nome}`);
                 location.reload(); 
             } catch (e) { alert("Erro na baixa."); }
         };
@@ -188,20 +186,13 @@
             const hoje = new Date();
             document.getElementById('lista-produtos').innerHTML = itensEstoque.map(i => {
                 const valF = i.proxVal === "9999-12-31" ? "Não definida" : i.proxVal.split('-').reverse().join('/');
-                
-                // LOGICA DA BORDA COLORIDA
-                let classeBorda = "";
-                if (i.proxVal === "9999-12-31") {
-                    classeBorda = "borda-geral";
-                } else {
-                    const dataVal = new Date(i.proxVal);
-                    const diffDias = Math.ceil((dataVal - hoje) / (1000 * 60 * 60 * 24));
+                let classeBorda = (i.proxVal === "9999-12-31") ? "borda-geral" : "borda-segura";
+                if (i.proxVal !== "9999-12-31") {
+                    const diffDias = Math.ceil((new Date(i.proxVal) - hoje) / (1000 * 60 * 60 * 24));
                     if (diffDias <= 15) classeBorda = "borda-critica";
                     else if (diffDias <= 45) classeBorda = "borda-alerta";
-                    else classeBorda = "borda-segura";
                 }
-
-                return `<div class="estoque-item ${classeBorda}"><div style="flex:1"><b>${i.nome}</b><span class="val-info">Próx. Validade: ${valF}</span><small style="color:#777">Saldo Total: ${i.quantidade} un.</small></div><div class="controles"><button class="btn-ajuste" style="background:var(--red)" onclick="window.ajustarEstoque('${i.id}', -1, '${i.nome}')">-</button><span style="font-weight:bold; min-width:30px; text-align:center;">${i.quantidade}</span><button class="btn-ajuste" style="background:var(--green)" onclick="window.ajustarEstoque('${i.id}', 1, '${i.nome}')">+</button></div></div>`;
+                return `<div class="estoque-item ${classeBorda}"><div style="flex:1"><b>${i.nome}</b><span class="val-info">Próx: ${valF}</span><small style="color:#777">Saldo: ${i.quantidade}</small></div><div class="controles"><button class="btn-ajuste" style="background:var(--red)" onclick="window.ajustarEstoque('${i.id}', -1, '${i.nome}')">-</button><span style="font-weight:bold; min-width:30px; text-align:center;">${i.quantidade}</span><button class="btn-ajuste" style="background:var(--green)" onclick="window.ajustarEstoque('${i.id}', 1, '${i.nome}')">+</button></div></div>`;
             }).join('');
         }
 
@@ -218,62 +209,58 @@
             document.getElementById('qtd-cestas-montaveis').innerText = prontas === Infinity ? 0 : prontas;
             document.getElementById('status-meta').innerText = `Meta: ${metaGlobal} | Prontas: ${prontas === Infinity ? 0 : prontas}`;
             const box = document.getElementById('box-pendencias');
-            if (pendencias.length > 0) {
-                box.style.display = 'block';
-                document.getElementById('lista-pendencias').innerHTML = pendencias.map(p => `<div class="pendencia-item">${p}</div>`).join('');
-            } else { box.style.display = 'none'; }
+            if (pendencias.length > 0) { box.style.display = 'block'; document.getElementById('lista-pendencias').innerHTML = pendencias.map(p => `<div class="pendencia-item">${p}</div>`).join(''); } else { box.style.display = 'none'; }
         }
 
-        // FUNÇÃO WHATSAPP LISTA ARRECADAÇÃO
         document.getElementById('btn-whatsapp-lista').onclick = () => {
-            let texto = `*CAMPANHA CÁRITAS - CEPAT*%0ANecessidades para meta de ${metaGlobal} cestas:%0A%0A`;
-            let faltas = false;
-            Object.entries(configCesta).forEach(([id, qtd]) => {
-                const item = itensEstoque.find(i => i.id === id);
-                const saldo = item ? item.quantidade : 0;
-                if (saldo < (metaGlobal * qtd)) {
-                    texto += `• *${item ? item.nome : id}*: Faltam ${(metaGlobal * qtd) - saldo} un.%0A`;
-                    faltas = true;
-                }
+            const h = new Date();
+            let d3d = new Date(h.getFullYear(), h.getMonth(), 1);
+            let dc = 0; while (dc < 3) { if (d3d.getDay() === 0) dc++; if (dc < 3) d3d.setDate(d3d.getDate() + 1); }
+            const mesTxt = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"][(h.getDate() > d3d.getDate() ? h.getMonth() + 1 : h.getMonth()) % 12];
+            
+            let t = `*Queridos irmãos,*%0A%0ACom carinho e confiança na fraternidade que nos une, compartilhamos as necessidades atuais para a montagem de *${metaGlobal} cestas básicas* do nosso trabalho de assistência de *${mesTxt}*.%0A%0ACada item doado representa mais do que alimento material — é um gesto de amor, solidariedade e cuidado com aqueles que mais necessitam. Toda colaboração, por menor que pareça, soma-se como luz na construção deste trabalho.%0A%0A📦 *Itens em aberto:*%0A`;
+            
+            let f = false;
+            Object.entries(configCesta).forEach(([id, q]) => {
+                const i = itensEstoque.find(x => x.id === id);
+                const s = i ? i.quantidade : 0;
+                if (s < (metaGlobal * q)) { t += `• *${i ? i.nome : id}*: Faltam ${(metaGlobal * q) - s} un.%0A`; f = true; }
             });
-            texto += faltas ? `%0A🙏 Quem puder colaborar favor entregar no CEPAT.` : `✅ Estoque completo!`;
-            window.open(`https://wa.me/?text=${texto}`, '_blank');
+            
+            if (!f) t = `*Cáritas CEPAT*%0A✅ Gratidão irmãos! O estoque para o trabalho de *${mesTxt}* já está completo.`;
+            else { 
+                t += `%0ASe estiver ao seu alcance colaborar, receberemos com muita gratidão na *Casa Espírita Paulo de Tarso*.%0A%0AComo nos ensina a Doutrina Espírita, é na simplicidade da caridade que encontramos as maiores oportunidades de servir e amar.%0A%0ADesde já, nossa gratidão a todos que puderem contribuir. Que Jesus abençoe cada gesto de generosidade.`;
+            }
+            window.open(`https://wa.me/?text=${t}`, '_blank');
         };
 
         document.getElementById('form-entrada-lote').onsubmit = async (e) => {
             e.preventDefault();
             const id = document.getElementById('entrada-item-id').value;
             const qtd = parseInt(document.getElementById('entrada-qtd').value);
-            const val = document.getElementById('entrada-validade').value;
-            console.log(`[FIREBASE] Adicionando ${qtd} un.`);
             await updateDoc(doc(db, "estoque_caritas", id), { quantidade: increment(qtd) });
-            await addDoc(collection(db, `estoque_caritas/${id}/lotes`), { quantidade: qtd, validade: val, doador: document.getElementById('entrada-doador').value || "Anônimo", dataEntrada: serverTimestamp() });
+            await addDoc(collection(db, `estoque_caritas/${id}/lotes`), { quantidade: qtd, validade: document.getElementById('entrada-validade').value, dataEntrada: serverTimestamp() });
             location.reload(); 
         };
 
         document.getElementById('form-novo-item').onsubmit = async (e) => {
             e.preventDefault();
-            const nome = document.getElementById('novo-nome').value.toUpperCase();
-            const qtd = parseInt(document.getElementById('novo-qtd').value);
-            const val = document.getElementById('novo-validade').value;
-            const docRef = await addDoc(collection(db, "estoque_caritas"), { nome, quantidade: qtd });
-            if (val) await addDoc(collection(db, `estoque_caritas/${docRef.id}/lotes`), { quantidade: qtd, validade: val, doador: "Saldo Inicial", dataEntrada: serverTimestamp() });
-            location.reload(); 
+            const docRef = await addDoc(collection(db, "estoque_caritas"), { nome: document.getElementById('novo-nome').value.toUpperCase(), quantidade: parseInt(document.getElementById('novo-qtd').value) });
+            if (document.getElementById('novo-validade').value) await addDoc(collection(db, `estoque_caritas/${docRef.id}/lotes`), { quantidade: parseInt(document.getElementById('novo-qtd').value), validade: document.getElementById('novo-validade').value, dataEntrada: serverTimestamp() });
+            location.reload();
         };
 
-        document.getElementById('btn-abrir-novo').onclick = () => { document.getElementById('form-novo-item').reset(); document.getElementById('modal-novo-item').style.display = 'flex'; };
-        
+        document.getElementById('btn-abrir-novo').onclick = () => { document.getElementById('form-novo-item').reset(); document.getElementById('modal-novo-item').style.display='flex'; };
         document.getElementById('btn-config-cesta').onclick = () => {
             document.getElementById('input-meta').value = metaGlobal;
             document.getElementById('lista-composicao').innerHTML = Object.entries(configCesta).map(([id, qtd]) => {
                 const item = itensEstoque.find(i => i.id === id);
                 return `<div class="linha-receita" id="receita-${id}"><button type="button" class="btn-remover-linha" onclick="removerLinhaDaReceita('${id}')"><i class="fas fa-trash-alt"></i></button><span>${item ? item.nome : id}</span><input type="number" class="input-receita" data-id="${id}" value="${qtd}" style="width:60px;"></div>`;
             }).join('');
-            document.getElementById('select-item-estoque').innerHTML = '<option value="">Adicionar item...</option>' + itensEstoque.map(i => `<option value="${i.id}">${i.nome}</option>`).join('');
+            document.getElementById('select-item-estoque').innerHTML = '<option value="">Adicionar...</option>' + itensEstoque.map(i => `<option value="${i.id}">${i.nome}</option>`).join('');
             document.getElementById('modal-config').style.display = 'flex';
         };
-
-        window.removerLinhaDaReceita = (id) => { const el = document.getElementById(`receita-${id}`); if (el) el.remove(); };
+        window.removerLinhaDaReceita = (id) => document.getElementById(`receita-${id}`).remove();
         window.adicionarLinhaCesta = () => {
             const id = document.getElementById('select-item-estoque').value;
             if (!id || document.querySelector(`.input-receita[data-id="${id}"]`)) return;
@@ -282,14 +269,12 @@
             div.innerHTML = `<button type="button" class="btn-remover-linha" onclick="removerLinhaDaReceita('${id}')"><i class="fas fa-trash-alt"></i></button><span>${item.nome}</span><input type="number" class="input-receita" data-id="${id}" value="1" style="width:60px;">`;
             document.getElementById('lista-composicao').appendChild(div);
         };
-
         document.getElementById('btn-salvar-receita').onclick = async () => {
             const novosItens = {};
             document.querySelectorAll('.input-receita').forEach(inp => { novosItens[inp.dataset.id] = parseInt(inp.value); });
             await setDoc(doc(db, "configuracoes", "cesta_padrao"), { itens: novosItens, meta: parseInt(document.getElementById('input-meta').value) });
-            location.reload(); 
+            location.reload();
         };
-
         window.fecharModais = () => document.querySelectorAll('.modal').forEach(m => m.style.display = 'none');
     </script>
 </body>
