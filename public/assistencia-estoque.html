@@ -18,7 +18,14 @@
         .lista-pendencias { margin-top: 15px; text-align: left; background: rgba(255,255,255,0.7); padding: 15px; border-radius: 8px; border: 1px dashed var(--green); }
         .pendencia-item { color: var(--red); font-size: 0.9em; font-weight: bold; margin-bottom: 5px; display: flex; align-items: center; gap: 8px; }
         .secao-estoque { border: 1px solid #eee; padding: 20px; border-radius: 10px; background: #fafafa; margin-bottom: 20px; }
-        .estoque-item { background: white; padding: 15px; border-radius: 8px; border: 1px solid #ddd; margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center; }
+        
+        /* ESTILOS DO SEMÁFORO NO ESTOQUE */
+        .estoque-item { background: white; padding: 15px; border-radius: 8px; border: 1px solid #ddd; margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center; border-left: 8px solid #ddd; }
+        .borda-critica { border-left-color: var(--red) !important; }
+        .borda-alerta { border-left-color: #f1c40f !important; }
+        .borda-geral { border-left-color: #3498db !important; }
+        .borda-segura { border-left-color: var(--green) !important; }
+
         .modal { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); display: none; justify-content: center; align-items: center; z-index: 1000; }
         .modal-content { background: white; padding: 30px; border-radius: 12px; width: 95%; max-width: 500px; max-height: 85vh; overflow-y: auto; }
         .form-group { display: flex; flex-direction: column; gap: 5px; margin-bottom: 15px; }
@@ -165,14 +172,28 @@
                     else await updateDoc(doc(db, `estoque_caritas/${cleanId}/lotes`, loteDoc.id), { quantidade: novaQtd });
                 }
                 console.log(`[SUCCESS] Baixa confirmada: ${nome}`);
-                location.reload(); // ATUALIZAÇÃO AUTOMÁTICA
+                location.reload(); 
             } catch (e) { alert("Erro na baixa."); }
         };
 
         function renderizarListaEstoque() {
+            const hoje = new Date();
             document.getElementById('lista-produtos').innerHTML = itensEstoque.map(i => {
                 const valF = i.proxVal === "9999-12-31" ? "Não definida" : i.proxVal.split('-').reverse().join('/');
-                return `<div class="estoque-item"><div style="flex:1"><b>${i.nome}</b><span class="val-info">Próx. Validade: ${valF}</span><small style="color:#777">Saldo Total: ${i.quantidade} un.</small></div><div class="controles"><button class="btn-ajuste" style="background:var(--red)" onclick="window.ajustarEstoque('${i.id}', -1, '${i.nome}')">-</button><span style="font-weight:bold; min-width:30px; text-align:center;">${i.quantidade}</span><button class="btn-ajuste" style="background:var(--green)" onclick="window.ajustarEstoque('${i.id}', 1, '${i.nome}')">+</button></div></div>`;
+                
+                // LOGICA DA BORDA COLORIDA
+                let classeBorda = "";
+                if (i.proxVal === "9999-12-31") {
+                    classeBorda = "borda-geral";
+                } else {
+                    const dataVal = new Date(i.proxVal);
+                    const diffDias = Math.ceil((dataVal - hoje) / (1000 * 60 * 60 * 24));
+                    if (diffDias <= 15) classeBorda = "borda-critica";
+                    else if (diffDias <= 45) classeBorda = "borda-alerta";
+                    else classeBorda = "borda-segura";
+                }
+
+                return `<div class="estoque-item ${classeBorda}"><div style="flex:1"><b>${i.nome}</b><span class="val-info">Próx. Validade: ${valF}</span><small style="color:#777">Saldo Total: ${i.quantidade} un.</small></div><div class="controles"><button class="btn-ajuste" style="background:var(--red)" onclick="window.ajustarEstoque('${i.id}', -1, '${i.nome}')">-</button><span style="font-weight:bold; min-width:30px; text-align:center;">${i.quantidade}</span><button class="btn-ajuste" style="background:var(--green)" onclick="window.ajustarEstoque('${i.id}', 1, '${i.nome}')">+</button></div></div>`;
             }).join('');
         }
 
@@ -203,7 +224,7 @@
             console.log(`[FIREBASE] Adicionando ${qtd} un.`);
             await updateDoc(doc(db, "estoque_caritas", id), { quantidade: increment(qtd) });
             await addDoc(collection(db, `estoque_caritas/${id}/lotes`), { quantidade: qtd, validade: val, doador: document.getElementById('entrada-doador').value || "Anônimo", dataEntrada: serverTimestamp() });
-            location.reload(); // ATUALIZAÇÃO AUTOMÁTICA
+            location.reload(); 
         };
 
         document.getElementById('form-novo-item').onsubmit = async (e) => {
@@ -213,7 +234,7 @@
             const val = document.getElementById('novo-validade').value;
             const docRef = await addDoc(collection(db, "estoque_caritas"), { nome, quantidade: qtd });
             if (val) await addDoc(collection(db, `estoque_caritas/${docRef.id}/lotes`), { quantidade: qtd, validade: val, doador: "Saldo Inicial", dataEntrada: serverTimestamp() });
-            location.reload(); // ATUALIZAÇÃO AUTOMÁTICA
+            location.reload(); 
         };
 
         document.getElementById('btn-abrir-novo').onclick = () => { document.getElementById('form-novo-item').reset(); document.getElementById('modal-novo-item').style.display = 'flex'; };
@@ -242,7 +263,7 @@
             const novosItens = {};
             document.querySelectorAll('.input-receita').forEach(inp => { novosItens[inp.dataset.id] = parseInt(inp.value); });
             await setDoc(doc(db, "configuracoes", "cesta_padrao"), { itens: novosItens, meta: parseInt(document.getElementById('input-meta').value) });
-            location.reload(); // ATUALIZAÇÃO AUTOMÁTICA
+            location.reload(); 
         };
 
         window.fecharModais = () => document.querySelectorAll('.modal').forEach(m => m.style.display = 'none');

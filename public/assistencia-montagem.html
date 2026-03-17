@@ -24,8 +24,14 @@
         .controles-sessao { width: 100%; max-width: 1200px; display: flex; justify-content: flex-end; margin-top: -15px; margin-bottom: 15px; }
         .btn-reset { background: none; border: none; color: var(--grey); cursor: pointer; font-size: 0.85em; text-decoration: underline; font-weight: 500; }
         .btn-reset:hover { color: var(--red); }
-        /* NOVO ESTILO PARA O AVISO DE PRÓXIMO CICLO */
         .alerta-proximo-ciclo { background: #fff3cd; border: 1px solid #ffeeba; color: #856404; padding: 30px; border-radius: 12px; text-align: center; margin-top: 20px; }
+        
+        /* ESTILOS DO SEMÁFORO DE VALIDADE */
+        .val-critica { color: var(--red) !important; font-weight: bold; }
+        .val-alerta { color: #d4a017 !important; font-weight: bold; }
+        .badge-val { font-size: 0.7em; padding: 2px 5px; border-radius: 4px; margin-left: 5px; color: white; }
+        .bg-critica { background: var(--red); }
+        .bg-alerta { background: #d4a017; }
     </style>
 </head>
 <body>
@@ -125,7 +131,6 @@
             grid.innerHTML = "";
             const totalCestasExibir = Math.max(0, metaGlobal - entregasNoMes);
 
-            // AQUI ESTÁ A FUNÇÃO COM A MENSAGEM SOLICITADA
             if (totalCestasExibir === 0 && metaGlobal > 0) {
                 const hoje = new Date();
                 const ultimoDiaMes = new Date(hoje.getFullYear(), hoje.getMonth() + 1, 0);
@@ -147,6 +152,7 @@
             }
 
             let lotesVirtuais = JSON.parse(JSON.stringify(mapaLotes));
+            const hoje = new Date();
 
             for (let i = 1; i <= totalCestasExibir; i++) {
                 const cestaId = `cesta_v_${i}`;
@@ -176,10 +182,20 @@
                         const itemKey = `${pId}_${idx}`;
                         const isChecked = est.itens[itemKey] || false;
                         const dataF = p.val === "9999-12-31" ? "Estoque Geral" : p.val.split('-').reverse().join('/');
+                        
+                        // LÓGICA DO SEMÁFORO
+                        let classeCor = "", labelAviso = "";
+                        if (p.val !== "9999-12-31") {
+                            const dataVal = new Date(p.val);
+                            const diffDias = Math.ceil((dataVal - hoje) / (1000 * 60 * 60 * 24));
+                            if (diffDias <= 15) { classeCor = "val-critica"; labelAviso = '<span class="badge-val bg-critica">USAR HOJE</span>'; }
+                            else if (diffDias <= 45) { classeCor = "val-alerta"; labelAviso = '<span class="badge-val bg-alerta">ATENÇÃO</span>'; }
+                        }
+
                         html += `
-                            <label class="item-montagem ${isChecked ? 'marcado' : ''}">
+                            <label class="item-montagem ${isChecked ? 'marcado' : ''} ${classeCor}">
                                 <input type="checkbox" ${isChecked ? 'checked' : ''} onchange="salvarProgresso('${cestaId}', '${itemKey}', this.checked)">
-                                <span><b>${p.qtd}x</b> ${nomesProdutos[pId] || pId}<small class="validade-info">Validade: ${dataF}</small></span>
+                                <span><b>${p.qtd}x</b> ${nomesProdutos[pId] || pId}${labelAviso}<small class="validade-info">Validade: ${dataF}</small></span>
                             </label>`;
                     });
                     if (faltam > 0) html += `<span class="txt-falta">⚠️ FALTA ${faltam}x ${nomesProdutos[pId] || 'Item'}</span>`;
@@ -193,12 +209,10 @@
             const docRef = doc(db, "picking_estado", cestaId);
             const atual = pickingMarcados[cestaId] || { itens: {}, concluida: false };
             atual.itens[itemKey] = status;
-            
             const card = document.getElementById(`card-${cestaId}`);
             const totalInputs = card.querySelectorAll('input[type="checkbox"]').length;
             const marcados = card.querySelectorAll('input[type="checkbox"]:checked').length;
             atual.concluida = marcados === totalInputs;
-
             await setDoc(docRef, atual);
         };
 
