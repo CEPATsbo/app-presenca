@@ -57,7 +57,7 @@
     <div class="no-print">
         <a href="/modulo-caritas.html" class="btn-acao btn-voltar"><i class="fas fa-arrow-left"></i> Voltar ao Painel</a>
         <div style="text-align: center;">
-            <h2 style="margin: 0; color: #2c3e50; font-size: 1.5em;">Etiquetas de Natal 2025</h2>
+            <h2 style="margin: 0; color: #2c3e50; font-size: 1.5em;">Etiquetas de Natal <span id="ano-topo">2025</span></h2>
             <small style="color: #666;">Layout configurado para papel A4 (2 colunas)</small>
         </div>
         <button onclick="window.print()" class="btn-acao btn-imprimir"><i class="fas fa-print"></i> Imprimir Agora</button>
@@ -84,6 +84,10 @@
         const app = initializeApp(firebaseConfig);
         const db = getFirestore(app);
 
+        // Define o ano atual dinamicamente
+        const anoVigente = new Date().getFullYear();
+        document.getElementById('ano-topo').innerText = anoVigente;
+
         // Proteção da Página: Apenas cargos autorizados podem acessar
         protegerPagina(['super-admin','diretor','tesoureiro','conselheiro','recepcionista','entrevistador','caritas'])
             .then(() => carregarEtiquetas())
@@ -93,8 +97,6 @@
             const container = document.getElementById('container-etiquetas');
             
             try {
-                console.log("Iniciando busca de etiquetas...");
-                // Busca apenas famílias ativas, ordenadas pelo nome do responsável para facilitar a logística
                 const q = query(collection(db, "familiasAssistidas"), where("statusGeral", "==", "Ativa"), orderBy("responsavel1.nome"));
                 const snapshot = await getDocs(q);
                 
@@ -108,21 +110,16 @@
 
                 snapshot.forEach(docSnap => {
                     const familia = docSnap.data();
-                    // Garante que o array de filhos exista, mesmo que vazio
                     const filhos = familia.filhos || [];
 
                     filhos.forEach(filho => {
-                        // Proteção contra dados faltantes (Evita tela branca)
                         if (!filho || !filho.nascimento) return;
 
                         const idade = calcularIdade(filho.nascimento);
                         
-                        // Critério da Campanha: Crianças até 13 anos
                         if (idade <= 13) {
                             contadorCrianças++;
                             
-                            // Dados seguros com valores padrão caso algo esteja em branco no banco
-                            // O .toUpperCase() agora é seguro pois garantimos que existe uma string antes
                             const nomeCriancaStr = filho.nome ? filho.nome.toUpperCase() : 'NOME NÃO INFORMADO';
                             const tamanhoRoupa = filho.tamanho || '---';
                             const tamanhoCalcado = filho.calcado || '---';
@@ -134,7 +131,7 @@
                                 <div class="etiqueta-card">
                                     <div class="etiqueta-header">
                                         <img src="/logo-cepat.png" alt="CEPAT" onerror="this.style.display='none'">
-                                        <span>NATAL SOLIDÁRIO 2025</span>
+                                        <span>NATAL SOLIDÁRIO ${anoVigente}</span>
                                     </div>
                                     
                                     <div class="info-crianca">${nomeCriancaStr}</div>
@@ -162,7 +159,6 @@
                     });
                 });
 
-                // Atualiza a tela com o resultado
                 if (contadorCrianças === 0) {
                     container.innerHTML = '<p class="estado-mensaje">Nenhuma criança elegível (até 13 anos) encontrada nas famílias ativas.</p>';
                 } else {
@@ -170,18 +166,15 @@
                 }
 
             } catch (error) {
-                // Em caso de erro grave (ex: falha de rede, permissão), mostra mensagem vermelha
                 console.error("Erro fatal ao carregar etiquetas:", error);
                 container.innerHTML = `<p class="estado-mensaje erro-mensaje"><i class="fas fa-exclamation-triangle"></i> Erro ao carregar dados: ${error.message}</p>`;
             }
         }
 
-        // Função auxiliar para calcular idade
         function calcularIdade(dataNascimento) {
             if (!dataNascimento) return 0;
             const hoje = new Date();
             const nasc = new Date(dataNascimento);
-            // Verifica se a data é válida
             if (isNaN(nasc.getTime())) return 0;
             
             let idade = hoje.getFullYear() - nasc.getFullYear();
