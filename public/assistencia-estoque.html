@@ -34,7 +34,7 @@
 <body>
 
     <header class="nav-header">
-        <a href="/modulo-caritas.html" class="btn-voltar"><i class="fas fa-arrow-left"></i> Voltar</a>
+        <a href="/modulo-caritas.html" class="btn-voltar"><i class="fas fa-arrow-left"></i> Voltar ao Painel</a>
         <img src="/logo-cepat.png" alt="Logo" style="height: 50px;">
     </header>
 
@@ -44,7 +44,7 @@
         <div id="painel-prontidao" class="cesta-pronta-card">
             <h2 id="qtd-cestas-montaveis">0</h2>
             <p>Cestas Prontas para Entrega</p>
-            <div id="status-meta" style="margin-top: 10px; color: #1b5e20; font-weight: bold; font-size: 0.9em;">Sincronizando...</div>
+            <div id="status-meta" style="margin-top: 10px; color: #1b5e20; font-weight: bold; font-size: 0.9em;">Sincronizando dados...</div>
             <div id="box-pendencias" class="lista-pendencias" style="display: none;"><div id="lista-pendencias"></div></div>
         </div>
 
@@ -55,7 +55,7 @@
 
         <div class="secao-estoque">
             <h3 style="color: #2980b9; margin: 0 0 15px 0;"><i class="fas fa-list"></i> Saldo Individual</h3>
-            <div id="lista-produtos">Carregando estoque...</div>
+            <div id="lista-produtos">Carregando estoque e validades...</div>
         </div>
     </main>
 
@@ -65,7 +65,7 @@
             <form id="form-entrada-lote">
                 <input type="hidden" id="entrada-item-id">
                 <div class="form-group"><label>Quantidade Recebida</label><input type="number" id="entrada-qtd" value="1" required></div>
-                <div class="form-group"><label>Doador (Opcional)</label><input type="text" id="entrada-doador"></div>
+                <div class="form-group"><label>Doador (Opcional)</label><input type="text" id="entrada-doador" placeholder="Ex: Mesa Brasil"></div>
                 <div class="form-group"><label>Data de Validade</label><input type="date" id="entrada-validade" required></div>
                 <div style="display: flex; gap: 10px; margin-top: 20px;">
                     <button type="button" onclick="fecharModais()" style="flex:1; border: 1px solid #ccc; border-radius: 8px;">Sair</button>
@@ -79,12 +79,12 @@
         <div class="modal-content">
             <h3>Cadastrar Novo Insumo</h3>
             <form id="form-novo-item">
-                <div class="form-group"><label>Nome do Produto</label><input type="text" id="novo-nome" required></div>
-                <div class="form-group"><label>Saldo Inicial</label><input type="number" id="novo-qtd" value="0"></div>
-                <div class="form-group"><label>Validade Inicial</label><input type="date" id="novo-validade"></div>
+                <div class="form-group"><label>Nome do Produto</label><input type="text" id="novo-nome" required placeholder="Ex: ARROZ 5KG"></div>
+                <div class="form-group"><label>Saldo Inicial</label><input type="number" id="novo-qtd" value="0" required></div>
+                <div class="form-group"><label>Validade Inicial (Opcional)</label><input type="date" id="novo-validade"></div>
                 <div style="display: flex; gap: 10px; margin-top: 20px;">
                     <button type="button" onclick="fecharModais()" style="flex:1; border: 1px solid #ccc; border-radius: 8px;">Sair</button>
-                    <button type="submit" style="flex:1; background: var(--green); color: white; border: none; border-radius: 8px; font-weight: bold;">Salvar</button>
+                    <button type="submit" style="flex:1; background: var(--green); color: white; border: none; border-radius: 8px; font-weight: bold;">Salvar Item</button>
                 </div>
             </form>
         </div>
@@ -92,7 +92,7 @@
 
     <div id="modal-config" class="modal">
         <div class="modal-content">
-            <h3>Configurar Receita e Meta</h3>
+            <h3>Configurar Entrega Social</h3>
             <div class="form-group" style="background: #f0f4f8; padding: 15px; border-radius: 10px;">
                 <label>META DE ATENDIMENTO</label>
                 <input type="number" id="input-meta" style="text-align:center; font-weight:bold;">
@@ -111,60 +111,69 @@
 
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
-        import { getFirestore, collection, onSnapshot, doc, updateDoc, setDoc, addDoc, serverTimestamp, query, getDocs, orderBy, increment, limit, deleteDoc } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
+        import { getFirestore, collection, onSnapshot, doc, updateDoc, setDoc, addDoc, serverTimestamp, query, where, Timestamp, getDocs, orderBy, increment, limit, deleteDoc } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
         import { protegerPagina } from '/auth.js';
 
         const firebaseConfig = { apiKey: "AIzaSyBV7RPjk3cFTqL-aIpflJcUojKg1ZXMLuU", authDomain: "voluntarios-ativos---cepat.firebaseapp.com", projectId: "voluntarios-ativos---cepat", storageBucket: "voluntarios-ativos---cepat.firebasestorage.app", messagingSenderId: "66122858261", appId: "1:66122858261:web:7fa21f1805463b5c08331c" };
         const db = getFirestore(initializeApp(firebaseConfig));
+        
         let itensEstoque = [], configCesta = {}, metaGlobal = 14;
 
         protegerPagina(['super-admin','diretor','caritas']).then(() => {
             onSnapshot(collection(db, "estoque_caritas"), async snap => {
-                const promessas = snap.docs.map(async d => {
+                const listaPromessas = snap.docs.map(async d => {
                     const qLote = query(collection(db, `estoque_caritas/${d.id}/lotes`), orderBy("validade", "asc"));
                     const lSnap = await getDocs(qLote);
                     const lotes = lSnap.docs.map(ld => ({ id: ld.id, ...ld.data() }));
                     const totalLotes = lotes.reduce((acc, curr) => acc + parseInt(curr.quantidade || 0), 0);
                     const quantidadeReal = Math.max(parseInt(d.data().quantidade || 0), totalLotes);
-                    return { id: d.id.trim(), ...d.data(), quantidade: quantidadeReal, proxVal: lotes.length > 0 ? lotes[0].validade : "9999-12-31" };
+                    const proxVal = lotes.length > 0 ? lotes[0].validade : d.data().validade || "9999-12-31";
+                    return { id: d.id.trim(), ...d.data(), quantidade: quantidadeReal, proxVal, lotes };
                 });
-                itensEstoque = await Promise.all(promessas);
-                renderizar();
+                itensEstoque = await Promise.all(listaPromessas);
+                renderizarListaEstoque();
+                calcular();
             });
-            onSnapshot(doc(db, "configuracoes", "cesta_padrao"), d => { if(d.exists()){ configCesta = d.data().itens || {}; metaGlobal = d.data().meta || 14; calcular(); }});
+
+            onSnapshot(doc(db, "configuracoes", "cesta_padrao"), d => {
+                if(d.exists()){
+                    configCesta = d.data().itens || {};
+                    metaGlobal = d.data().meta || 14;
+                    calcular();
+                }
+            });
         });
 
         window.ajustarEstoque = async (id, delta, nome) => {
-            if (delta > 0) { document.getElementById('entrada-item-id').value = id; document.getElementById('titulo-entrada').innerText = `Entrada: ${nome}`; document.getElementById('modal-entrada-lote').style.display = 'flex'; return; }
-            
-            // UPDATE OTIMISTA VISUAL
-            const idx = itensEstoque.findIndex(i => i.id === id);
-            if(idx !== -1 && itensEstoque[idx].quantidade > 0) { 
-                itensEstoque[idx].quantidade += delta; 
-                renderizar(); 
+            const cleanId = id.trim();
+            if (!cleanId) return;
+            if (delta > 0) {
+                document.getElementById('entrada-item-id').value = cleanId;
+                document.getElementById('titulo-entrada').innerText = `Entrada: ${nome}`;
+                document.getElementById('modal-entrada-lote').style.display = 'flex';
+                return;
             }
-
             try {
-                console.log(`[FIREBASE] Baixa: ${nome}`);
-                await updateDoc(doc(db, "estoque_caritas", id), { quantidade: increment(-1) });
-                const qLote = query(collection(db, `estoque_caritas/${id}/lotes`), orderBy("validade", "asc"), limit(1));
+                console.log(`[FIREBASE] Iniciando baixa: ${nome}`);
+                await updateDoc(doc(db, "estoque_caritas", cleanId), { quantidade: increment(-1) });
+                const qLote = query(collection(db, `estoque_caritas/${cleanId}/lotes`), orderBy("validade", "asc"), limit(1));
                 const lSnap = await getDocs(qLote);
                 if (!lSnap.empty) {
-                    const ld = lSnap.docs[0];
-                    const nQtd = (ld.data().quantidade || 0) - 1;
-                    if (nQtd <= 0) await deleteDoc(doc(db, `estoque_caritas/${id}/lotes`, ld.id));
-                    else await updateDoc(doc(db, `estoque_caritas/${id}/lotes`, ld.id), { quantidade: nQtd });
+                    const loteDoc = lSnap.docs[0];
+                    const novaQtd = (loteDoc.data().quantidade || 0) - 1;
+                    if (novaQtd <= 0) await deleteDoc(doc(db, `estoque_caritas/${cleanId}/lotes`, loteDoc.id));
+                    else await updateDoc(doc(db, `estoque_caritas/${cleanId}/lotes`, loteDoc.id), { quantidade: novaQtd });
                 }
                 console.log(`[SUCCESS] Baixa confirmada: ${nome}`);
-            } catch (e) { console.error("Erro na baixa:", e); }
+                location.reload(); // ATUALIZAÇÃO AUTOMÁTICA
+            } catch (e) { alert("Erro na baixa."); }
         };
 
-        function renderizar() {
+        function renderizarListaEstoque() {
             document.getElementById('lista-produtos').innerHTML = itensEstoque.map(i => {
                 const valF = i.proxVal === "9999-12-31" ? "Não definida" : i.proxVal.split('-').reverse().join('/');
-                return `<div class="estoque-item"><div style="flex:1"><b>${i.nome}</b><span class="val-info">Próx: ${valF}</span><small style="color:#777">Saldo: ${i.quantidade}</small></div><div class="controles"><button class="btn-ajuste" style="background:var(--red)" onclick="window.ajustarEstoque('${i.id}', -1, '${i.nome}')">-</button><span style="font-weight:bold; min-width:30px; text-align:center;">${i.quantidade}</span><button class="btn-ajuste" style="background:var(--green)" onclick="window.ajustarEstoque('${i.id}', 1, '${i.nome}')">+</button></div></div>`;
+                return `<div class="estoque-item"><div style="flex:1"><b>${i.nome}</b><span class="val-info">Próx. Validade: ${valF}</span><small style="color:#777">Saldo Total: ${i.quantidade} un.</small></div><div class="controles"><button class="btn-ajuste" style="background:var(--red)" onclick="window.ajustarEstoque('${i.id}', -1, '${i.nome}')">-</button><span style="font-weight:bold; min-width:30px; text-align:center;">${i.quantidade}</span><button class="btn-ajuste" style="background:var(--green)" onclick="window.ajustarEstoque('${i.id}', 1, '${i.nome}')">+</button></div></div>`;
             }).join('');
-            calcular();
         }
 
         function calcular() {
@@ -172,15 +181,18 @@
             let prontas = Infinity, pendencias = [];
             Object.entries(configCesta).forEach(([id, qtdNec]) => {
                 const item = itensEstoque.find(i => i.id === id);
-                const saldo = item ? item.quantidade : 0;
-                const cap = Math.floor(saldo / qtdNec);
+                const saldoValido = item ? item.quantidade : 0;
+                const cap = Math.floor(saldoValido / qtdNec);
                 if (cap < prontas) prontas = cap;
-                if (saldo < (metaGlobal * qtdNec)) pendencias.push(`Faltam ${(metaGlobal * qtdNec) - saldo} un. de ${item ? item.nome : id}`);
+                if (saldoValido < (metaGlobal * qtdNec)) pendencias.push(`Faltam ${(metaGlobal * qtdNec) - saldoValido} un. de <b>${item ? item.nome : id}</b>.`);
             });
             document.getElementById('qtd-cestas-montaveis').innerText = prontas === Infinity ? 0 : prontas;
             document.getElementById('status-meta').innerText = `Meta: ${metaGlobal} | Prontas: ${prontas === Infinity ? 0 : prontas}`;
             const box = document.getElementById('box-pendencias');
-            if (pendencias.length > 0) { box.style.display = 'block'; document.getElementById('lista-pendencias').innerHTML = pendencias.map(p => `<div class="pendencia-item">${p}</div>`).join(''); } else { box.style.display = 'none'; }
+            if (pendencias.length > 0) {
+                box.style.display = 'block';
+                document.getElementById('lista-pendencias').innerHTML = pendencias.map(p => `<div class="pendencia-item">${p}</div>`).join('');
+            } else { box.style.display = 'none'; }
         }
 
         document.getElementById('form-entrada-lote').onsubmit = async (e) => {
@@ -188,10 +200,10 @@
             const id = document.getElementById('entrada-item-id').value;
             const qtd = parseInt(document.getElementById('entrada-qtd').value);
             const val = document.getElementById('entrada-validade').value;
-            fecharModais();
             console.log(`[FIREBASE] Adicionando ${qtd} un.`);
             await updateDoc(doc(db, "estoque_caritas", id), { quantidade: increment(qtd) });
-            await addDoc(collection(db, `estoque_caritas/${id}/lotes`), { quantidade: qtd, validade: val, dataEntrada: serverTimestamp() });
+            await addDoc(collection(db, `estoque_caritas/${id}/lotes`), { quantidade: qtd, validade: val, doador: document.getElementById('entrada-doador').value || "Anônimo", dataEntrada: serverTimestamp() });
+            location.reload(); // ATUALIZAÇÃO AUTOMÁTICA
         };
 
         document.getElementById('form-novo-item').onsubmit = async (e) => {
@@ -200,18 +212,19 @@
             const qtd = parseInt(document.getElementById('novo-qtd').value);
             const val = document.getElementById('novo-validade').value;
             const docRef = await addDoc(collection(db, "estoque_caritas"), { nome, quantidade: qtd });
-            if (val) await addDoc(collection(db, `estoque_caritas/${docRef.id}/lotes`), { quantidade: qtd, validade: val, dataEntrada: serverTimestamp() });
-            fecharModais();
+            if (val) await addDoc(collection(db, `estoque_caritas/${docRef.id}/lotes`), { quantidade: qtd, validade: val, doador: "Saldo Inicial", dataEntrada: serverTimestamp() });
+            location.reload(); // ATUALIZAÇÃO AUTOMÁTICA
         };
 
-        document.getElementById('btn-abrir-novo').onclick = () => { document.getElementById('form-novo-item').reset(); document.getElementById('modal-novo-item').style.display='flex'; };
+        document.getElementById('btn-abrir-novo').onclick = () => { document.getElementById('form-novo-item').reset(); document.getElementById('modal-novo-item').style.display = 'flex'; };
+        
         document.getElementById('btn-config-cesta').onclick = () => {
             document.getElementById('input-meta').value = metaGlobal;
             document.getElementById('lista-composicao').innerHTML = Object.entries(configCesta).map(([id, qtd]) => {
                 const item = itensEstoque.find(i => i.id === id);
                 return `<div class="linha-receita" id="receita-${id}"><button type="button" class="btn-remover-linha" onclick="removerLinhaDaReceita('${id}')"><i class="fas fa-trash-alt"></i></button><span>${item ? item.nome : id}</span><input type="number" class="input-receita" data-id="${id}" value="${qtd}" style="width:60px;"></div>`;
             }).join('');
-            document.getElementById('select-item-estoque').innerHTML = '<option value="">Adicionar...</option>' + itensEstoque.map(i => `<option value="${i.id}">${i.nome}</option>`).join('');
+            document.getElementById('select-item-estoque').innerHTML = '<option value="">Adicionar item...</option>' + itensEstoque.map(i => `<option value="${i.id}">${i.nome}</option>`).join('');
             document.getElementById('modal-config').style.display = 'flex';
         };
 
@@ -229,7 +242,7 @@
             const novosItens = {};
             document.querySelectorAll('.input-receita').forEach(inp => { novosItens[inp.dataset.id] = parseInt(inp.value); });
             await setDoc(doc(db, "configuracoes", "cesta_padrao"), { itens: novosItens, meta: parseInt(document.getElementById('input-meta').value) });
-            fecharModais();
+            location.reload(); // ATUALIZAÇÃO AUTOMÁTICA
         };
 
         window.fecharModais = () => document.querySelectorAll('.modal').forEach(m => m.style.display = 'none');
