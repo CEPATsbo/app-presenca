@@ -49,11 +49,11 @@
         <h1><i class="fas fa-boxes"></i> Almoxarifado Social</h1>
 
         <div style="display: flex; gap: 15px; margin-bottom: 20px; flex-wrap: wrap; background: #f0f0f0; padding: 12px; border-radius: 8px; font-size: 0.85em; justify-content: center; border: 1px solid #ddd;">
-        <span style="display: flex; align-items: center; gap: 5px;"><i class="fas fa-square" style="color: var(--red);"></i> <b>Crítico:</b> < 15 dias</span>
-        <span style="display: flex; align-items: center; gap: 5px;"><i class="fas fa-square" style="color: #f1c40f;"></i> <b>Atenção:</b> < 45 dias</span>
-        <span style="display: flex; align-items: center; gap: 5px;"><i class="fas fa-square" style="color: var(--green);"></i> <b>Seguro:</b> Validade OK</span>
-        <span style="display: flex; align-items: center; gap: 5px;"><i class="fas fa-square" style="color: #3498db;"></i> <b>Geral:</b> Sem Validade</span>
-    </div>
+            <span style="display: flex; align-items: center; gap: 5px;"><i class="fas fa-square" style="color: var(--red);"></i> <b>Crítico:</b> < 15 dias</span>
+            <span style="display: flex; align-items: center; gap: 5px;"><i class="fas fa-square" style="color: #f1c40f;"></i> <b>Atenção:</b> < 45 dias</span>
+            <span style="display: flex; align-items: center; gap: 5px;"><i class="fas fa-square" style="color: var(--green);"></i> <b>Seguro:</b> Validade OK</span>
+            <span style="display: flex; align-items: center; gap: 5px;"><i class="fas fa-square" style="color: #3498db;"></i> <b>Geral:</b> Sem Validade</span>
+        </div>
 
         <div id="painel-prontidao" class="cesta-pronta-card">
             <h2 id="qtd-cestas-montaveis">0</h2>
@@ -62,9 +62,10 @@
             <div id="box-pendencias" class="lista-pendencias" style="display: none;"><div id="lista-pendencias"></div></div>
         </div>
 
-        <div style="display: flex; gap: 10px; margin-bottom: 30px; justify-content: center;">
+        <div style="display: flex; gap: 10px; margin-bottom: 30px; justify-content: center; flex-wrap: wrap;">
             <button id="btn-config-cesta" class="btn-acao" style="background: var(--primary); color: white;"><i class="fas fa-cog"></i> Configurar Receita e Meta</button>
             <button id="btn-abrir-novo" class="btn-acao" style="background: var(--orange); color: white;"><i class="fas fa-plus"></i> + Novo Item</button>
+            <button id="btn-whatsapp-lista" class="btn-acao" style="background: #25D366; color: white;"><i class="fab fa-whatsapp"></i> Gerar Lista p/ WhatsApp</button>
         </div>
 
         <div class="secao-estoque">
@@ -222,6 +223,22 @@
                 document.getElementById('lista-pendencias').innerHTML = pendencias.map(p => `<div class="pendencia-item">${p}</div>`).join('');
             } else { box.style.display = 'none'; }
         }
+
+        // FUNÇÃO WHATSAPP LISTA ARRECADAÇÃO
+        document.getElementById('btn-whatsapp-lista').onclick = () => {
+            let texto = `*CAMPANHA CÁRITAS - CEPAT*%0ANecessidades para meta de ${metaGlobal} cestas:%0A%0A`;
+            let faltas = false;
+            Object.entries(configCesta).forEach(([id, qtd]) => {
+                const item = itensEstoque.find(i => i.id === id);
+                const saldo = item ? item.quantidade : 0;
+                if (saldo < (metaGlobal * qtd)) {
+                    texto += `• *${item ? item.nome : id}*: Faltam ${(metaGlobal * qtd) - saldo} un.%0A`;
+                    faltas = true;
+                }
+            });
+            texto += faltas ? `%0A🙏 Quem puder colaborar favor entregar no CEPAT.` : `✅ Estoque completo!`;
+            window.open(`https://wa.me/?text=${texto}`, '_blank');
+        };
 
         document.getElementById('form-entrada-lote').onsubmit = async (e) => {
             e.preventDefault();
