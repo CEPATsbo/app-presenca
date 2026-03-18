@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Cáritas - Relatório de Gestão Social</title>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
     <style>
         body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #f4f6f9; margin: 0; padding: 20px; display: flex; flex-direction: column; align-items: center; }
         .nav-header { width: 100%; max-width: 1000px; display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
@@ -41,31 +41,78 @@
 </head>
 <body>
     <div class="nav-header"><a href="/modulo-caritas.html" class="btn-voltar"><i class="fas fa-arrow-left"></i> Painel Cáritas</a></div>
+    
     <div class="filtros-painel">
-        <div class="form-filtro"><label>Início</label><input type="date" id="data-inicio"></div>
-        <div class="form-filtro"><label>Término</label><input type="date" id="data-fim"></div>
-        <button class="btn-filtrar" onclick="carregarRelatorio()"><i class="fas fa-filter"></i> ATUALIZAR</button>
+        <div class="form-filtro">
+            <label>Data de Início</label>
+            <input type="date" id="data-inicio">
+        </div>
+        <div class="form-filtro">
+            <label>Data de Término</label>
+            <input type="date" id="data-fim">
+        </div>
+        <button class="btn-filtrar" onclick="carregarRelatorio()">
+            <i class="fas fa-filter"></i> ATUALIZAR RELATÓRIO
+        </button>
     </div>
+
     <div class="folha">
-        <button class="btn-imprimir" onclick="window.print()"><i class="fas fa-print"></i> IMPRIMIR</button>
+        <button class="btn-imprimir" onclick="window.print()">
+            <i class="fas fa-print"></i> IMPRIMIR RELATÓRIO
+        </button>
+
         <header class="header">
             <img src="/logo-cepat.png" alt="Logo CEPAT">
             <h2>Relatório de Gestão Social - Cáritas</h2>
             <p>Período: <span id="label-periodo">Calculando...</span></p>
         </header>
+
         <section class="grid-stats">
-            <div class="card-stat"><h4>Famílias Ativas</h4><p id="rep-familias">0</p></div>
-            <div class="card-stat"><h4>Total de Entregas</h4><p id="rep-cestas">0</p></div>
-            <div class="card-stat"><h4>Itens no Estoque</h4><p id="rep-itens">0</p></div>
+            <div class="card-stat">
+                <h4>Famílias Ativas</h4>
+                <p id="rep-familias">0</p>
+            </div>
+            <div class="card-stat">
+                <h4>Total de Entregas</h4>
+                <p id="rep-cestas">0</p>
+            </div>
+            <div class="card-stat">
+                <h4>Unidades em Estoque</h4>
+                <p id="rep-itens">0</p>
+            </div>
         </section>
+
         <section>
             <h3><i class="fas fa-shopping-basket"></i> Registro de Atendimento e Entregas</h3>
-            <table id="tabela-entregas"><thead><tr><th style="width: 15%;">Data</th><th style="width: 25%;">Responsável</th><th>Conteúdo e Observações</th></tr></thead><tbody></tbody></table>
+            <table id="tabela-entregas">
+                <thead>
+                    <tr>
+                        <th style="width: 15%;">Data</th>
+                        <th style="width: 25%;">Responsável</th>
+                        <th>Conteúdo e Observações</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    </tbody>
+            </table>
         </section>
+
         <section>
             <h3><i class="fas fa-hand-holding-heart"></i> Entradas e Doações Recebidas</h3>
-            <table id="tabela-doacoes"><thead><tr><th style="width: 15%;">Data</th><th>Doador / Origem</th><th>Item e Quantidade</th><th>Tipo</th></tr></thead><tbody></tbody></table>
+            <table id="tabela-doacoes">
+                <thead>
+                    <tr>
+                        <th style="width: 15%;">Data</th>
+                        <th>Doador / Origem</th>
+                        <th>Item e Quantidade</th>
+                        <th>Tipo</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    </tbody>
+            </table>
         </section>
+
         <footer>Documento Gerado pelo Sistema CEPAT em <span id="data-geracao"></span>.</footer>
     </div>
 
@@ -74,7 +121,15 @@
         import { getFirestore, collection, query, where, getDocs, orderBy, Timestamp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
         import { protegerPagina } from '/auth.js';
 
-        const firebaseConfig = { apiKey: "AIzaSyBV7RPjk3cFTqL-aIpflJcUojKg1ZXMLuU", authDomain: "voluntarios-ativos---cepat.firebaseapp.com", projectId: "voluntarios-ativos---cepat", storageBucket: "voluntarios-ativos---cepat.firebasestorage.app", messagingSenderId: "66122858261", appId: "1:66122858261:web:7fa21f1805463b5c08331c" };
+        const firebaseConfig = { 
+            apiKey: "AIzaSyBV7RPjk3cFTqL-aIpflJcUojKg1ZXMLuU", 
+            authDomain: "voluntarios-ativos---cepat.firebaseapp.com", 
+            projectId: "voluntarios-ativos---cepat", 
+            storageBucket: "voluntarios-ativos---cepat.firebasestorage.app", 
+            messagingSenderId: "66122858261", 
+            appId: "1:66122858261:web:7fa21f1805463b5c08331c" 
+        };
+        
         const db = getFirestore(initializeApp(firebaseConfig));
 
         window.onload = () => {
@@ -93,56 +148,97 @@
         async function carregarRelatorio() {
             const strInicio = document.getElementById('data-inicio').value;
             const strFim = document.getElementById('data-fim').value;
+            
+            // Ajuste de fuso horário para garantir que o dia inteiro seja incluído
             const dtInicio = Timestamp.fromDate(new Date(strInicio + "T00:00:00"));
             const dtFim = Timestamp.fromDate(new Date(strFim + "T23:59:59"));
+            
             document.getElementById('label-periodo').innerText = `${new Date(strInicio + "T00:00:00").toLocaleDateString('pt-BR')} até ${new Date(strFim + "T00:00:00").toLocaleDateString('pt-BR')}`;
 
             try {
+                // 1. FAMÍLIAS ATIVAS
                 const snapFams = await getDocs(query(collection(db, "familiasAssistidas"), where("statusGeral", "==", "Ativa")));
                 document.getElementById('rep-familias').innerText = snapFams.size;
+
+                // 2. TOTAL DE UNIDADES NO ESTOQUE (SOMA REAL)
                 const snapItens = await getDocs(collection(db, "estoque_caritas"));
-                document.getElementById('rep-itens').innerText = snapItens.size;
-                const snapEntregas = await getDocs(query(collection(db, "entregasCestas"), where("data", ">=", dtInicio), where("data", "<=", dtFim), orderBy("data", "desc")));
+                let acumuladorEstoque = 0;
+                snapItens.forEach(docEstoque => {
+                    const dadosItem = docEstoque.data();
+                    acumuladorEstoque += (dadosItem.quantidade || 0);
+                });
+                document.getElementById('rep-itens').innerText = acumuladorEstoque;
+
+                // 3. REGISTRO DE ENTREGAS
+                const snapEntregas = await getDocs(query(
+                    collection(db, "entregasCestas"), 
+                    where("data", ">=", dtInicio), 
+                    where("data", "<=", dtFim), 
+                    orderBy("data", "desc")
+                ));
+                
                 document.getElementById('rep-cestas').innerText = snapEntregas.size;
 
                 let htmlEntregas = "";
-                snapEntregas.forEach(doc => {
-                    const e = doc.data();
-                    htmlEntregas += `<tr><td>${e.data.toDate().toLocaleDateString('pt-BR')}</td><td><strong>${e.responsavel}</strong></td><td><b>Kit:</b> ${e.itens ? e.itens.join(", ") : "Cesta Padrão"}${e.observacoes ? `<span class="obs-texto"><b>Nota:</b> ${e.observacoes}</span>` : ""}</td></tr>`;
+                snapEntregas.forEach(docEnt => {
+                    const e = docEnt.data();
+                    const dataFormatada = e.data.toDate().toLocaleDateString('pt-BR');
+                    htmlEntregas += `
+                        <tr>
+                            <td>${dataFormatada}</td>
+                            <td><strong>${e.responsavel}</strong></td>
+                            <td>
+                                <b>Kit:</b> ${e.itens ? e.itens.join(", ") : "Cesta Padrão"}
+                                ${e.observacoes ? `<span class="obs-texto"><b>Nota:</b> ${e.observacoes}</span>` : ""}
+                            </td>
+                        </tr>`;
                 });
-                document.getElementById('tabela-entregas').querySelector('tbody').innerHTML = htmlEntregas || "<tr><td colspan='3' style='text-align:center;'>Nenhuma entrega.</td></tr>";
+                document.getElementById('tabela-entregas').querySelector('tbody').innerHTML = htmlEntregas || "<tr><td colspan='3' style='text-align:center;'>Nenhuma entrega registrada no período.</td></tr>";
 
-                // CORREÇÃO: LÓGICA DE PARSE INTELIGENTE PARA AS DOAÇÕES
-                const snapLogs = await getDocs(query(collection(db, "log_auditoria"), where("timestamp", ">=", dtInicio), where("timestamp", "<=", dtFim), where("acao", "in", ["ENTRADA", "ENTRADA_ESTOQUE"]), orderBy("timestamp", "desc")));
+                // 4. REGISTRO DE DOAÇÕES E ENTRADAS
+                const snapLogs = await getDocs(query(
+                    collection(db, "log_auditoria"), 
+                    where("timestamp", ">=", dtInicio), 
+                    where("timestamp", "<=", dtFim), 
+                    orderBy("timestamp", "desc")
+                ));
+                
                 let htmlDoacoes = "";
-                snapLogs.forEach(doc => {
-                    const l = doc.data();
-                    const texto = l.detalhes || "";
-                    
-                    // Extrai "[Qtd] un. de [Item]" e "[Nome]" do Doador
-                    let doador = "Não identificado";
-                    let itemQtd = "Entrada registrada";
+                snapLogs.forEach(docLog => {
+                    const l = docLog.data();
+                    // Aceita múltiplos tipos de ações de entrada para maior cobertura
+                    if (["ENTRADA", "ENTRADA_ESTOQUE", "CADASTRO_ITEM"].includes(l.acao)) {
+                        const detalhes = l.detalhes || "";
+                        let nomeDoador = "Anônimo / Geral"; 
+                        let descricaoItem = detalhes;
 
-                    if (texto.includes('Entrada de')) {
-                        // Formato: "Entrada de [qtd] un. de [item]. Doador: [nome]."
-                        const regex = /Entrada de (.*?) un\. de (.*?)\. Doador: (.*?)\./;
-                        const match = texto.match(regex);
-                        if (match) {
-                            itemQtd = `${match[1]} un. de ${match[2]}`;
-                            doador = match[3];
+                        if (detalhes.includes('Doador:')) {
+                            const partesDoador = detalhes.split('Doador:');
+                            descricaoItem = partesDoador[0].replace('Entrada de', '').replace('Cadastrou item:', '').trim();
+                            nomeDoador = partesDoador[1].split('.')[0].trim() || "Anônimo";
+                        } else {
+                            // Se não tiver a tag Doador, limpa o texto para exibir apenas o item e quantidade
+                            descricaoItem = detalhes.replace('Entrada de', '').replace('Cadastrou item:', '').trim();
                         }
-                    } else if (texto.includes('Doador:')) {
-                        // Fallback para logs mais simples
-                        doador = texto.split('Doador:')[1].split('.')[0].trim();
-                        itemQtd = texto.split('Doador:')[0].replace('Entrada de', '').trim();
+
+                        htmlDoacoes += `
+                            <tr>
+                                <td>${l.timestamp.toDate().toLocaleDateString('pt-BR')}</td>
+                                <td><strong>${nomeDoador}</strong></td>
+                                <td>${descricaoItem}</td>
+                                <td><span class="badge-entrada">Entrada</span></td>
+                            </tr>`;
                     }
-
-                    htmlDoacoes += `<tr><td>${l.timestamp.toDate().toLocaleDateString('pt-BR')}</td><td><strong>${doador}</strong></td><td>${itemQtd}</td><td><span class="badge-entrada">Entrada</span></td></tr>`;
                 });
-                document.getElementById('tabela-doacoes').querySelector('tbody').innerHTML = htmlDoacoes || "<tr><td colspan='4' style='text-align:center;'>Nenhuma doação.</td></tr>";
+                document.getElementById('tabela-doacoes').querySelector('tbody').innerHTML = htmlDoacoes || "<tr><td colspan='4' style='text-align:center;'>Nenhuma doação registrada no período.</td></tr>";
 
-            } catch (err) { console.error("Erro:", err); }
+            } catch (error) { 
+                console.error("Erro detalhado ao carregar relatório:", error);
+                alert("Erro ao sincronizar dados. Verifique o console para mais detalhes.");
+            }
         }
+        
+        // Torna a função global para o botão HTML conseguir chamar
         window.carregarRelatorio = carregarRelatorio;
     </script>
 </body>
