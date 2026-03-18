@@ -488,12 +488,33 @@
                     cesta: document.querySelector('input[name="ficha-cesta"]:checked')?.value || "Não informado"
                 };
                 try {
-                    await addDoc(collection(db, `familiasAssistidas/${familiaSelecionadaId}/atendimentos`), dadosFicha);
-                    await updateDoc(doc(db, "familiasAssistidas", familiaSelecionadaId), { estadoCivil: dadosFicha.estadoCivil });
-                    await addDoc(collection(db, "log_auditoria"), { timestamp: serverTimestamp(), autor: { nome: user.displayName || user.email }, acao: "GRAVAR_FICHA_MENSAL", detalhes: `Ficha mensal arquivada para família: ${familiaSelecionadaId}` });
-                    alert("Ficha arquivada com sucesso!");
-                    carregarHistoricoAtendimentos(familiaSelecionadaId);
-                } catch (e) { alert("Erro ao arquivar: " + e.message); }
+    await addDoc(collection(db, `familiasAssistidas/${familiaSelecionadaId}/atendimentos`), dadosFicha);
+    await updateDoc(doc(db, "familiasAssistidas", familiaSelecionadaId), { estadoCivil: dadosFicha.estadoCivil });
+    await addDoc(collection(db, "log_auditoria"), { 
+        timestamp: serverTimestamp(), 
+        autor: { nome: user.displayName || user.email }, 
+        acao: "GRAVAR_FICHA_MENSAL", 
+        detalhes: `Ficha mensal arquivada para família: ${familiaSelecionadaId}` 
+    });
+
+    alert("Ficha arquivada com sucesso!");
+
+    // --- NOVA LÓGICA DE LIMPEZA DO FORMULÁRIO APÓS SALVAR ---
+    document.querySelectorAll('#ficha-situacao input[type="checkbox"]').forEach(c => c.checked = false);
+    document.querySelectorAll('#ficha-necessidades input[type="checkbox"]').forEach(c => c.checked = false);
+    document.querySelectorAll('input[name="ficha-cesta"]').forEach(r => r.checked = false);
+    document.getElementById('ficha-situacao-outros').value = "";
+    document.getElementById('ficha-necessidades-outros').value = "";
+    document.getElementById('ficha-relato').value = "";
+    document.getElementById('ficha-obs').value = "";
+    // O campo voluntário pode permanecer preenchido com seu nome para o próximo atendimento
+    
+    // Atualiza a lista visual do histórico logo abaixo
+    carregarHistoricoAtendimentos(familiaSelecionadaId);
+
+} catch (e) { 
+    alert("Erro ao arquivar: " + e.message); 
+}
             };
 
             window.gerarReciboImpressao = () => {
