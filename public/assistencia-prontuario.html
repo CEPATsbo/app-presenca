@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cáritas - Prontuário Individual</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #f4f6f9; margin: 0; padding: 20px; display: flex; flex-direction: column; align-items: center; }
+        .btn-voltar { background: #6c757d; color: white; padding: 10px 15px; border-radius: 8px; text-decoration: none; font-weight: bold; margin-bottom: 20px; align-self: flex-start; }
+        .folha-prontuario { background: white; padding: 40px; width: 100%; max-width: 900px; border-radius: 8px; box-shadow: 0 0 20px rgba(0,0,0,0.1); box-sizing: border-box; }
+        .header-cepat { text-align: center; border-bottom: 2px solid #2c3e50; padding-bottom: 20px; margin-bottom: 30px; }
+        .header-cepat img { height: 60px; }
+        .secao-titulo { background: #f8f9fa; padding: 10px; border-left: 5px solid #3498db; font-weight: bold; color: #2c3e50; margin: 20px 0 10px 0; text-transform: uppercase; font-size: 0.9em; }
+        .grid-info { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 20px; }
+        .info-item label { display: block; font-size: 0.75em; color: #7f8c8d; font-weight: bold; text-transform: uppercase; }
+        .info-item span { font-size: 1.1em; color: #2c3e50; font-weight: 500; }
+        .card-atendimento { border: 1px solid #ddd; border-radius: 8px; padding: 20px; margin-bottom: 30px; position: relative; background: #fff; }
+        .data-atendimento { position: absolute; top: -12px; right: 20px; background: #2c3e50; color: white; padding: 5px 15px; border-radius: 20px; font-weight: bold; font-size: 0.85em; }
+        .ficha-subtitulo { font-weight: bold; color: #e67e22; margin-top: 15px; font-size: 0.9em; border-bottom: 1px solid #eee; padding-bottom: 3px; }
+        .texto-relato { white-space: pre-wrap; font-size: 0.95em; line-height: 1.5; color: #444; background: #fdfdfd; padding: 10px; border-radius: 4px; border: 1px solid #f1f1f1; margin-top: 5px; }
+        .badge-tag { display: inline-block; background: #e8f4fd; color: #3498db; padding: 3px 8px; border-radius: 4px; font-size: 0.8em; font-weight: bold; margin-right: 5px; margin-top: 5px; }
+        
+        @media print {
+            .btn-voltar { display: none !important; }
+            body { padding: 0; background: white; }
+            .folha-prontuario { box-shadow: none; max-width: 100%; padding: 0; }
+            .card-atendimento { break-inside: avoid; border: 1px solid #000; }
+        }
+    </style>
+</head>
+<body>
+    <a href="assistencia-familias.html" class="btn-voltar"><i class="fas fa-arrow-left"></i> Voltar à Lista</a>
+
+    <div class="folha-prontuario" id="conteudo-prontuario">
+        <header class="header-cepat">
+            <img src="/logo-cepat.png" alt="Logo CEPAT">
+            <h2>Prontuário de Evolução Social - Cáritas</h2>
+        </header>
+
+        <div id="dados-familia">
+            <p style="text-align:center; color:#999;">Carregando histórico da família...</p>
+        </div>
+
+        <div id="historico-atendimentos"></div>
+    </div>
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
+        import { getFirestore, doc, getDoc, collection, query, orderBy, getDocs } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
+        import { protegerPagina } from '/auth.js';
+
+        const firebaseConfig = { apiKey: "AIzaSyBV7RPjk3cFTqL-aIpflJcUojKg1ZXMLuU", authDomain: "voluntarios-ativos---cepat.firebaseapp.com", projectId: "voluntarios-ativos---cepat", storageBucket: "voluntarios-ativos---cepat.firebasestorage.app", messagingSenderId: "66122858261", appId: "1:66122858261:web:7fa21f1805463b5c08331c" };
+        const db = getFirestore(initializeApp(firebaseConfig));
+
+        const urlParams = new URLSearchParams(window.location.search);
+        const familiaId = urlParams.get('id');
+
+        function calcularIdade(nasc) { 
+            if(!nasc) return "?";
+            const d = new Date(nasc); 
+            let i = new Date().getFullYear() - d.getFullYear(); 
+            const m = new Date().getMonth() - d.getMonth();
+            if (m < 0 || (m === 0 && new Date().getDate() < d.getDate())) i--; 
+            return i; 
+        }
+
+        protegerPagina(['super-admin','diretor','caritas','entrevistador']).then(() => {
+            if (familiaId) carregarProntuarioCompleto();
+            else window.location.href = 'assistencia-familias.html';
+        });
+
+        async function carregarProntuarioCompleto() {
+            try {
+                const famSnap = await getDoc(doc(db, "familiasAssistidas", familiaId));
+                if (!famSnap.exists()) {
+                    document.getElementById('dados-familia').innerHTML = "<p>Família não encontrada.</p>";
+                    return;
+                }
+                const fam = famSnap.data();
+
+                document.getElementById('dados-familia').innerHTML = `
+                    <div class="secao-titulo">Informações Gerais</div>
+                    <div class="grid-info">
+                        <div class="info-item"><label>Responsável Principal</label><span>${fam.responsavel1.nome}</span></div>
+                        <div class="info-item"><label>Estado Civil</label><span>${fam.estadoCivil || 'Não informado'}</span></div>
+                        <div class="info-item"><label>Contato</label><span>${fam.contato.telefone}</span></div>
+                        <div class="info-item"><label>Endereço</label><span>${fam.contato.endereco}</span></div>
+                    </div>
+                    <div class="secao-titulo">Dependentes</div>
+                    <div style="margin-bottom:30px;">
+                        ${fam.filhos.map(filho => `<span class="badge-tag" style="background:#eee; color:#333;">${filho.nome} (${calcularIdade(filho.nascimento)} anos)</span>`).join('')}
+                    </div>
+                `;
+
+                const histSnap = await getDocs(query(collection(db, `familiasAssistidas/${familiaId}/atendimentos`), orderBy("data", "desc")));
+                let htmlHistorico = `<div class="secao-titulo">Histórico de Evolução Mensal</div>`;
+
+                histSnap.forEach(docAtend => {
+                    const d = docAtend.data();
+                    htmlHistorico += `
+                        <div class="card-atendimento">
+                            <div class="data-atendimento">${d.data?.toDate().toLocaleDateString('pt-BR')}</div>
+                            <div class="grid-info">
+                                <div class="info-item"><label>Entrevistador</label><span>${d.voluntario}</span></div>
+                                <div class="info-item"><label>Recebeu Cesta?</label><span>${d.cesta}</span></div>
+                            </div>
+                            
+                            <div class="ficha-subtitulo">SITUAÇÃO E NECESSIDADES</div>
+                            <div style="margin-bottom:10px;">
+                                <strong>Situação:</strong> ${d.situacao ? d.situacao.map(s => `<span class="badge-tag">${s}</span>`).join('') : '---'} 
+                                ${d.situacaoOutros ? `<br><small><b>Outros:</b> ${d.situacaoOutros}</small>` : ''}
+                            </div>
+                            <div>
+                                <strong>Necessidades:</strong> ${d.necessidades ? d.necessidades.map(n => `<span class="badge-tag" style="background:#fff3e0; color:#e67e22;">${n}</span>`).join('') : '---'} 
+                                ${d.necessidadesOutros ? `<br><small><b>Outros:</b> ${d.necessidadesOutros}</small>` : ''}
+                            </div>
+
+                            <div class="ficha-subtitulo">RELATO DA PESSOA ATENDIDA</div>
+                            <div class="texto-relato">${d.relato || 'Sem relato registrado.'}</div>
+
+                            <div class="ficha-subtitulo">OBSERVAÇÃO DO ENTREVISTADOR</div>
+                            <div class="texto-relato" style="border-left: 4px solid #fbc02d;">${d.obs || 'Sem observações adicionais.'}</div>
+                        </div>
+                    `;
+                });
+
+                document.getElementById('historico-atendimentos').innerHTML = htmlHistorico || "<p>Nenhum atendimento arquivado.</p>";
+
+            } catch (e) { 
+                console.error("Erro no carregamento:", e);
+                document.getElementById('dados-familia').innerHTML = "<p style='color:red;'>Erro ao carregar dados. Verifique a permissão.</p>";
+            }
+        }
+    </script>
+</body>
+</html>
