@@ -50,12 +50,6 @@
         .detalhe-item label { font-weight: bold; color: #7f8c8d; font-size: 0.8em; text-transform: uppercase; display: block; }
         .detalhe-item span { font-size: 1.1em; color: #2c3e50; }
 
-        .prontuario-container { margin-top: 25px; padding: 20px; background: #fffde7; border-radius: 12px; border: 1px solid #fbc02d; }
-        .prontuario-container h4 { margin: 0 0 10px 0; color: #f57f17; display: flex; align-items: center; gap: 8px; }
-        .prontuario-textarea { width: 100%; height: 120px; padding: 12px; border-radius: 8px; border: 1px solid #ccc; font-family: inherit; font-size: 1em; resize: vertical; box-sizing: border-box; }
-        .btn-salvar-prontuario { margin-top: 12px; background-color: #fbc02d; color: #2c3e50; border: none; padding: 10px 20px; border-radius: 8px; cursor: pointer; font-weight: bold; transition: background 0.2s; }
-        .btn-salvar-prontuario:hover { background-color: #f9a825; }
-
         /* Edição de Medidas e Nomes - LAYOUT CORRIGIDO */
         .edicao-medidas-grid { display: grid; grid-template-columns: 1fr auto auto 40px; gap: 10px; background: #fff; padding: 12px; border-radius: 8px; border: 1px solid #ddd; margin-bottom: 12px; align-items: center; }
         .input-medida { padding: 10px; border: 1px solid #ccc; border-radius: 6px; width: 100%; box-sizing: border-box; font-size: 0.95em; color: #2c3e50; }
@@ -63,6 +57,15 @@
         .input-data-filho { width: 160px !important; }
         .btn-update-medidas { background: #27ae60; color: white; border: none; padding: 12px 15px; border-radius: 6px; cursor: pointer; font-weight: bold; font-size: 0.85em; margin-top: 10px; width: 100%; }
         .btn-del-child { color: #e74c3c; background: none; border: none; cursor: pointer; font-size: 1.2em; display: flex; align-items: center; justify-content: center; }
+
+        /* Nova Ficha Digital Igual à Foto */
+        .ficha-container { background: #fff; border: 2px solid #2c3e50; padding: 20px; border-radius: 8px; margin-top: 25px; }
+        .ficha-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-top: 15px; }
+        .ficha-check-group { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 5px; }
+        .ficha-check-item { background: #f1f1f1; padding: 5px 10px; border-radius: 4px; font-size: 0.9em; display: flex; align-items: center; gap: 5px; cursor: pointer; }
+        .ficha-textarea { width: 100%; height: 80px; padding: 10px; border-radius: 6px; border: 1px solid #ccc; font-family: inherit; resize: vertical; margin-top: 5px; box-sizing: border-box;}
+        .historico-atendimentos { margin-top: 20px; border-top: 2px solid #eee; padding-top: 15px; }
+        .atendimento-item { background: #f8f9fa; padding: 10px; border-radius: 6px; margin-bottom: 8px; border-left: 4px solid #2c3e50; font-size: 0.9em; cursor: pointer; }
     </style>
 </head>
 <body>
@@ -161,7 +164,7 @@
     </div>
 
     <div id="modal-detalhes" class="modal">
-        <div class="modal-content" style="max-width: 650px;">
+        <div class="modal-content" style="max-width: 850px;">
             <h2 id="det-titulo" style="color: #3498db; margin-bottom: 25px;">Detalhes da Família</h2>
             
             <div id="det-conteudo">
@@ -179,12 +182,67 @@
 
                 <button id="btn-atualizar-medidas" class="btn-update-medidas"><i class="fas fa-sync-alt"></i> Salvar Alterações de Medidas e Nomes</button>
 
-                <div id="secao-prontuario" class="prontuario-container">
-                    <h4><i class="fas fa-comment-medical"></i> Prontuário de Evolução Social</h4>
-                    <textarea id="texto-prontuario" class="prontuario-textarea" placeholder="Anote aqui a evolução social, necessidades específicas ou observações fraternas da família..."></textarea>
-                    <button id="btn-gravar-prontuario" class="btn-salvar-prontuario">
-                        <i class="fas fa-save"></i> Gravar Observação
+                <div class="ficha-container">
+                    <h3 style="text-align:center; border-bottom: 2px solid #2c3e50; padding-bottom: 10px; margin-bottom: 20px;">FICHA DE ATENDIMENTO - AÇÃO SOCIAL / CÁRITAS</h3>
+                    
+                    <div class="ficha-grid">
+                        <div class="form-group">
+                            <label>SITUAÇÃO ATUAL</label>
+                            <div class="ficha-check-group" id="ficha-situacao">
+                                <label class="ficha-check-item"><input type="checkbox" value="Desemprego"> Desemprego</label>
+                                <label class="ficha-check-item"><input type="checkbox" value="Doença na família"> Doença na família</label>
+                                <label class="ficha-check-item"><input type="checkbox" value="Dificuldade financeira"> Dificuldade financeira</label>
+                                <label class="ficha-check-item"><input type="checkbox" value="Separação familiar"> Separação familiar</label>
+                            </div>
+                            <input type="text" id="ficha-situacao-outros" placeholder="Outros (especificar)..." class="input-medida" style="margin-top:8px;">
+                        </div>
+                        <div class="form-group">
+                            <label>NECESSIDADES PRINCIPAIS</label>
+                            <div class="ficha-check-group" id="ficha-necessidades">
+                                <label class="ficha-check-item"><input type="checkbox" value="Cesta básica"> Cesta básica</label>
+                                <label class="ficha-check-item"><input type="checkbox" value="Roupa"> Roupa</label>
+                                <label class="ficha-check-item"><input type="checkbox" value="Orientação espiritual"> Orientação espiritual</label>
+                                <label class="ficha-check-item"><input type="checkbox" value="Encaminhamento social"> Encaminhamento social</label>
+                            </div>
+                            <input type="text" id="ficha-necessidades-outros" placeholder="Outros (especificar)..." class="input-medida" style="margin-top:8px;">
+                        </div>
+                    </div>
+
+                    <div class="ficha-grid">
+                        <div class="form-group">
+                            <label>ESTADO CIVIL</label>
+                            <input type="text" id="ficha-estado-civil" placeholder="Estado Civil do(s) Responsável(is)" class="input-medida">
+                        </div>
+                        <div class="form-group">
+                            <label>VOLUNTÁRIO RESPONSÁVEL</label>
+                            <input type="text" id="ficha-voluntario" placeholder="Nome do Entrevistador" class="input-medida">
+                        </div>
+                    </div>
+
+                    <div class="form-group" style="margin-top:15px;">
+                        <label>RELATO DA PESSOA ATENDIDA:</label>
+                        <textarea id="ficha-relato" class="ficha-textarea" placeholder="Transcreva aqui o relato da família..."></textarea>
+                    </div>
+
+                    <div class="form-group" style="margin-top:15px;">
+                        <label>OBSERVAÇÃO DO ENTREVISTADOR:</label>
+                        <textarea id="ficha-obs" class="ficha-textarea" placeholder="Análise técnica e observações fraternas..."></textarea>
+                    </div>
+
+                    <div style="margin-top:15px; display:flex; gap:20px; align-items:center; background: #f8f9fa; padding: 15px; border-radius: 8px;">
+                        <label><strong>RECEBEU CESTA BÁSICA?</strong></label>
+                        <label style="cursor:pointer;"><input type="radio" name="ficha-cesta" value="Sim"> SIM</label>
+                        <label style="cursor:pointer;"><input type="radio" name="ficha-cesta" value="Não"> NÃO</label>
+                    </div>
+
+                    <button id="btn-gravar-atendimento" class="btn-acao" style="background:#e67e22; width:100%; margin-top:20px; height:55px; justify-content:center; font-size: 1.1em;">
+                        <i class="fas fa-file-medical"></i> GRAVAR ATENDIMENTO MENSAL (ARQUIVAR)
                     </button>
+                </div>
+
+                <div class="historico-atendimentos">
+                    <h4 style="color: #2c3e50; border-bottom: 2px solid #eee; padding-bottom: 5px;"><i class="fas fa-history"></i> Histórico de Atendimentos Arquivados</h4>
+                    <div id="lista-historico" style="margin-top:10px;"></div>
                 </div>
             </div>
 
@@ -197,7 +255,7 @@
 
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
-        import { getFirestore, collection, addDoc, onSnapshot, query, orderBy, serverTimestamp, doc, updateDoc, getDoc } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
+        import { getFirestore, collection, addDoc, onSnapshot, query, orderBy, serverTimestamp, doc, updateDoc, getDocs } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
         import { protegerPagina } from '/auth.js';
 
         const firebaseConfig = { apiKey: "AIzaSyBV7RPjk3cFTqL-aIpflJcUojKg1ZXMLuU", authDomain: "voluntarios-ativos---cepat.firebaseapp.com", projectId: "voluntarios-ativos---cepat", storageBucket: "voluntarios-ativos---cepat.firebasestorage.app", messagingSenderId: "66122858261", appId: "1:66122858261:web:7fa21f1805463b5c08331c" };
@@ -245,10 +303,9 @@
                 lista: document.getElementById('lista-familias'),
                 busca: document.getElementById('search-input'),
                 btnExcel: document.getElementById('btn-exportar'),
-                textoProntuario: document.getElementById('texto-prontuario'),
-                btnGravarProntuario: document.getElementById('btn-gravar-prontuario'),
                 btnAtualizarMedidas: document.getElementById('btn-atualizar-medidas'),
-                btnNovoFilhoDet: document.getElementById('btn-novo-filho-detalhe')
+                btnNovoFilhoDet: document.getElementById('btn-novo-filho-detalhe'),
+                btnGravarAtendimento: document.getElementById('btn-gravar-atendimento')
             };
 
             ui.btnNovo.onclick = () => { ui.form.reset(); ui.listaFilhos.innerHTML = ''; ui.modal.style.display = 'flex'; };
@@ -301,7 +358,7 @@
                 }).join('');
             }
 
-            window.abrirDetalhes = (id) => {
+            window.abrirDetalhes = async (id) => {
                 familiaSelecionadaId = id;
                 const familia = todasFamilias.find(f => f.id === id);
                 if (!familia) return;
@@ -312,10 +369,36 @@
                 document.getElementById('det-end').textContent = familia.contato.endereco;
                 
                 renderizarListaFilhosEdicao(familia.filhos);
+                carregarHistoricoAtendimentos(id);
 
-                ui.textoProntuario.value = familia.evolucaoSocial || "";
+                // Limpar campos da ficha para novo preenchimento
+                document.querySelectorAll('.ficha-container input[type="checkbox"]').forEach(c => c.checked = false);
+                document.querySelectorAll('.ficha-container input[type="radio"]').forEach(r => r.checked = false);
+                document.getElementById('ficha-situacao-outros').value = "";
+                document.getElementById('ficha-necessidades-outros').value = "";
+                document.getElementById('ficha-relato').value = "";
+                document.getElementById('ficha-obs').value = "";
+                document.getElementById('ficha-estado-civil').value = familia.estadoCivil || "";
+                document.getElementById('ficha-voluntario').value = user.displayName || "";
+
                 ui.modalDet.style.display = 'flex';
             };
+
+            async function carregarHistoricoAtendimentos(id) {
+                const histSnap = await getDocs(query(collection(db, `familiasAssistidas/${id}/atendimentos`), orderBy("data", "desc")));
+                document.getElementById('lista-historico').innerHTML = histSnap.docs.map(d => {
+                    const data = d.data();
+                    const dStr = data.data?.toDate().toLocaleDateString('pt-BR') || "Data N/A";
+                    return `
+                        <div class="atendimento-item" onclick="alert('RELATO: ${data.relato}\\n\\nOBSERVAÇÃO: ${data.obs}')">
+                            <div style="display:flex; justify-content:space-between;">
+                                <strong>${dStr}</strong>
+                                <span>Voluntário: ${data.voluntario}</span>
+                            </div>
+                            <small>Situação: ${data.situacao.join(', ')} | Cesta: ${data.cesta}</small>
+                        </div>`;
+                }).join('') || "<p style='color:#999; font-size:0.9em;'>Sem atendimentos registrados anteriormente.</p>";
+            }
 
             function renderizarListaFilhosEdicao(filhos) {
                 const container = document.getElementById('det-lista-filhos');
@@ -361,7 +444,6 @@
             ui.btnAtualizarMedidas.onclick = async () => {
                 if (!familiaSelecionadaId) return;
                 const novosFilhos = [];
-                
                 document.querySelectorAll('.edicao-medidas-grid').forEach(row => {
                     if(!row.classList.contains('deleted-flag')) {
                         const nome = row.querySelector('.edit-nome').value;
@@ -376,27 +458,35 @@
                         }
                     }
                 });
-
                 try {
                     await updateDoc(doc(db, "familiasAssistidas", familiaSelecionadaId), { filhos: novosFilhos });
-                    await addDoc(collection(db, "log_auditoria"), {
-                        timestamp: serverTimestamp(),
-                        autor: { nome: user.displayName || user.email },
-                        acao: "ATUALIZAR_DEPENDENTES",
-                        detalhes: `Atualizou dependentes da família: ${familiaSelecionadaId}`
-                    });
+                    await addDoc(collection(db, "log_auditoria"), { timestamp: serverTimestamp(), autor: { nome: user.displayName || user.email }, acao: "ATUALIZAR_DEPENDENTES", detalhes: `Atualizou dependentes da família: ${familiaSelecionadaId}` });
                     alert("Dados salvos com sucesso!");
                     abrirDetalhes(familiaSelecionadaId);
                 } catch (e) { alert("Erro: " + e.message); }
             };
 
-            ui.btnGravarProntuario.onclick = async () => {
-                if (!familiaSelecionadaId) return;
+            ui.btnGravarAtendimento.onclick = async () => {
+                if(!confirm("Deseja gravar e arquivar esta ficha de atendimento mensal?")) return;
+                const dadosFicha = {
+                    data: serverTimestamp(),
+                    situacao: Array.from(document.querySelectorAll('#ficha-situacao input:checked')).map(c => c.value),
+                    situacaoOutros: document.getElementById('ficha-situacao-outros').value,
+                    necessidades: Array.from(document.querySelectorAll('#ficha-necessidades input:checked')).map(c => c.value),
+                    necessidadesOutros: document.getElementById('ficha-necessidades-outros').value,
+                    estadoCivil: document.getElementById('ficha-estado-civil').value,
+                    voluntario: document.getElementById('ficha-voluntario').value,
+                    relato: document.getElementById('ficha-relato').value,
+                    obs: document.getElementById('ficha-obs').value,
+                    cesta: document.querySelector('input[name="ficha-cesta"]:checked')?.value || "Não informado"
+                };
                 try {
-                    await updateDoc(doc(db, "familiasAssistidas", familiaSelecionadaId), { evolucaoSocial: ui.textoProntuario.value });
-                    await addDoc(collection(db, "log_auditoria"), { timestamp: serverTimestamp(), autor: { nome: user.displayName || user.email }, acao: "ATUALIZAR_PRONTUARIO", detalhes: `Atualizou prontuário da família: ${familiaSelecionadaId}` });
-                    alert("Prontuário atualizado!");
-                } catch (e) { alert("Erro: " + e.message); }
+                    await addDoc(collection(db, `familiasAssistidas/${familiaSelecionadaId}/atendimentos`), dadosFicha);
+                    await updateDoc(doc(db, "familiasAssistidas", familiaSelecionadaId), { estadoCivil: dadosFicha.estadoCivil });
+                    await addDoc(collection(db, "log_auditoria"), { timestamp: serverTimestamp(), autor: { nome: user.displayName || user.email }, acao: "GRAVAR_FICHA_MENSAL", detalhes: `Ficha mensal arquivada para família: ${familiaSelecionadaId}` });
+                    alert("Ficha arquivada com sucesso!");
+                    carregarHistoricoAtendimentos(familiaSelecionadaId);
+                } catch (e) { alert("Erro ao arquivar: " + e.message); }
             };
 
             window.gerarReciboImpressao = () => {
@@ -442,10 +532,10 @@
                 const dadosXls = [];
                 todasFamilias.forEach(f => {
                     if (f.filhos.length === 0) {
-                        dadosXls.push({ "Responsável": f.responsavel1.nome, "Telefone": f.contato.telefone, "Endereço": f.contato.endereco, "Dependente": "Nenhum", "Evolução Social": f.evolucaoSocial || "" });
+                        dadosXls.push({ "Responsável": f.responsavel1.nome, "Telefone": f.contato.telefone, "Endereço": f.contato.endereco, "Dependente": "Nenhum", "Estado Civil": f.estadoCivil || "" });
                     } else {
                         f.filhos.forEach(filho => {
-                            dadosXls.push({ "Responsável": f.responsavel1.nome, "Telefone": f.contato.telefone, "Endereço": f.contato.endereco, "Dependente": filho.nome, "Idade": calcularIdade(filho.nascimento), "Roupa": filho.tamanho, "Calçado": filho.calcado, "Evolução Social": f.evolucaoSocial || "" });
+                            dadosXls.push({ "Responsável": f.responsavel1.nome, "Telefone": f.contato.telefone, "Endereço": f.contato.endereco, "Dependente": filho.nome, "Idade": calcularIdade(filho.nascimento), "Roupa": filho.tamanho, "Calçado": filho.calcado, "Estado Civil": f.estadoCivil || "" });
                         });
                     }
                 });
