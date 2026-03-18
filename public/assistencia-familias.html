@@ -359,30 +359,37 @@
             }
 
             window.abrirDetalhes = async (id) => {
-                familiaSelecionadaId = id;
-                const familia = todasFamilias.find(f => f.id === id);
-                if (!familia) return;
+    familiaSelecionadaId = id;
+    const familia = todasFamilias.find(f => f.id === id);
+    if (!familia) return;
 
-                document.getElementById('det-resp1').textContent = familia.responsavel1.nome;
-                document.getElementById('det-resp2').textContent = familia.responsavel2?.nome ? familia.responsavel2.nome : "Não informado";
-                document.getElementById('det-tel').textContent = familia.contato.telefone;
-                document.getElementById('det-end').textContent = familia.contato.endereco;
-                
-                renderizarListaFilhosEdicao(familia.filhos);
-                carregarHistoricoAtendimentos(id);
+    document.getElementById('det-resp1').textContent = familia.responsavel1.nome;
+    document.getElementById('det-tel').textContent = familia.contato.telefone;
+    document.getElementById('det-end').textContent = familia.contato.endereco;
+    
+    renderizarListaFilhosEdicao(familia.filhos);
 
-                // Limpar campos da ficha para novo preenchimento
-                document.querySelectorAll('.ficha-container input[type="checkbox"]').forEach(c => c.checked = false);
-                document.querySelectorAll('.ficha-container input[type="radio"]').forEach(r => r.checked = false);
-                document.getElementById('ficha-situacao-outros').value = "";
-                document.getElementById('ficha-necessidades-outros').value = "";
-                document.getElementById('ficha-relato').value = "";
-                document.getElementById('ficha-obs').value = "";
-                document.getElementById('ficha-estado-civil').value = familia.estadoCivil || "";
-                document.getElementById('ficha-voluntario').value = user.displayName || "";
+    // Limpeza dos campos da ficha para nova avaliação
+    document.querySelectorAll('.ficha-container input[type="checkbox"]').forEach(c => c.checked = false);
+    document.querySelectorAll('.ficha-container input[type="radio"]').forEach(r => r.checked = false);
+    document.getElementById('ficha-situacao-outros').value = "";
+    document.getElementById('ficha-necessidades-outros').value = "";
+    document.getElementById('ficha-relato').value = "";
+    document.getElementById('ficha-obs').value = "";
+    document.getElementById('ficha-estado-civil').value = familia.estadoCivil || "";
+    document.getElementById('ficha-voluntario').value = user.displayName || "";
 
-                ui.modalDet.style.display = 'flex';
-            };
+    // Tenta carregar o histórico, mas avisa se houver erro de permissão
+    try {
+        await carregarHistoricoAtendimentos(id);
+    } catch (e) {
+        console.error("Erro de permissão ao ler histórico:", e);
+        document.getElementById('lista-historico').innerHTML = 
+            "<p style='color:red;'>Erro de permissão no Firebase. Verifique as Regras de Segurança.</p>";
+    }
+
+    document.getElementById('modal-detalhes').style.display = 'flex';
+};
 
             async function carregarHistoricoAtendimentos(id) {
                 const histSnap = await getDocs(query(collection(db, `familiasAssistidas/${id}/atendimentos`), orderBy("data", "desc")));
