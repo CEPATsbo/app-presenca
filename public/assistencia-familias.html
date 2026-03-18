@@ -9,14 +9,13 @@
     <script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
     
     <style>
-        /* Estilos Gerais */
+        /* Estilos Gerais preservados */
         body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background-color: #f4f6f9; margin: 0; padding: 20px; display: flex; flex-direction: column; align-items: center; }
         .nav-header { width: 100%; max-width: 1000px; display: flex; justify-content: space-between; margin-bottom: 20px; align-items: center; }
         .btn-voltar { background-color: #6c757d; color: white; padding: 10px 15px; border-radius: 8px; text-decoration: none; font-weight: bold; font-size: 0.9em; }
         .container { background: white; padding: 30px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); width: 100%; max-width: 1000px; box-sizing: border-box; }
         h1 { color: #2c3e50; margin-top: 0; border-bottom: 2px solid #e67e22; padding-bottom: 10px; margin-bottom: 20px; }
         
-        /* Barra de Busca e Botões */
         .search-container { margin-bottom: 25px; display: flex; gap: 10px; flex-wrap: wrap; }
         #search-input { flex-grow: 1; padding: 12px; border: 1px solid #ddd; border-radius: 8px; font-size: 1em; min-width: 250px; }
         .btn-acao { border: none; padding: 12px 20px; border-radius: 8px; cursor: pointer; font-weight: bold; color: white; display: flex; align-items: center; gap: 8px; }
@@ -24,14 +23,12 @@
         .btn-excel { background-color: #27ae60; }
         .btn-recibo { background-color: #3498db; }
 
-        /* Lista de Famílias */
         .familia-card { border: 1px solid #eee; padding: 20px; border-radius: 10px; margin-bottom: 15px; display: flex; justify-content: space-between; align-items: center; border-left: 6px solid #3498db; transition: transform 0.2s; }
         .familia-card:hover { transform: translateY(-2px); box-shadow: 0 4px 10px rgba(0,0,0,0.05); }
         .card-rua { border-left-color: #e67e22; background-color: #fff8f0; }
         .info-responsaveis strong { font-size: 1.1em; color: #2c3e50; }
         .badge-parentesco { background: #e9ecef; padding: 2px 8px; border-radius: 4px; font-size: 0.75em; color: #495057; font-weight: bold; margin-left: 5px; }
 
-        /* Modais */
         .modal { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.6); display: none; justify-content: center; align-items: center; z-index: 1000; }
         .modal-content { background: white; padding: 30px; border-radius: 12px; width: 95%; max-width: 800px; max-height: 90vh; overflow-y: auto; position: relative; }
         .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; }
@@ -42,7 +39,6 @@
         
         .secao-titulo { grid-column: 1 / -1; background: #f8f9fa; padding: 10px; border-radius: 6px; font-weight: bold; color: #e67e22; margin-top: 15px; border-left: 4px solid #e67e22; }
 
-        /* Dependentes */
         .filhos-section { margin-top: 20px; border-top: 2px dashed #eee; padding-top: 20px; }
         .filho-item { display: grid; grid-template-columns: 2fr 1fr 1fr 1fr auto; gap: 10px; margin-bottom: 12px; align-items: end; background: #fcfcfc; padding: 10px; border-radius: 8px; border: 1px solid #f1f1f1; }
         .btn-remove-filho { color: #e74c3c; cursor: pointer; background: none; border: none; font-size: 1.5em; line-height: 1; }
@@ -50,23 +46,23 @@
 
         .situacao-rua-toggle { display: flex; align-items: center; gap: 10px; background: #fff3e0; padding: 15px; border-radius: 8px; margin: 15px 0; border: 1px solid #ffe0b2; }
         
-        /* Detalhes */
         .detalhe-item { margin-bottom: 10px; padding-bottom: 10px; border-bottom: 1px solid #f1f1f1; }
         .detalhe-item label { font-weight: bold; color: #7f8c8d; font-size: 0.8em; text-transform: uppercase; display: block; }
         .detalhe-item span { font-size: 1.1em; color: #2c3e50; }
 
-        /* Estilo do Prontuário */
         .prontuario-container { margin-top: 25px; padding: 20px; background: #fffde7; border-radius: 12px; border: 1px solid #fbc02d; }
         .prontuario-container h4 { margin: 0 0 10px 0; color: #f57f17; display: flex; align-items: center; gap: 8px; }
         .prontuario-textarea { width: 100%; height: 120px; padding: 12px; border-radius: 8px; border: 1px solid #ccc; font-family: inherit; font-size: 1em; resize: vertical; box-sizing: border-box; }
         .btn-salvar-prontuario { margin-top: 12px; background-color: #fbc02d; color: #2c3e50; border: none; padding: 10px 20px; border-radius: 8px; cursor: pointer; font-weight: bold; transition: background 0.2s; }
         .btn-salvar-prontuario:hover { background-color: #f9a825; }
 
-        /* Edição de Medidas e Nomes */
-        .edicao-medidas-grid { display: grid; grid-template-columns: 2fr 1fr 1fr 40px; gap: 10px; background: #fff; padding: 12px; border-radius: 8px; border: 1px solid #ddd; margin-bottom: 12px; align-items: center; }
-        .input-medida { padding: 8px; border: 1px solid #ccc; border-radius: 4px; width: 100%; box-sizing: border-box; }
+        /* Edição de Medidas e Nomes - LAYOUT CORRIGIDO */
+        .edicao-medidas-grid { display: grid; grid-template-columns: 1fr auto auto 40px; gap: 10px; background: #fff; padding: 12px; border-radius: 8px; border: 1px solid #ddd; margin-bottom: 12px; align-items: center; }
+        .input-medida { padding: 10px; border: 1px solid #ccc; border-radius: 6px; width: 100%; box-sizing: border-box; font-size: 0.95em; color: #2c3e50; }
+        .input-nome-filho { border: 2px solid #3498db !important; background: #f0f7ff !important; font-weight: bold !important; min-width: 150px; }
+        .input-data-filho { width: 160px !important; }
         .btn-update-medidas { background: #27ae60; color: white; border: none; padding: 12px 15px; border-radius: 6px; cursor: pointer; font-weight: bold; font-size: 0.85em; margin-top: 10px; width: 100%; }
-        .btn-del-child { color: #e74c3c; background: none; border: none; cursor: pointer; font-size: 1.2em; }
+        .btn-del-child { color: #e74c3c; background: none; border: none; cursor: pointer; font-size: 1.2em; display: flex; align-items: center; justify-content: center; }
     </style>
 </head>
 <body>
@@ -174,7 +170,7 @@
                 <div class="detalhe-item"><label>Contato</label><span id="det-tel"></span></div>
                 <div class="detalhe-item"><label>Endereço</label><span id="det-end"></span></div>
                 
-                <h4 style="margin: 20px 0 10px 0; color: #555;"><i class="fas fa-child"></i> Dependentes (Edite Nomes e Medidas)</h4>
+                <h4 style="margin: 20px 0 10px 0; color: #555;"><i class="fas fa-child"></i> Dependentes (Ajuste Medidas e Nomes aqui)</h4>
                 <div id="det-lista-filhos" style="background: #f9f9f9; padding: 15px; border-radius: 8px;"></div>
                 
                 <button type="button" id="btn-novo-filho-detalhe" class="btn-acao" style="background:#3498db; width:100%; justify-content:center; margin-top:10px;">
@@ -326,16 +322,14 @@
                 container.innerHTML = filhos.length > 0 ? 
                     filhos.map((filho, idx) => `
                         <div class="edicao-medidas-grid" data-idx="${idx}">
-                            <div style="grid-column: 1 / 4; margin-bottom: 8px; display:flex; align-items:center; gap:10px;">
-                                <input type="text" class="input-medida edit-nome" value="${filho.nome}" placeholder="Nome do Filho" style="font-weight:bold; flex:1">
-                                <input type="date" class="input-medida edit-nasc" value="${filho.nascimento}">
-                                <small style="white-space:nowrap; color:#7f8c8d">${calcularIdade(filho.nascimento)} anos</small>
+                            <input type="text" class="input-medida input-nome-filho edit-nome" value="${filho.nome}" placeholder="Nome do Filho">
+                            <input type="date" class="input-medida input-data-filho edit-nasc" value="${filho.nascimento}">
+                            <div style="display:flex; flex-direction:column; gap:5px;">
+                                <input type="text" class="input-medida edit-roupa" value="${filho.tamanho || ''}" placeholder="Roupa">
+                                <input type="text" class="input-medida edit-calcado" value="${filho.calcado || ''}" placeholder="Calçado">
+                                <small style="color:#7f8c8d; font-size:0.8em; text-align:center;">${calcularIdade(filho.nascimento)} anos</small>
                             </div>
-                            <input type="text" class="input-medida edit-roupa" value="${filho.tamanho || ''}" placeholder="Roupa">
-                            <input type="text" class="input-medida edit-calcado" value="${filho.calcado || ''}" placeholder="Calçado">
-                            <div style="display:flex; justify-content:center;">
-                                <button type="button" class="btn-del-child" onclick="removerDependenteLocal(this)"><i class="fas fa-trash-alt"></i></button>
-                            </div>
+                            <button type="button" class="btn-del-child" onclick="removerDependenteLocal(this)"><i class="fas fa-trash-alt"></i></button>
                         </div>
                     `).join('') : "Sem dependentes cadastrados.";
             }
@@ -352,15 +346,13 @@
                 const div = document.createElement('div');
                 div.className = "edicao-medidas-grid new-child-row";
                 div.innerHTML = `
-                    <div style="grid-column: 1 / 4; margin-bottom: 8px; display:flex; align-items:center; gap:10px;">
-                        <input type="text" class="input-medida edit-nome" placeholder="Nome Completo" style="font-weight:bold; flex:1">
-                        <input type="date" class="input-medida edit-nasc">
+                    <input type="text" class="input-medida input-nome-filho edit-nome" placeholder="Nome do Novo Dependente">
+                    <input type="date" class="input-medida input-data-filho edit-nasc">
+                    <div style="display:flex; flex-direction:column; gap:5px;">
+                        <input type="text" class="input-medida edit-roupa" placeholder="Roupa">
+                        <input type="text" class="input-medida edit-calcado" placeholder="Calçado">
                     </div>
-                    <input type="text" class="input-medida edit-roupa" placeholder="Roupa">
-                    <input type="text" class="input-medida edit-calcado" placeholder="Calçado">
-                    <div style="display:flex; justify-content:center;">
-                        <button type="button" class="btn-del-child" onclick="this.closest('.edicao-medidas-grid').remove()"><i class="fas fa-times"></i></button>
-                    </div>
+                    <button type="button" class="btn-del-child" onclick="this.closest('.edicao-medidas-grid').remove()"><i class="fas fa-times"></i></button>
                 `;
                 if(container.innerText.includes("Sem dependentes")) container.innerHTML = '';
                 container.appendChild(div);
@@ -391,9 +383,9 @@
                         timestamp: serverTimestamp(),
                         autor: { nome: user.displayName || user.email },
                         acao: "ATUALIZAR_DEPENDENTES",
-                        detalhes: `Atualizou dependentes e medidas da família: ${familiaSelecionadaId}`
+                        detalhes: `Atualizou dependentes da família: ${familiaSelecionadaId}`
                     });
-                    alert("Dados da família atualizados com sucesso!");
+                    alert("Dados salvos com sucesso!");
                     abrirDetalhes(familiaSelecionadaId);
                 } catch (e) { alert("Erro: " + e.message); }
             };
