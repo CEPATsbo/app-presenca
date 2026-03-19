@@ -69,7 +69,7 @@
                     <canvas id="grafico-idades-social"></canvas>
                 </div>
                 <div>
-                    <h3 style="text-align: center;">Evolução de Entrega de Cestas</h3>
+                    <h3 style="text-align: center;">Evolução de Entrega de Cestas (2026)</h3>
                     <canvas id="grafico-cestas-social"></canvas>
                 </div>
             </div>
@@ -165,7 +165,6 @@
                 return [];
             }
 
-            // --- LÓGICA DE INTERATIVIDADE PRESERVADA (SEM RETROCESSO) ---
             function destacarBarras(atividade, corDestaque) {
                 if (!graficoFrequencia) return;
                 const novasCores = voluntariosOrdenadosGlobal.map(([nome]) => {
@@ -199,7 +198,6 @@
                 destacarBarras(ativ, todasAsAtividades.get(ativ) || COR_PADRAO_ATIVIDADE);
             };
 
-            // --- RENDERIZAÇÃO DOS GRÁFICOS ---
             function renderizarGraficosPresenca(dados) {
                 if (graficoFrequencia) graficoFrequencia.destroy();
                 if (graficoAtividades) graficoAtividades.destroy();
@@ -252,7 +250,7 @@
                     aplicarFiltrosPresenca();
                     carregarGraficoFinanceiro();
                     carregarGraficoVibracoes();
-                    carregarDadosCaritas(); // FUNÇÃO CORRIGIDA ABAIXO
+                    carregarDadosCaritas(); 
                 } catch (e) { console.error(e); }
             }
 
@@ -271,7 +269,6 @@
                 }
             }
 
-            // --- FINANCEIRO E VIBRAÇÕES PRESERVADOS ---
             async function carregarGraficoFinanceiro() {
                 const snap = await getDocs(query(collection(db, "balancetes"), where("status", "==", "aprovado"), orderBy(documentId())));
                 if (snap.empty) return;
@@ -301,7 +298,6 @@
                 new Chart(document.getElementById('grafico-vibracoes'), { type: 'bar', data: { labels, datasets: [{ label: 'Encarnados', data: labels.map(l => sem[l].e), backgroundColor: 'teal' }, { label: 'Desencarnados', data: labels.map(l => sem[l].d), backgroundColor: 'blue' }] } });
             }
 
-            // --- CORREÇÃO CÁRITAS: DATA E FILTRO 2025 ---
             async function carregarDadosCaritas() {
                 try {
                     const [famSnap, cestaSnap] = await Promise.all([
@@ -332,16 +328,22 @@
 
                     new Chart(document.getElementById('grafico-idades-social'), { type: 'pie', data: { labels: Object.keys(faixas), datasets: [{ data: Object.values(faixas), backgroundColor: ['#e67e22', '#3498db', '#27ae60', '#9b59b6'] }] } });
 
+                    const anoAtual = new Date().getFullYear();
                     const contagemMensal = new Array(12).fill(0);
                     cestaSnap.forEach(doc => {
-                        // CORREÇÃO: Usando 'data' e convertendo Timestamp
-                        const d = doc.data().data?.toDate(); 
-                        if (d && d.getFullYear() === 2025) contagemMensal[d.getMonth()]++;
+                        // CORREÇÃO: Usando 'data' conforme banco e validando ano atual (2026)
+                        const timestamp = doc.data().data; 
+                        if (timestamp) {
+                            const d = timestamp.toDate();
+                            if (d.getFullYear() === anoAtual) {
+                                contagemMensal[d.getMonth()]++;
+                            }
+                        }
                     });
 
                     new Chart(document.getElementById('grafico-cestas-social'), {
                         type: 'bar',
-                        data: { labels: ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'], datasets: [{ label: 'Cestas', data: contagemMensal, backgroundColor: '#e67e22' }] },
+                        data: { labels: ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'], datasets: [{ label: 'Cestas Entregues em ' + anoAtual, data: contagemMensal, backgroundColor: '#e67e22' }] },
                         options: { scales: { y: { beginAtZero: true, ticks: { stepSize: 1 } } } }
                     });
                 } catch (e) { console.error(e); }
