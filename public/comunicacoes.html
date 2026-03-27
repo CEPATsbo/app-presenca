@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Comunicações Mediúnicas - CePaT</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <style>
+        body { font-family: sans-serif; background-color: #f4f6f9; padding: 20px; margin: 0; display: flex; flex-direction: column; align-items: center; }
+        .header { width: 100%; max-width: 800px; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #ccc; padding-bottom: 15px; margin-bottom: 30px; }
+        .btn-voltar { background-color: #7f8c8d; color: white; padding: 10px 15px; border-radius: 8px; text-decoration: none; font-weight: bold; font-size: 14px; }
+        .container { width: 100%; max-width: 800px; }
+        .upload-section { background: white; padding: 20px; border-radius: 12px; box-shadow: 0 4px 10px rgba(0,0,0,0.1); border-left: 5px solid #8e44ad; margin-bottom: 20px; }
+        .btn-enviar { background-color: #8e44ad; color: white; border: none; padding: 12px 20px; border-radius: 8px; cursor: pointer; font-weight: bold; width: 100%; margin-top: 10px; }
+        .item-transcricao { background: white; padding: 15px; border-radius: 8px; margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center; border: 1px solid #ddd; }
+        .actions i { font-size: 20px; margin-left: 15px; cursor: pointer; }
+        #progress-container { background: #eee; height: 10px; border-radius: 5px; margin-top: 10px; display: none; overflow: hidden; }
+        #progress-bar { background: #8e44ad; width: 0%; height: 100%; transition: width 0.2s; }
+    </style>
+</head>
+<body>
+
+    <div class="header">
+        <div>
+            <h1 style="margin:0; font-size: 22px;">Comunicações Mediúnicas</h1>
+            <p style="margin:5px 0 0; color: #666;">CePaT - Transcrição de Áudio</p>
+        </div>
+        <a href="/dashboard-gestao.html" class="btn-voltar">Voltar</a>
+    </div>
+
+    <div class="container">
+        <div class="upload-section">
+            <label style="font-weight:bold; display:block; margin-bottom:10px;">Selecionar Áudio:</label>
+            <input type="file" id="audio-input" accept="audio/*" style="width:100%;">
+            <div id="progress-container"><div id="progress-bar"></div></div>
+            <button id="btn-upload" class="btn-enviar">Subir para Transcrição</button>
+        </div>
+
+        <div id="lista">
+            <p style="text-align:center; color:#999;">Carregando registros...</p>
+        </div>
+    </div>
+
+    <script type="module">
+        // Importações diretas do CDN para evitar conflitos no Vercel
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
+        import { getFirestore, collection, addDoc, query, orderBy, onSnapshot, serverTimestamp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
+        import { getStorage, ref, uploadBytesResumable, getDownloadURL } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-storage.js";
+
+        const firebaseConfig = {
+            apiKey: "AIzaSyBV7RPjk3cFTqL-aIpflJcUojKg1ZXMLuU",
+            authDomain: "voluntarios-ativos---cepat.firebaseapp.com",
+            projectId: "voluntarios-ativos---cepat",
+            storageBucket: "voluntarios-ativos---cepat.firebasestorage.app",
+            appId: "1:66122858261:web:7fa21f1805463b5c08331c"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const db = getFirestore(app);
+        const storage = getStorage(app);
+
+        const btnUpload = document.getElementById('btn-upload');
+        const audioInput = document.getElementById('audio-input');
+
+        // Lógica de Upload
+        btnUpload.onclick = async () => {
+            const file = audioInput.files[0];
+            if (!file) return alert("Selecione um arquivo!");
+
+            btnUpload.disabled = true;
+            btnUpload.innerText = "Enviando...";
+            const progCont = document.getElementById('progress-container');
+            const progBar = document.getElementById('progress-bar');
+            progCont.style.display = 'block';
+
+            const storageRef = ref(storage, `audios_mediunicos/${Date.now()}_${file.name}`);
+            const uploadTask = uploadBytesResumable(storageRef, file);
+
+            uploadTask.on('state_changed', 
+                (snap) => { progBar.style.width = (snap.bytesTransferred / snap.totalBytes) * 100 + '%'; },
+                (err) => { alert("Erro no upload!"); btnUpload.disabled = false; },
+                async () => {
+                    const url = await getDownloadURL(uploadTask.snapshot.ref);
+                    await addDoc(collection(db, "comunicacoes_mediunicas"), {
+                        nomeArquivo: file.name,
+                        urlAudio: url,
+                        status: 'processando',
+                        dataCriacao: serverTimestamp(),
+                        transcricao: ""
+                    });
+                    btnUpload.disabled = false;
+                    btnUpload.innerText = "Subir para Transcrição";
+                    audioInput.value = "";
+                    progCont.style.display = 'none';
+                }
+            );
+        };
+
+        // Listagem
+        onSnapshot(query(collection(db, "comunicacoes_mediunicas"), orderBy("dataCriacao", "desc")), (snap) => {
+            const listaDiv = document.getElementById('lista');
+            listaDiv.innerHTML = "";
+            if(snap.empty) listaDiv.innerHTML = "<p style='text-align:center;'>Nenhum registro encontrado.</p>";
+            
+            snap.forEach(doc => {
+                const d = doc.data();
+                const div = document.createElement('div');
+                div.className = 'item-transcricao';
+                div.innerHTML = `
+                    <div>
+                        <strong style="color:#333;">${d.nomeArquivo}</strong><br>
+                        <small style="color:${d.status === 'concluido' ? 'green' : 'orange'}; font-weight:bold;">
+                            ${d.status.toUpperCase()}
+                        </small>
+                    </div>
+                    <div class="actions">
+                        ${d.status === 'concluido' ? `
+                            <i class="fab fa-whatsapp" style="color:#25d366;" onclick="window.zap('${d.transcricao.replace(/'/g, "")}')"></i>
+                            <i class="fas fa-file-pdf" style="color:#e74c3c;" onclick="window.pdf('${d.nomeArquivo}', '${d.transcricao.replace(/'/g, "")}')"></i>
+                        ` : '<i class="fas fa-spinner fa-spin" style="color:#999;"></i>'}
+                    </div>
+                `;
+                listaDiv.appendChild(div);
+            });
+        });
+
+        // Funções de Botão
+        window.zap = (t) => {
+            window.open(`https://api.whatsapp.com/send?text=${encodeURIComponent("*CePaT - Transcrição*\n\n" + t)}`, '_blank');
+        };
+
+        window.pdf = (n, t) => {
+            const { jsPDF } = window.jspdf;
+            const doc = new jsPDF();
+            doc.setTextColor(86, 173, 89);
+            doc.text("Casa Espírita Paulo de Tarso", 105, 20, { align: "center" });
+            doc.setTextColor(0);
+            doc.setFontSize(10);
+            doc.text("Transcrição Mediúnica", 105, 28, { align: "center" });
+            doc.line(20, 32, 190, 32);
+            doc.setFontSize(12);
+            doc.text(doc.splitTextToSize(t, 170), 20, 45);
+            doc.save(`CePaT_${n}.pdf`);
+        };
+    </script>
+</body>
+</html>
