@@ -12,8 +12,12 @@
         .btn-voltar { background-color: #7f8c8d; color: white; padding: 10px 18px; border-radius: 8px; text-decoration: none; font-weight: bold; }
         .container { width: 100%; max-width: 1000px; display: none; }
         .upload-section { background: white; padding: 25px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.08); border-left: 5px solid #8e44ad; margin-bottom: 30px; }
-        .btn-enviar { background-color: #8e44ad; color: white; border: none; padding: 12px 25px; border-radius: 8px; cursor: pointer; font-weight: bold; width: 100%; margin-top: 15px; }
+        .input-group { margin-bottom: 15px; }
+        .input-group label { display: block; margin-bottom: 5px; font-weight: bold; color: #333; }
+        .input-group input, .input-group select { width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 6px; box-sizing: border-box; }
+        .btn-enviar { background-color: #8e44ad; color: white; border: none; padding: 12px 25px; border-radius: 8px; cursor: pointer; font-weight: bold; width: 100%; margin-top: 10px; }
         .item-transcricao { background: white; padding: 20px; border-radius: 12px; box-shadow: 0 2px 10px rgba(0,0,0,0.05); display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; }
+        .info-msg { font-size: 0.9em; color: #666; }
         .actions i { font-size: 22px; margin-left: 15px; cursor: pointer; transition: 0.2s; }
         .actions i:hover { transform: scale(1.2); }
         #progress-bar-container { background: #eee; height: 8px; border-radius: 4px; margin-top: 15px; display: none; overflow: hidden; }
@@ -32,10 +36,31 @@
 
     <div id="main-container" class="container">
         <div class="upload-section">
-            <h3 style="margin-top:0;">Novo Upload de Áudio</h3>
-            <input type="file" id="audio-input" accept="audio/*">
+            <h3 style="margin-top:0;">Novo Registro de Comunicação</h3>
+            
+            <div class="input-group">
+                <label>Nome do Médium:</label>
+                <input type="text" id="medium-name" placeholder="Ex: Carlos Reis">
+            </div>
+
+            <div class="input-group">
+                <label>Circunstância / Trabalho:</label>
+                <select id="trabalho-tipo">
+                    <option value="Vibrações">Trabalho de Vibrações</option>
+                    <option value="Reunião de Desobsessão">Reunião de Desobsessão</option>
+                    <option value="Reunião Pública">Reunião Pública</option>
+                    <option value="Desenvolvimento Mediúnico">Desenvolvimento Mediúnico</option>
+                    <option value="Outros">Outros</option>
+                </select>
+            </div>
+
+            <div class="input-group">
+                <label>Arquivo de Áudio:</label>
+                <input type="file" id="audio-input" accept="audio/*">
+            </div>
+
             <div id="progress-bar-container"><div id="progress-bar"></div></div>
-            <button id="btn-upload" class="btn-enviar">Enviar para Transcrição</button>
+            <button id="btn-upload" class="btn-enviar">Fazer Upload e Transcrever</button>
         </div>
 
         <div id="lista-atividades"></div>
@@ -60,8 +85,7 @@
         const db = getFirestore(app);
         const storage = getStorage(app);
 
-        // Armazenamento temporário para as transcrições (evita erro de sintaxe no HTML)
-        const transcricoesCache = {};
+        const cacheDados = {};
 
         onAuthStateChanged(auth, (user) => {
             if (user) {
@@ -83,22 +107,20 @@
                 snap.forEach(doc => {
                     const d = doc.data();
                     const id = doc.id;
-                    // Salva a transcrição no cache usando o ID do documento
-                    transcricoesCache[id] = d.transcricao || "";
+                    cacheDados[id] = d;
 
                     const item = document.createElement('div');
                     item.className = 'item-transcricao';
                     item.innerHTML = `
                         <div>
-                            <strong>${d.nomeArquivo}</strong><br>
-                            <small style="color:${d.status === 'concluido' ? '#27ae60' : '#e67e22'}">
-                                ${d.status.toUpperCase()}
-                            </small>
+                            <strong>${d.medium || 'N/A'} - ${d.trabalho || 'Geral'}</strong><br>
+                            <small class="info-msg">${new Date(d.dataCriacao?.seconds * 1000).toLocaleDateString()}</small> | 
+                            <small style="color:${d.status === 'concluido' ? '#27ae60' : '#e67e22'}">${d.status.toUpperCase()}</small>
                         </div>
                         <div class="actions">
                             ${d.status === 'concluido' ? `
-                                <i class="fab fa-whatsapp" style="color:#25d366;" onclick="dispararZap('${id}')"></i>
-                                <i class="fas fa-file-pdf" style="color:#e74c3c;" onclick="gerarPdf('${d.nomeArquivo}', '${id}')"></i>
+                                <i class="fab fa-whatsapp" style="color:#25d366;" title="Enviar Texto" onclick="dispararZap('${id}')"></i>
+                                <i class="fas fa-file-pdf" style="color:#e74c3c;" title="Gerar PDF" onclick="gerarPdf('${id}')"></i>
                             ` : '<i class="fas fa-spinner fa-spin" style="color:#999;"></i>'}
                         </div>
                     `;
@@ -108,7 +130,10 @@
 
             btnUpload.onclick = async () => {
                 const file = audioInput.files[0];
-                if (!file) return alert("Selecione um áudio!");
+                const medium = document.getElementById('medium-name').value;
+                const trabalho = document.getElementById('trabalho-tipo').value;
+
+                if (!file || !medium) return alert("Preencha o nome do médium e selecione o áudio!");
 
                 btnUpload.disabled = true;
                 const progBar = document.getElementById('progress-bar');
@@ -119,10 +144,12 @@
 
                 uploadTask.on('state_changed', 
                     (s) => progBar.style.width = (s.bytesTransferred / s.totalBytes) * 100 + '%',
-                    (e) => { alert("Erro!"); btnUpload.disabled = false; },
+                    (e) => { alert("Erro no upload!"); btnUpload.disabled = false; },
                     async () => {
                         const url = await getDownloadURL(uploadTask.snapshot.ref);
                         await addDoc(collection(db, "comunicacoes_mediunicas"), {
+                            medium: medium,
+                            trabalho: trabalho,
                             nomeArquivo: file.name,
                             urlAudio: url,
                             status: 'processando',
@@ -131,45 +158,55 @@
                         });
                         btnUpload.disabled = false;
                         audioInput.value = "";
+                        document.getElementById('medium-name').value = "";
                         document.getElementById('progress-bar-container').style.display = 'none';
                     }
                 );
             };
         }
 
-        // Funções anexadas à window de forma segura
         window.dispararZap = (id) => {
-            const t = transcricoesCache[id];
-            if(!t) return alert("Transcrição ainda não disponível.");
-            const msg = encodeURIComponent("*CePaT - Comunicação Mediúnica*\n\n" + t);
+            const d = cacheDados[id];
+            const dataStr = new Date(d.dataCriacao?.seconds * 1000).toLocaleDateString();
+            const cabecalho = `*CePaT - Comunicação Mediúnica*\n\n*Médium:* ${d.medium}\n*Trabalho:* ${d.trabalho}\n*Data:* ${dataStr}\n\n*Transcrição:*\n`;
+            const msg = encodeURIComponent(cabecalho + d.transcricao);
             window.open(`https://api.whatsapp.com/send?text=${msg}`, '_blank');
         };
 
-        window.gerarPdf = (nome, id) => {
-            const t = transcricoesCache[id];
-            if(!t) return alert("Transcrição ainda não disponível.");
-            
+        window.gerarPdf = (id) => {
+            const d = cacheDados[id];
             const { jsPDF } = window.jspdf;
             const doc = new jsPDF();
+            const dataStr = new Date(d.dataCriacao?.seconds * 1000).toLocaleDateString();
             
-            // Cabeçalho
-            doc.setTextColor(142, 68, 173); // Roxo do CePaT
+            // Layout CePaT
+            doc.setFillColor(142, 68, 173);
+            doc.rect(0, 0, 210, 15, 'F'); // Faixa roxa no topo
+            
+            doc.setTextColor(142, 68, 173);
             doc.setFont("helvetica", "bold");
-            doc.text("Casa Espírita Paulo de Tarso", 105, 20, { align: "center" });
+            doc.setFontSize(16);
+            doc.text("Casa Espírita Paulo de Tarso", 105, 25, { align: "center" });
             
-            doc.setTextColor(100);
             doc.setFontSize(10);
-            doc.setFont("helvetica", "normal");
-            doc.text("Transcrição Automática de Comunicação Mediúnica", 105, 28, { align: "center" });
-            doc.line(20, 32, 190, 32);
-            
-            // Corpo do texto (com quebra automática de página)
+            doc.setTextColor(100);
+            doc.text("Departamento de Mediunidade", 105, 32, { align: "center" });
+            doc.line(20, 35, 190, 35);
+
+            // Infos do Registro
+            doc.setFontSize(11);
             doc.setTextColor(0);
-            doc.setFontSize(12);
-            const textoDividido = doc.splitTextToSize(t, 170);
-            doc.text(textoDividido, 20, 45);
+            doc.text(`Médium: ${d.medium}`, 20, 45);
+            doc.text(`Trabalho: ${d.trabalho}`, 20, 52);
+            doc.text(`Data: ${dataStr}`, 20, 59);
+            doc.line(20, 65, 190, 65);
+
+            // Texto Transcrito
+            doc.setFont("helvetica", "normal");
+            const textoDividido = doc.splitTextToSize(d.transcricao, 170);
+            doc.text(textoDividido, 20, 75);
             
-            doc.save(`Comunicacao_${nome.split('.')[0]}.pdf`);
+            doc.save(`CePaT_${d.medium.replace(/\s/g, '_')}_${dataStr.replace(/\//g, '-')}.pdf`);
         };
     </script>
 </body>
