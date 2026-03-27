@@ -10,7 +10,7 @@
         body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif; background-color: #f4f6f9; padding: 20px; display: flex; flex-direction: column; align-items: center; }
         .header { width: 100%; max-width: 1000px; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #e0e0e0; padding-bottom: 15px; margin-bottom: 30px; }
         .btn-voltar { background-color: #7f8c8d; color: white; padding: 10px 18px; border-radius: 8px; text-decoration: none; font-weight: bold; }
-        .container { width: 100%; max-width: 1000px; display: none; } /* Escondido até logar */
+        .container { width: 100%; max-width: 1000px; display: none; }
         .upload-section { background: white; padding: 25px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.08); border-left: 5px solid #8e44ad; margin-bottom: 30px; }
         .btn-enviar { background-color: #8e44ad; color: white; border: none; padding: 12px 25px; border-radius: 8px; cursor: pointer; font-weight: bold; width: 100%; margin-top: 15px; }
         .item-transcricao { background: white; padding: 20px; border-radius: 12px; box-shadow: 0 2px 10px rgba(0,0,0,0.05); display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; }
@@ -38,8 +38,7 @@
             <button id="btn-upload" class="btn-enviar">Enviar para Transcrição</button>
         </div>
 
-        <div id="lista-atividades">
-            </div>
+        <div id="lista-atividades"></div>
     </div>
 
     <script type="module">
@@ -61,7 +60,9 @@
         const db = getFirestore(app);
         const storage = getStorage(app);
 
-        // VERIFICA SE O USUÁRIO ESTÁ LOGADO ANTES DE TUDO
+        // Armazenamento temporário para as transcrições (evita erro de sintaxe no HTML)
+        const transcricoesCache = {};
+
         onAuthStateChanged(auth, (user) => {
             if (user) {
                 document.getElementById('loading-msg').textContent = "Conectado como: " + user.email;
@@ -76,12 +77,15 @@
             const btnUpload = document.getElementById('btn-upload');
             const audioInput = document.getElementById('audio-input');
 
-            // 1. ESCUTAR BANCO DE DADOS
             onSnapshot(query(collection(db, "comunicacoes_mediunicas"), orderBy("dataCriacao", "desc")), (snap) => {
                 const lista = document.getElementById('lista-atividades');
                 lista.innerHTML = "";
                 snap.forEach(doc => {
                     const d = doc.data();
+                    const id = doc.id;
+                    // Salva a transcrição no cache usando o ID do documento
+                    transcricoesCache[id] = d.transcricao || "";
+
                     const item = document.createElement('div');
                     item.className = 'item-transcricao';
                     item.innerHTML = `
@@ -93,8 +97,8 @@
                         </div>
                         <div class="actions">
                             ${d.status === 'concluido' ? `
-                                <i class="fab fa-whatsapp" style="color:#25d366;" onclick="window.zap('${d.transcricao.replace(/'/g, "")}')"></i>
-                                <i class="fas fa-file-pdf" style="color:#e74c3c;" onclick="window.pdf('${d.nomeArquivo}', '${d.transcricao.replace(/'/g, "")}')"></i>
+                                <i class="fab fa-whatsapp" style="color:#25d366;" onclick="dispararZap('${id}')"></i>
+                                <i class="fas fa-file-pdf" style="color:#e74c3c;" onclick="gerarPdf('${d.nomeArquivo}', '${id}')"></i>
                             ` : '<i class="fas fa-spinner fa-spin" style="color:#999;"></i>'}
                         </div>
                     `;
@@ -102,7 +106,6 @@
                 });
             });
 
-            // 2. LOGICA DE UPLOAD
             btnUpload.onclick = async () => {
                 const file = audioInput.files[0];
                 if (!file) return alert("Selecione um áudio!");
@@ -134,24 +137,39 @@
             };
         }
 
-        // FUNÇÕES GLOBAIS
-        window.zap = (t) => {
+        // Funções anexadas à window de forma segura
+        window.dispararZap = (id) => {
+            const t = transcricoesCache[id];
+            if(!t) return alert("Transcrição ainda não disponível.");
             const msg = encodeURIComponent("*CePaT - Comunicação Mediúnica*\n\n" + t);
             window.open(`https://api.whatsapp.com/send?text=${msg}`, '_blank');
         };
 
-        window.pdf = (n, t) => {
+        window.gerarPdf = (nome, id) => {
+            const t = transcricoesCache[id];
+            if(!t) return alert("Transcrição ainda não disponível.");
+            
             const { jsPDF } = window.jspdf;
             const doc = new jsPDF();
-            doc.setTextColor(86, 173, 89);
+            
+            // Cabeçalho
+            doc.setTextColor(142, 68, 173); // Roxo do CePaT
+            doc.setFont("helvetica", "bold");
             doc.text("Casa Espírita Paulo de Tarso", 105, 20, { align: "center" });
-            doc.setTextColor(0);
+            
+            doc.setTextColor(100);
             doc.setFontSize(10);
-            doc.text("Transcrição Automática de Áudio", 105, 28, { align: "center" });
+            doc.setFont("helvetica", "normal");
+            doc.text("Transcrição Automática de Comunicação Mediúnica", 105, 28, { align: "center" });
             doc.line(20, 32, 190, 32);
+            
+            // Corpo do texto (com quebra automática de página)
+            doc.setTextColor(0);
             doc.setFontSize(12);
-            doc.text(doc.splitTextToSize(t, 170), 20, 50);
-            doc.save(`Comunicacao_${n}.pdf`);
+            const textoDividido = doc.splitTextToSize(t, 170);
+            doc.text(textoDividido, 20, 45);
+            
+            doc.save(`Comunicacao_${nome.split('.')[0]}.pdf`);
         };
     </script>
 </body>
