@@ -7,44 +7,44 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <style>
-        body { font-family: sans-serif; background-color: #f4f6f9; padding: 20px; margin: 0; display: flex; flex-direction: column; align-items: center; }
-        .header { width: 100%; max-width: 800px; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #ccc; padding-bottom: 15px; margin-bottom: 30px; }
-        .btn-voltar { background-color: #7f8c8d; color: white; padding: 10px 15px; border-radius: 8px; text-decoration: none; font-weight: bold; font-size: 14px; }
-        .container { width: 100%; max-width: 800px; }
-        .upload-section { background: white; padding: 20px; border-radius: 12px; box-shadow: 0 4px 10px rgba(0,0,0,0.1); border-left: 5px solid #8e44ad; margin-bottom: 20px; }
-        .btn-enviar { background-color: #8e44ad; color: white; border: none; padding: 12px 20px; border-radius: 8px; cursor: pointer; font-weight: bold; width: 100%; margin-top: 10px; }
-        .item-transcricao { background: white; padding: 15px; border-radius: 8px; margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center; border: 1px solid #ddd; }
-        .actions i { font-size: 20px; margin-left: 15px; cursor: pointer; }
-        #progress-container { background: #eee; height: 10px; border-radius: 5px; margin-top: 10px; display: none; overflow: hidden; }
-        #progress-bar { background: #8e44ad; width: 0%; height: 100%; transition: width 0.2s; }
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif; background-color: #f4f6f9; padding: 20px; display: flex; flex-direction: column; align-items: center; }
+        .header { width: 100%; max-width: 1000px; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #e0e0e0; padding-bottom: 15px; margin-bottom: 30px; }
+        .btn-voltar { background-color: #7f8c8d; color: white; padding: 10px 18px; border-radius: 8px; text-decoration: none; font-weight: bold; }
+        .container { width: 100%; max-width: 1000px; display: none; } /* Escondido até logar */
+        .upload-section { background: white; padding: 25px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.08); border-left: 5px solid #8e44ad; margin-bottom: 30px; }
+        .btn-enviar { background-color: #8e44ad; color: white; border: none; padding: 12px 25px; border-radius: 8px; cursor: pointer; font-weight: bold; width: 100%; margin-top: 15px; }
+        .item-transcricao { background: white; padding: 20px; border-radius: 12px; box-shadow: 0 2px 10px rgba(0,0,0,0.05); display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; }
+        .actions i { font-size: 22px; margin-left: 15px; cursor: pointer; transition: 0.2s; }
+        .actions i:hover { transform: scale(1.2); }
+        #progress-bar-container { background: #eee; height: 8px; border-radius: 4px; margin-top: 15px; display: none; overflow: hidden; }
+        #progress-bar { background: #8e44ad; width: 0%; height: 100%; transition: width 0.3s; }
     </style>
 </head>
 <body>
 
     <div class="header">
-        <div>
-            <h1 style="margin:0; font-size: 22px;">Comunicações Mediúnicas</h1>
-            <p style="margin:5px 0 0; color: #666;">CePaT - Transcrição de Áudio</p>
+        <div id="user-info">
+            <h1>Comunicações Mediúnicas</h1>
+            <p id="loading-msg">Verificando acesso...</p>
         </div>
-        <a href="/dashboard-gestao.html" class="btn-voltar">Voltar</a>
+        <a href="/dashboard-gestao.html" class="btn-voltar">Sair / Voltar</a>
     </div>
 
-    <div class="container">
+    <div id="main-container" class="container">
         <div class="upload-section">
-            <label style="font-weight:bold; display:block; margin-bottom:10px;">Selecionar Áudio:</label>
-            <input type="file" id="audio-input" accept="audio/*" style="width:100%;">
-            <div id="progress-container"><div id="progress-bar"></div></div>
-            <button id="btn-upload" class="btn-enviar">Subir para Transcrição</button>
+            <h3 style="margin-top:0;">Novo Upload de Áudio</h3>
+            <input type="file" id="audio-input" accept="audio/*">
+            <div id="progress-bar-container"><div id="progress-bar"></div></div>
+            <button id="btn-upload" class="btn-enviar">Enviar para Transcrição</button>
         </div>
 
-        <div id="lista">
-            <p style="text-align:center; color:#999;">Carregando registros...</p>
-        </div>
+        <div id="lista-atividades">
+            </div>
     </div>
 
     <script type="module">
-        // Importações diretas do CDN para evitar conflitos no Vercel
         import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
+        import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-auth.js";
         import { getFirestore, collection, addDoc, query, orderBy, onSnapshot, serverTimestamp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
         import { getStorage, ref, uploadBytesResumable, getDownloadURL } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-storage.js";
 
@@ -57,77 +57,87 @@
         };
 
         const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
         const db = getFirestore(app);
         const storage = getStorage(app);
 
-        const btnUpload = document.getElementById('btn-upload');
-        const audioInput = document.getElementById('audio-input');
-
-        // Lógica de Upload
-        btnUpload.onclick = async () => {
-            const file = audioInput.files[0];
-            if (!file) return alert("Selecione um arquivo!");
-
-            btnUpload.disabled = true;
-            btnUpload.innerText = "Enviando...";
-            const progCont = document.getElementById('progress-container');
-            const progBar = document.getElementById('progress-bar');
-            progCont.style.display = 'block';
-
-            const storageRef = ref(storage, `audios_mediunicos/${Date.now()}_${file.name}`);
-            const uploadTask = uploadBytesResumable(storageRef, file);
-
-            uploadTask.on('state_changed', 
-                (snap) => { progBar.style.width = (snap.bytesTransferred / snap.totalBytes) * 100 + '%'; },
-                (err) => { alert("Erro no upload!"); btnUpload.disabled = false; },
-                async () => {
-                    const url = await getDownloadURL(uploadTask.snapshot.ref);
-                    await addDoc(collection(db, "comunicacoes_mediunicas"), {
-                        nomeArquivo: file.name,
-                        urlAudio: url,
-                        status: 'processando',
-                        dataCriacao: serverTimestamp(),
-                        transcricao: ""
-                    });
-                    btnUpload.disabled = false;
-                    btnUpload.innerText = "Subir para Transcrição";
-                    audioInput.value = "";
-                    progCont.style.display = 'none';
-                }
-            );
-        };
-
-        // Listagem
-        onSnapshot(query(collection(db, "comunicacoes_mediunicas"), orderBy("dataCriacao", "desc")), (snap) => {
-            const listaDiv = document.getElementById('lista');
-            listaDiv.innerHTML = "";
-            if(snap.empty) listaDiv.innerHTML = "<p style='text-align:center;'>Nenhum registro encontrado.</p>";
-            
-            snap.forEach(doc => {
-                const d = doc.data();
-                const div = document.createElement('div');
-                div.className = 'item-transcricao';
-                div.innerHTML = `
-                    <div>
-                        <strong style="color:#333;">${d.nomeArquivo}</strong><br>
-                        <small style="color:${d.status === 'concluido' ? 'green' : 'orange'}; font-weight:bold;">
-                            ${d.status.toUpperCase()}
-                        </small>
-                    </div>
-                    <div class="actions">
-                        ${d.status === 'concluido' ? `
-                            <i class="fab fa-whatsapp" style="color:#25d366;" onclick="window.zap('${d.transcricao.replace(/'/g, "")}')"></i>
-                            <i class="fas fa-file-pdf" style="color:#e74c3c;" onclick="window.pdf('${d.nomeArquivo}', '${d.transcricao.replace(/'/g, "")}')"></i>
-                        ` : '<i class="fas fa-spinner fa-spin" style="color:#999;"></i>'}
-                    </div>
-                `;
-                listaDiv.appendChild(div);
-            });
+        // VERIFICA SE O USUÁRIO ESTÁ LOGADO ANTES DE TUDO
+        onAuthStateChanged(auth, (user) => {
+            if (user) {
+                document.getElementById('loading-msg').textContent = "Conectado como: " + user.email;
+                document.getElementById('main-container').style.display = 'block';
+                iniciarApp();
+            } else {
+                window.location.href = '/login.html';
+            }
         });
 
-        // Funções de Botão
+        function iniciarApp() {
+            const btnUpload = document.getElementById('btn-upload');
+            const audioInput = document.getElementById('audio-input');
+
+            // 1. ESCUTAR BANCO DE DADOS
+            onSnapshot(query(collection(db, "comunicacoes_mediunicas"), orderBy("dataCriacao", "desc")), (snap) => {
+                const lista = document.getElementById('lista-atividades');
+                lista.innerHTML = "";
+                snap.forEach(doc => {
+                    const d = doc.data();
+                    const item = document.createElement('div');
+                    item.className = 'item-transcricao';
+                    item.innerHTML = `
+                        <div>
+                            <strong>${d.nomeArquivo}</strong><br>
+                            <small style="color:${d.status === 'concluido' ? '#27ae60' : '#e67e22'}">
+                                ${d.status.toUpperCase()}
+                            </small>
+                        </div>
+                        <div class="actions">
+                            ${d.status === 'concluido' ? `
+                                <i class="fab fa-whatsapp" style="color:#25d366;" onclick="window.zap('${d.transcricao.replace(/'/g, "")}')"></i>
+                                <i class="fas fa-file-pdf" style="color:#e74c3c;" onclick="window.pdf('${d.nomeArquivo}', '${d.transcricao.replace(/'/g, "")}')"></i>
+                            ` : '<i class="fas fa-spinner fa-spin" style="color:#999;"></i>'}
+                        </div>
+                    `;
+                    lista.appendChild(item);
+                });
+            });
+
+            // 2. LOGICA DE UPLOAD
+            btnUpload.onclick = async () => {
+                const file = audioInput.files[0];
+                if (!file) return alert("Selecione um áudio!");
+
+                btnUpload.disabled = true;
+                const progBar = document.getElementById('progress-bar');
+                document.getElementById('progress-bar-container').style.display = 'block';
+
+                const storageRef = ref(storage, `audios_mediunicos/${Date.now()}_${file.name}`);
+                const uploadTask = uploadBytesResumable(storageRef, file);
+
+                uploadTask.on('state_changed', 
+                    (s) => progBar.style.width = (s.bytesTransferred / s.totalBytes) * 100 + '%',
+                    (e) => { alert("Erro!"); btnUpload.disabled = false; },
+                    async () => {
+                        const url = await getDownloadURL(uploadTask.snapshot.ref);
+                        await addDoc(collection(db, "comunicacoes_mediunicas"), {
+                            nomeArquivo: file.name,
+                            urlAudio: url,
+                            status: 'processando',
+                            dataCriacao: serverTimestamp(),
+                            transcricao: ""
+                        });
+                        btnUpload.disabled = false;
+                        audioInput.value = "";
+                        document.getElementById('progress-bar-container').style.display = 'none';
+                    }
+                );
+            };
+        }
+
+        // FUNÇÕES GLOBAIS
         window.zap = (t) => {
-            window.open(`https://api.whatsapp.com/send?text=${encodeURIComponent("*CePaT - Transcrição*\n\n" + t)}`, '_blank');
+            const msg = encodeURIComponent("*CePaT - Comunicação Mediúnica*\n\n" + t);
+            window.open(`https://api.whatsapp.com/send?text=${msg}`, '_blank');
         };
 
         window.pdf = (n, t) => {
@@ -137,11 +147,11 @@
             doc.text("Casa Espírita Paulo de Tarso", 105, 20, { align: "center" });
             doc.setTextColor(0);
             doc.setFontSize(10);
-            doc.text("Transcrição Mediúnica", 105, 28, { align: "center" });
+            doc.text("Transcrição Automática de Áudio", 105, 28, { align: "center" });
             doc.line(20, 32, 190, 32);
             doc.setFontSize(12);
-            doc.text(doc.splitTextToSize(t, 170), 20, 45);
-            doc.save(`CePaT_${n}.pdf`);
+            doc.text(doc.splitTextToSize(t, 170), 20, 50);
+            doc.save(`Comunicacao_${n}.pdf`);
         };
     </script>
 </body>
