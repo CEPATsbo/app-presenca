@@ -96,6 +96,7 @@
 
         const cacheDados = {};
 
+        // Data de hoje por padrão
         document.getElementById('data-comunicacao').valueAsDate = new Date();
 
         onAuthStateChanged(auth, (user) => {
@@ -159,7 +160,7 @@
                 const trabalho = document.getElementById('trabalho-tipo').value;
                 const dataCom = document.getElementById('data-comunicacao').value;
 
-                if (!file || !medium || !dataCom) return alert("Preencha todos os campos e selecione o áudio!");
+                if (!file || !medium || !dataCom) return alert("Preencha todos os campos!");
 
                 btnUpload.disabled = true;
                 const progBar = document.getElementById('progress-bar');
@@ -193,7 +194,6 @@
             };
         }
 
-        // Funções Globais
         window.toggleAudio = (id) => {
             const player = document.getElementById(`player-${id}`);
             player.style.display = (player.style.display === 'block') ? 'none' : 'block';
@@ -228,28 +228,28 @@
             
             doc.setFillColor(142, 68, 173);
             doc.rect(0, 0, 210, 15, 'F'); 
-            
             doc.setTextColor(142, 68, 173);
             doc.setFont("helvetica", "bold");
             doc.setFontSize(16);
-            doc.text("Casa Espírita Paulo de Tarso", 105, 25, { align: "center" });
-            
+            doc.text("Casa Espírita Paulo de Tarso [cite: 3]", 105, 25, { align: "center" });
             doc.setFontSize(10);
             doc.setTextColor(100);
-            doc.text("Departamento de Mediunidade", 105, 32, { align: "center" });
+            doc.text("Departamento de Mediunidade [cite: 3]", 105, 32, { align: "center" });
             doc.line(20, 35, 190, 35);
 
             doc.setFontSize(11);
             doc.setTextColor(0);
-            doc.text(`Médium: ${d.medium}`, 20, 45);
-            doc.text(`Trabalho: ${d.trabalho}`, 20, 52);
-            doc.text(`Data: ${dataStr}`, 20, 59);
+            doc.text(`Médium: ${d.medium} [cite: 1]`, 20, 45);
+            doc.text(`Trabalho: ${d.trabalho} [cite: 1]`, 20, 52);
+            doc.text(`Data: ${dataStr} [cite: 2]`, 20, 59);
             doc.line(20, 65, 190, 65);
 
             doc.setFont("helvetica", "normal");
             doc.setFontSize(11);
             
-            const paragrafos = d.transcricao.split('\n');
+            // Lógica de parágrafos automáticos por ponto final
+            const textoFormatado = d.transcricao.replace(/\. /g, ".\n\n");
+            const paragrafos = textoFormatado.split('\n');
             let cursorY = 75;
             const margemEsquerda = 20;
             const larguraUtil = 170;
@@ -262,7 +262,7 @@
                     cursorY = 20;
                 }
                 doc.text(linhas, margemEsquerda, cursorY);
-                cursorY += (linhas.length * 6) + 6; 
+                cursorY += (linhas.length * 6) + 5; 
             });
             
             doc.save(`CePaT_${d.medium.replace(/\s/g, '_')}_${dataStr.replace(/\//g, '-')}.pdf`);
