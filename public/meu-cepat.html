@@ -1,243 +1,577 @@
 <!DOCTYPE html>
+
 <html lang="pt-br">
+
 <head>
+
     <meta charset="UTF-8">
+
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
     <title>Meu CEPAT - Painel Unificado</title>
+
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+
     <style>
+
         body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background-color: #f4f6f9; margin: 0; padding: 20px; display: flex; flex-direction: column; align-items: center; }
+
         .container { width: 100%; max-width: 900px; display: none; }
+
         .header { display: flex; justify-content: space-between; align-items: center; padding-bottom: 15px; margin-bottom: 20px; border-bottom: 1px solid #e0e0e0; }
+
         .header h1 { font-size: 1.8em; margin: 0; color: #2c3e50; }
+
         .btn-logout { background-color: #c0392b; color: white; padding: 8px 15px; border-radius: 6px; text-decoration: none; font-weight: bold; }
+
+       
+
         #user-greeting { margin-bottom: 30px; }
+
         #user-greeting h2 { margin-bottom: 5px; }
+
         #user-greeting p { color: #555; margin-top: 0; }
+
+
+
+        /* --- NOVOS ESTILOS DO CARROSSEL INFORMATIVO --- */
+
         .carousel-outer { position: relative; overflow: hidden; background: white; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.08); margin-bottom: 30px; border-left: 5px solid #0277BD; }
+
         .carousel-inner { display: flex; transition: transform 0.4s cubic-bezier(0.25, 1, 0.5, 1); }
+
         .carousel-item { min-width: 100%; padding: 25px; box-sizing: border-box; }
+
         .carousel-item h4 { margin-top: 0; color: #2c3e50; display: flex; align-items: center; gap: 10px; font-size: 1.2em; }
+
         .carousel-nav { display: flex; justify-content: center; gap: 8px; padding-bottom: 15px; }
+
         .dot { height: 8px; width: 8px; background-color: #bbb; border-radius: 50%; display: inline-block; cursor: pointer; transition: all 0.3s; }
+
         .dot.active { background-color: #0277BD; width: 20px; border-radius: 4px; }
+
         .escala-lista { list-style: none; padding: 0; margin-top: 10px; }
+
         .escala-item { display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid #f1f1f1; font-size: 0.95em; }
+
         .escala-item:last-child { border-bottom: none; }
+
         .escala-data { font-weight: bold; color: #0277BD; }
+
+        /* ---------------------------------------------- */
+
+
+
         .module-section { margin-bottom: 40px; }
+
         .module-section h3 { font-size: 1.5em; color: #34495e; border-bottom: 2px solid #e0e0e0; padding-bottom: 10px; margin-bottom: 20px; display: flex; align-items: center; gap: 10px; }
+
         .loading-message { text-align: center; color: #777; font-size: 1.1em; padding: 40px 0; }
+
+
+
         .card-container { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 25px; }
+
         .card { background-color: white; border-radius: 12px; box-shadow: 0 4px 15px rgba(0, 0, 0, 0.08); padding: 25px; text-decoration: none; color: inherit; transition: transform 0.2s; }
+
         .card:hover { transform: translateY(-5px); }
+
         .card h4 { margin-top: 0; font-size: 1.3em; color: #0277BD; }
+
         .card p { color: #576574; }
+
         .card .card-link { color: #0277BD; text-decoration: none; font-weight: bold; cursor: pointer; margin-top: 10px; display: inline-block; }
+
+
+
         .hidden { display: none !important; }
+
+
+
+        /* Estilos do Modal de Frequência */
+
         .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0, 0, 0, 0.6); display: flex; justify-content: center; align-items: center; z-index: 1000; visibility: hidden; opacity: 0; transition: opacity 0.3s; }
+
         .modal-overlay.visible { visibility: visible; opacity: 1; }
+
         .modal-content { background-color: white; padding: 25px; border-radius: 10px; width: 90%; max-width: 500px; position: relative; max-height: 80vh; overflow-y: auto; }
+
         .modal-content h3 { margin-top: 0; }
+
         .modal-close-btn { position: absolute; top: 10px; right: 15px; font-size: 1.5em; cursor: pointer; color: #888; border: none; background: none; }
+
         .attendance-list { list-style-type: none; padding: 0; }
+
         .attendance-item { display: flex; justify-content: space-between; align-items: center; padding: 10px; border-bottom: 1px solid #eee; }
+
         .attendance-controls { display: flex; gap: 5px; }
+
         .attendance-controls .btn-status { font-size: 0.8em; padding: 5px 8px; border: 1px solid #ccc; background-color: #f9f9f9; color: #333; border-radius: 4px; cursor: pointer; }
+
         .attendance-controls .btn-status.active.presente { background-color: #dcfce7; border-color: #4ade80; color: #15803d; }
+
         .attendance-controls .btn-status.active.ausente { background-color: #fee2e2; border-color: #f87171; color: #b91c1c; }
+
         .attendance-controls .btn-status.active.justificado { background-color: #fef9c3; border-color: #facc15; color: #713f12; }
+
         .btn-primary { background-color: #0277BD; color: white; padding: 10px 18px; border: none; border-radius: 6px; font-weight: bold; cursor: pointer; }
+
+
+
+         /* Estilos específicos para o Card de Presença */
+
         .presenca-card { background-color: white; border-radius: 12px; box-shadow: 0 4px 15px rgba(0, 0, 0, 0.08); padding: 25px; text-align: center; }
+
         .presenca-card h4 { margin-top: 0; font-size: 1.3em; color: #34495e; display: flex; align-items: center; justify-content: center; gap: 8px; }
+
         .presenca-card p { color: #576574; font-size: 1em; margin-bottom: 20px; }
+
         .btn-presenca { background-color: #16a34a; color: white; padding: 12px 25px; border: none; border-radius: 6px; cursor: pointer; font-weight: bold; font-size: 1.1em; width: 100%; }
+
         .btn-presenca:disabled { background-color: #9ca3af; cursor: not-allowed; }
+
         .presenca-registrada-info { font-size: 0.9em; color: #555; margin-top: 15px; }
+
         .btn-tertiary { background-color: transparent; color: #555; border: 1px solid #ccc; padding: 8px 15px; border-radius: 6px; cursor: pointer; }
+
+
+
+        /* Estilos para o Modal de Atividades */
+
         #atividades-modal-lista { max-height: 200px; overflow-y: auto; margin-bottom: 15px; text-align: left; }
+
         #atividades-modal-lista div { margin-bottom: 8px; }
+
+
+
+        /* Estilos dos cards "Meu Perfil" e "Minhas Pendências" */
+
         .profile-card p, .pendencias-card p { margin: 8px 0; color: #333; font-size: 1em; }
+
         .profile-card p strong, .pendencias-card p strong { color: #576574; }
+
         .item-details-list { margin: 5px 0 0 20px; padding: 0; }
+
         .item-details-list li { font-size: 0.9em; color: #333; }
+
+
+
+        /* Estilo do histórico de presença */
+
         #history-list-container { max-height: 300px; overflow-y: auto; }
+
         #history-list-container ul { list-style-type: none; padding: 0; }
+
         #history-list-container li { background-color: #f9f9f9; padding: 10px; border-radius: 4px; margin-bottom: 8px; }
+
         .form-group { display: flex; flex-direction: column; gap: 8px; margin-bottom: 20px; }
+
         .form-group label { font-weight: bold; color: #555; }
+
         .form-group input { width: 100%; padding: 10px; border: 1px solid #ccc; border-radius: 6px; box-sizing: border-box; font-size: 1em; }
+
     </style>
+
 </head>
+
 <body>
+
     <div class="container" id="main-container">
+
         <div class="header">
+
             <h1 id="header-title">Meu CEPAT</h1>
+
             <a href="#" id="btn-logout" class="btn-logout">Sair</a>
+
         </div>
+
+
+
         <div id="user-greeting">
+
             <h2 id="greeting-name">Olá!</h2>
+
             <p>Bem-vindo(a) ao seu portal unificado.</p>
+
         </div>
+
+
 
         <section id="module-informativo" class="carousel-outer hidden">
+
             <div class="carousel-inner" id="carousel-inner">
+
                 <div class="carousel-item" id="slide-mural">
+
                     <h4><i class="fas fa-bullhorn" style="color: #f39c12;"></i> Mural de Avisos</h4>
+
                     <div id="mural-content"><p>Nenhuma mensagem nova no mural.</p></div>
+
                 </div>
+
                 <div class="carousel-item" id="slide-escala">
+
                     <h4><i class="fas fa-calendar-alt" style="color: #673ab7;"></i> Minha Escala Mediúnica</h4>
+
                     <div id="escala-content"><p>Verificando seus horários...</p></div>
+
                 </div>
+
             </div>
+
             <div class="carousel-nav" id="carousel-nav">
+
                 <span class="dot active" data-slide="0"></span>
+
                 <span class="dot" data-slide="1"></span>
+
             </div>
+
         </section>
 
-        <section id="module-comunicacoes" class="module-section hidden">
-            <h3><i class="fas fa-comment-dots"></i> Comunicações Mediúnicas</h3>
-            <div id="comunicacoes-publicas-content" class="card-container">
-                <p>Buscando comunicações...</p>
-            </div>
-        </section>
+
 
         <section id="module-dia" class="module-section hidden">
+
             <h3><i class="fas fa-check-circle"></i> Ações do Dia</h3>
+
             <div id="dia-content" class="card-container">
+
                  <div id="presenca-card-content">
+
                      <p class="loading-message">Verificando status de presença...</p>
+
                  </div>
+
             </div>
+
         </section>
+
+
 
         <section id="module-pessoal" class="module-section hidden">
+
             <h3><i class="fas fa-user"></i> Pessoal</h3>
+
             <div id="pessoal-content" class="card-container">
+
                 <p class="loading-message">Carregando informações pessoais...</p>
+
             </div>
+
         </section>
+
+
 
         <section id="module-aluno" class="module-section hidden">
+
             <h3><i class="fas fa-graduation-cap"></i> Meu Progresso como Aluno</h3>
-            <div id="aluno-content" class="card-container"></div>
+
+            <div id="aluno-content" class="card-container">
+
+                 </div>
+
         </section>
+
+
 
         <section id="module-facilitador" class="module-section hidden">
+
             <h3><i class="fas fa-chalkboard-teacher"></i> Minhas Turmas como Facilitador</h3>
-            <div id="facilitador-content" class="card-container"></div>
+
+            <div id="facilitador-content" class="card-container">
+
+                 </div>
+
         </section>
+
+
 
         <section id="module-gestao" class="module-section hidden">
+
             <h3><i class="fas fa-cogs"></i> Acesso Administrativo</h3>
+
             <div class="card-container">
+
                 <a href="/dashboard.html" class="card">
+
                     <h4>Painel de Gestão</h4>
+
                     <p>Acessar todas as ferramentas administrativas do sistema.</p>
+
                 </a>
+
             </div>
+
         </section>
+
+
 
         <section id="module-servicos" class="module-section hidden">
+
             <h3><i class="fas fa-house-user"></i> Serviços da Casa</h3>
+
             <div id="servicos-content" class="card-container">
-                <a href="/transparencia.html" class="card"><h4>Portal da Transparência</h4></a>
-                <a href="/vibracoes.html" class="card"><h4>Pedidos de Vibração</h4></a>
-                <a href="/cepat-ao-vivo.html" class="card">
-                    <h4 style="color: #16a34a;"><i class="fas fa-broadcast-tower"></i> CEPAT - AO VIVO</h4>
-                    <p>Ver os "sinais vitais" da casa em tempo real.</p>
+
+                <a href="/transparencia.html" class="card">
+
+                    <h4>Portal da Transparência</h4>
+
+                    <p>Consultar balancetes e relatórios financeiros.</p>
+
                 </a>
-            </div>
+
+                <a href="/vibracoes.html" class="card">
+
+                    <h4>Pedidos de Vibração</h4>
+
+                    <p>Enviar nomes para o trabalho de irradiação e preces.</p>
+
+                </a>
+
+
+
+                <a href="/cepat-ao-vivo.html" class="card">
+
+                    <h4 style="color: #16a34a;"><i class="fas fa-broadcast-tower"></i> CEPAT - AO VIVO</h4>
+
+                    <p>Ver os "sinais vitais" da casa e o status das filas em tempo real.</p>
+
+                </a>
+
+                </div>
+
         </section>
 
+
+
         <div id="loading-message" class="loading-message">
+
             <p>Carregando suas informações...</p>
+
         </div>
+
     </div>
 
-    <div class="modal-overlay" id="modal-player-comunicacao">
-        <div class="modal-content" style="text-align: center;">
-            <button class="modal-close-btn" id="close-modal-player">&times;</button>
-            <h3 id="player-titulo-comunicacao">Ouvir Comunicação</h3>
-            <p id="player-info-comunicacao" style="font-size: 0.9em; color: #666;"></p>
-            <audio id="audio-player-portal" controls style="width: 100%; margin-top: 20px;"></audio>
-            <div id="texto-transcricao-portal" style="margin-top: 20px; text-align: justify; max-height: 250px; overflow-y: auto; padding: 15px; background: #f9f9f9; border-radius: 8px; font-size: 0.95em; line-height: 1.6;"></div>
-        </div>
-    </div>
+   
 
     <div class="modal-overlay" id="modal-frequencia">
+
         <div class="modal-content">
+
             <button class="modal-close-btn" id="close-modal-frequencia">&times;</button>
+
             <h3 id="modal-frequencia-titulo">Lançar Frequência</h3>
-            <ul class="attendance-list" id="frequencia-list-container"><li>Carregando...</li></ul>
+
+            <ul class="attendance-list" id="frequencia-list-container">
+
+                <li>Carregando...</li>
+
+            </ul>
+
             <button class="btn-primary" id="btn-salvar-frequencia" style="margin-top: 20px;">Salvar Frequência</button>
+
         </div>
+
     </div>
+
+
 
     <div class="modal-overlay" id="modal-atividades-presenca">
+
         <div class="modal-content">
+
             <button class="modal-close-btn" id="close-modal-atividades">&times;</button>
+
             <h3>Selecione suas Atividades de Hoje</h3>
+
             <form id="form-atividades-presenca">
+
                 <div id="atividades-modal-lista">Carregando atividades...</div>
+
                 <button type="submit" class="btn-primary" id="btn-confirmar-presenca" style="width: 100%;">Confirmar Presença</button>
+
             </form>
+
         </div>
+
     </div>
+
+
 
     <div class="modal-overlay" id="modal-detalhes">
+
         <div class="modal-content">
+
             <button class="modal-close-btn" id="close-modal-detalhes">&times;</button>
+
             <h3>Detalhes das Pendências</h3>
-            <div id="detalhes-cantina-container"></div><hr>
-            <div id="detalhes-biblioteca-container"></div><hr>
+
+            <div id="detalhes-cantina-container"></div>
+
+            <hr>
+
+            <div id="detalhes-biblioteca-container"></div>
+
+            <hr>
+
             <div id="detalhes-emprestimos-container"></div>
+
         </div>
+
     </div>
+
+   
 
     <div class="modal-overlay" id="modal-editar-perfil">
+
         <div class="modal-content">
+
             <button class="modal-close-btn" id="close-modal-editar-perfil">&times;</button>
+
             <h3>Editar Meus Dados</h3>
+
             <form id="form-editar-perfil">
-                <div class="form-group"><label for="edit-nome">Nome Completo</label><input type="text" id="edit-nome" required></div>
-                <div class="form-group"><label for="edit-telefone">Telefone</label><input type="tel" id="edit-telefone"></div>
-                <div class="form-group"><label for="edit-endereco">Endereço Completo</label><input type="text" id="edit-endereco"></div>
-                <div class="form-group"><label for="edit-aniversario">Aniversário (Dia/Mês)</label><input type="text" id="edit-aniversario"></div>
+
+                <div class="form-group">
+
+                    <label for="edit-nome">Nome Completo</label>
+
+                    <input type="text" id="edit-nome" required>
+
+                </div>
+
+                <div class="form-group">
+
+                    <label for="edit-telefone">Telefone</label>
+
+                    <input type="tel" id="edit-telefone" placeholder="(XX) XXXXX-XXXX">
+
+                </div>
+
+                <div class="form-group">
+
+                    <label for="edit-endereco">Endereço Completo</label>
+
+                    <input type="text" id="edit-endereco" placeholder="Rua, Número, Bairro...">
+
+                </div>
+
+                <div class="form-group">
+
+                    <label for="edit-aniversario">Aniversário (Dia/Mês)</label>
+
+                    <input type="text" id="edit-aniversario" placeholder="dd/mm">
+
+                </div>
+
                 <button type="submit" class="btn-primary" id="btn-salvar-perfil" style="width: 100%;">Salvar Alterações</button>
+
             </form>
+
         </div>
+
     </div>
+
+
 
     <div class="modal-overlay" id="modal-historico">
+
         <div class="modal-content">
+
             <button class="modal-close-btn" id="close-modal-historico">&times;</button>
+
             <h3>Meu Histórico de Presença</h3>
+
             <div id="history-list-container"></div>
+
         </div>
+
     </div>
 
-    <div class="modal-overlay" id="modal-tasv" style="z-index: 2000;">
-        <div class="modal-content" style="max-width: 700px;">
+
+
+    <div class="modal-overlay" id="modal-tasv" style="z-index: 2000;"> <div class="modal-content" style="max-width: 700px;">
+
             <h3 style="text-align: center; color: #2c3e50;">Termo de Adesão ao Serviço Voluntário <span id="tasv-ano-atual"></span></h3>
-            <div style="background-color: #fff3cd; color: #856404; padding: 10px; border-radius: 4px; margin-bottom: 15px; font-size: 0.9em;"><i class="fas fa-exclamation-triangle"></i> Atenção: Verifique seus dados antes de aceitar.</div>
+
+           
+
+            <div style="background-color: #fff3cd; color: #856404; padding: 10px; border-radius: 4px; margin-bottom: 15px; font-size: 0.9em;">
+
+                <i class="fas fa-exclamation-triangle"></i> <strong>Atenção:</strong> Por favor, verifique se seus dados pessoais (Endereço, Telefone) estão atualizados em "Meu Perfil" antes de aceitar este termo.
+
+            </div>
+
+
+
             <div style="max-height: 300px; overflow-y: auto; background-color: #f8f9fa; padding: 15px; border: 1px solid #ddd; border-radius: 4px; font-size: 0.9em; line-height: 1.6; text-align: justify;">
-                <p><strong>CASA ESPÍRITA PAULO DE TARSO</strong><br>CNPJ 12.253.749/0001-20</p>
-                <p>O voluntário firma o TERMO DE ADESÃO AO SERVIÇO VOLUNTÁRIO, nos termos da Lei nº 9.608/1998...</p>
-                <hr><p>ESTOU CIENTE E ACEITO os termos da LEI DO SERVIÇO VOLUNTÁRIO.</p>
+
+                <p><strong>CASA ESPÍRITA PAULO DE TARSO</strong><br>
+
+                CNPJ 12.253.749/0001-20</p>
+
+                <p><strong>SERVIÇO VOLUNTÁRIO</strong></p>
+
+                <p>Pelo presente instrumento, na melhor forma de direito, o(a) voluntário(a) identificado(a) no sistema, firma com a entidade acima qualificada o presente TERMO DE ADESÃO AO SERVIÇO VOLUNTÁRIO, nos termos da <strong>Lei nº 9.608, de 18 de Fevereiro de 1998</strong>:</p>
+
+                <hr>
+
+                <p><em><strong>LEI Nº 9.608, DE 18 DE FEVEREIRO DE 1998</strong><br>
+
+                Dispõe sobre o serviço voluntário e dá outras providências.</em></p>
+
+                <p><em>Art. 1º Considera-se serviço voluntário, para os fins desta Lei, a atividade não remunerada prestada por pessoa física a entidade pública de qualquer natureza ou a instituição privada de fins não lucrativos que tenha objetivos cívicos, culturais, educacionais, científicos, recreativos ou de assistência à pessoa. (Redação dada pela Lei nº 13.297, de 2016)</em></p>
+
+                <p><em>Parágrafo único. O serviço voluntário não gera vínculo empregatício, nem obrigação de natureza trabalhista previdenciária ou afim.</em></p>
+
+                <p><em>Art. 2º O serviço voluntário será exercido mediante a celebração de termo de adesão entre a entidade, pública ou privada, e o prestador do serviço voluntário, dele devendo constar o objeto e as condições de seu exercício.</em></p>
+
+                <p><em>Art. 3º O prestador do serviço voluntário poderá ser ressarcido pelas despesas que comprovadamente realizar no desempenho das atividades voluntárias.</em></p>
+
+                <p><em>Parágrafo único. As despesas a serem ressarcidas deverão estar expressamente autorizadas pela entidade a que for prestado o serviço voluntário.</em></p>
+
+                <hr>
+
+                <p><strong>DECLARAÇÃO DE ACEITE</strong></p>
+
+                <p>ESTOU CIENTE E ACEITO os termos da LEI DO SERVIÇO VOLUNTÁRIO, nº 9.608 de 18 de fevereiro de 1998.</p>
+
+                <p>AUTORIZO O REGISTRO, em arquivo físico ou digital confidencial, sob responsabilidade da secretaria da entidade, DOS MEUS DADOS PESSOAIS, com objetivo exclusivo aos fins previstos no Estatuto desta entidade, de acordo com o Capítulo II, artigos 3º, 4º, 5º e 6º e Parágrafo Único.</p>
+
             </div>
+
+
+
             <div style="margin-top: 20px;">
+
                 <label style="display: flex; align-items: flex-start; gap: 10px; cursor: pointer;">
+
                     <input type="checkbox" id="check-aceite-tasv" style="margin-top: 4px; width: 20px; height: 20px;">
-                    <span>Li, compreendi e concordo integralmente com os termos.</span>
+
+                    <span>Li, compreendi e concordo integralmente com os termos acima para a prestação de serviço voluntário neste ano.</span>
+
                 </label>
+
             </div>
-            <button id="btn-assinar-tasv" class="btn-primary" disabled style="width: 100%; margin-top: 20px; background-color: #9ca3af; border-color: #9ca3af;">Assinar Digitalmente</button>
+
+
+
+            <button id="btn-assinar-tasv" class="btn-primary" disabled style="width: 100%; margin-top: 20px; background-color: #9ca3af; border-color: #9ca3af;">
+
+                <i class="fas fa-file-signature"></i> Assinar Digitalmente
+
+            </button>
+
         </div>
+
     </div>
+
+
 
     <script type="module" src="js/meu-cepat.js"></script>
+
 </body>
+
 </html>
