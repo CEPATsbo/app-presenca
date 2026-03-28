@@ -25,6 +25,9 @@
         audio { width: 100%; height: 35px; }
         #progress-bar-container { background: #eee; height: 8px; border-radius: 4px; margin-top: 15px; display: none; overflow: hidden; }
         #progress-bar { background: #8e44ad; width: 0%; height: 100%; transition: width 0.3s; }
+        .public-toggle { display: flex; align-items: center; gap: 10px; background: #fdfaff; padding: 12px; border-radius: 8px; border: 1px dashed #8e44ad; margin-bottom: 15px; }
+        .public-toggle input { width: 20px; height: 20px; cursor: pointer; }
+        .public-toggle label { margin: 0; cursor: pointer; color: #8e44ad; font-weight: bold; }
     </style>
 </head>
 <body>
@@ -59,6 +62,12 @@
                     <option value="OUTROS">OUTROS</option>
                 </select>
             </div>
+            
+            <div class="public-toggle">
+                <input type="checkbox" id="tornar-publico">
+                <label for="tornar-publico"><i class="fas fa-globe"></i> Tornar visível no Portal Meu-CePaT</label>
+            </div>
+
             <div class="input-group">
                 <label>Arquivo de Áudio:</label>
                 <input type="file" id="audio-input" accept="audio/*">
@@ -126,7 +135,8 @@
                     item.innerHTML = `
                         <div class="item-main">
                             <div>
-                                <strong>${d.medium || 'N/A'} - ${d.trabalho || 'Geral'}</strong><br>
+                                <strong>${d.medium || 'N/A'} - ${d.trabalho || 'Geral'}</strong> 
+                                ${d.publico ? '<i class="fas fa-globe" style="color:#8e44ad; font-size:12px;" title="Público"></i>' : ''}<br>
                                 <small class="info-msg">Data Comunicação: ${dataExibicao}</small> | 
                                 <small style="color:${d.status === 'concluido' ? '#27ae60' : '#e67e22'}">${d.status.toUpperCase()}</small>
                             </div>
@@ -151,6 +161,7 @@
                 const medium = document.getElementById('medium-name').value;
                 const trabalho = document.getElementById('trabalho-tipo').value;
                 const dataCom = document.getElementById('data-comunicacao').value;
+                const isPublico = document.getElementById('tornar-publico').checked;
 
                 if (!file || !medium || !dataCom) return alert("Preencha todos os campos!");
 
@@ -173,12 +184,14 @@
                             nomeArquivo: file.name,
                             urlAudio: url,
                             status: 'processando',
+                            publico: isPublico,
                             dataCriacao: serverTimestamp(),
                             transcricao: ""
                         });
                         btnUpload.disabled = false;
                         audioInput.value = "";
                         document.getElementById('medium-name').value = "";
+                        document.getElementById('tornar-publico').checked = false;
                         document.getElementById('data-comunicacao').valueAsDate = new Date();
                         document.getElementById('progress-bar-container').style.display = 'none';
                     }
@@ -198,10 +211,7 @@
                 const p = d.dataComunicacao.split("-");
                 dataStr = p[2] + "/" + p[1] + "/" + p[0];
             }
-            
-            // LIMPEZA SEM REGEX (À PROVA DE ERROS)
             const textoLimpo = d.transcricao.split("").join("");
-            
             const cabecalho = "*CePaT - Comunicação Mediúnica*\n\n*Médium:* " + d.medium + "\n*Trabalho:* " + d.trabalho + "\n*Data:* " + dataStr + "\n\n*Transcrição:*\n";
             const msg = encodeURIComponent(cabecalho + textoLimpo);
             window.open("https://api.whatsapp.com/send?text=" + msg, "_blank");
@@ -211,16 +221,12 @@
             const d = cacheDados[id];
             const { jsPDF } = window.jspdf;
             const doc = new jsPDF();
-            
             let dataStr = "";
             if (d.dataComunicacao) {
                 const p = d.dataComunicacao.split("-");
                 dataStr = p[2] + "/" + p[1] + "/" + p[0];
             }
-            
-            // LIMPEZA SEM REGEX (À PROVA DE ERROS)
             const transcricaoLimpa = d.transcricao.split("").join("");
-
             doc.setFillColor(142, 68, 173);
             doc.rect(0, 0, 210, 15, 'F'); 
             doc.setTextColor(142, 68, 173);
@@ -231,24 +237,19 @@
             doc.setTextColor(100);
             doc.text("Departamento de Mediunidade", 105, 32, { align: "center" });
             doc.line(20, 35, 190, 35);
-
             doc.setFontSize(11);
             doc.setTextColor(0);
             doc.text("Médium: " + d.medium, 20, 45);
             doc.text("Trabalho: " + d.trabalho, 20, 52);
             doc.text("Data: " + dataStr, 20, 59);
             doc.line(20, 65, 190, 65);
-
             doc.setFont("helvetica", "normal");
             doc.setFontSize(11);
-            
-            // QUEBRA DE PARÁGRAFOS USANDO TEXTO SIMPLES
             const textoFormatado = transcricaoLimpa.split(". ").join(".\n\n");
             const paragrafos = textoFormatado.split("\n");
             let cursorY = 75;
             const margemEsquerda = 20;
             const larguraUtil = 170;
-
             paragrafos.forEach(paragrafo => {
                 if (paragrafo.trim() === "") return;
                 const linhas = doc.splitTextToSize(paragrafo, larguraUtil);
@@ -259,7 +260,6 @@
                 doc.text(linhas, margemEsquerda, cursorY);
                 cursorY += (linhas.length * 6) + 5; 
             });
-            
             doc.save("CePaT_" + d.medium.replace(" ", "_") + "_" + dataStr.replace("/", "-") + ".pdf");
         };
     </script>
