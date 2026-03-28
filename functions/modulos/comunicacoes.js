@@ -1,69 +1,78 @@
 const { onDocumentCreated } = require("firebase-functions/v2/firestore");
 const admin = require("firebase-admin");
-const axios = require("axios");
 
 const REGIAO = 'southamerica-east1';
 
-const transcreverAudioMediunico = onDocumentCreated({ 
+exports.transcreverAudioMediunico = onDocumentCreated({ 
     region: REGIAO, 
     document: 'comunicacoes_mediunicas/{docId}',
-    secrets: ["GOOGLE_CLOUD_SPEECH_API_KEY"] 
+    secrets: ["GOOGLE_CLOUD_SPEECH_API_KEY"],
+    timeoutSeconds: 540, 
+    memory: "1GiB" 
 }, async (event) => {
     const snap = event.data; 
     if (!snap) return null;
-    const d = snap.data(); 
+    const d = snap.data();
     if (d.status !== 'processando' || !d.urlAudio) return null;
 
     try {
-        console.log(`[CePaT] Baixando arquivo para processamento...`);
-        const bucket = admin.storage().bucket(); 
+        console.log(`[CePaT] Transcrevendo via Stream (Fluxo contínuo): ${d.nomeArquivo}`);
+        
+        const speech = require('@google-cloud/speech');
+        const client = new speech.SpeechClient({ apiKey: process.env.GOOGLE_CLOUD_SPEECH_API_KEY });
+
+        const bucket = admin.storage().bucket("voluntarios-ativos---cepat.firebasestorage.app");
         const parteUrl = d.urlAudio.split('/o/')[1].split('?')[0];
         const caminhoArquivo = decodeURIComponent(parteUrl);
-        const [audioBuffer] = await bucket.file(caminhoArquivo).download();
-        const audioBase64 = audioBuffer.toString('base64');
+        const file = bucket.file(caminhoArquivo);
 
-        const apiKey = process.env.GOOGLE_CLOUD_SPEECH_API_KEY;
-        
-        // USANDO A VERSÃO BETA (Ela é a única que aceita MP4 via Base64)
-        const urlApi = `https://speech.googleapis.com/v1p1beta1/speech:recognize?key=${apiKey}`;
-        
-        console.log(`[CePaT] Enviando para motor de decodificação Beta...`);
-
-        const requestBody = {
+        const request = {
             config: {
-                languageCode: "pt-BR",
-                model: "latest_long",
-                // O SEGREDO: Ao definir o encoding como MP3 (mesmo sendo MP4), 
-                // o motor beta do Google tenta decodificar o arquivo comprimido.
-                encoding: "MP3", 
-                sampleRateHertz: 16000, 
-                enableAutomaticPunctuation: true
-            },
-            audio: {
-                content: audioBase64
+                encoding: 'MP3', 
+                sampleRateHertz: 16000,
+                languageCode: 'pt-BR',
+                model: 'latest_long',
+                enableAutomaticPunctuation: true,
             }
         };
 
-        const res = await axios.post(urlApi, requestBody);
+        let transcricaoFinal = '';
 
-        if (res.data && res.data.results) {
-            const text = res.data.results.map(r => r.alternatives[0].transcript).join('\n');
-            console.log(`[CePaT] Transcrição concluída!`);
-            return snap.ref.update({ 
-                transcricao: text || "Áudio processado, mas sem texto.", 
-                status: 'concluido', 
-                processadoEm: admin.firestore.FieldValue.serverTimestamp() 
+        // O motor de Stream (Ele vai "escutando" o arquivo que vamos enviar)
+        const recognizeStream = client
+            .streamingRecognize(request)
+            .on('error', (err) => { 
+                console.error("[CePaT] Erro no Stream do Google:", err);
+                throw err; 
+            })
+            .on('data', (data) => {
+                if (data.results[0] && data.results[0].alternatives[0]) {
+                    transcricaoFinal += data.results[0].alternatives[0].transcript + ' ';
+                }
             });
-        } else {
-            return snap.ref.update({ status: 'concluido', transcricao: "Sem fala identificada." });
-        }
 
-    } catch (e) { 
-        const erroMsg = e.response ? JSON.stringify(e.response.data) : e.message;
-        console.error(`[CePaT] Erro:`, erroMsg);
-        // Se der erro de encoding de novo, tentaremos o último recurso: converter no código.
-        return snap.ref.update({ status: 'erro', erroDetalhe: e.message }); 
+        // O Pulo do Gato: Lê o arquivo e "toca" para o Google bit a bit
+        await new Promise((resolve, reject) => {
+            file.createReadStream()
+                .on('error', reject)
+                .pipe(recognizeStream)
+                .on('finish', resolve)
+                .on('error', reject);
+        });
+
+        // Espera um segundinho para o Google processar o último pedaço
+        await new Promise(res => setTimeout(res, 2000));
+
+        console.log(`[CePaT] Transcrição via Stream finalizada!`);
+
+        return snap.ref.update({
+            transcricao: transcricaoFinal.trim() || "Processado, mas sem texto detectado.",
+            status: 'concluido',
+            processadoEm: admin.firestore.FieldValue.serverTimestamp()
+        });
+
+    } catch (e) {
+        console.error(`[CePaT] Erro Final:`, e.message);
+        return snap.ref.update({ status: 'erro', erroDetalhe: e.message });
     }
 });
-
-module.exports = { transcreverAudioMediunico };

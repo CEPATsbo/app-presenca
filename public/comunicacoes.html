@@ -39,6 +39,11 @@
             <h3 style="margin-top:0;">Novo Registro de Comunicação</h3>
             
             <div class="input-group">
+                <label>Data da Comunicação:</label>
+                <input type="date" id="data-comunicacao">
+            </div>
+
+            <div class="input-group">
                 <label>Nome do Médium:</label>
                 <input type="text" id="medium-name" placeholder="Ex: Carlos Reis">
             </div>
@@ -46,11 +51,12 @@
             <div class="input-group">
                 <label>Circunstância / Trabalho:</label>
                 <select id="trabalho-tipo">
-                    <option value="Vibrações">Trabalho de Vibrações</option>
-                    <option value="Reunião de Desobsessão">Reunião de Desobsessão</option>
-                    <option value="Reunião Pública">Reunião Pública</option>
-                    <option value="Desenvolvimento Mediúnico">Desenvolvimento Mediúnico</option>
-                    <option value="Outros">Outros</option>
+                    <option value="REUNIÃO PÚBLICA">REUNIÃO PÚBLICA</option>
+                    <option value="VIBRAÇÕES">VIBRAÇÕES</option>
+                    <option value="COLEGIADO MEDIÚNICO">COLEGIADO MEDIÚNICO</option>
+                    <option value="INTERCÂMBIO MENSAL">INTERCÂMBIO MENSAL</option>
+                    <option value="VINHA DE LUZ">VINHA DE LUZ</option>
+                    <option value="OUTROS">OUTROS</option>
                 </select>
             </div>
 
@@ -87,6 +93,9 @@
 
         const cacheDados = {};
 
+        // Define data de hoje no input por padrão
+        document.getElementById('data-comunicacao').valueAsDate = new Date();
+
         onAuthStateChanged(auth, (user) => {
             if (user) {
                 document.getElementById('loading-msg').textContent = "Conectado como: " + user.email;
@@ -109,12 +118,21 @@
                     const id = doc.id;
                     cacheDados[id] = d;
 
+                    // Formatação da data para exibição (Prioriza a data informada pelo usuário)
+                    let dataExibicao = "";
+                    if (d.dataComunicacao) {
+                        const partes = d.dataComunicacao.split("-");
+                        dataExibicao = `${partes[2]}/${partes[1]}/${partes[0]}`;
+                    } else {
+                        dataExibicao = new Date(d.dataCriacao?.seconds * 1000).toLocaleDateString();
+                    }
+
                     const item = document.createElement('div');
                     item.className = 'item-transcricao';
                     item.innerHTML = `
                         <div>
                             <strong>${d.medium || 'N/A'} - ${d.trabalho || 'Geral'}</strong><br>
-                            <small class="info-msg">${new Date(d.dataCriacao?.seconds * 1000).toLocaleDateString()}</small> | 
+                            <small class="info-msg">Data Comunicação: ${dataExibicao}</small> | 
                             <small style="color:${d.status === 'concluido' ? '#27ae60' : '#e67e22'}">${d.status.toUpperCase()}</small>
                         </div>
                         <div class="actions">
@@ -132,8 +150,9 @@
                 const file = audioInput.files[0];
                 const medium = document.getElementById('medium-name').value;
                 const trabalho = document.getElementById('trabalho-tipo').value;
+                const dataCom = document.getElementById('data-comunicacao').value;
 
-                if (!file || !medium) return alert("Preencha o nome do médium e selecione o áudio!");
+                if (!file || !medium || !dataCom) return alert("Preencha todos os campos e selecione o áudio!");
 
                 btnUpload.disabled = true;
                 const progBar = document.getElementById('progress-bar');
@@ -150,6 +169,7 @@
                         await addDoc(collection(db, "comunicacoes_mediunicas"), {
                             medium: medium,
                             trabalho: trabalho,
+                            dataComunicacao: dataCom,
                             nomeArquivo: file.name,
                             urlAudio: url,
                             status: 'processando',
@@ -159,6 +179,7 @@
                         btnUpload.disabled = false;
                         audioInput.value = "";
                         document.getElementById('medium-name').value = "";
+                        document.getElementById('data-comunicacao').valueAsDate = new Date();
                         document.getElementById('progress-bar-container').style.display = 'none';
                     }
                 );
@@ -167,7 +188,13 @@
 
         window.dispararZap = (id) => {
             const d = cacheDados[id];
-            const dataStr = new Date(d.dataCriacao?.seconds * 1000).toLocaleDateString();
+            let dataStr = "";
+            if (d.dataComunicacao) {
+                const p = d.dataComunicacao.split("-");
+                dataStr = `${p[2]}/${p[1]}/${p[2]}`;
+            } else {
+                dataStr = new Date(d.dataCriacao?.seconds * 1000).toLocaleDateString();
+            }
             const cabecalho = `*CePaT - Comunicação Mediúnica*\n\n*Médium:* ${d.medium}\n*Trabalho:* ${d.trabalho}\n*Data:* ${dataStr}\n\n*Transcrição:*\n`;
             const msg = encodeURIComponent(cabecalho + d.transcricao);
             window.open(`https://api.whatsapp.com/send?text=${msg}`, '_blank');
@@ -177,7 +204,14 @@
             const d = cacheDados[id];
             const { jsPDF } = window.jspdf;
             const doc = new jsPDF();
-            const dataStr = new Date(d.dataCriacao?.seconds * 1000).toLocaleDateString();
+            
+            let dataStr = "";
+            if (d.dataComunicacao) {
+                const p = d.dataComunicacao.split("-");
+                dataStr = `${p[2]}/${p[1]}/${p[0]}`;
+            } else {
+                dataStr = new Date(d.dataCriacao?.seconds * 1000).toLocaleDateString();
+            }
             
             // Layout CePaT
             doc.setFillColor(142, 68, 173);
@@ -201,10 +235,32 @@
             doc.text(`Data: ${dataStr}`, 20, 59);
             doc.line(20, 65, 190, 65);
 
-            // Texto Transcrito
+            // Texto Transcrito com Espaçamento entre parágrafos
             doc.setFont("helvetica", "normal");
-            const textoDividido = doc.splitTextToSize(d.transcricao, 170);
-            doc.text(textoDividido, 20, 75);
+            doc.setFontSize(11);
+            
+            // Divide o texto original em parágrafos reais (quebras de linha)
+            const paragrafos = d.transcricao.split('\n');
+            let cursorY = 75;
+            const margemEsquerda = 20;
+            const larguraUtil = 170;
+
+            paragrafos.forEach(paragrafo => {
+                if (paragrafo.trim() === "") return; // Pula linhas vazias
+                
+                // Quebra o parágrafo em linhas menores para caber na página
+                const linhas = doc.splitTextToSize(paragrafo, larguraUtil);
+                
+                // Verifica se precisa de nova página
+                if (cursorY + (linhas.length * 7) > 280) {
+                    doc.addPage();
+                    cursorY = 20;
+                }
+
+                doc.text(linhas, margemEsquerda, cursorY);
+                // Incrementa Y: (número de linhas * altura da linha) + espaçamento extra entre parágrafos
+                cursorY += (linhas.length * 6) + 6; 
+            });
             
             doc.save(`CePaT_${d.medium.replace(/\s/g, '_')}_${dataStr.replace(/\//g, '-')}.pdf`);
         };
