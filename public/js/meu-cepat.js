@@ -643,20 +643,59 @@ async function buscarPendenciasEEmprestimos(userId) {
 }
 
 function preencherModalDetalhes() {
-    const list = (itens) => {
+    // Função auxiliar para listar itens internos de uma venda
+    const criarListaDeItens = (itens) => {
         if (!itens || itens.length === 0) return '';
-        let h = '<ul class="item-details-list">';
-        itens.forEach(p => h += `<li>${p.qtd}x ${p.nome || p.descricao || p.titulo}</li>`);
-        return h + '</ul>';
+        let listaHtml = '<ul class="item-details-list">';
+        itens.forEach(produto => {
+            const nomeItem = produto.nome || produto.descricao || produto.titulo; 
+            listaHtml += `<li>${produto.qtd}x ${nomeItem}</li>`;
+        });
+        listaHtml += '</ul>';
+        return listaHtml;
     };
-    let cH = '<h4>Cantina</h4>';
+
+    // 1. Preenchimento da Cantina
+    let cantinaHtml = '<h4>Cantina</h4>';
     if (detalhesPendenciasCantina.length > 0) {
-        cH += '<ul>';
-        detalhesPendenciasCantina.forEach(i => cH += `<li><strong>${i.registradoEm.toDate().toLocaleDateString()}: R$ ${i.total.toFixed(2)}</strong>${list(i.itens)}</li>`);
-        cH += '</ul>';
-    } else cH += '<p>Nenhuma pendência.</p>';
-    detalhesCantinaContainer.innerHTML = cH;
-    // (Resto do preenchimento da biblioteca/empréstimos mantido igual ao seu original)
+        cantinaHtml += '<ul>';
+        detalhesPendenciasCantina.forEach(item => {
+            const data = item.registradoEm.toDate().toLocaleDateString('pt-BR');
+            cantinaHtml += `<li><strong>Em ${data}: R$ ${item.total.toFixed(2).replace('.', ',')}</strong>${criarListaDeItens(item.itens)}</li>`;
+        });
+        cantinaHtml += '</ul>';
+    } else { 
+        cantinaHtml += '<p>Nenhuma pendência na cantina.</p>'; 
+    }
+    detalhesCantinaContainer.innerHTML = cantinaHtml;
+
+    // 2. Preenchimento da Biblioteca (Vendas Pendentes)
+    let bibHtml = '<h4>Pendências da Biblioteca (Vendas)</h4>';
+    if (detalhesPendenciasBiblioteca.length > 0) {
+        bibHtml += '<ul>';
+        detalhesPendenciasBiblioteca.forEach(item => {
+            const data = item.registradoEm.toDate().toLocaleDateString('pt-BR');
+            bibHtml += `<li><strong>Em ${data}: R$ ${item.total.toFixed(2).replace('.', ',')}</strong>${criarListaDeItens(item.itens)}</li>`;
+        });
+        bibHtml += '</ul>';
+    } else { 
+        bibHtml += '<p>Nenhuma pendência de vendas na biblioteca.</p>'; 
+    }
+    detalhesBibliotecaContainer.innerHTML = bibHtml;
+
+    // 3. Preenchimento de Empréstimos de Livros
+    let emprestimosHtml = '<h4>Livros Emprestados</h4>';
+    if (detalhesEmprestimos.length > 0) {
+        emprestimosHtml += '<ul>';
+        detalhesEmprestimos.forEach(item => {
+            const data = item.dataEmprestimo.toDate().toLocaleDateString('pt-BR');
+            emprestimosHtml += `<li>${item.livroTitulo} (retirado em ${data})</li>`;
+        });
+        emprestimosHtml += '</ul>';
+    } else { 
+        emprestimosHtml += '<p>Nenhum livro emprestado no momento.</p>'; 
+    }
+    detalhesEmprestimosContainer.innerHTML = emprestimosHtml;
 }
 
 function abrirModalEdicao() {
