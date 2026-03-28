@@ -1,1729 +1,243 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
-
 import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-auth.js";
-
 import { getFirestore, collection, collectionGroup, query, where, getDocs, doc, getDoc, limit, orderBy, Timestamp, writeBatch, updateDoc, setDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
 
-
-
-// --- CONFIGURAÇÕES E INICIALIZAÇÃO ---
-
 const firebaseConfig = {
-
     apiKey: "AIzaSyBV7RPjk3cFTqL-aIpflJcUojKg1ZXMLuU",
-
     authDomain: "voluntarios-ativos---cepat.firebaseapp.com",
-
     projectId: "voluntarios-ativos---cepat",
-
-    storageBucket: "voluntarios-ativos---cepat.appspot.com",
-
-    messagingSenderId: "66122858261",
-
+    storageBucket: "voluntarios-ativos---cepat.firebasestorage.app",
     appId: "1:66122858261:web:7fa21f1805463b5c08331c"
-
 };
-
-const CASA_ESPIRITA_LAT = -22.75553;
-
-const CASA_ESPIRITA_LON = -47.36945;
-
-const RAIO_EM_METROS = 70;
-
-
+const CASA_LAT = -22.75553; const CASA_LON = -47.36945; const RAIO = 70;
 
 const app = initializeApp(firebaseConfig);
-
 const auth = getAuth(app);
-
 const db = getFirestore(app);
 
-
-
-// --- ELEMENTOS DA PÁGINA ---
-
+// Elementos
 const mainContainer = document.getElementById('main-container');
-
 const greetingName = document.getElementById('greeting-name');
-
 const loadingMessage = document.getElementById('loading-message');
-
-const moduleDia = document.getElementById('module-dia');
-
-const modulePessoal = document.getElementById('module-pessoal');
-
-const moduleAluno = document.getElementById('module-aluno');
-
-const moduleFacilitador = document.getElementById('module-facilitador');
-
-const moduleGestao = document.getElementById('module-gestao');
-
-const moduleServicos = document.getElementById('module-servicos');
-
-const alunoContent = document.getElementById('aluno-content');
-
-const facilitadorContent = document.getElementById('facilitador-content');
-
-const btnLogout = document.getElementById('btn-logout');
-
-const diaContent = document.getElementById('dia-content');
-
-const presencaCardContent = document.getElementById('presenca-card-content');
-
-const pessoalContent = document.getElementById('pessoal-content');
-
-
-
 const moduleInformativo = document.getElementById('module-informativo');
-
-const carouselInner = document.getElementById('carousel-inner');
-
-const carouselDots = document.querySelectorAll('.dot');
-
 const muralContent = document.getElementById('mural-content');
-
 const escalaContent = document.getElementById('escala-content');
+const moduleComunicacoes = document.getElementById('module-comunicacoes');
+const comunicacoesContent = document.getElementById('comunicacoes-publicas-content');
 
-
-
-const modalFrequencia = document.getElementById('modal-frequencia');
-
-const closeModalFrequenciaBtn = document.getElementById('close-modal-frequencia');
-
-const modalFrequenciaTitulo = document.getElementById('modal-frequencia-titulo');
-
-const frequenciaListContainer = document.getElementById('frequencia-list-container');
-
-const btnSalvarFrequencia = document.getElementById('btn-salvar-frequencia');
-
-
-
-const modalAtividades = document.getElementById('modal-atividades-presenca');
-
-const closeModalAtividadesBtn = document.getElementById('close-modal-atividades');
-
-const formAtividadesPresenca = document.getElementById('form-atividades-presenca');
-
-const atividadesModalLista = document.getElementById('atividades-modal-lista');
-
-const btnConfirmarPresenca = document.getElementById('btn-confirmar-presenca');
-
-
-
-const modalOverlayDetalhes = document.getElementById('modal-detalhes');
-
-const closeModalDetalhesBtn = document.getElementById('close-modal-detalhes');
-
-const detalhesCantinaContainer = document.getElementById('detalhes-cantina-container');
-
-const detalhesBibliotecaContainer = document.getElementById('detalhes-biblioteca-container');
-
-const detalhesEmprestimosContainer = document.getElementById('detalhes-emprestimos-container');
-
-const modalOverlayEditarPerfil = document.getElementById('modal-editar-perfil');
-
-const closeModalEditarPerfilBtn = document.getElementById('close-modal-editar-perfil');
-
-const formEditarPerfil = document.getElementById('form-editar-perfil');
-
-const inputEditNome = document.getElementById('edit-nome');
-
-const inputEditTelefone = document.getElementById('edit-telefone');
-
-const inputEditEndereco = document.getElementById('edit-endereco');
-
-const inputEditAniversario = document.getElementById('edit-aniversario');
-
-const btnSalvarPerfil = document.getElementById('btn-salvar-perfil');
-
-const modalOverlayHistorico = document.getElementById('modal-historico');
-
-const closeModalHistoricoBtn = document.getElementById('close-modal-historico');
-
-const historyListContainer = document.getElementById('history-list-container');
-
-
-
-let currentUserData = null;
-
-let currentUserId = null;
-
-let cachedAtividades = null;
-
-let currentTurmaIdModal = null;
-
-let currentAulaIdModal = null;
-
-let detalhesPendenciasCantina = [];
-
-let detalhesPendenciasBiblioteca = [];
-
-let detalhesEmprestimos = [];
-
-
+let currentUserData, currentUserId, cacheDados = {};
+let detalhesCantina = [], detalhesBiblioteca = [], detalhesEmprestimos = [];
 
 onAuthStateChanged(auth, async (user) => {
-
     if (user) {
-
         mainContainer.style.display = 'block';
-
         try {
-
-            const qUser = query(collection(db, "voluntarios"), where("authUid", "==", user.uid), limit(1));
-
-            const userSnapshot = await getDocs(qUser);
-
-            let origemBusca;
-
-            if (userSnapshot.empty) {
-
-                const qAluno = query(collection(db, "alunos"), where("authUid", "==", user.uid), limit(1));
-
-                const alunoSnapshot = await getDocs(qAluno);
-
-                if (alunoSnapshot.empty) throw new Error("Perfil não encontrado. Contate a secretaria.");
-
-                currentUserData = alunoSnapshot.docs[0].data();
-
-                currentUserId = alunoSnapshot.docs[0].id;
-
-                origemBusca = 'aluno';
-
+            const qV = query(collection(db, "voluntarios"), where("authUid", "==", user.uid), limit(1));
+            const snapV = await getDocs(qV);
+            let origem;
+            if (snapV.empty) {
+                const qA = query(collection(db, "alunos"), where("authUid", "==", user.uid), limit(1));
+                const snapA = await getDocs(qA);
+                if (snapA.empty) throw new Error("Perfil não encontrado.");
+                currentUserData = snapA.docs[0].data();
+                currentUserId = snapA.docs[0].id;
+                origem = 'aluno';
             } else {
-
-                currentUserData = userSnapshot.docs[0].data();
-
-                currentUserId = userSnapshot.docs[0].id;
-
-                origemBusca = 'voluntario';
-
+                currentUserData = snapV.docs[0].data();
+                currentUserId = snapV.docs[0].id;
+                origem = 'voluntario';
             }
 
             greetingName.textContent = `Olá, ${currentUserData.nome}!`;
-
-
-
-            if (origemBusca === 'voluntario') {
-
-                verificarPendenciaTASV(currentUserData, currentUserId);
-
-            }
-
-
+            if (origem === 'voluntario') verificarTASV(currentUserData, currentUserId);
 
             await carregarMural();
-
             if (currentUserData.isMedium) {
-
                 moduleInformativo.classList.remove('hidden');
-
                 await carregarMinhaEscala(currentUserId);
-
-            } else {
-
-                document.getElementById('slide-escala').style.display = 'none';
-
-                document.getElementById('carousel-nav').classList.add('hidden');
-
-                if (muralContent.innerText.trim() !== "" && muralContent.innerText !== "Carregando avisos...") {
-
-                    moduleInformativo.classList.remove('hidden');
-
-                }
-
             }
+            
+            // NOVO: Carregar comunicações públicas filtradas pela diretoria
+            await carregarComunicacoesPublicas();
 
+            const isA = await verificarPapelAluno(currentUserId);
+            const isF = await verificarPapelFacilitador(currentUserId);
+            const isAdm = await verificarPapelAdmin(user);
 
+            loadingMessage.classList.add('hidden');
+            document.getElementById('module-dia').classList.remove('hidden');
+            document.getElementById('module-pessoal').classList.remove('hidden');
+            document.getElementById('module-servicos').classList.remove('hidden');
+            moduleComunicacoes.classList.remove('hidden');
 
-            const [isAluno, isFacilitador, isAdmin] = await Promise.all([
+            if (isA) { document.getElementById('module-aluno').classList.remove('hidden'); carregarModuloAluno(currentUserId); }
+            if (isF) { document.getElementById('module-facilitador').classList.remove('hidden'); carregarModuloFacilitador(currentUserId); }
+            if (isAdm) document.getElementById('module-gestao').classList.remove('hidden');
 
-                verificarPapelAluno(currentUserId, origemBusca),
+            carregarModuloAcoesDoDia(currentUserId, currentUserData);
+            carregarModuloPessoal(currentUserId, currentUserData);
 
-                verificarPapelFacilitador(currentUserId),
-
-                verificarPapelAdmin(user)
-
-            ]);
-
-            await processarPapeisEExibirModulos(currentUserId, currentUserData, isAluno, isFacilitador, isAdmin);
-
-
-
-        } catch (error) {
-
-            console.error("Erro ao carregar dados:", error);
-
-            loadingMessage.classList.remove('hidden');
-
-            loadingMessage.innerHTML = `<p style="color: red;">${error.message}</p>`;
-
-        }
-
-    } else {
-
-        window.location.href = 'login.html';
-
-    }
-
+        } catch (e) { console.error(e); loadingMessage.innerHTML = `<p style="color:red;">${e.message}</p>`; }
+    } else { window.location.href = 'login.html'; }
 });
 
+// --- LÓGICA DE INSTRUÇÕES ESPIRITUAIS ---
+async function carregarComunicacoesPublicas() {
+    try {
+        const q = query(collection(db, "comunicacoes_mediunicas"), where("publico", "==", true), where("status", "==", "concluido"), orderBy("dataComunicacao", "desc"), limit(5));
+        const snap = await getDocs(q);
+        if (snap.empty) { comunicacoesContent.innerHTML = "<p>Nenhuma instrução pública recente.</p>"; return; }
+        comunicacoesContent.innerHTML = "";
+        snap.forEach(docSnap => {
+            const d = docSnap.data(); cacheDados[docSnap.id] = d;
+            const dataBR = d.dataComunicacao.split("-").reverse().join("/");
+            const card = document.createElement('div'); card.className = 'card';
+            card.innerHTML = `<h4>${d.trabalho}</h4><p>Data: ${dataBR}</p><button class="btn-primary" onclick="abrirPlayerPortal('${docSnap.id}')">Ouvir e Ler</button>`;
+            comunicacoesContent.appendChild(card);
+        });
+    } catch (e) { console.error("Erro comunicacoes:", e); }
+}
 
+window.abrirPlayerPortal = (id) => {
+    const d = cacheDados[id];
+    document.getElementById('player-titulo-comunicacao').innerText = d.trabalho;
+    document.getElementById('player-info-comunicacao').innerText = `Médium: ${d.medium} | Data: ${d.dataComunicacao.split("-").reverse().join("/")}`;
+    const player = document.getElementById('audio-player-portal');
+    player.src = d.urlAudio;
+    const tLimpo = d.transcricao.split("").join("").split(". ").join(".<br><br>");
+    document.getElementById('texto-transcricao-portal').innerHTML = tLimpo;
+    document.getElementById('modal-player-comunicacao').classList.add('visible');
+};
 
+document.getElementById('close-modal-player').onclick = () => {
+    document.getElementById('audio-player-portal').pause();
+    document.getElementById('modal-player-comunicacao').classList.remove('visible');
+};
+
+// --- MURAL E ESCALA ---
 async function carregarMural() {
-
-    try {
-
-        const configRef = doc(db, "configuracoes", "mural");
-
-        const snap = await getDoc(configRef);
-
-        if (snap.exists() && snap.data().mensagem) {
-
-            muralContent.innerHTML = `<p style="font-size: 1.1em; color: #444; line-height: 1.5;">${snap.data().mensagem}</p>`;
-
-        } else {
-
-            muralContent.innerHTML = "<p>Nenhum aviso importante no momento.</p>";
-
-        }
-
-    } catch (e) { console.error("Erro mural:", e); muralContent.innerHTML = ""; }
-
+    const snap = await getDoc(doc(db, "configuracoes", "mural"));
+    if (snap.exists() && snap.data().mensagem) muralContent.innerHTML = `<p>${snap.data().mensagem}</p>`;
 }
 
-
-
-async function carregarMinhaEscala(userId) {
-
-    const hoje = new Date();
-
-    hoje.setHours(0,0,0,0);
-
-    const mesId = `${hoje.getFullYear()}-${String(hoje.getMonth() + 1).padStart(2, '0')}`;
-
-    const hojeIso = hoje.toISOString().split('T')[0];
-
-    try {
-
-        const escalaRef = doc(db, "escalas_mediunicas", mesId);
-
-        const snap = await getDoc(escalaRef);
-
-        if (!snap.exists()) {
-
-            escalaContent.innerHTML = "<p>A escala deste mês ainda não foi publicada.</p>";
-
-            return;
-
-        }
-
-        const dados = snap.data().escalados || {};
-
-        let meusTrabalhos = [];
-
-        for (const [chave, listaUids] of Object.entries(dados)) {
-
-            const dataString = chave.split('_')[0];
-
-            if (listaUids.includes(userId) && dataString >= hojeIso) {
-
-                meusTrabalhos.push({
-
-                    data: dataString,
-
-                    trabalho: chave.split('_').slice(1).join(' ').replace(/_/g, ' ')
-
-                });
-
-            }
-
-        }
-
-        if (meusTrabalhos.length === 0) {
-
-            escalaContent.innerHTML = "<p>Você não possui trabalhos escalados.</p>";
-
-        } else {
-
-            meusTrabalhos.sort((a, b) => a.data.localeCompare(b.data));
-
-            let html = '<ul class="escala-lista">';
-
-            meusTrabalhos.forEach(t => {
-
-                const dataBR = t.data.split('-').reverse().join('/');
-
-                html += `<li class="escala-item"><span class="escala-data">${dataBR}</span> <span class="escala-trab">${t.trabalho}</span></li>`;
-
-            });
-
-            html += '</ul>';
-
-            escalaContent.innerHTML = html;
-
-        }
-
-    } catch (e) { console.error(e); escalaContent.innerHTML = "<p>Erro ao carregar escala.</p>"; }
-
-}
-
-
-
-carouselDots.forEach(dot => {
-
-    dot.addEventListener('click', () => {
-
-        const index = dot.dataset.slide;
-
-        carouselInner.style.transform = `translateX(-${index * 100}%)`;
-
-        carouselDots.forEach(d => d.classList.remove('active'));
-
-        dot.classList.add('active');
-
+async function carregarMinhaEscala(uid) {
+    const hoje = new Date(); const mesId = `${hoje.getFullYear()}-${String(hoje.getMonth() + 1).padStart(2, '0')}`;
+    const snap = await getDoc(doc(db, "escalas_mediunicas", mesId));
+    if (!snap.exists()) { escalaContent.innerHTML = "<p>Escala não publicada.</p>"; return; }
+    let trabs = [];
+    Object.entries(snap.data().escalados || {}).forEach(([k, uids]) => {
+        if (uids.includes(uid)) trabs.push({ d: k.split('_')[0], t: k.split('_').slice(1).join(' ').replace(/_/g, ' ') });
     });
-
-});
-
-
-
-async function processarPapeisEExibirModulos(userId, userData, isAluno, isFacilitador, isAdmin) {
-
-    loadingMessage.classList.add('hidden');
-
-    moduleDia.classList.remove('hidden');
-
-    modulePessoal.classList.remove('hidden');
-
-    moduleServicos.classList.remove('hidden');
-
-    await Promise.all([carregarModuloAcoesDoDia(userId, userData), carregarModuloPessoal(userId, userData)]);
-
-    if (isAluno) { moduleAluno.classList.remove('hidden'); carregarModuloAluno(userId); }
-
-    if (isFacilitador) { moduleFacilitador.classList.remove('hidden'); carregarModuloFacilitador(userId); }
-
-    if (isAdmin) { moduleGestao.classList.remove('hidden'); }
-
-}
-
-
-
-async function verificarPapelAluno(userId, origemBusca) {
-
-    const q = query(collectionGroup(db, 'participantes'), where('participanteId', '==', userId), limit(1));
-
-    const snapshot = await getDocs(q);
-
-    return !snapshot.empty;
-
-}
-
-
-
-async function verificarPapelFacilitador(userId) {
-
-    const q = query(collection(db, 'turmas'), where('facilitadoresIds', 'array-contains', userId), limit(1));
-
-    const snapshot = await getDocs(q);
-
-    return !snapshot.empty;
-
-}
-
-
-
-// CORREÇÃO: Função com Fallback para Voluntário Básico
-
-async function verificarPapelAdmin(user) {
-
-    try {
-
-        const idTokenResult = await user.getIdTokenResult(true);
-
-        const claims = idTokenResult.claims || {};
-
-       
-
-        // Se role for nulo, consideramos 'voluntario'
-
-        const userRole = claims.role || 'voluntario';
-
-
-
-        const rolesComAcessoAdmin = [
-
-            'super-admin', 'voluntario', 'diretor', 'entrevistador', 'bibliotecario',
-
-            'produtor-evento', 'conselheiro', 'irradiador', 'dirigente-escola',
-
-            'secretario-escola', 'recepcionista', 'tesoureiro', 'caritas'
-
-        ];
-
-
-
-        if (rolesComAcessoAdmin.includes(userRole)) return true;
-
-
-
-        for (const role of rolesComAcessoAdmin) {
-
-            if (claims[role] === true) return true;
-
-        }
-
-        return false;
-
-    } catch (error) { console.error(error); return false; }
-
-}
-
-
-
-// ... (Restante das funções de UI e Geolocation preservadas do seu original) ...
-
-// (Ajustes de UI mantidos: carregarModuloAluno, carregarModuloFacilitador, carregarModuloAcoesDoDia, etc.)
-
-
-
-// --- LÓGICA DO MÓDULO ALUNO ---
-
-async function carregarModuloAluno(userId) {
-
-    alunoContent.innerHTML = "<p>Buscando seus cursos...</p>";
-
-    try {
-
-        const participantesQuery = query(collectionGroup(db, 'participantes'), where('participanteId', '==', userId));
-
-        const participantesSnapshot = await getDocs(participantesQuery);
-
-        if (participantesSnapshot.empty) {
-
-            alunoContent.innerHTML = '<p>Você não está inscrito em nenhum curso no momento.</p>';
-
-            return;
-
-        }
-
-        alunoContent.innerHTML = '';
-
-        for (const participanteDoc of participantesSnapshot.docs) {
-
-            const turmaRef = participanteDoc.ref.parent.parent;
-
-            const turmaDoc = await getDoc(turmaRef);
-
-            if (turmaDoc.exists()) {
-
-                renderizarCardDoCursoAluno({ id: turmaDoc.id, ...turmaDoc.data() }, { id: participanteDoc.id, ...participanteDoc.data() });
-
-            }
-
-        }
-
-    } catch (error) {
-
-        console.error("Erro ao carregar módulo do aluno:", error);
-
-        alunoContent.innerHTML = '<p style="color: red;">Erro ao carregar seus cursos.</p>';
-
+    if (trabs.length === 0) escalaContent.innerHTML = "<p>Sem trabalhos escalados.</p>";
+    else {
+        let h = '<ul class="escala-lista">';
+        trabs.sort((a,b)=>a.d.localeCompare(b.d)).forEach(x => h += `<li class="escala-item"><span>${x.d.split('-').reverse().join('/')}</span><span>${x.t}</span></li>`);
+        escalaContent.innerHTML = h + '</ul>';
     }
-
 }
 
-
-
-function renderizarCardDoCursoAluno(turmaData, participanteData) {
-
-    const cursoCard = document.createElement('div');
-
-    cursoCard.className = 'card';
-
-    const anoAtual = turmaData.anoAtual || 1;
-
-    const avaliacaoDoAno = participanteData.avaliacoes ? participanteData.avaliacoes[anoAtual] : null;
-
-    let frequencia = '--';
-
-    let status = 'Cursando';
-
-    let mediaFinal = null;
-
-    if (avaliacaoDoAno) {
-
-        frequencia = `${avaliacaoDoAno.notaFrequencia || 0}%`;
-
-        status = avaliacaoDoAno.statusAprovacao || 'Em Andamento';
-
-        if (turmaData.isEAE) mediaFinal = (avaliacaoDoAno.mediaFinal !== undefined) ? avaliacaoDoAno.mediaFinal.toFixed(1) : 'N/D';
-
-    }
-
-    cursoCard.innerHTML = `<h4>${turmaData.nomeDaTurma}</h4><p><strong>Frequência:</strong> ${frequencia}</p><p><strong>Status:</strong> ${status}</p>${mediaFinal !== null ? `<p><strong>Média Final (${anoAtual}º Ano):</strong> ${mediaFinal}</p>` : ''}<button class="btn-details-aluno" data-turma-id="${turmaData.id}" data-participante-doc-id="${participanteData.id}" style="margin-top: 15px; padding: 8px 12px; background-color: #eee; border: 1px solid #ccc; border-radius: 4px; cursor: pointer;">Ver Detalhes ▼</button><div class="curso-details-content hidden" style="margin-top: 15px; border-top: 1px solid #eee; padding-top: 15px;"></div>`;
-
-    alunoContent.appendChild(cursoCard);
-
+// --- PENDÊNCIAS E PERFIL ---
+async function carregarModuloPessoal(uid, userData) {
+    const cont = document.getElementById('pessoal-content'); cont.innerHTML = "";
+    const cardP = document.createElement('div'); cardP.className = 'card';
+    cardP.innerHTML = `<h4>Meu Perfil</h4><p>Email: ${userData.email}</p><p>Fone: ${userData.telefone || '--'}</p><a href="#" class="card-link" id="link-editar">Editar Dados</a>`;
+    cont.appendChild(cardP);
+    const cardF = document.createElement('div'); cardF.className = 'card';
+    cardF.innerHTML = `<h4>Pendências</h4><p>Cantina: <span id="p-cant">R$ 0,00</span></p><p>Biblioteca: <span id="p-bib">R$ 0,00</span></p><a href="#" class="card-link" id="link-detalhes">Ver Detalhes</a>`;
+    cont.appendChild(cardF);
+    document.getElementById('link-editar').onclick = () => {
+        document.getElementById('edit-nome').value = userData.nome;
+        document.getElementById('edit-telefone').value = userData.telefone || '';
+        document.getElementById('edit-endereco').value = userData.endereco || '';
+        document.getElementById('edit-aniversario').value = userData.aniversario || '';
+        document.getElementById('modal-editar-perfil').classList.add('visible');
+    };
+    document.getElementById('link-detalhes').onclick = () => { preencherModalDetalhes(); document.getElementById('modal-detalhes').classList.add('visible'); };
+    buscarPendencias(uid);
 }
 
-
-
-async function carregarErenderizarDetalhesAluno(turmaId, participanteDocId, detailsContainer) {
-
-    detailsContainer.innerHTML = '<p>Carregando detalhes...</p>';
-
-    try {
-
-        const participanteRef = doc(db, "turmas", turmaId, "participantes", participanteDocId);
-
-        const participanteSnap = await getDoc(participanteRef);
-
-        if(!participanteSnap.exists()) throw new Error("Registro de participante não encontrado.");
-
-        const participanteIdOriginal = participanteSnap.data().participanteId;
-
-        const cronogramaRef = collection(db, "turmas", turmaId, "cronograma");
-
-        const frequenciasRef = collection(db, "turmas", turmaId, "frequencias");
-
-        const [cronogramaSnap, frequenciasSnap] = await Promise.all([
-
-            getDocs(query(cronogramaRef, orderBy("dataAgendada", "asc"))),
-
-            getDocs(query(frequenciasRef, where("participanteId", "==", participanteIdOriginal)))
-
-        ]);
-
-        const frequenciasMap = new Map();
-
-        frequenciasSnap.forEach(doc => frequenciasMap.set(doc.data().aulaId, doc.data().status));
-
-        const hoje = new Date(); hoje.setHours(0, 0, 0, 0);
-
-        let proximasAulasHTML = '<tbody>'; let historicoHTML = '<tbody>';
-
-        let temProxima = false; let temHistorico = false;
-
-        cronogramaSnap.docs.forEach(doc => {
-
-            const aula = { id: doc.id, ...doc.data() };
-
-            const dataAula = aula.dataAgendada.toDate();
-
-            const dataFormatada = dataAula.toLocaleDateString('pt-BR', { timeZone: 'UTC' });
-
-            if (dataAula >= hoje && aula.status !== 'realizada') {
-
-                temProxima = true;
-
-                proximasAulasHTML += `<tr><td>${dataFormatada}</td><td>${aula.isExtra ? 'Extra' : aula.numeroDaAula}</td><td>${aula.titulo}</td></tr>`;
-
-            }
-
-            if (aula.status === 'realizada') {
-
-                temHistorico = true;
-
-                const statusPresenca = frequenciasMap.get(aula.id);
-
-                let statusDisplay = '';
-
-                switch (statusPresenca) {
-
-                    case 'presente': statusDisplay = '<span style="color: green;">Presente</span>'; break;
-
-                    case 'ausente': statusDisplay = '<span style="color: red;">Falta</span>'; break;
-
-                    case 'justificado': statusDisplay = '<span style="color: orange;">Justificado</span>'; break;
-
-                    default: statusDisplay = '<span>Não lançado</span>';
-
-                }
-
-                historicoHTML = `<tr><td>${dataFormatada}</td><td>${aula.titulo}</td><td>${statusDisplay}</td></tr>` + historicoHTML;
-
-            }
-
-        });
-
-        proximasAulasHTML += '</tbody>'; historicoHTML += '</tbody>';
-
-        detailsContainer.innerHTML = `<h5>Próximas Aulas:</h5>${temProxima ? `<table><thead><tr><th>Data</th><th>Nº</th><th>Tema</th></tr></thead>${proximasAulasHTML}</table>` : '<p>Nenhuma aula futura.</p>'}<h5 style="margin-top: 20px;">Histórico:</h5>${temHistorico ? `<table><thead><tr><th>Data</th><th>Tema</th><th>Presença</th></tr></thead>${historicoHTML}</table>` : '<p>Nenhum histórico.</p>'}`;
-
-    } catch (error) {
-
-        console.error("Erro ao carregar detalhes do aluno:", error);
-
-        detailsContainer.innerHTML = '<p style="color: red;">Erro ao carregar detalhes.</p>';
-
-    }
-
+async function buscarPendencias(uid) {
+    detalhesCantina = []; detalhesBiblioteca = [];
+    const qC = query(collection(db, "contas_a_receber"), where("compradorId", "==", uid), where("status", "==", "pendente"));
+    const snapC = await getDocs(qC);
+    let totC = 0; snapC.forEach(d => { totC += d.data().total; detalhesCantina.push(d.data()); });
+    document.getElementById('p-cant').innerText = `R$ ${totC.toFixed(2)}`;
 }
-
-
-
-// --- LÓGICA DO MÓDULO FACILITADOR ---
-
-async function carregarModuloFacilitador(userId) {
-
-    facilitadorContent.innerHTML = "<p>Buscando suas turmas...</p>";
-
-    try {
-
-        const turmasRef = collection(db, "turmas");
-
-        const qTurmas = query(turmasRef, where("facilitadoresIds", "array-contains", userId));
-
-        const turmasSnapshot = await getDocs(qTurmas);
-
-        if (turmasSnapshot.empty) {
-
-            facilitadorContent.innerHTML = '<p>Você não está designado como facilitador de nenhuma turma.</p>';
-
-            return;
-
-        }
-
-        facilitadorContent.innerHTML = '';
-
-        for (const turmaDoc of turmasSnapshot.docs) {
-
-            await renderizarCardDaTurmaFacilitador({ id: turmaDoc.id, ...turmaDoc.data() });
-
-        }
-
-    } catch (error) {
-
-        console.error("Erro ao carregar módulo facilitador:", error);
-
-        facilitadorContent.innerHTML = '<p style="color: red;">Erro ao carregar turmas.</p>';
-
-    }
-
-}
-
-
-
-async function renderizarCardDaTurmaFacilitador(turmaData) {
-
-    const card = document.createElement('div');
-
-    card.className = 'card';
-
-    const hojeInicio = new Date(); hojeInicio.setHours(0, 0, 0, 0);
-
-    const hojeFim = new Date(); hojeFim.setHours(23, 59, 59, 999);
-
-    const cronogramaRef = collection(db, "turmas", turmaData.id, "cronograma");
-
-    const qAula = query(cronogramaRef, where("dataAgendada", ">=", Timestamp.fromDate(hojeInicio)), where("dataAgendada", "<=", Timestamp.fromDate(hojeFim)), limit(1));
-
-    const aulaSnapshot = await getDocs(qAula);
-
-    let aulaDeHoje = null;
-
-    if (!aulaSnapshot.empty) aulaDeHoje = { id: aulaSnapshot.docs[0].id, ...aulaSnapshot.docs[0].data() };
-
-    const dataFormatada = hojeInicio.toLocaleDateString('pt-BR');
-
-    let aulaInfoHTML = ''; let isChamadaDisabled = true; let buttonDataAttributes = '';
-
-    if (aulaDeHoje) {
-
-        aulaInfoHTML = `<strong>Aula de Hoje (${dataFormatada}):</strong><p>${aulaDeHoje.titulo}</p>`;
-
-        isChamadaDisabled = false;
-
-        buttonDataAttributes = `data-turma-id="${turmaData.id}" data-aula-id="${aulaDeHoje.id}" data-aula-titulo="${aulaDeHoje.titulo}"`;
-
-    } else {
-
-        aulaInfoHTML = `<strong>Aula de Hoje (${dataFormatada}):</strong><p>Nenhuma aula agendada.</p>`;
-
-    }
-
-    card.innerHTML = `<h4>${turmaData.nomeDaTurma}</h4><div style="background-color: #f1f5f9; padding: 10px; border-radius: 6px; margin-bottom: 15px;">${aulaInfoHTML}</div><button class="btn-chamada-facilitador" ${buttonDataAttributes} ${isChamadaDisabled ? 'disabled' : ''} style="width: 100%; padding: 10px; background-color: ${isChamadaDisabled ? '#ccc' : '#16a34a'}; color: white; border: none; border-radius: 4px; cursor: ${isChamadaDisabled ? 'not-allowed' : 'pointer'}; font-weight: bold;"><i class="fas fa-clipboard-list"></i> Realizar Chamada</button>`;
-
-    facilitadorContent.appendChild(card);
-
-}
-
-
-
-// --- FUNÇÕES DO MODAL DE FREQUÊNCIA ---
-
-async function abrirModalFrequencia(turmaId, aulaId, aulaTitulo) {
-
-    currentTurmaIdModal = turmaId;
-
-    currentAulaIdModal = aulaId;
-
-    modalFrequenciaTitulo.textContent = `Frequência: ${aulaTitulo}`;
-
-    frequenciaListContainer.innerHTML = '<li>Carregando lista...</li>';
-
-    modalFrequencia.classList.add('visible');
-
-    try {
-
-        const participantesRef = collection(db, "turmas", turmaId, "participantes");
-
-        const qParticipantes = query(participantesRef, orderBy("nome"));
-
-        const participantesSnapshot = await getDocs(qParticipantes);
-
-        const frequenciaRef = collection(db, "turmas", turmaId, "frequencias");
-
-        const qFrequencia = query(frequenciaRef, where("aulaId", "==", aulaId));
-
-        const frequenciaSnapshot = await getDocs(qFrequencia);
-
-        const frequenciasSalvas = new Map();
-
-        frequenciaSnapshot.forEach(doc => frequenciasSalvas.set(doc.data().participanteId, doc.data().status));
-
-        let listHTML = '';
-
-        participantesSnapshot.forEach(doc => {
-
-            const participanteIdOriginal = doc.data().participanteId;
-
-            const statusAtual = frequenciasSalvas.get(participanteIdOriginal) || null;
-
-            listHTML += `<li class="attendance-item" data-participante-id="${participanteIdOriginal}" data-status="${statusAtual || ''}"><span>${doc.data().nome}</span><div class="attendance-controls"><button class="btn-status presente ${statusAtual === 'presente' ? 'active' : ''}" data-status="presente">P</button><button class="btn-status ausente ${statusAtual === 'ausente' ? 'active' : ''}" data-status="ausente">F</button><button class="btn-status justificado ${statusAtual === 'justificado' ? 'active' : ''}" data-status="justificado">J</button></div></li>`;
-
-        });
-
-        frequenciaListContainer.innerHTML = listHTML || '<li>Nenhum participante.</li>';
-
-    } catch(error) {
-
-        console.error("Erro ao carregar chamada:", error);
-
-        frequenciaListContainer.innerHTML = '<li>Erro ao carregar.</li>';
-
-    }
-
-}
-
-
-
-async function salvarFrequencia() {
-
-    if (!currentTurmaIdModal || !currentAulaIdModal) return;
-
-    btnSalvarFrequencia.disabled = true;
-
-    try {
-
-        const batch = writeBatch(db);
-
-        const items = frequenciaListContainer.querySelectorAll('.attendance-item');
-
-        items.forEach(item => {
-
-            const participanteIdOriginal = item.dataset.participanteId;
-
-            const status = item.dataset.status || 'ausente';
-
-            const frequenciaDocId = `${currentAulaIdModal}_${participanteIdOriginal}`;
-
-            const frequenciaRef = doc(db, "turmas", currentTurmaIdModal, "frequencias", frequenciaDocId);
-
-            batch.set(frequenciaRef, { aulaId: currentAulaIdModal, participanteId: participanteIdOriginal, status: status, turmaId: currentTurmaIdModal });
-
-        });
-
-        const aulaRef = doc(db, "turmas", currentTurmaIdModal, "cronograma", currentAulaIdModal);
-
-        batch.update(aulaRef, { status: 'realizada' });
-
-        await batch.commit();
-
-        alert("Frequência salva!");
-
-        modalFrequencia.classList.remove('visible');
-
-    } catch (error) {
-
-        console.error("Erro ao salvar frequência:", error);
-
-        alert("Erro ao salvar.");
-
-    } finally {
-
-        btnSalvarFrequencia.disabled = false;
-
-    }
-
-}
-
-
-
-
-
-// --- LÓGICA DO MÓDULO AÇÕES DO DIA ---
-
-function getDistance(lat1, lon1, lat2, lon2) {
-
-    const R = 6371e3; const φ1 = lat1 * Math.PI / 180, φ2 = lat2 * Math.PI / 180;
-
-    const Δφ = (lat2 - lat1) * Math.PI / 180, Δλ = (lon2 - lon1) * Math.PI / 180;
-
-    const a = Math.sin(Δφ / 2) * Math.sin(Δφ / 2) + Math.cos(φ1) * Math.cos(φ2) * Math.sin(Δλ / 2) * Math.sin(Δλ / 2);
-
-    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a)); return R * c;
-
-}
-
-function getDataDeHojeSP() {
-
-    const formatador = new Intl.DateTimeFormat('en-CA', { year: 'numeric', month: '2-digit', day: '2-digit', timeZone: 'America/Sao_Paulo' });
-
-    return formatador.format(new Date());
-
-}
-
-
-
-async function carregarModuloAcoesDoDia(userId, userData) {
-
-    presencaCardContent.innerHTML = '<p class="loading-message">Verificando status de presença...</p>';
-
-    const dataHoje = getDataDeHojeSP();
-
-    const presencaId = `${dataHoje}_${userData.nome.replace(/\s+/g, '_')}`;
-
-    const presencaRef = doc(db, "presencas", presencaId);
-
-    try {
-
-        const presencaSnap = await getDoc(presencaRef);
-
-        if (presencaSnap.exists() && presencaSnap.data().status === 'presente') {
-
-            renderizarCardPresencaRegistrada(presencaSnap.data());
-
-        } else {
-
-            verificarLocalizacaoParaRegistro();
-
-        }
-
-    } catch (error) {
-
-        console.error("Erro ao verificar presença:", error);
-
-        presencaCardContent.innerHTML = '<p style="color: red;">Erro ao verificar presença.</p>';
-
-    }
-
-}
-
-
-
-function verificarLocalizacaoParaRegistro() {
-
-    if (!navigator.geolocation) return renderizarCardErroGeo("Geolocalização não suportada.");
-
-    navigator.geolocation.getCurrentPosition(
-
-        (position) => {
-
-            const distancia = getDistance(position.coords.latitude, position.coords.longitude, CASA_ESPIRITA_LAT, CASA_ESPIRITA_LON);
-
-            if (distancia <= RAIO_EM_METROS) renderizarCardProntoParaRegistrar(distancia);
-
-            else renderizarCardLonge(distancia);
-
-        },
-
-        (error) => {
-
-            console.error("Erro de geolocalização:", error);
-
-            renderizarCardErroGeo("Não foi possível obter localização.");
-
-        }
-
-    );
-
-}
-
-
-
-function renderizarCardPresencaRegistrada(presencaData) {
-
-    presencaCardContent.innerHTML = `<div class="presenca-card"><h4><i class="fas fa-check-circle" style="color: green;"></i> Status da Presença Hoje</h4><p style="color: green; font-weight: bold;">Presença registrada com sucesso!</p><div class="presenca-registrada-info">Atividades: ${presencaData.atividade || 'Não informado'}</div><button class="btn-tertiary" style="margin-top: 15px;" onclick="location.reload()">Verificar novamente</button></div>`;
-
-}
-
-function renderizarCardProntoParaRegistrar(distancia) {
-
-    presencaCardContent.innerHTML = `<div class="presenca-card"><h4><i class="fas fa-map-marker-alt" style="color: #16a34a;"></i> Status da Presença Hoje</h4><p>Você está na Casa Espírita!<br>(Aprox. ${distancia.toFixed(0)} metros)</p><button class="btn-presenca" id="btn-registrar-presenca-meu-cepat"><i class="fas fa-plus-circle"></i> Registrar Presença Agora</button></div>`;
-
-    document.getElementById('btn-registrar-presenca-meu-cepat').addEventListener('click', abrirModalAtividades);
-
-}
-
-function renderizarCardLonge(distancia) {
-
-    presencaCardContent.innerHTML = `<div class="presenca-card"><h4><i class="fas fa-satellite-dish" style="color: #f59e0b;"></i> Status da Presença Hoje</h4><p>Você não está na área da Casa Espírita.<br>(Aprox. ${distancia.toFixed(0)} metros)</p><button class="btn-presenca" disabled>Aproxime-se para Registrar</button><button class="btn-tertiary" style="margin-top: 15px;" onclick="location.reload()">Verificar novamente</button></div>`;
-
-}
-
-function renderizarCardErroGeo(mensagem) {
-
-     presencaCardContent.innerHTML = `<div class="presenca-card"><h4><i class="fas fa-exclamation-triangle" style="color: red;"></i> Status da Presença Hoje</h4><p style="color: red;">${mensagem}</p><button class="btn-presenca" disabled>Registro Indisponível</button><button class="btn-tertiary" style="margin-top: 15px;" onclick="location.reload()">Tentar novamente</button></div>`;
-
-}
-
-
-
-async function buscarAtividadesDoFirestore() {
-
-    if (cachedAtividades) return cachedAtividades;
-
-    try {
-
-        const q = query(collection(db, "atividades"), where("ativo", "==", true), orderBy("nome"));
-
-        const snapshot = await getDocs(q);
-
-        cachedAtividades = snapshot.docs.map(doc => doc.data().nome);
-
-        return cachedAtividades;
-
-    } catch (e) { console.error("Erro ao buscar atividades:", e); return []; }
-
-}
-
-
-
-async function abrirModalAtividades() {
-
-    atividadesModalLista.innerHTML = 'Carregando atividades...';
-
-    modalAtividades.classList.add('visible');
-
-    const atividades = await buscarAtividadesDoFirestore();
-
-    atividadesModalLista.innerHTML = '';
-
-    if (atividades.length === 0) { atividadesModalLista.innerHTML = '<p>Nenhuma atividade.</p>'; return; }
-
-    atividades.forEach(atividade => {
-
-        const div = document.createElement('div');
-
-        div.innerHTML = `<input type="checkbox" name="atividade_modal" value="${atividade}" id="modal-${atividade}"> <label for="modal-${atividade}">${atividade}</label>`;
-
-        atividadesModalLista.appendChild(div);
-
-    });
-
-}
-
-
-
-async function salvarPresencaLogado(event) {
-
-    event.preventDefault();
-
-    const atividadesSelecionadasNode = document.querySelectorAll('#form-atividades-presenca input[name="atividade_modal"]:checked');
-
-    const atividadesSelecionadas = Array.from(atividadesSelecionadasNode).map(cb => cb.value);
-
-    if (atividadesSelecionadas.length === 0) return alert("Selecione pelo menos uma atividade.");
-
-    btnConfirmarPresenca.disabled = true; btnConfirmarPresenca.textContent = 'Registrando...';
-
-    try {
-
-        const dataHoje = getDataDeHojeSP();
-
-        const presencaId = `${dataHoje}_${currentUserData.nome.replace(/\s+/g, '_')}`;
-
-        const docRef = doc(db, "presencas", presencaId);
-
-        await setDoc(docRef, {
-
-            nome: currentUserData.nome, atividade: atividadesSelecionadas.join(', '), data: dataHoje,
-
-            primeiroCheckin: serverTimestamp(), ultimaAtualizacao: serverTimestamp(), status: 'presente',
-
-            authUid: auth.currentUser.uid, voluntarioId: currentUserId
-
-        }, { merge: true });
-
-        modalAtividades.classList.remove('visible');
-
-        renderizarCardPresencaRegistrada({ atividade: atividadesSelecionadas.join(', ') });
-
-    } catch (error) {
-
-        console.error("Erro ao registrar presença:", error);
-
-        alert("Erro ao salvar presença.");
-
-    } finally {
-
-        btnConfirmarPresenca.disabled = false; btnConfirmarPresenca.textContent = 'Confirmar Presença';
-
-    }
-
-}
-
-
-
-// ===================================================================
-
-// ## BLOCO TRANSPLANTADO E ADAPTADO DE PAINEL.JS ##
-
-// ===================================================================
-
-async function carregarModuloPessoal(userId, userData) {
-
-    pessoalContent.innerHTML = '';
-
-
-
-    // Card 1: Meu Perfil
-
-    const perfilCard = document.createElement('div');
-
-    perfilCard.className = 'card profile-card';
-
-    perfilCard.innerHTML = `
-
-        <h4><i class="fas fa-id-card"></i> Meu Perfil</h4>
-
-        <p><strong>Email:</strong> ${userData.email || '--'}</p>
-
-        <p><strong>Telefone:</strong> ${userData.telefone || '--'}</p>
-
-        <p><strong>Aniversário:</strong> ${userData.aniversario || '--'}</p>
-
-        <p><strong>Endereço:</strong> ${userData.endereco || '--'}</p>
-
-        <a href="#" class="card-link" id="link-editar-dados">Editar Meus Dados</a>
-
-    `;
-
-    pessoalContent.appendChild(perfilCard);
-
-
-
-    // Card 2: Minhas Pendências
-
-    const pendenciasCard = document.createElement('div');
-
-    pendenciasCard.className = 'card pendencias-card';
-
-    pendenciasCard.innerHTML = `
-
-        <h4><i class="fas fa-file-invoice-dollar"></i> Minhas Pendências</h4>
-
-        <p><strong>Saldo Cantina:</strong> <span id="pendencia-cantina">R$ 0,00</span></p>
-
-        <p><strong>Saldo Biblioteca:</strong> <span id="pendencia-biblioteca">R$ 0,00</span></p>
-
-        <div id="emprestimos-biblioteca"><p><strong>Livros:</strong> Nenhum.</p></div>
-
-        <a href="#" class="card-link" id="link-ver-detalhes">Ver Detalhes</a>
-
-    `;
-
-    pessoalContent.appendChild(pendenciasCard);
-
-   
-
-    // Card 3: Histórico de Presença
-
-    const historicoCard = document.createElement('div');
-
-    historicoCard.className = 'card';
-
-    historicoCard.innerHTML = `
-
-        <h4><i class="fas fa-history"></i> Histórico de Presença</h4>
-
-        <p>Sua última presença foi em ${userData.ultimaPresenca || 'não registrada'}.</p>
-
-        <a href="#" class="card-link" id="link-ver-historico">Ver Histórico Completo</a>
-
-    `;
-
-    pessoalContent.appendChild(historicoCard);
-
-
-
-    document.getElementById('link-editar-dados').addEventListener('click', abrirModalEdicao);
-
-    document.getElementById('link-ver-detalhes').addEventListener('click', () => { preencherModalDetalhes(); modalOverlayDetalhes.classList.add('visible'); });
-
-    document.getElementById('link-ver-historico').addEventListener('click', carregarHistoricoDePresenca);
-
-
-
-    await buscarPendenciasEEmprestimos(userId);
-
-}
-
-
-
-async function buscarPendenciasEEmprestimos(userId) {
-
-    if (!userId) return;
-
-    detalhesPendenciasCantina = [];
-
-    detalhesPendenciasBiblioteca = [];
-
-    detalhesEmprestimos = [];
-
-    const pendenciaCantinaElement = document.getElementById('pendencia-cantina');
-
-    const pendenciaBibliotecaElement = document.getElementById('pendencia-biblioteca');
-
-    const emprestimosBibliotecaElement = document.getElementById('emprestimos-biblioteca');
-
-
-
-    try {
-
-        const qCantina = query(collection(db, "contas_a_receber"), where("compradorId", "==", userId), where("status", "==", "pendente"));
-
-        const snapshotCantina = await getDocs(qCantina);
-
-        let totalCantina = 0;
-
-        snapshotCantina.forEach(doc => { const data = doc.data(); totalCantina += data.total; detalhesPendenciasCantina.push(data); });
-
-        if (pendenciaCantinaElement) pendenciaCantinaElement.textContent = `R$ ${totalCantina.toFixed(2).replace('.', ',')}`;
-
-    } catch (e) { console.error("Erro ao buscar pendências da cantina:", e); }
-
-
-
-    try {
-
-        const qBibVendas = query(collection(db, "biblioteca_contas_a_receber"), where("compradorId", "==", userId), where("status", "==", "pendente"));
-
-        const snapshotBibVendas = await getDocs(qBibVendas);
-
-        let totalBibVendas = 0;
-
-        snapshotBibVendas.forEach(doc => { const data = doc.data(); totalBibVendas += data.total; detalhesPendenciasBiblioteca.push(data); });
-
-        if (pendenciaBibliotecaElement) pendenciaBibliotecaElement.textContent = `R$ ${totalBibVendas.toFixed(2).replace('.', ',')}`;
-
-    } catch (e) { console.error("Erro ao buscar pendências da biblioteca:", e); }
-
-
-
-    try {
-
-        const qBibEmprestimos = query(collection(db, "biblioteca_emprestimos"), where("leitor.id", "==", userId), where("status", "==", "emprestado"));
-
-        const snapshotBibEmprestimos = await getDocs(qBibEmprestimos);
-
-        if (emprestimosBibliotecaElement) {
-
-            if (snapshotBibEmprestimos.empty) {
-
-                emprestimosBibliotecaElement.innerHTML = `<p><strong>Livros Emprestados:</strong> Nenhum.</p>`;
-
-            } else {
-
-                let livrosHtml = '<p><strong>Livros Emprestados:</strong></p><ul style="margin: 0; padding-left: 20px;">';
-
-                snapshotBibEmprestimos.forEach(doc => { const data = doc.data(); livrosHtml += `<li>${data.livroTitulo}</li>`; detalhesEmprestimos.push(data); });
-
-                livrosHtml += '</ul>';
-
-                emprestimosBibliotecaElement.innerHTML = livrosHtml;
-
-            }
-
-        }
-
-    } catch (e) { console.error("Erro ao buscar empréstimos da biblioteca:", e); }
-
-}
-
-
 
 function preencherModalDetalhes() {
-
-    const criarListaDeItens = (itens) => {
-
-        if (!itens || itens.length === 0) return '';
-
-        let listaHtml = '<ul class="item-details-list">';
-
-        itens.forEach(produto => {
-
-            const nomeItem = produto.nome || produto.descricao || produto.titulo;
-
-            listaHtml += `<li>${produto.qtd}x ${nomeItem}</li>`;
-
-        });
-
-        listaHtml += '</ul>';
-
-        return listaHtml;
-
-    };
-
-    let cantinaHtml = '<h4>Pendências da Cantina</h4>';
-
-    if (detalhesPendenciasCantina.length > 0) {
-
-        cantinaHtml += '<ul>';
-
-        detalhesPendenciasCantina.forEach(item => {
-
-            const data = item.registradoEm.toDate().toLocaleDateString('pt-BR');
-
-            cantinaHtml += `<li><strong>Em ${data}: R$ ${item.total.toFixed(2).replace('.', ',')}</strong>${criarListaDeItens(item.itens)}</li>`;
-
-        });
-
-        cantinaHtml += '</ul>';
-
-    } else { cantinaHtml += '<p>Nenhuma pendência na cantina.</p>'; }
-
-    detalhesCantinaContainer.innerHTML = cantinaHtml;
-
-
-
-    let bibHtml = '<h4>Pendências da Biblioteca (Vendas)</h4>';
-
-    if (detalhesPendenciasBiblioteca.length > 0) {
-
-        bibHtml += '<ul>';
-
-        detalhesPendenciasBiblioteca.forEach(item => {
-
-            const data = item.registradoEm.toDate().toLocaleDateString('pt-BR');
-
-            bibHtml += `<li><strong>Em ${data}: R$ ${item.total.toFixed(2).replace('.', ',')}</strong>${criarListaDeItens(item.itens)}</li>`;
-
-        });
-
-        bibHtml += '</ul>';
-
-    } else { bibHtml += '<p>Nenhuma pendência de vendas na biblioteca.</p>'; }
-
-    detalhesBibliotecaContainer.innerHTML = bibHtml;
-
-
-
-    let emprestimosHtml = '<h4>Livros Emprestados</h4>';
-
-    if (detalhesEmprestimos.length > 0) {
-
-        emprestimosHtml += '<ul>';
-
-        detalhesEmprestimos.forEach(item => {
-
-            const data = item.dataEmprestimo.toDate().toLocaleDateString('pt-BR');
-
-            emprestimosHtml += `<li>${item.livroTitulo} (retirado em ${data})</li>`;
-
-        });
-
-        emprestimosHtml += '</ul>';
-
-    } else { emprestimosHtml += '<p>Nenhum livro emprestado.</p>'; }
-
-    detalhesEmprestimosContainer.innerHTML = emprestimosHtml;
-
+    let h = '<h4>Cantina</h4><ul>';
+    detalhesCantina.forEach(i => h += `<li>${i.registradoEm.toDate().toLocaleDateString()}: R$ ${i.total.toFixed(2)}</li>`);
+    document.getElementById('detalhes-cantina-container').innerHTML = h + '</ul>';
 }
 
-
-
-function abrirModalEdicao() {
-
-    if (!currentUserData) return;
-
-    inputEditNome.value = currentUserData.nome || '';
-
-    inputEditTelefone.value = currentUserData.telefone || '';
-
-    inputEditEndereco.value = currentUserData.endereco || '';
-
-    inputEditAniversario.value = currentUserData.aniversario || '';
-
-    modalOverlayEditarPerfil.classList.add('visible');
-
-}
-
-
-
-async function salvarAlteracoesPerfil(event) {
-
-    event.preventDefault();
-
-    if (!currentUserId) return;
-
-    const dadosAtualizados = {
-
-        nome: inputEditNome.value.trim(),
-
-        telefone: inputEditTelefone.value.trim(),
-
-        endereco: inputEditEndereco.value.trim(),
-
-        aniversario: inputEditAniversario.value.trim()
-
-    };
-
-    btnSalvarPerfil.disabled = true;
-
-    btnSalvarPerfil.textContent = 'Salvando...';
-
-    try {
-
-        const voluntarioDocRef = doc(db, "voluntarios", currentUserId);
-
-        await updateDoc(voluntarioDocRef, dadosAtualizados);
-
-        currentUserData = { ...currentUserData, ...dadosAtualizados };
-
-        await carregarModuloPessoal(currentUserId, currentUserData);
-
-        alert("Dados atualizados com sucesso!");
-
-        modalOverlayEditarPerfil.classList.remove('visible');
-
-    } catch (error) {
-
-        console.error("Erro ao atualizar o perfil:", error);
-
-        alert("Ocorreu um erro ao salvar. Tente novamente.");
-
-    } finally {
-
-        btnSalvarPerfil.disabled = false;
-
-        btnSalvarPerfil.textContent = 'Salvar Alterações';
-
+// --- TASV ---
+function verificarTASV(u, uid) {
+    const ano = new Date().getFullYear();
+    if (u.tasvAssinadoAno !== ano) {
+        document.getElementById('tasv-ano-atual').textContent = ano;
+        document.getElementById('modal-tasv').classList.add('visible');
     }
-
 }
+document.getElementById('check-aceite-tasv').onchange = (e) => {
+    const btn = document.getElementById('btn-assinar-tasv');
+    btn.disabled = !e.target.checked; btn.style.backgroundColor = e.target.checked ? '#0277BD' : '#9ca3af';
+};
+document.getElementById('btn-assinar-tasv').onclick = async () => {
+    const b = writeBatch(db); const ano = new Date().getFullYear();
+    b.update(doc(db, "voluntarios", currentUserId), { tasvAssinadoAno: ano, tasvDataAssinatura: serverTimestamp() });
+    await b.commit(); document.getElementById('modal-tasv').classList.remove('visible'); alert("Termo assinado!");
+};
 
-
-
-async function carregarHistoricoDePresenca() {
-
-    if (!currentUserData) return;
-
-    historyListContainer.innerHTML = '<p>Carregando histórico...</p>';
-
-    modalOverlayHistorico.classList.add('visible');
-
-    try {
-
-        const q = query(collection(db, "presencas"), where("nome", "==", currentUserData.nome), orderBy("data", "desc"));
-
-        const snapshot = await getDocs(q);
-
-        if (snapshot.empty) {
-
-            historyListContainer.innerHTML = '<p>Nenhuma presença encontrada em seu histórico.</p>';
-
-            return;
-
-        }
-
-        let historicoHtml = '<ul>';
-
-        snapshot.forEach(doc => {
-
-            const presenca = doc.data();
-
-            historicoHtml += `<li><strong>${presenca.data}:</strong> ${presenca.atividade}</li>`;
-
-        });
-
-        historicoHtml += '</ul>';
-
-        historyListContainer.innerHTML = historicoHtml;
-
-    } catch (error) {
-
-        console.error("Erro ao carregar histórico de presença:", error);
-
-        historyListContainer.innerHTML = '<p style="color:red;">Ocorreu um erro ao buscar seu histórico.</p>';
-
-    }
-
-}
-
-
-
-// ===================================================================
-
-// ## LÓGICA DO TASV DIGITAL (TERMO DE ADESÃO) ##
-
-// ===================================================================
-
-const modalTasv = document.getElementById('modal-tasv');
-
-const checkAceiteTasv = document.getElementById('check-aceite-tasv');
-
-const btnAssinarTasv = document.getElementById('btn-assinar-tasv');
-
-const spanTasvAno = document.getElementById('tasv-ano-atual');
-
-
-
-async function verificarPendenciaTASV(userData, userId) {
-
-    const anoAtual = new Date().getFullYear();
-
-    if (userData.tasvAssinadoAno !== anoAtual) {
-
-        abrirModalTASV(anoAtual);
-
-    }
-
-}
-
-
-
-function abrirModalTASV(ano) {
-
-    if (spanTasvAno) spanTasvAno.textContent = ano;
-
-    if (modalTasv) {
-
-        modalTasv.classList.add('visible');
-
-        if (checkAceiteTasv) checkAceiteTasv.checked = false;
-
-        if (btnAssinarTasv) {
-
-            btnAssinarTasv.disabled = true;
-
-            btnAssinarTasv.style.backgroundColor = '#9ca3af';
-
-        }
-
-    }
-
-}
-
-
-
-if (checkAceiteTasv) {
-
-    checkAceiteTasv.addEventListener('change', (e) => {
-
-        if (e.target.checked) {
-
-            btnAssinarTasv.disabled = false;
-
-            btnAssinarTasv.style.backgroundColor = '#0277BD';
-
+// --- GEOLOCALIZAÇÃO E PRESENÇA ---
+function carregarModuloAcoesDoDia(uid, userData) {
+    const cont = document.getElementById('presenca-card-content');
+    const dataH = new Date().toISOString().split('T')[0];
+    const presId = `${dataH}_${userData.nome.replace(/\s+/g, '_')}`;
+    getDoc(doc(db, "presencas", presId)).then(snap => {
+        if (snap.exists() && snap.data().status === 'presente') {
+            cont.innerHTML = `<div class="card"><h4>Presença Confirmada</h4><p>Atividades: ${snap.data().atividade}</p></div>`;
         } else {
-
-            btnAssinarTasv.disabled = true;
-
-            btnAssinarTasv.style.backgroundColor = '#9ca3af';
-
-        }
-
-    });
-
-}
-
-
-
-if (btnAssinarTasv) {
-
-    btnAssinarTasv.addEventListener('click', async () => {
-
-        if (!currentUserId || !currentUserData) return;
-
-        btnAssinarTasv.disabled = true;
-
-        btnAssinarTasv.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Registrando...';
-
-        const anoAtual = new Date().getFullYear();
-
-        const timestampAgora = serverTimestamp();
-
-        try {
-
-            const batch = writeBatch(db);
-
-            const voluntarioRef = doc(db, "voluntarios", currentUserId);
-
-            batch.update(voluntarioRef, {
-
-                tasvAssinadoAno: anoAtual,
-
-                tasvDataAssinatura: timestampAgora
-
+            navigator.geolocation.getCurrentPosition(p => {
+                const dist = calcularDist(p.coords.latitude, p.coords.longitude, CASA_LAT, CASA_LON);
+                if (dist <= RAIO) {
+                    cont.innerHTML = `<button class="btn-presenca" id="btn-reg">Registrar Presença (${dist.toFixed(0)}m)</button>`;
+                    document.getElementById('btn-reg').onclick = abrirModalAtividades;
+                } else cont.innerHTML = `<p>Aproxime-se da Casa para registrar (${dist.toFixed(0)}m)</p>`;
             });
-
-            const logRef = doc(collection(db, "log_auditoria"));
-
-            batch.set(logRef, {
-
-                acao: "ASSINATURA_DIGITAL_TASV",
-
-                autor: { uid: auth.currentUser.uid, nome: currentUserData.nome, id_voluntario: currentUserId },
-
-                detalhes: { ano_referencia: anoAtual, texto_aceito: "Lei nº 9.608/1998 e Termo de Adesão CEPAT", navegador: navigator.userAgent },
-
-                timestamp: timestampAgora
-
-            });
-
-            await batch.commit();
-
-            alert(`Termo de Adesão ${anoAtual} assinado com sucesso!`);
-
-            modalTasv.classList.remove('visible');
-
-            currentUserData.tasvAssinadoAno = anoAtual;
-
-        } catch (error) {
-
-            console.error("Erro ao assinar TASV:", error);
-
-            alert("Erro ao registrar assinatura.");
-
-            btnAssinarTasv.disabled = false;
-
-            btnAssinarTasv.innerHTML = '<i class="fas fa-file-signature"></i> Assinar Digitalmente';
-
         }
-
     });
-
 }
-
-
-
-// --- EVENTOS ---
-
-btnLogout.addEventListener('click', async (e) => {
-
+function calcularDist(la1, lo1, la2, lo2) {
+    const R = 6371e3; const p1 = la1 * Math.PI/180, p2 = la2 * Math.PI/180, dl = (lo2-lo1)*Math.PI/180, da = (la2-la1)*Math.PI/180;
+    const a = Math.sin(da/2)**2 + Math.cos(p1)*Math.cos(p2)*Math.sin(dl/2)**2;
+    return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+}
+async function abrirModalAtividades() {
+    const lista = document.getElementById('atividades-modal-lista'); lista.innerHTML = "Carregando...";
+    document.getElementById('modal-atividades-presenca').classList.add('visible');
+    const snap = await getDocs(query(collection(db, "atividades"), where("ativo", "==", true), orderBy("nome")));
+    lista.innerHTML = "";
+    snap.forEach(d => {
+        const div = document.createElement('div');
+        div.innerHTML = `<input type="checkbox" name="atv" value="${d.data().nome}" id="atv-${d.id}"> <label for="atv-${d.id}">${d.data().nome}</label>`;
+        lista.appendChild(div);
+    });
+}
+document.getElementById('form-atividades-presenca').onsubmit = async (e) => {
     e.preventDefault();
+    const sel = Array.from(document.querySelectorAll('input[name="atv"]:checked')).map(c => c.value);
+    if (sel.length === 0) return alert("Selecione uma atividade.");
+    const dataH = new Date().toISOString().split('T')[0];
+    const presId = `${dataH}_${currentUserData.nome.replace(/\s+/g, '_')}`;
+    await setDoc(doc(db, "presencas", presId), { nome: currentUserData.nome, atividade: sel.join(', '), status: 'presente', voluntarioId: currentUserId, data: dataH, primeiroCheckin: serverTimestamp() }, { merge: true });
+    document.getElementById('modal-atividades-presenca').classList.remove('visible');
+    location.reload();
+};
 
-    await signOut(auth);
+// --- AUXILIARES ---
+async function verificarPapelAluno(uid) { return !(await getDocs(query(collectionGroup(db, 'participantes'), where('participanteId', '==', uid), limit(1)))).empty; }
+async function verificarPapelFacilitador(uid) { return !(await getDocs(query(collection(db, 'turmas'), where('facilitadoresIds', 'array-contains', uid), limit(1)))).empty; }
+async function verificarPapelAdmin(user) { const c = (await user.getIdTokenResult()).claims; return !!(c.role || c['super-admin']); }
 
-    window.location.href = 'login.html';
-
-});
-
-
-
-alunoContent.addEventListener('click', async (e) => {
-
-    const target = e.target.closest('.btn-details-aluno');
-
-    if (!target) return;
-
-    const card = target.closest('.card');
-
-    const detailsContent = card.querySelector('.curso-details-content');
-
-    const turmaId = target.dataset.turmaId;
-
-    const participanteDocId = target.dataset.participanteDocId;
-
-    const isHidden = detailsContent.classList.contains('hidden');
-
-    if (isHidden) {
-
-        detailsContent.classList.remove('hidden');
-
-        target.innerHTML = `Ocultar Detalhes ▲`;
-
-        await carregarErenderizarDetalhesAluno(turmaId, participanteDocId, detailsContent);
-
-    } else {
-
-        detailsContent.classList.add('hidden');
-
-        target.innerHTML = `Ver Detalhes ▼`;
-
-        detailsContent.innerHTML = '';
-
-    }
-
-});
-
-
-
-facilitadorContent.addEventListener('click', (e) => {
-
-    const target = e.target.closest('.btn-chamada-facilitador');
-
-    if (target && !target.disabled) {
-
-        const { turmaId, aulaId, aulaTitulo } = target.dataset;
-
-        abrirModalFrequencia(turmaId, aulaId, aulaTitulo);
-
-    }
-
-});
-
-
-
-if(closeModalFrequenciaBtn) closeModalFrequenciaBtn.addEventListener('click', () => modalFrequencia.classList.remove('visible'));
-
-if(btnSalvarFrequencia) btnSalvarFrequencia.addEventListener('click', salvarFrequencia);
-
-if(frequenciaListContainer) frequenciaListContainer.addEventListener('click', (event) => {
-
-    if (event.target.classList.contains('btn-status')) {
-
-        const targetBtn = event.target;
-
-        const parentItem = targetBtn.closest('.attendance-item');
-
-        parentItem.dataset.status = targetBtn.dataset.status;
-
-        parentItem.querySelectorAll('.btn-status').forEach(btn => btn.classList.remove('active'));
-
-        targetBtn.classList.add('active');
-
-    }
-
-});
-
-
-
-if(closeModalAtividadesBtn) closeModalAtividadesBtn.addEventListener('click', () => modalAtividades.classList.remove('visible'));
-
-if(formAtividadesPresenca) formAtividadesPresenca.addEventListener('submit', salvarPresencaLogado);
-
-
-
-if(closeModalDetalhesBtn) closeModalDetalhesBtn.addEventListener('click', () => { modalOverlayDetalhes.classList.remove('visible'); });
-
-if(modalOverlayDetalhes) modalOverlayDetalhes.addEventListener('click', (event) => { if (event.target === modalOverlayDetalhes) { modalOverlayDetalhes.classList.remove('visible'); } });
-
-if(closeModalEditarPerfilBtn) closeModalEditarPerfilBtn.addEventListener('click', () => { modalOverlayEditarPerfil.classList.remove('visible'); });
-
-if(modalOverlayEditarPerfil) modalOverlayEditarPerfil.addEventListener('click', (event) => { if (event.target === modalOverlayEditarPerfil) { modalOverlayEditarPerfil.classList.remove('visible'); } });
-
-if(formEditarPerfil) formEditarPerfil.addEventListener('submit', salvarAlteracoesPerfil);
-
-if(closeModalHistoricoBtn) closeModalHistoricoBtn.addEventListener('click', () => { modalOverlayHistorico.classList.remove('visible'); });
-
-if(modalOverlayHistorico) modalOverlayHistorico.addEventListener('click', (event) => { if (event.target === modalOverlayHistorico) { modalOverlayHistorico.classList.remove('visible'); } });
-
-
-
-console.log("DEBUG: Script meu-cepat.js carregado e eventos adicionados.");
+document.getElementById('btn-logout').onclick = () => signOut(auth).then(() => window.location.href='login.html');
+document.querySelectorAll('.modal-close-btn').forEach(b => b.onclick = (e) => e.target.closest('.modal-overlay').classList.remove('visible'));
