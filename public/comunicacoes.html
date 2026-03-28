@@ -16,10 +16,13 @@
         .input-group label { display: block; margin-bottom: 5px; font-weight: bold; color: #333; }
         .input-group input, .input-group select { width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 6px; box-sizing: border-box; }
         .btn-enviar { background-color: #8e44ad; color: white; border: none; padding: 12px 25px; border-radius: 8px; cursor: pointer; font-weight: bold; width: 100%; margin-top: 10px; }
-        .item-transcricao { background: white; padding: 20px; border-radius: 12px; box-shadow: 0 2px 10px rgba(0,0,0,0.05); display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; }
+        .item-transcricao { background: white; padding: 20px; border-radius: 12px; box-shadow: 0 2px 10px rgba(0,0,0,0.05); margin-bottom: 15px; display: flex; flex-direction: column; }
+        .item-main { display: flex; justify-content: space-between; align-items: center; }
         .info-msg { font-size: 0.9em; color: #666; }
         .actions i { font-size: 22px; margin-left: 15px; cursor: pointer; transition: 0.2s; }
         .actions i:hover { transform: scale(1.2); }
+        .audio-player-container { margin-top: 15px; padding-top: 10px; border-top: 1px dashed #eee; display: none; }
+        audio { width: 100%; height: 35px; }
         #progress-bar-container { background: #eee; height: 8px; border-radius: 4px; margin-top: 15px; display: none; overflow: hidden; }
         #progress-bar { background: #8e44ad; width: 0%; height: 100%; transition: width 0.3s; }
     </style>
@@ -93,7 +96,6 @@
 
         const cacheDados = {};
 
-        // Define data de hoje no input por padrão
         document.getElementById('data-comunicacao').valueAsDate = new Date();
 
         onAuthStateChanged(auth, (user) => {
@@ -118,7 +120,6 @@
                     const id = doc.id;
                     cacheDados[id] = d;
 
-                    // Formatação da data para exibição (Prioriza a data informada pelo usuário)
                     let dataExibicao = "";
                     if (d.dataComunicacao) {
                         const partes = d.dataComunicacao.split("-");
@@ -130,16 +131,22 @@
                     const item = document.createElement('div');
                     item.className = 'item-transcricao';
                     item.innerHTML = `
-                        <div>
-                            <strong>${d.medium || 'N/A'} - ${d.trabalho || 'Geral'}</strong><br>
-                            <small class="info-msg">Data Comunicação: ${dataExibicao}</small> | 
-                            <small style="color:${d.status === 'concluido' ? '#27ae60' : '#e67e22'}">${d.status.toUpperCase()}</small>
+                        <div class="item-main">
+                            <div>
+                                <strong>${d.medium || 'N/A'} - ${d.trabalho || 'Geral'}</strong><br>
+                                <small class="info-msg">Data Comunicação: ${dataExibicao}</small> | 
+                                <small style="color:${d.status === 'concluido' ? '#27ae60' : '#e67e22'}">${d.status.toUpperCase()}</small>
+                            </div>
+                            <div class="actions">
+                                <i class="fas fa-headphones" style="color:#3498db;" title="Ouvir Áudio" onclick="toggleAudio('${id}')"></i>
+                                ${d.status === 'concluido' ? `
+                                    <i class="fab fa-whatsapp" style="color:#25d366;" title="Enviar Texto" onclick="dispararZap('${id}')"></i>
+                                    <i class="fas fa-file-pdf" style="color:#e74c3c;" title="Gerar PDF" onclick="gerarPdf('${id}')"></i>
+                                ` : '<i class="fas fa-spinner fa-spin" style="color:#999;"></i>'}
+                            </div>
                         </div>
-                        <div class="actions">
-                            ${d.status === 'concluido' ? `
-                                <i class="fab fa-whatsapp" style="color:#25d366;" title="Enviar Texto" onclick="dispararZap('${id}')"></i>
-                                <i class="fas fa-file-pdf" style="color:#e74c3c;" title="Gerar PDF" onclick="gerarPdf('${id}')"></i>
-                            ` : '<i class="fas fa-spinner fa-spin" style="color:#999;"></i>'}
+                        <div id="player-${id}" class="audio-player-container">
+                            <audio controls src="${d.urlAudio}"></audio>
                         </div>
                     `;
                     lista.appendChild(item);
@@ -186,12 +193,18 @@
             };
         }
 
+        // Funções Globais
+        window.toggleAudio = (id) => {
+            const player = document.getElementById(`player-${id}`);
+            player.style.display = (player.style.display === 'block') ? 'none' : 'block';
+        };
+
         window.dispararZap = (id) => {
             const d = cacheDados[id];
             let dataStr = "";
             if (d.dataComunicacao) {
                 const p = d.dataComunicacao.split("-");
-                dataStr = `${p[2]}/${p[1]}/${p[2]}`;
+                dataStr = `${p[2]}/${p[1]}/${p[0]}`;
             } else {
                 dataStr = new Date(d.dataCriacao?.seconds * 1000).toLocaleDateString();
             }
@@ -213,9 +226,8 @@
                 dataStr = new Date(d.dataCriacao?.seconds * 1000).toLocaleDateString();
             }
             
-            // Layout CePaT
             doc.setFillColor(142, 68, 173);
-            doc.rect(0, 0, 210, 15, 'F'); // Faixa roxa no topo
+            doc.rect(0, 0, 210, 15, 'F'); 
             
             doc.setTextColor(142, 68, 173);
             doc.setFont("helvetica", "bold");
@@ -227,7 +239,6 @@
             doc.text("Departamento de Mediunidade", 105, 32, { align: "center" });
             doc.line(20, 35, 190, 35);
 
-            // Infos do Registro
             doc.setFontSize(11);
             doc.setTextColor(0);
             doc.text(`Médium: ${d.medium}`, 20, 45);
@@ -235,30 +246,22 @@
             doc.text(`Data: ${dataStr}`, 20, 59);
             doc.line(20, 65, 190, 65);
 
-            // Texto Transcrito com Espaçamento entre parágrafos
             doc.setFont("helvetica", "normal");
             doc.setFontSize(11);
             
-            // Divide o texto original em parágrafos reais (quebras de linha)
             const paragrafos = d.transcricao.split('\n');
             let cursorY = 75;
             const margemEsquerda = 20;
             const larguraUtil = 170;
 
             paragrafos.forEach(paragrafo => {
-                if (paragrafo.trim() === "") return; // Pula linhas vazias
-                
-                // Quebra o parágrafo em linhas menores para caber na página
+                if (paragrafo.trim() === "") return;
                 const linhas = doc.splitTextToSize(paragrafo, larguraUtil);
-                
-                // Verifica se precisa de nova página
                 if (cursorY + (linhas.length * 7) > 280) {
                     doc.addPage();
                     cursorY = 20;
                 }
-
                 doc.text(linhas, margemEsquerda, cursorY);
-                // Incrementa Y: (número de linhas * altura da linha) + espaçamento extra entre parágrafos
                 cursorY += (linhas.length * 6) + 6; 
             });
             
