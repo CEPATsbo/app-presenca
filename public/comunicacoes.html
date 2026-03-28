@@ -25,9 +25,6 @@
         audio { width: 100%; height: 35px; }
         #progress-bar-container { background: #eee; height: 8px; border-radius: 4px; margin-top: 15px; display: none; overflow: hidden; }
         #progress-bar { background: #8e44ad; width: 0%; height: 100%; transition: width 0.3s; }
-        .public-toggle { display: flex; align-items: center; gap: 10px; background: #fdfaff; padding: 12px; border-radius: 8px; border: 1px dashed #8e44ad; margin-bottom: 15px; }
-        .public-toggle input { width: 20px; height: 20px; cursor: pointer; }
-        .public-toggle label { margin: 0; cursor: pointer; color: #8e44ad; font-weight: bold; }
     </style>
 </head>
 <body>
@@ -62,12 +59,6 @@
                     <option value="OUTROS">OUTROS</option>
                 </select>
             </div>
-            
-            <div class="public-toggle">
-                <input type="checkbox" id="tornar-publico">
-                <label for="tornar-publico"><i class="fas fa-globe"></i> Tornar visível no Portal Meu-CePaT</label>
-            </div>
-
             <div class="input-group">
                 <label>Arquivo de Áudio:</label>
                 <input type="file" id="audio-input" accept="audio/*">
@@ -81,7 +72,7 @@
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
         import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-auth.js";
-        import { getFirestore, collection, addDoc, query, orderBy, onSnapshot, serverTimestamp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
+        import { getFirestore, collection, addDoc, query, orderBy, onSnapshot, serverTimestamp, updateDoc, doc } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
         import { getStorage, ref, uploadBytesResumable, getDownloadURL } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-storage.js";
 
         const firebaseConfig = {
@@ -117,35 +108,31 @@
             onSnapshot(query(collection(db, "comunicacoes_mediunicas"), orderBy("dataComunicacao", "desc")), (snap) => {
                 const lista = document.getElementById('lista-atividades');
                 lista.innerHTML = "";
-                snap.forEach(doc => {
-                    const d = doc.data();
-                    const id = doc.id;
+                snap.forEach(snapDoc => {
+                    const d = snapDoc.data();
+                    const id = snapDoc.id;
                     cacheDados[id] = d;
 
-                    let dataExibicao = "";
-                    if (d.dataComunicacao) {
-                        const partes = d.dataComunicacao.split("-");
-                        dataExibicao = partes[2] + "/" + partes[1] + "/" + partes[0];
-                    } else {
-                        dataExibicao = "N/A";
-                    }
+                    const dataExibicao = d.dataComunicacao ? d.dataComunicacao.split("-").reverse().join("/") : "N/A";
+                    const corGlobo = d.publico ? "#8e44ad" : "#ccc";
+                    const tituloGlobo = d.publico ? "Visível no Portal" : "Privado (Clique para publicar)";
 
                     const item = document.createElement('div');
                     item.className = 'item-transcricao';
                     item.innerHTML = `
                         <div class="item-main">
                             <div>
-                                <strong>${d.medium || 'N/A'} - ${d.trabalho || 'Geral'}</strong> 
-                                ${d.publico ? '<i class="fas fa-globe" style="color:#8e44ad; font-size:12px;" title="Público"></i>' : ''}<br>
-                                <small class="info-msg">Data Comunicação: ${dataExibicao}</small> | 
+                                <strong>${d.medium || 'N/A'} - ${d.trabalho || 'Geral'}</strong><br>
+                                <small class="info-msg">Data: ${dataExibicao}</small> | 
                                 <small style="color:${d.status === 'concluido' ? '#27ae60' : '#e67e22'}">${d.status.toUpperCase()}</small>
                             </div>
                             <div class="actions">
                                 <i class="fas fa-headphones" style="color:#3498db;" title="Ouvir Áudio" onclick="toggleAudio('${id}')"></i>
                                 ${d.status === 'concluido' ? `
+                                    <i class="fas fa-globe" style="color:${corGlobo};" title="${tituloGlobo}" onclick="alternarPrivacidade('${id}')"></i>
                                     <i class="fab fa-whatsapp" style="color:#25d366;" title="Enviar Texto" onclick="dispararZap('${id}')"></i>
                                     <i class="fas fa-file-pdf" style="color:#e74c3c;" title="Gerar PDF" onclick="gerarPdf('${id}')"></i>
-                                ` : '<i class="fas fa-spinner fa-spin" style="color:#999;"></i>'}
+                                ` : '<i class="fas fa-spinner fa-spin"></i>'}
                             </div>
                         </div>
                         <div id="player-${id}" class="audio-player-container">
@@ -161,7 +148,6 @@
                 const medium = document.getElementById('medium-name').value;
                 const trabalho = document.getElementById('trabalho-tipo').value;
                 const dataCom = document.getElementById('data-comunicacao').value;
-                const isPublico = document.getElementById('tornar-publico').checked;
 
                 if (!file || !medium || !dataCom) return alert("Preencha todos os campos!");
 
@@ -184,14 +170,13 @@
                             nomeArquivo: file.name,
                             urlAudio: url,
                             status: 'processando',
-                            publico: isPublico,
+                            publico: false, // Inicia sempre como privado
                             dataCriacao: serverTimestamp(),
                             transcricao: ""
                         });
                         btnUpload.disabled = false;
                         audioInput.value = "";
                         document.getElementById('medium-name').value = "";
-                        document.getElementById('tornar-publico').checked = false;
                         document.getElementById('data-comunicacao').valueAsDate = new Date();
                         document.getElementById('progress-bar-container').style.display = 'none';
                     }
@@ -202,6 +187,14 @@
         window.toggleAudio = (id) => {
             const player = document.getElementById("player-" + id);
             player.style.display = (player.style.display === 'block') ? 'none' : 'block';
+        };
+
+        window.alternarPrivacidade = async (id) => {
+            const statusAtual = cacheDados[id].publico || false;
+            const novaPrivacidade = !statusAtual;
+            try {
+                await updateDoc(doc(db, "comunicacoes_mediunicas", id), { publico: novaPrivacidade });
+            } catch (e) { alert("Erro ao atualizar privacidade."); }
         };
 
         window.dispararZap = (id) => {
@@ -220,31 +213,31 @@
         window.gerarPdf = (id) => {
             const d = cacheDados[id];
             const { jsPDF } = window.jspdf;
-            const doc = new jsPDF();
+            const docPdf = new jsPDF();
             let dataStr = "";
             if (d.dataComunicacao) {
                 const p = d.dataComunicacao.split("-");
                 dataStr = p[2] + "/" + p[1] + "/" + p[0];
             }
             const transcricaoLimpa = d.transcricao.split("").join("");
-            doc.setFillColor(142, 68, 173);
-            doc.rect(0, 0, 210, 15, 'F'); 
-            doc.setTextColor(142, 68, 173);
-            doc.setFont("helvetica", "bold");
-            doc.setFontSize(16);
-            doc.text("Casa Espírita Paulo de Tarso", 105, 25, { align: "center" });
-            doc.setFontSize(10);
-            doc.setTextColor(100);
-            doc.text("Departamento de Mediunidade", 105, 32, { align: "center" });
-            doc.line(20, 35, 190, 35);
-            doc.setFontSize(11);
-            doc.setTextColor(0);
-            doc.text("Médium: " + d.medium, 20, 45);
-            doc.text("Trabalho: " + d.trabalho, 20, 52);
-            doc.text("Data: " + dataStr, 20, 59);
-            doc.line(20, 65, 190, 65);
-            doc.setFont("helvetica", "normal");
-            doc.setFontSize(11);
+            docPdf.setFillColor(142, 68, 173);
+            docPdf.rect(0, 0, 210, 15, 'F'); 
+            docPdf.setTextColor(142, 68, 173);
+            docPdf.setFont("helvetica", "bold");
+            docPdf.setFontSize(16);
+            docPdf.text("Casa Espírita Paulo de Tarso", 105, 25, { align: "center" });
+            docPdf.setFontSize(10);
+            docPdf.setTextColor(100);
+            docPdf.text("Departamento de Mediunidade", 105, 32, { align: "center" });
+            docPdf.line(20, 35, 190, 35);
+            docPdf.setFontSize(11);
+            docPdf.setTextColor(0);
+            docPdf.text("Médium: " + d.medium, 20, 45);
+            docPdf.text("Trabalho: " + d.trabalho, 20, 52);
+            docPdf.text("Data: " + dataStr, 20, 59);
+            docPdf.line(20, 65, 190, 65);
+            docPdf.setFont("helvetica", "normal");
+            docPdf.setFontSize(11);
             const textoFormatado = transcricaoLimpa.split(". ").join(".\n\n");
             const paragrafos = textoFormatado.split("\n");
             let cursorY = 75;
@@ -252,15 +245,15 @@
             const larguraUtil = 170;
             paragrafos.forEach(paragrafo => {
                 if (paragrafo.trim() === "") return;
-                const linhas = doc.splitTextToSize(paragrafo, larguraUtil);
+                const linhas = docPdf.splitTextToSize(paragrafo, larguraUtil);
                 if (cursorY + (linhas.length * 7) > 280) {
-                    doc.addPage();
+                    docPdf.addPage();
                     cursorY = 20;
                 }
-                doc.text(linhas, margemEsquerda, cursorY);
+                docPdf.text(linhas, margemEsquerda, cursorY);
                 cursorY += (linhas.length * 6) + 5; 
             });
-            doc.save("CePaT_" + d.medium.replace(" ", "_") + "_" + dataStr.replace("/", "-") + ".pdf");
+            docPdf.save("CePaT_" + d.medium.replace(" ", "_") + "_" + dataStr.replace("/", "-") + ".pdf");
         };
     </script>
 </body>
