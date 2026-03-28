@@ -225,8 +225,9 @@ window.abrirPlayerPortal = (id) => {
     const player = document.getElementById('audio-player-portal');
     player.src = d.urlAudio;
     
-    // Limpeza de tags de citação e quebra de linhas para parágrafos
-    const tLimpo = d.transcricao.split("").join("").split(". ").join(".<br><br>");
+   // Limpeza de tags de citação e quebra de linhas para parágrafos (versão segura)
+const transcricaoSemCites = d.transcricao.split("").join("");
+const textoLimpo = transcricaoSemCites.split(". ").join(".<br><br>");
     document.getElementById('texto-transcricao-portal').innerHTML = textoLimpo;
     
     document.getElementById('modal-player-comunicacao').classList.add('visible');
