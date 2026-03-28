@@ -9,7 +9,7 @@
     <style>
         body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif; background-color: #f4f6f9; padding: 20px; display: flex; flex-direction: column; align-items: center; }
         .header { width: 100%; max-width: 1000px; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #e0e0e0; padding-bottom: 15px; margin-bottom: 30px; }
-        .btn-voltar { background-color: #7f8c8d; color: white; padding: 10px 18px; border-radius: 8px; text-decoration: none; font-weight: bold; }
+        .btn-voltar { background-color: #7f8c8d; color: white; padding: 10px 18px; border-radius: 8px; text-decoration: none; font-weight: bold; cursor: pointer; border: none; }
         .container { width: 100%; max-width: 1000px; display: none; }
         .upload-section { background: white; padding: 25px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.08); border-left: 5px solid #8e44ad; margin-bottom: 30px; }
         .input-group { margin-bottom: 15px; }
@@ -34,23 +34,20 @@
             <h1>Comunicações Mediúnicas</h1>
             <p id="loading-msg">Verificando acesso...</p>
         </div>
-        <a href="/dashboard-gestao.html" class="btn-voltar">Sair / Voltar</a>
+        <a href="dashboard-gestao.html" class="btn-voltar">Sair / Voltar</a>
     </div>
 
     <div id="main-container" class="container">
         <div class="upload-section">
             <h3 style="margin-top:0;">Novo Registro de Comunicação</h3>
-            
             <div class="input-group">
                 <label>Data da Comunicação:</label>
                 <input type="date" id="data-comunicacao">
             </div>
-
             <div class="input-group">
                 <label>Nome do Médium:</label>
                 <input type="text" id="medium-name" placeholder="Ex: Carlos Reis">
             </div>
-
             <div class="input-group">
                 <label>Circunstância / Trabalho:</label>
                 <select id="trabalho-tipo">
@@ -62,16 +59,13 @@
                     <option value="OUTROS">OUTROS</option>
                 </select>
             </div>
-
             <div class="input-group">
                 <label>Arquivo de Áudio:</label>
                 <input type="file" id="audio-input" accept="audio/*">
             </div>
-
             <div id="progress-bar-container"><div id="progress-bar"></div></div>
             <button id="btn-upload" class="btn-enviar">Fazer Upload e Transcrever</button>
         </div>
-
         <div id="lista-atividades"></div>
     </div>
 
@@ -93,10 +87,8 @@
         const auth = getAuth(app);
         const db = getFirestore(app);
         const storage = getStorage(app);
-
         const cacheDados = {};
 
-        // Data de hoje por padrão
         document.getElementById('data-comunicacao').valueAsDate = new Date();
 
         onAuthStateChanged(auth, (user) => {
@@ -105,7 +97,7 @@
                 document.getElementById('main-container').style.display = 'block';
                 iniciarApp();
             } else {
-                window.location.href = '/login.html';
+                window.location.href = 'login.html';
             }
         });
 
@@ -113,7 +105,7 @@
             const btnUpload = document.getElementById('btn-upload');
             const audioInput = document.getElementById('audio-input');
 
-            onSnapshot(query(collection(db, "comunicacoes_mediunicas"), orderBy("dataCriacao", "desc")), (snap) => {
+            onSnapshot(query(collection(db, "comunicacoes_mediunicas"), orderBy("dataComunicacao", "desc")), (snap) => {
                 const lista = document.getElementById('lista-atividades');
                 lista.innerHTML = "";
                 snap.forEach(doc => {
@@ -124,9 +116,9 @@
                     let dataExibicao = "";
                     if (d.dataComunicacao) {
                         const partes = d.dataComunicacao.split("-");
-                        dataExibicao = `${partes[2]}/${partes[1]}/${partes[0]}`;
+                        dataExibicao = partes[2] + "/" + partes[1] + "/" + partes[0];
                     } else {
-                        dataExibicao = new Date(d.dataCriacao?.seconds * 1000).toLocaleDateString();
+                        dataExibicao = "N/A";
                     }
 
                     const item = document.createElement('div');
@@ -166,7 +158,7 @@
                 const progBar = document.getElementById('progress-bar');
                 document.getElementById('progress-bar-container').style.display = 'block';
 
-                const storageRef = ref(storage, `audios_mediunicos/${Date.now()}_${file.name}`);
+                const storageRef = ref(storage, "audios_mediunicos/" + Date.now() + "_" + file.name);
                 const uploadTask = uploadBytesResumable(storageRef, file);
 
                 uploadTask.on('state_changed', 
@@ -195,7 +187,7 @@
         }
 
         window.toggleAudio = (id) => {
-            const player = document.getElementById(`player-${id}`);
+            const player = document.getElementById("player-" + id);
             player.style.display = (player.style.display === 'block') ? 'none' : 'block';
         };
 
@@ -204,13 +196,15 @@
             let dataStr = "";
             if (d.dataComunicacao) {
                 const p = d.dataComunicacao.split("-");
-                dataStr = `${p[2]}/${p[1]}/${p[0]}`;
-            } else {
-                dataStr = new Date(d.dataCriacao?.seconds * 1000).toLocaleDateString();
+                dataStr = p[2] + "/" + p[1] + "/" + p[0];
             }
-            const cabecalho = `*CePaT - Comunicação Mediúnica*\n\n*Médium:* ${d.medium}\n*Trabalho:* ${d.trabalho}\n*Data:* ${dataStr}\n\n*Transcrição:*\n`;
-            const msg = encodeURIComponent(cabecalho + d.transcricao);
-            window.open(`https://api.whatsapp.com/send?text=${msg}`, '_blank');
+            
+            // LIMPEZA SEM REGEX (À PROVA DE ERROS)
+            const textoLimpo = d.transcricao.split("").join("");
+            
+            const cabecalho = "*CePaT - Comunicação Mediúnica*\n\n*Médium:* " + d.medium + "\n*Trabalho:* " + d.trabalho + "\n*Data:* " + dataStr + "\n\n*Transcrição:*\n";
+            const msg = encodeURIComponent(cabecalho + textoLimpo);
+            window.open("https://api.whatsapp.com/send?text=" + msg, "_blank");
         };
 
         window.gerarPdf = (id) => {
@@ -221,35 +215,36 @@
             let dataStr = "";
             if (d.dataComunicacao) {
                 const p = d.dataComunicacao.split("-");
-                dataStr = `${p[2]}/${p[1]}/${p[0]}`;
-            } else {
-                dataStr = new Date(d.dataCriacao?.seconds * 1000).toLocaleDateString();
+                dataStr = p[2] + "/" + p[1] + "/" + p[0];
             }
             
+            // LIMPEZA SEM REGEX (À PROVA DE ERROS)
+            const transcricaoLimpa = d.transcricao.split("").join("");
+
             doc.setFillColor(142, 68, 173);
             doc.rect(0, 0, 210, 15, 'F'); 
             doc.setTextColor(142, 68, 173);
             doc.setFont("helvetica", "bold");
             doc.setFontSize(16);
-            doc.text("Casa Espírita Paulo de Tarso [cite: 3]", 105, 25, { align: "center" });
+            doc.text("Casa Espírita Paulo de Tarso", 105, 25, { align: "center" });
             doc.setFontSize(10);
             doc.setTextColor(100);
-            doc.text("Departamento de Mediunidade [cite: 3]", 105, 32, { align: "center" });
+            doc.text("Departamento de Mediunidade", 105, 32, { align: "center" });
             doc.line(20, 35, 190, 35);
 
             doc.setFontSize(11);
             doc.setTextColor(0);
-            doc.text(`Médium: ${d.medium} [cite: 1]`, 20, 45);
-            doc.text(`Trabalho: ${d.trabalho} [cite: 1]`, 20, 52);
-            doc.text(`Data: ${dataStr} [cite: 2]`, 20, 59);
+            doc.text("Médium: " + d.medium, 20, 45);
+            doc.text("Trabalho: " + d.trabalho, 20, 52);
+            doc.text("Data: " + dataStr, 20, 59);
             doc.line(20, 65, 190, 65);
 
             doc.setFont("helvetica", "normal");
             doc.setFontSize(11);
             
-            // Lógica de parágrafos automáticos por ponto final
-            const textoFormatado = d.transcricao.replace(/\. /g, ".\n\n");
-            const paragrafos = textoFormatado.split('\n');
+            // QUEBRA DE PARÁGRAFOS USANDO TEXTO SIMPLES
+            const textoFormatado = transcricaoLimpa.split(". ").join(".\n\n");
+            const paragrafos = textoFormatado.split("\n");
             let cursorY = 75;
             const margemEsquerda = 20;
             const larguraUtil = 170;
@@ -265,7 +260,7 @@
                 cursorY += (linhas.length * 6) + 5; 
             });
             
-            doc.save(`CePaT_${d.medium.replace(/\s/g, '_')}_${dataStr.replace(/\//g, '-')}.pdf`);
+            doc.save("CePaT_" + d.medium.replace(" ", "_") + "_" + dataStr.replace("/", "-") + ".pdf");
         };
     </script>
 </body>
