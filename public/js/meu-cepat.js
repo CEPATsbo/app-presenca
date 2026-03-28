@@ -198,6 +198,8 @@ async function processarPapeisEExibirModulos(userId, userData, isAluno, isFacili
     moduleDia.classList.remove('hidden');
     modulePessoal.classList.remove('hidden');
     moduleServicos.classList.remove('hidden');
+    moduleComunicacoes.classList.remove('hidden');
+    carregarComunicacoesPublicas();
     await Promise.all([carregarModuloAcoesDoDia(userId, userData), carregarModuloPessoal(userId, userData)]); 
     if (isAluno) { moduleAluno.classList.remove('hidden'); carregarModuloAluno(userId); }
     if (isFacilitador) { moduleFacilitador.classList.remove('hidden'); carregarModuloFacilitador(userId); }
@@ -430,6 +432,64 @@ async function salvarFrequencia() {
     }
 }
 
+// 2. Função para buscar apenas o que a diretoria liberou
+async function carregarComunicacoesPublicas() {
+    const container = document.getElementById('comunicacoes-publicas-content');
+    container.innerHTML = '<p>Buscando instruções...</p>';
+
+    try {
+        // FILTRO CRUCIAL: status concluído E publico verdadeiro
+        const q = query(
+            collection(db, "comunicacoes_mediunicas"), 
+            where("publico", "==", true), 
+            where("status", "==", "concluido"),
+            orderBy("dataComunicacao", "desc"),
+            limit(5) // Mostra as 5 últimas para não sobrecarregar
+        );
+
+        const querySnapshot = await getDocs(q);
+        if (querySnapshot.empty) {
+            container.innerHTML = '<p>Nenhuma instrução pública recente.</p>';
+            return;
+        }
+
+        container.innerHTML = '';
+        querySnapshot.forEach((docSnap) => {
+            const d = docSnap.data();
+            const card = document.createElement('div');
+            card.className = 'card';
+            card.innerHTML = `
+                <h4>${d.trabalho}</h4>
+                <p><strong>Data:</strong> ${d.dataComunicacao.split('-').reverse().join('/')}</p>
+                <button class="btn-primary" onclick="abrirPlayerPortal('${docSnap.id}')" style="width: 100%; margin-top: 10px;">
+                    <i class="fas fa-play"></i> Ouvir e Ler
+                </button>
+            `;
+            container.appendChild(card);
+            // Salva no cache para o modal usar
+            cacheDados[docSnap.id] = d; 
+        });
+    } catch (e) {
+        console.error("Erro comunicacoes:", e);
+        container.innerHTML = '<p>Erro ao carregar instruções.</p>';
+    }
+}
+
+// 3. Funções do Modal de Áudio
+window.abrirPlayerPortal = (id) => {
+    const d = cacheDados[id];
+    document.getElementById('player-titulo-comunicacao').innerText = d.trabalho;
+    document.getElementById('player-info-comunicacao').innerText = `Médium: ${d.medium} | Data: ${d.dataComunicacao.split('-').reverse().join('/')}`;
+    
+    const player = document.getElementById('audio-player-portal');
+    player.src = d.urlAudio;
+    
+    // Limpeza de [cite] e formatação de parágrafos para o portal
+    const textoLimpo = d.transcricao.split("").join("").split(". ").join(".<br><br>");
+    document.getElementById('texto-transcricao-portal').innerHTML = textoLimpo;
+    
+    document.getElementById('modal-player-comunicacao').classList.add('visible');
+};
 
 // --- LÓGICA DO MÓDULO AÇÕES DO DIA ---
 function getDistance(lat1, lon1, lat2, lon2) {
@@ -810,6 +870,12 @@ btnLogout.addEventListener('click', async (e) => {
     e.preventDefault();
     await signOut(auth);
     window.location.href = 'login.html';
+});
+
+document.getElementById('close-modal-player').addEventListener('click', () => {
+    const player = document.getElementById('audio-player-portal');
+    player.pause(); // Para o áudio ao fechar
+    document.getElementById('modal-player-comunicacao').classList.remove('visible');
 });
 
 alunoContent.addEventListener('click', async (e) => {
