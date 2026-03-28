@@ -148,50 +148,91 @@ async function carregarComunicacoesMediunicas() {
             collection(db, "comunicacoes_mediunicas"), 
             where("publico", "==", true), 
             where("status", "==", "concluido"),
-            orderBy("dataComunicacao", "desc"),
-            limit(5)
+            orderBy("dataComunicacao", "desc")
         );
+        
         const snapshot = await getDocs(q);
+        const contadorElement = document.getElementById('comunicacoes-contador');
+        
         if (snapshot.empty) {
-            comunicacoesContent.innerHTML = '<p>Nenhuma comunicação pública disponível.</p>';
+            // Se não houver nada público, o módulo continua escondido
             return;
         }
-        comunicacoesContent.innerHTML = '';
+
+        const total = snapshot.size;
+        contadorElement.innerHTML = `Existem <strong>${total}</strong> comunicações disponíveis.`;
+
+        // Preenche o cache para uso nos modais
+        window.cacheComunicacoes = {}; 
         snapshot.forEach(docSnap => {
-            const d = docSnap.data();
-            cacheComunicacoes[docSnap.id] = d;
-            const dataExibicao = d.dataComunicacao ? d.dataComunicacao.split("-").reverse().join("/") : "N/A";
-            const card = document.createElement('div');
-            card.className = 'card';
-            card.innerHTML = `
-                <h4>${d.trabalho}</h4>
-                <p><strong>Data:</strong> ${dataExibicao}</p>
-                <button class="btn-primary" onclick="abrirPlayerPortal('${docSnap.id}')" style="width: 100%; margin-top: 10px;">
-                    <i class="fas fa-play"></i> Ouvir e Ler
-                </button>
-            `;
-            comunicacoesContent.appendChild(card);
+            window.cacheComunicacoes[docSnap.id] = docSnap.data();
         });
-        moduleComunicacoes.classList.remove('hidden');
-    } catch (e) { console.error("Erro comunicações:", e); }
+
+        document.getElementById('module-comunicacoes').classList.remove('hidden');
+    } catch (e) { 
+        console.error("Erro ao carregar comunicações:", e); 
+    }
 }
 
+// 2. COLE ESTAS FUNÇÕES LOGO ABAIXO DA FUNÇÃO ACIMA
+window.abrirGaleriaComunicacoes = () => {
+    const listaContainer = document.getElementById('galeria-lista-container');
+    listaContainer.innerHTML = '';
+
+    const itens = Object.entries(window.cacheComunicacoes);
+
+    itens.forEach(([id, d]) => {
+        const dataEx = d.dataComunicacao ? d.dataComunicacao.split("-").reverse().join("/") : "N/A";
+        const itemDiv = document.createElement('div');
+        // Estilização rápida para cada item da lista
+        itemDiv.style.padding = '15px';
+        itemDiv.style.marginBottom = '10px';
+        itemDiv.style.background = '#fff';
+        itemDiv.style.border = '1px solid #eee';
+        itemDiv.style.borderRadius = '8px';
+        itemDiv.style.cursor = 'pointer';
+        itemDiv.style.display = 'flex';
+        itemDiv.style.justifyContent = 'space-between';
+        itemDiv.style.alignItems = 'center';
+        itemDiv.style.boxShadow = '0 2px 4px rgba(0,0,0,0.05)';
+        
+        itemDiv.innerHTML = `
+            <div style="text-align: left;">
+                <strong style="color: #333;">${d.trabalho}</strong><br>
+                <small style="color: #888;">${d.medium} | ${dataEx}</small>
+            </div>
+            <i class="fas fa-play-circle" style="color: #0277BD; font-size: 1.2em;"></i>
+        `;
+        
+        itemDiv.onclick = () => {
+            document.getElementById('modal-galeria-comunicacoes').classList.remove('visible');
+            abrirPlayerPortal(id);
+        };
+        
+        listaContainer.appendChild(itemDiv);
+    });
+
+    document.getElementById('modal-galeria-comunicacoes').classList.add('visible');
+};
+
 window.abrirPlayerPortal = (id) => {
-    const d = cacheComunicacoes[id];
-    const dataExibicao = d.dataComunicacao ? d.dataComunicacao.split("-").reverse().join("/") : "N/A";
+    const d = window.cacheComunicacoes[id];
+    const dataEx = d.dataComunicacao ? d.dataComunicacao.split("-").reverse().join("/") : "N/A";
+    
     document.getElementById('player-titulo-comunicacao').innerText = d.trabalho;
-    document.getElementById('player-info-comunicacao').innerText = `Médium: ${d.medium} | Data: ${dataExibicao}`;
+    document.getElementById('player-info-comunicacao').innerText = `${d.medium} • ${dataEx}`;
+    
     const player = document.getElementById('audio-player-portal');
     player.src = d.urlAudio;
+    
+    // Limpeza de tags de citação e quebra de linhas para parágrafos
     const tLimpo = d.transcricao.split("").join("").split(". ").join(".<br><br>");
-    document.getElementById('texto-transcricao-portal').innerHTML = tLimpo;
+    document.getElementById('texto-transcricao-portal').innerHTML = textoLimpo;
+    
     document.getElementById('modal-player-comunicacao').classList.add('visible');
 };
 
-document.getElementById('close-modal-player').onclick = () => {
-    document.getElementById('audio-player-portal').pause();
-    document.getElementById('modal-player-comunicacao').classList.remove('visible');
-};
+
 
 // --- FUNÇÕES ORIGINAIS (MANTIDAS 100%) ---
 async function carregarMural() {
@@ -698,6 +739,19 @@ frequenciaListContainer.onclick = (e) => {
         item.querySelectorAll('.btn-status').forEach(btn => btn.classList.remove('active'));
         b.classList.add('active');
     }
+};
+
+document.getElementById('close-modal-galeria').onclick = () => {
+    document.getElementById('modal-galeria-comunicacoes').classList.remove('visible');
+};
+
+document.getElementById('close-modal-player').onclick = () => {
+    const player = document.getElementById('audio-player-portal');
+    player.pause();
+    player.src = ""; // Para parar o download do áudio
+    document.getElementById('modal-player-comunicacao').classList.remove('visible');
+    // Reabre a galeria para facilitar a navegação
+    document.getElementById('modal-galeria-comunicacoes').classList.add('visible');
 };
 closeModalAtividadesBtn.onclick = () => modalAtividades.classList.remove('visible');
 formAtividadesPresenca.onsubmit = salvarPresencaLogado;
