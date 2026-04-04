@@ -1,5 +1,6 @@
 const { onDocumentCreated } = require("firebase-functions/v2/firestore");
-const { onSchedule } = require("firebase-functions/v2/scheduler"); // v2 para agendamento
+const { onSchedule } = require("firebase-functions/v2/scheduler");
+const { onRequest } = require("firebase-functions/v2/https");
 const admin = require("firebase-admin");
 const { createCanvas, loadImage, registerFont } = require('canvas');
 const path = require('path');
@@ -7,117 +8,162 @@ const path = require('path');
 const REGIAO = 'southamerica-east1';
 const BUCKET_NAME = "voluntarios-ativos---cepat.firebasestorage.app";
 
-// 1. Registrar a fonte profissional que você subiu
+// 1. Registrar a fonte profissional
 const fontPath = path.join(__dirname, '../assets/fonts/Roboto-Bold.ttf');
 registerFont(fontPath, { family: 'RobotoCePaT' });
 
-// --- FUNÇÃO AUXILIAR: QUEBRA DE LINHA ---
-function wrapText(ctx, text, x, y, maxWidth, lineHeight) {
+// --- FUNÇÃO AUXILIAR: QUEBRA DE LINHA INTELIGENTE ---
+// Esta função calcula a altura total para centralizar o texto verticalmente.
+function wrapText(ctx, text, x, y, maxWidth, lineHeight, draw = true) {
     const words = text.split(' ');
     let line = '';
+    let totalHeight = 0;
+    let lines = [];
+
     for (let n = 0; n < words.length; n++) {
         let testLine = line + words[n] + ' ';
         let metrics = ctx.measureText(testLine);
         if (metrics.width > maxWidth && n > 0) {
-            ctx.fillText(line.trim(), x, y);
+            lines.push(line.trim());
             line = words[n] + ' ';
-            y += lineHeight;
+            totalHeight += lineHeight;
         } else {
             line = testLine;
         }
     }
-    ctx.fillText(line.trim(), x, y);
+    lines.push(line.trim());
+    totalHeight += lineHeight;
+
+    if (draw) {
+        lines.forEach((l, index) => {
+            ctx.fillText(l, x, y + (index * lineHeight));
+        });
+    }
+    return totalHeight;
 }
 
-// --- FUNÇÃO DE DESENHO: MODELO 2 (Mostarda) ---
-const desenharModelo2 = async (ctx, dados) => {
-    const template = await loadImage(path.join(__dirname, '../templates/evangelho-2.png'));
-    ctx.drawImage(template, 0, 0, 1080, 1528); // Ajuste para o tamanho da sua imagem
-
-    ctx.fillStyle = '#333333'; // Cor escura para o texto
+// --- FUNÇÃO CENTRAL DE DESENHO DO STORY DIÁRIO ---
+const desenharStoryDiario = async (ctx, mensagem, autor, width, height) => {
+    // 1. Carregar o template carregado (confirme se o nome é 'story-diario.png' no Storage/Pasta)
+    const templatePath = path.join(__dirname, '../templates/story-diario.png');
     
-    // DATA (Topo Esquerdo)
-    ctx.textAlign = 'left';
-    ctx.font = 'bold 60pt RobotoCePaT';
-    ctx.fillText("MAR", 70, 140); 
-    ctx.font = '35pt RobotoCePaT';
-    ctx.fillText("24", 70, 210);
+    // Se não tiver o template, gera fundo azul
+    let background;
+    try {
+        background = await loadImage(templatePath);
+        ctx.drawImage(background, 0, 0, width, height);
+    } catch (e) {
+        console.log(`[CePaT] Aviso: Template story-diario.png não encontrado, usando fundo sólido. Erro: ${e.message}`);
+        ctx.fillStyle = '#1a237e'; // Azul CePaT
+        ctx.fillRect(0, 0, width, height);
+    }
 
-    // TÍTULO (Centro)
+    // 2. Configurações de texto (Centralizado em azul escuro para contraste)
+    ctx.fillStyle = '#1a237e'; 
     ctx.textAlign = 'center';
-    ctx.font = 'bold 45pt RobotoCePaT';
-    const tituloFull = `Cap. ${dados.capitulo} - ${dados.tema.toUpperCase()}`;
-    wrapText(ctx, tituloFull, 540, 540, 850, 65);
 
-    // ITENS (Abaixo do Título)
-    ctx.font = '35pt RobotoCePaT';
-    ctx.fillText(`Itens: ${dados.itens}`, 540, 780);
+    const maxWidth = 880; // Margens de ~100px considerando a borda do template
 
-    // MENSAGEM FINAL (Canto inferior esquerdo)
-    ctx.textAlign = 'left';
-    ctx.font = 'italic 50pt RobotoCePaT';
-    wrapText(ctx, (dados.fraseFinal || "DAR-SE-Á ÀQUELE QUE TEM"), 100, 1050, 700, 75);
+    // Área útil vertical (excluindo logo e bordas superiores)
+    const yInicialValido = 300; 
+    const yFinalValido = 1600; // Antes do logo da CePaT no rodapé
+    const usableHeight = yFinalValido - yInicialValido;
+
+    // 3. Calcular altura para centralizar verticalmente
+    const lineHeightMensagem = 70;
+    ctx.font = 'bold 50pt RobotoCePaT';
+    
+    // Simula o desenho para calcular altura total (passando draw = false)
+    const heightMensagem = wrapText(ctx, mensagem, width / 2, 0, maxWidth, lineHeightMensagem, false);
+    
+    // Adiciona espaço para o autor
+    const lineHeightAutor = 50;
+    const heightAutor = heightMensagem + 80; // 80px de espaçamento
+
+    // 4. Desenhar o texto centralizado verticalmente na área útil
+    const yTextoStart = yInicialValido + (usableHeight - heightAutor) / 2;
+
+    // Desenha Mensagem
+    ctx.font = 'bold 50pt RobotoCePaT';
+    wrapText(ctx, mensagem, width / 2, yTextoStart, maxWidth, lineHeightMensagem, true);
+
+    // Desenha Autor (italico e menor)
+    ctx.font = 'italic 40pt RobotoCePaT';
+    ctx.fillText(autor, width / 2, yTextoStart + heightMensagem + 60);
 };
 
-// --- GATILHO AUTOMÁTICO: TODO DOMINGO ÀS 07:00 ---
-exports.agendarPostsSemana = onSchedule({
-    schedule: "0 7 * * 0", // Domingo às 07h
+// --- FUNÇÃO AGENDADA (GATILHO DIÁRIO ÀS 07:00) ---
+exports.postDiarioAutomatico = onSchedule({
+    schedule: "0 7 * * *", // Todo dia às 07:00
     region: REGIAO,
     timeZone: "America/Sao_Paulo",
     memory: "1GiB"
 }, async (event) => {
-    console.log("[CePaT] Iniciando geração automática da semana...");
+    console.log("[CePaT] Iniciando geração do Post Diário Automático...");
     
-    // 1. Lógica para achar a próxima terça
-    const hoje = new Date();
-    const proximaTerca = new Date(hoje);
-    proximaTerca.setDate(hoje.getDate() + (2 + 7 - hoje.getDay()) % 7);
-    const dataBusca = proximaTerca.toISOString().split('T')[0];
+    try {
+        // 1. Descobrir qual o dia do ano (1 a 366)
+        const agora = new Date();
+        const inicioAno = new Date(agora.getFullYear(), 0, 0);
+        const dif = agora - inicioAno;
+        const umDia = 1000 * 60 * 60 * 24;
+        const diaDoAno = Math.floor(dif / umDia);
+        console.log(`[CePaT] Dia do ano calculado: ${diaDoAno}`);
 
-    // 2. Buscar na escala
-    const doc = await admin.firestore().collection('escala_prelecoes').doc(dataBusca).get();
-    if (!doc.exists) {
-        console.log("[CePaT] Escala não encontrada para " + dataBusca);
-        return;
-    }
-    const dados = doc.data();
+        // 2. Buscar a mensagem no Firestore
+        const doc = await admin.firestore().collection('mensagens_diarias').doc(diaDoAno.toString()).get();
+        
+        if (!doc.exists) {
+            console.log(`[CePaT] Aviso: Mensagem para o dia ${diaDoAno} não encontrada no banco.`);
+            // Mensagem de fallback caso não encontre no banco
+            return null; 
+        }
 
-    // 3. Gerar imagem (Aqui usamos o Modelo 2 como teste)
-    const canvas = createCanvas(1080, 1528);
-    const ctx = canvas.getContext('2d');
-    await desenharModelo2(ctx, dados);
+        const dados = doc.data();
+        const mensagem = dados.texto;
+        const autor = dados.autor;
 
-    // 4. Salvar no Storage
-    const buffer = canvas.toBuffer('image/png');
-    const fileName = `posts/evangelho_${dataBusca}.png`;
-    const bucket = admin.storage().bucket(BUCKET_NAME);
-    const file = bucket.file(fileName);
-    await file.save(buffer, { contentType: 'image/png' });
+        // 3. Gerar a imagem Story (Canvas)
+        const width = 1080;
+        const height = 1920; // Formato Story padrão
+        const canvas = createCanvas(width, height);
+        const ctx = canvas.getContext('2d');
+        
+        await desenharStoryDiario(ctx, mensagem, autor, width, height);
 
-    const [url] = await file.getSignedUrl({ action: 'read', expires: '01-01-2030' });
+        // 4. Salvar no Storage e obter URL (Necessário para a API do Instagram buscar)
+        const buffer = canvas.toBuffer('image/png');
+        const bucket = admin.storage().bucket(BUCKET_NAME);
+        const caminhoArquivo = `instagram/stories/diario_${diaDoAno}.png`;
+        const file = bucket.file(caminhoArquivo);
+        
+        await file.save(buffer, { contentType: 'image/png' });
 
-    // 5. Criar os 3 registros no Firestore (Domingo, Segunda, Terça)
-    const dias = [0, 1, 2]; // Hoje, Amanhã, Depois
-    const batch = admin.firestore().batch();
-    
-    dias.forEach(dia => {
-        const dataPost = new Date(hoje);
-        dataPost.setDate(hoje.getDate() + dia);
-        const postRef = admin.firestore().collection('posts_instagram').doc();
-        batch.set(postRef, {
+        const [url] = await file.getSignedUrl({
+            action: 'read',
+            expires: '01-01-2030'
+        });
+
+        console.log(`[CePaT] Arte gerada e salva em Storage: ${caminhoArquivo}. URL: ${url}`);
+
+        // 5. REGISTRAR O POST NO FIRESTORE (A SER DESENVOLVIDA: PUBLICAÇÃO INSTAGRAM)
+        // Criaremos um documento na coleção 'posts_instagram' para a função de publicação consumir.
+        await admin.firestore().collection('posts_instagram').add({
             urlImagem: url,
-            status: 'aguardando_publicacao',
-            dataAgendada: dataPost.toISOString().split('T')[0],
-            tipo: 'evangelho_semanal',
+            status: 'aguardando_publicacao', // A função de publicação buscará por este status
+            tipo: 'story_diario',
             geradoEm: admin.firestore.FieldValue.serverTimestamp()
         });
-    });
 
-    await batch.commit();
-    console.log("[CePaT] 3 posts agendados com sucesso!");
+        console.log(`[CePaT] Geração diária concluída. Post registrado em 'posts_instagram' para publicação.`);
+
+    } catch (error) {
+        console.error(`[CePaT] Erro Final (postDiarioAutomatico):`, error);
+        // ... logar erro em escala ou notificar admin ...
+    }
 });
 
-// MANTENHA SUA FUNÇÃO DE TRANSCRIÇÃO ABAIXO...
+// ... MANTENHA SUA FUNÇÃO DE TRANSCRIÇÃO ABAIXO ...
 
 exports.transcreverAudioMediunico = onDocumentCreated({ 
     region: REGIAO, 
@@ -190,5 +236,51 @@ exports.transcreverAudioMediunico = onDocumentCreated({
     } catch (e) {
         console.error(`[CePaT] Erro Final:`, e.message);
         return snap.ref.update({ status: 'erro', erroDetalhe: e.message });
+    }
+});
+
+
+// --- FUNÇÃO PARA VOCÊ TESTAR O VISUAL AGORA MESMO ---
+exports.verTesteDiario = onRequest({ region: REGIAO, memory: "1GiB" }, async (req, res) => {
+    try {
+        // Testando com o dia de hoje
+        const agora = new Date();
+        const inicioAno = new Date(agora.getFullYear(), 0, 0);
+        const dif = agora - inicioAno;
+        const diaDoAno = Math.floor(dif / (1000 * 60 * 60 * 24));
+
+        const doc = await admin.firestore().collection('mensagens_diarias').doc(diaDoAno.toString()).get();
+        
+        if (!doc.exists) return res.send("Mensagem não encontrada no Firestore!");
+
+        const { texto, autor } = doc.data();
+
+        // Criar Canvas
+        const canvas = createCanvas(1080, 1920);
+        const ctx = canvas.getContext('2d');
+
+        // Carregar seu template (Certifique-se que o nome do arquivo na pasta é story-diario.jpg ou .png)
+        const template = await loadImage(path.join(__dirname, '../templates/story-diario.png'));
+        ctx.drawImage(template, 0, 0, 1080, 1920);
+
+        // Configurar Texto
+        ctx.fillStyle = '#2D4A22'; // Verde escuro para combinar com o logo
+        ctx.textAlign = 'center';
+        
+        // Posição: Começando abaixo do logo (ajuste se necessário)
+        const x = 540;
+        const yBase = 800; 
+
+        ctx.font = 'bold 50pt RobotoCePaT';
+        const alturaTexto = wrapText(ctx, `"${texto}"`, x, yBase, 850, 80, true);
+
+        ctx.font = 'italic 40pt RobotoCePaT';
+        ctx.fillText(`— ${autor}`, x, yBase + alturaTexto + 100);
+
+        const buffer = canvas.toBuffer('image/png');
+        res.set('Content-Type', 'image/png');
+        res.send(buffer);
+    } catch (e) {
+        res.status(500).send("Erro no teste: " + e.message);
     }
 });

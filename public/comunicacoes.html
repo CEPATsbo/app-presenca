@@ -185,9 +185,24 @@
         }
 
         window.toggleAudio = (id) => {
-            const player = document.getElementById("player-" + id);
-            player.style.display = (player.style.display === 'block') ? 'none' : 'block';
-        };
+    const playerContainer = document.getElementById("player-" + id);
+    const audioElement = playerContainer.querySelector("audio");
+    
+    // Se o player estiver escondido, vamos abrir e garantir o carregamento
+    if (playerContainer.style.display === 'none' || playerContainer.style.display === '') {
+        // Adiciona um parâmetro de tempo real à URL para evitar o erro de cache do navegador
+        const urlOriginal = cacheDados[id].urlAudio;
+        if (!audioElement.src || audioElement.src === "") {
+            audioElement.src = urlOriginal + "&t=" + new Date().getTime();
+        }
+        playerContainer.style.display = 'block';
+        audioElement.play();
+    } else {
+        // Se já estiver aberto, apenas pausa e esconde
+        audioElement.pause();
+        playerContainer.style.display = 'none';
+    }
+};
 
         window.alternarPrivacidade = async (id) => {
             const statusAtual = cacheDados[id].publico || false;
