@@ -24,6 +24,10 @@
             <h1>Estatísticas Música Viva</h1>
         </div>
 
+<div class="chart-card">
+    <h3>Volume de Acessos à Plataforma</h3>
+    <canvas id="grafico-acessos"></canvas>
+</div>
         <div class="metric-row">
             <div class="metric-box">
                 <h4>Total de Aulas Concluídas</h4>
@@ -100,6 +104,36 @@ const db = getFirestore(app);
                 }
             });
         }
+        async function carregarGraficoAcessos() {
+    const snap = await getDocs(collection(db, "estatisticas_gerais"));
+    const acessosPorData = {};
+
+    snap.forEach(doc => {
+        const dataDoc = doc.data().data?.toDate();
+        if (dataDoc) {
+            const dataFormatada = dataDoc.toLocaleDateString('pt-BR');
+            acessosPorData[dataFormatada] = (acessosPorData[dataFormatada] || 0) + 1;
+        }
+    });
+
+    const labels = Object.keys(acessosPorData).sort();
+    const valores = labels.map(l => acessosPorData[l]);
+
+    new Chart(document.getElementById('grafico-acessos'), {
+        type: 'line', // Gráfico de linha é melhor para ver fluxo de acessos
+        data: {
+            labels: labels,
+            datasets: [{
+                label: 'Acessos Diários',
+                data: valores,
+                borderColor: '#007bff',
+                backgroundColor: 'rgba(0, 123, 255, 0.1)',
+                fill: true,
+                tension: 0.3
+            }]
+        }
+    });
+}
     </script>
 </body>
 </html>
