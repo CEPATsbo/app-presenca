@@ -92,7 +92,7 @@
 
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
-        import { getFirestore, collection, onSnapshot, query, where, Timestamp, doc } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
+        import { getFirestore, collection, onSnapshot, query, where, Timestamp, doc, getDocs } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
         import { protegerPagina } from '/auth.js';
 
         const firebaseConfig = { apiKey: "AIzaSyBV7RPjk3cFTqL-aIpflJcUojKg1ZXMLuU", authDomain: "voluntarios-ativos---cepat.firebaseapp.com", projectId: "voluntarios-ativos---cepat", storageBucket: "voluntarios-ativos---cepat.firebasestorage.app", messagingSenderId: "66122858261", appId: "1:66122858261:web:7fa21f1805463b5c08331c" };
@@ -106,7 +106,7 @@
             const limiteStr = new Date(domSoc.getTime() + 14 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
 
             let estoqueGlobal = [];
-            let configCesta = null; // Alterado para null para checagem de carregamento
+            let configCesta = null; 
             let metaGlobal = 14; 
             let entregasRealizadas = 0;
 
@@ -129,8 +129,18 @@
                 }
             });
 
-            onSnapshot(collection(db, "estoque_caritas"), snap => {
-                estoqueGlobal = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+            // LOGICA SINCRONIZADA COM ALMOXARIFADO (SOMA DE LOTES)
+            onSnapshot(collection(db, "estoque_caritas"), async snap => {
+                const listaPromessas = snap.docs.map(async d => {
+                    const lSnap = await getDocs(collection(db, `estoque_caritas/${d.id}/lotes`));
+                    const lotes = lSnap.docs.map(ld => ld.data());
+                    const totalLotes = lotes.reduce((acc, curr) => acc + parseInt(curr.quantidade || 0), 0);
+                    // Garante que o saldo seja o maior valor entre o campo estático e a soma real dos lotes
+                    const quantidadeReal = Math.max(parseInt(d.data().quantidade || 0), totalLotes);
+                    return { id: d.id, ...d.data(), quantidade: quantidadeReal };
+                });
+
+                estoqueGlobal = await Promise.all(listaPromessas);
                 recalcularProntidao();
                 
                 const painel = document.getElementById('painel-validade-viva');
@@ -147,7 +157,6 @@
             });
 
             function recalcularProntidao() {
-                // SÓ CALCULA SE JÁ TIVER CARREGADO CONFIG E ESTOQUE
                 if (!configCesta || estoqueGlobal.length === 0) return;
                 
                 let montaveis = Infinity;
