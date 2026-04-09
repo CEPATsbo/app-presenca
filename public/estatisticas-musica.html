@@ -6,87 +6,129 @@
     <title>Estatísticas - Música Viva</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
-        /* Reutilizando seus estilos para manter a identidade */
-        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif; background-color: #f4f6f9; padding: 20px; }
-        .dashboard-container { max-width: 1000px; margin: auto; }
-        .chart-card { background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); margin-bottom: 20px; }
-        .btn-voltar { background-color: #e9ecef; color: #495057; padding: 10px 20px; border-radius: 8px; text-decoration: none; font-weight: bold; display: inline-block; margin-bottom: 20px; }
-        .header h1 { color: #1b5e20; text-align: center; }
-        .metric-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; margin-bottom: 20px; }
-        .metric-box { background: #fff; padding: 15px; border-radius: 8px; text-align: center; border-top: 5px solid #28a745; box-shadow: 0 2px 5px rgba(0,0,0,0.05); }
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif; background-color: #f4f6f9; color: #333; margin: 0; padding: 20px; }
+        .dashboard-container { max-width: 1100px; margin: auto; }
+        .header { text-align: center; margin-bottom: 30px; border-bottom: 1px solid #ddd; padding-bottom: 20px; }
+        .header h1 { color: #1b5e20; margin: 0; }
+        .btn-voltar { background-color: #e9ecef; color: #495057; border: 1px solid #dee2e6; padding: 10px 20px; border-radius: 8px; font-weight: bold; text-decoration: none; transition: 0.2s; display: inline-block; margin-bottom: 20px; }
+        .btn-voltar:hover { background-color: #dee2e6; }
+        
+        .metric-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 20px; margin-bottom: 30px; }
+        .metric-box { background: white; padding: 20px; border-radius: 10px; text-align: center; box-shadow: 0 2px 8px rgba(0,0,0,0.05); border-top: 5px solid #28a745; }
+        .metric-box h4 { margin: 0; color: #7f8c8d; font-size: 0.9em; text-transform: uppercase; }
+        .metric-box p { margin: 10px 0 0 0; font-size: 2.5em; font-weight: bold; color: #2c3e50; }
+
+        .chart-grid { display: grid; grid-template-columns: 1fr; gap: 30px; }
+        .chart-card { background: white; padding: 25px; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+        .chart-card h3 { margin-top: 0; color: #444; border-left: 5px solid #28a745; padding-left: 10px; margin-bottom: 20px; }
+        
+        #loading-overlay { position: fixed; top:0; left:0; width:100%; height:100%; background: rgba(255,255,255,0.8); display: flex; justify-content: center; align-items: center; z-index: 1000; font-weight: bold; font-size: 1.2em; }
     </style>
 </head>
 <body>
+
+    <div id="loading-overlay">Carregando dados do Música Viva...</div>
+
     <div class="dashboard-container">
         <a href="/estatisticas.html" class="btn-voltar">⬅ Voltar para Estatísticas Gerais</a>
 
         <div class="header">
-            <h1>Estatísticas Música Viva</h1>
+            <h1>Estatísticas Projeto Música Viva</h1>
         </div>
 
-<div class="chart-card">
-    <h3>Volume de Acessos à Plataforma</h3>
-    <canvas id="grafico-acessos"></canvas>
-</div>
         <div class="metric-row">
             <div class="metric-box">
                 <h4>Total de Aulas Concluídas</h4>
-                <p id="total-conclusoes" style="font-size: 2em; font-weight: bold;">--</p>
+                <p id="total-conclusoes">--</p>
             </div>
             <div class="metric-box" style="border-top-color: #007bff;">
-                <h4>Aula Mais Acessada</h4>
-                <p id="aula-popular" style="font-size: 1.2em; font-weight: bold; margin-top: 10px;">--</p>
+                <h4>Acessos Totais (Histórico)</h4>
+                <p id="total-acessos">--</p>
             </div>
         </div>
 
-        <div class="chart-card">
-            <h3>Engajamento por Aula</h3>
-            <canvas id="grafico-aulas"></canvas>
+        <div class="chart-grid">
+            <div class="chart-card">
+                <h3>Engajamento: Conclusões por Aula</h3>
+                <canvas id="grafico-aulas"></canvas>
+            </div>
+
+            <div class="chart-card">
+                <h3>Audiência: Acessos Diários à Plataforma</h3>
+                <canvas id="grafico-acessos"></canvas>
+            </div>
         </div>
     </div>
 
     <script type="module">
-       import { initializeApp, getApps } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
-import { getFirestore, collection, getDocs } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
-import { protegerPagina } from './auth.js';
+        import { initializeApp, getApps } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
+        import { getFirestore, collection, getDocs } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
+        import { protegerPagina } from '/auth.js';
 
-const firebaseConfig = {
-    apiKey: "AIzaSyBV7RPjk3cFTqL-aIpflJcUojKg1ZXMLuU",
-    authDomain: "voluntarios-ativos---cepat.firebaseapp.com",
-    projectId: "voluntarios-ativos---cepat"
-};
+        const firebaseConfig = {
+            apiKey: "AIzaSyBV7RPjk3cFTqL-aIpflJcUojKg1ZXMLuU",
+            authDomain: "voluntarios-ativos---cepat.firebaseapp.com",
+            projectId: "voluntarios-ativos---cepat"
+        };
 
-// CORREÇÃO AQUI: Verifica se já existe uma instância aberta
-const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApps()[0];
-const db = getFirestore(app);
+        // Inicialização Segura
+        const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApps()[0];
+        const db = getFirestore(app);
 
-// ... restante do código (protegerPagina, etc)
-
-        // Proteção de acesso
-        protegerPagina(['super-admin', 'diretor', 'tesoureiro']).then(() => {
-            carregarEstatisticasMusica();
-        });
-
-        async function carregarEstatisticasMusica() {
-            const snap = await getDocs(collection(db, "stats_musica_viva"));
-            const contagem = {};
-            let total = 0;
-
-            snap.forEach(doc => {
-                const aula = doc.data().aula;
-                contagem[aula] = (contagem[aula] || 0) + 1;
-                total++;
+        // Proteção de Rota (Cargos autorizados)
+        protegerPagina(['super-admin', 'diretor', 'tesoureiro', 'conselheiro'])
+            .then(() => {
+                inicializarEstatisticas();
+            })
+            .catch(() => {
+                window.location.href = "/acesso-negado.html";
             });
 
-            document.getElementById('total-conclusoes').textContent = total;
+        async function inicializarEstatisticas() {
+            try {
+                // Busca dados das duas coleções
+                const [snapAulas, snapGeral] = await Promise.all([
+                    getDocs(collection(db, "stats_musica_viva")),
+                    getDocs(collection(db, "estatisticas_gerais"))
+                ]);
 
-            // Ordenar aulas para o gráfico
-            const labels = Object.keys(contagem).sort();
-            const valores = labels.map(l => contagem[l]);
+                // 1. Processar Aulas
+                const dadosAulas = {};
+                snapAulas.forEach(doc => {
+                    const nomeAula = doc.data().aula || "Aula Indefinida";
+                    dadosAulas[nomeAula] = (dadosAulas[nomeAula] || 0) + 1;
+                });
 
-            // Aula mais popular
-            const popular = labels.reduce((a, b) => contagem[a] > contagem[b] ? a : b, labels[0]);
-            document.getElementById('aula-popular').textContent = popular || "Nenhuma";
+                // 2. Processar Acessos Diários
+                const acessosPorData = {};
+                snapGeral.forEach(doc => {
+                    const timestamp = doc.data().data?.toDate();
+                    if (timestamp) {
+                        const dataBr = timestamp.toLocaleDateString('pt-BR');
+                        acessosPorData[dataBr] = (acessosPorData[dataBr] || 0) + 1;
+                    }
+                });
+
+                // Atualizar Métricas no Topo
+                document.getElementById('total-conclusoes').textContent = snapAulas.size;
+                document.getElementById('total-acessos').textContent = snapGeral.size;
+
+                // Renderizar Gráficos
+                gerarGraficoBarras(dadosAulas);
+                gerarGraficoLinha(acessosPorData);
+
+                // Esconder Loading
+                document.getElementById('loading-overlay').style.display = 'none';
+
+            } catch (error) {
+                console.error("Erro ao carregar dados:", error);
+                document.getElementById('loading-overlay').textContent = "Erro ao carregar dados do Firebase.";
+            }
+        }
+
+        function gerarGraficoBarras(dados) {
+            const labels = Object.keys(dados).sort();
+            const valores = labels.map(l => dados[l]);
 
             new Chart(document.getElementById('grafico-aulas'), {
                 type: 'bar',
@@ -95,7 +137,8 @@ const db = getFirestore(app);
                     datasets: [{
                         label: 'Conclusões',
                         data: valores,
-                        backgroundColor: '#28a745'
+                        backgroundColor: '#28a745',
+                        borderRadius: 5
                     }]
                 },
                 options: {
@@ -104,36 +147,33 @@ const db = getFirestore(app);
                 }
             });
         }
-        async function carregarGraficoAcessos() {
-    const snap = await getDocs(collection(db, "estatisticas_gerais"));
-    const acessosPorData = {};
 
-    snap.forEach(doc => {
-        const dataDoc = doc.data().data?.toDate();
-        if (dataDoc) {
-            const dataFormatada = dataDoc.toLocaleDateString('pt-BR');
-            acessosPorData[dataFormatada] = (acessosPorData[dataFormatada] || 0) + 1;
+        function gerarGraficoLinha(dados) {
+            const labels = Object.keys(dados).sort((a, b) => {
+                return new Date(a.split('/').reverse().join('-')) - new Date(b.split('/').reverse().join('-'));
+            });
+            const valores = labels.map(l => dados[l]);
+
+            new Chart(document.getElementById('grafico-acessos'), {
+                type: 'line',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: 'Acessos por Dia',
+                        data: valores,
+                        borderColor: '#007bff',
+                        backgroundColor: 'rgba(0, 123, 255, 0.1)',
+                        fill: true,
+                        tension: 0.3,
+                        pointRadius: 5
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    scales: { y: { beginAtZero: true, ticks: { stepSize: 1 } } }
+                }
+            });
         }
-    });
-
-    const labels = Object.keys(acessosPorData).sort();
-    const valores = labels.map(l => acessosPorData[l]);
-
-    new Chart(document.getElementById('grafico-acessos'), {
-        type: 'line', // Gráfico de linha é melhor para ver fluxo de acessos
-        data: {
-            labels: labels,
-            datasets: [{
-                label: 'Acessos Diários',
-                data: valores,
-                borderColor: '#007bff',
-                backgroundColor: 'rgba(0, 123, 255, 0.1)',
-                fill: true,
-                tension: 0.3
-            }]
-        }
-    });
-}
     </script>
 </body>
 </html>
