@@ -42,19 +42,21 @@
     </div>
 
     <script type="module">
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
-        import { getFirestore, collection, getDocs } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
-        import { protegerPagina } from '/auth.js';
+       import { initializeApp, getApps } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
+import { getFirestore, collection, getDocs } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
+import { protegerPagina } from './auth.js';
 
-        // Mesma config do seu projeto
-        const firebaseConfig = {
-            apiKey: "AIzaSyBV7RPjk3cFTqL-aIpflJcUojKg1ZXMLuU",
-            authDomain: "voluntarios-ativos---cepat.firebaseapp.com",
-            projectId: "voluntarios-ativos---cepat"
-        };
-        
-        const app = initializeApp(firebaseConfig);
-        const db = getFirestore(app);
+const firebaseConfig = {
+    apiKey: "AIzaSyBV7RPjk3cFTqL-aIpflJcUojKg1ZXMLuU",
+    authDomain: "voluntarios-ativos---cepat.firebaseapp.com",
+    projectId: "voluntarios-ativos---cepat"
+};
+
+// CORREÇÃO AQUI: Verifica se já existe uma instância aberta
+const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApps()[0];
+const db = getFirestore(app);
+
+// ... restante do código (protegerPagina, etc)
 
         // Proteção de acesso
         protegerPagina(['super-admin', 'diretor', 'tesoureiro']).then(() => {
