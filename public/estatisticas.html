@@ -294,7 +294,8 @@
                 const canvas = document.getElementById('grafico-vibracoes');
                 if (!canvas) return;
 
-                // 1. Filtro mais agressivo para pegar apenas o ano atual de 2026
+                // 1. Filtramos apenas pedidos ARQUIVADOS desde o início de 2026
+                // Isso garante que os dados de Abril (02/04 e 09/04) apareçam assim que processados
                 const q = query(
                     collection(db, "historico_vibracoes"), 
                     where("semanaDeReferencia", ">=", "2026-01-01"),
@@ -303,24 +304,35 @@
 
                 try {
                     const snap = await getDocs(q);
+                    
                     if (snap.empty) {
-                        document.getElementById('vibracoes-feedback').innerText = "Nenhum dado encontrado para 2026.";
+                        document.getElementById('vibracoes-feedback').style.display = 'block';
+                        document.getElementById('vibracoes-feedback').innerText = "Nenhum pedido arquivado encontrado em 2026.";
                         return;
                     }
 
                     document.getElementById('vibracoes-feedback').style.display = 'none';
-                    const sem = {};
+                    const contagemArquivados = {};
                     
                     snap.forEach(doc => {
                         const d = doc.data();
-                        const semana = d.semanaDeReferencia;
-                        if(!sem[semana]) sem[semana] = { e: 0, d: 0 };
-                        d.tipo === 'encarnado' ? sem[semana].e++ : sem[semana].d++;
+                        const dataRef = d.semanaDeReferencia;
+                        
+                        // Só processa se a data existir (evita quebra do gráfico)
+                        if (dataRef) {
+                            if(!contagemArquivados[dataRef]) contagemArquivados[dataRef] = { e: 0, d: 0 };
+                            
+                            if (d.tipo === 'encarnado') {
+                                contagemArquivados[dataRef].e++;
+                            } else {
+                                contagemArquivados[dataRef].d++;
+                            }
+                        }
                     });
 
-                    const labels = Object.keys(sem);
+                    const labels = Object.keys(contagemArquivados).sort();
                     
-                    // Limpeza total do gráfico anterior
+                    // Destruição segura da instância anterior do Chart.js
                     let chartInstance = Chart.getChart(canvas);
                     if (chartInstance) chartInstance.destroy();
 
@@ -329,20 +341,58 @@
                         data: { 
                             labels, 
                             datasets: [
-                                { label: 'Encarnados', data: labels.map(l => sem[l].e), backgroundColor: 'teal' }, 
-                                { label: 'Desencarnados', data: labels.map(l => sem[l].d), backgroundColor: 'blue' }
+                                { 
+                                    label: 'Encarnados', 
+                                    data: labels.map(l => contagemArquivados[l].e), 
+                                    backgroundColor: 'teal' 
+                                }, 
+                                { 
+                                    label: 'Desencarnados', 
+                                    data: labels.map(l => contagemArquivados[l].d), 
+                                    backgroundColor: 'blue' 
+                                }
                             ] 
                         },
                         options: {
                             responsive: true,
-                            scales: { y: { beginAtZero: true } }
+                            maintainAspectRatio: false,
+                            scales: {
+                                y: { 
+                                    beginAtZero: true, 
+                                    ticks: { stepSize: 1 } 
+                                },
+                                x: {
+                                    ticks: {
+                                        maxRotation: 45,
+                                        minRotation: 45
+                                    }
+                                }
+                            },
+                            plugins: {
+                                legend: { position: 'top' }
+                            }
                         }
                     });
+
+                    console.log("Gráfico de Vibrações atualizado com sucesso!");
+
                 } catch (error) {
-                    console.error("Erro ao carregar vibrações:", error);
-                    // Se cair aqui, é quase certeza que falta o ÍNDICE.
-                    document.getElementById('vibracoes-feedback').innerHTML = 
-                        `<span style="color:red">Erro ao carregar dados. Verifique o console (F12) para criar o índice do Firebase.</span>`;
+                    console.error("Erro Crítico no Firestore:", error);
+                    
+                    // Se o erro for de índice, ele aparecerá aqui
+                    if (error.message.includes("requires an index")) {
+                        const indexUrl = error.message.split("here: ")[1];
+                        document.getElementById('vibracoes-feedback').innerHTML = 
+                            `<div style="color:red; padding:10px; border:1px solid red; border-radius:5px;">
+                                <strong>Erro de Índice:</strong> O Firebase precisa criar um índice para este gráfico. 
+                                <br><a href="${indexUrl}" target="_blank" style="color:blue; font-weight:bold;">CLIQUE AQUI PARA CRIAR O ÍNDICE</a>
+                                <br>(Após clicar, aguarde 3 minutos e atualize a página)
+                            </div>`;
+                        document.getElementById('vibracoes-feedback').style.display = 'block';
+                    } else {
+                        document.getElementById('vibracoes-feedback').innerText = "Erro ao carregar dados. Verifique sua conexão.";
+                        document.getElementById('vibracoes-feedback').style.display = 'block';
+                    }
                 }
             }
 
