@@ -290,110 +290,60 @@
                 new Chart(document.getElementById('grafico-financeiro'), { type: 'line', data: { labels, datasets: [{ label: 'Receitas', data: rec, borderColor: 'green' }, { label: 'Despesas', data: des, borderColor: 'red' }] } });
             }
 
+            async function carregarGraficoFinanceiro() {
+
+                const snap = await getDocs(query(collection(db, "balancetes"), where("status", "==", "aprovado"), orderBy(documentId())));
+
+                if (snap.empty) return;
+
+                document.getElementById('financeiro-feedback').style.display = 'none';
+
+                const labels = [], rec = [], des = [];
+
+                snap.forEach(doc => {
+
+                    labels.push(doc.id);
+
+                    let r = 0, d = 0;
+
+                    Object.values(doc.data().receitas || {}).flat().forEach(i => r += i.valor || 0);
+
+                    Object.values(doc.data().despesas || {}).flat().forEach(i => d += i.valor || 0);
+
+                    rec.push(r); des.push(d);
+
+                });
+
+                new Chart(document.getElementById('grafico-financeiro'), { type: 'line', data: { labels, datasets: [{ label: 'Receitas', data: rec, borderColor: 'green' }, { label: 'Despesas', data: des, borderColor: 'red' }] } });
+
+            }
+
+
+
             async function carregarGraficoVibracoes() {
-                const canvas = document.getElementById('grafico-vibracoes');
-                if (!canvas) return;
 
-                // 1. Filtramos apenas pedidos ARQUIVADOS desde o início de 2026
-                // Isso garante que os dados de Abril (02/04 e 09/04) apareçam assim que processados
-                const q = query(
-                    collection(db, "historico_vibracoes"), 
-                    where("semanaDeReferencia", ">=", "2026-01-01"),
-                    orderBy("semanaDeReferencia", "asc")
-                );
+                const snap = await getDocs(query(collection(db, "historico_vibracoes"), orderBy("semanaDeReferencia", "asc")));
 
-                try {
-                    const snap = await getDocs(q);
-                    
-                    if (snap.empty) {
-                        document.getElementById('vibracoes-feedback').style.display = 'block';
-                        document.getElementById('vibracoes-feedback').innerText = "Nenhum pedido arquivado encontrado em 2026.";
-                        return;
-                    }
+                if (snap.empty) return;
 
-                    document.getElementById('vibracoes-feedback').style.display = 'none';
-                    const contagemArquivados = {};
-                    
-                    snap.forEach(doc => {
-                        const d = doc.data();
-                        const dataRef = d.semanaDeReferencia;
-                        
-                        // Só processa se a data existir (evita quebra do gráfico)
-                        if (dataRef) {
-                            if(!contagemArquivados[dataRef]) contagemArquivados[dataRef] = { e: 0, d: 0 };
-                            
-                            if (d.tipo === 'encarnado') {
-                                contagemArquivados[dataRef].e++;
-                            } else {
-                                contagemArquivados[dataRef].d++;
-                            }
-                        }
-                    });
+                document.getElementById('vibracoes-feedback').style.display = 'none';
 
-                    const labels = Object.keys(contagemArquivados).sort();
-                    
-                    // Destruição segura da instância anterior do Chart.js
-                    let chartInstance = Chart.getChart(canvas);
-                    if (chartInstance) chartInstance.destroy();
+                const sem = {};
 
-                    new Chart(canvas, { 
-                        type: 'bar', 
-                        data: { 
-                            labels, 
-                            datasets: [
-                                { 
-                                    label: 'Encarnados', 
-                                    data: labels.map(l => contagemArquivados[l].e), 
-                                    backgroundColor: 'teal' 
-                                }, 
-                                { 
-                                    label: 'Desencarnados', 
-                                    data: labels.map(l => contagemArquivados[l].d), 
-                                    backgroundColor: 'blue' 
-                                }
-                            ] 
-                        },
-                        options: {
-                            responsive: true,
-                            maintainAspectRatio: false,
-                            scales: {
-                                y: { 
-                                    beginAtZero: true, 
-                                    ticks: { stepSize: 1 } 
-                                },
-                                x: {
-                                    ticks: {
-                                        maxRotation: 45,
-                                        minRotation: 45
-                                    }
-                                }
-                            },
-                            plugins: {
-                                legend: { position: 'top' }
-                            }
-                        }
-                    });
+                snap.forEach(doc => {
 
-                    console.log("Gráfico de Vibrações atualizado com sucesso!");
+                    const d = doc.data();
 
-                } catch (error) {
-                    console.error("Erro Crítico no Firestore:", error);
-                    
-                    // Se o erro for de índice, ele aparecerá aqui
-                    if (error.message.includes("requires an index")) {
-                        const indexUrl = error.message.split("here: ")[1];
-                        document.getElementById('vibracoes-feedback').innerHTML = 
-                            `<div style="color:red; padding:10px; border:1px solid red; border-radius:5px;">
-                                <strong>Erro de Índice:</strong> O Firebase precisa criar um índice para este gráfico. 
-                                <br><a href="${indexUrl}" target="_blank" style="color:blue; font-weight:bold;">CLIQUE AQUI PARA CRIAR O ÍNDICE</a>
-                                <br>(Após clicar, aguarde 3 minutos e atualize a página)
-                            </div>`;
-                        document.getElementById('vibracoes-feedback').style.display = 'block';
-                    } else {
-                        document.getElementById('vibracoes-feedback').innerText = "Erro ao carregar dados. Verifique sua conexão.";
-                        document.getElementById('vibracoes-feedback').style.display = 'block';
-                    }
-                }
+                    if(!sem[d.semanaDeReferencia]) sem[d.semanaDeReferencia] = { e: 0, d: 0 };
+
+                    d.tipo === 'encarnado' ? sem[d.semanaDeReferencia].e++ : sem[d.semanaDeReferencia].d++;
+
+                });
+
+                const labels = Object.keys(sem);
+
+                new Chart(document.getElementById('grafico-vibracoes'), { type: 'bar', data: { labels, datasets: [{ label: 'Encarnados', data: labels.map(l => sem[l].e), backgroundColor: 'teal' }, { label: 'Desencarnados', data: labels.map(l => sem[l].d), backgroundColor: 'blue' }] } });
+
             }
 
             async function carregarDadosCaritas() {
