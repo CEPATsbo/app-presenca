@@ -291,17 +291,64 @@
             }
 
             async function carregarGraficoVibracoes() {
-                const snap = await getDocs(query(collection(db, "historico_vibracoes"), orderBy("semanaDeReferencia", "asc")));
-                if (snap.empty) return;
+                // 1. Definimos uma data de corte (90 dias atrás) para o gráfico não pesar
+                const dataCorte = new Date();
+                dataCorte.setDate(dataCorte.getDate() - 90);
+                const dataCorteIso = dataCorte.toISOString().split('T')[0];
+
+                // 2. Filtramos na Query: apenas semanas maiores que a data de corte
+                const q = query(
+                    collection(db, "historico_vibracoes"), 
+                    where("semanaDeReferencia", ">=", dataCorteIso),
+                    orderBy("semanaDeReferencia", "asc")
+                );
+
+                const snap = await getDocs(q);
+                
+                if (snap.empty) {
+                    document.getElementById('vibracoes-feedback').innerText = "Nenhum dado de vibração recente encontrado.";
+                    return;
+                }
+
                 document.getElementById('vibracoes-feedback').style.display = 'none';
+                
                 const sem = {};
                 snap.forEach(doc => {
                     const d = doc.data();
-                    if(!sem[d.semanaDeReferencia]) sem[d.semanaDeReferencia] = { e: 0, d: 0 };
-                    d.tipo === 'encarnado' ? sem[d.semanaDeReferencia].e++ : sem[d.semanaDeReferencia].d++;
+                    const semana = d.semanaDeReferencia;
+                    
+                    if(!sem[semana]) sem[semana] = { e: 0, d: 0 };
+                    
+                    if (d.tipo === 'encarnado') {
+                        sem[semana].e++;
+                    } else {
+                        sem[semana].d++;
+                    }
                 });
+
                 const labels = Object.keys(sem);
-                new Chart(document.getElementById('grafico-vibracoes'), { type: 'bar', data: { labels, datasets: [{ label: 'Encarnados', data: labels.map(l => sem[l].e), backgroundColor: 'teal' }, { label: 'Desencarnados', data: labels.map(l => sem[l].d), backgroundColor: 'blue' }] } });
+                
+                // Destruir gráfico anterior se existir para evitar sobreposição
+                const ctx = document.getElementById('grafico-vibracoes');
+                const chartStatus = Chart.getChart(ctx);
+                if (chartStatus) chartStatus.destroy();
+
+                new Chart(ctx, { 
+                    type: 'bar', 
+                    data: { 
+                        labels, 
+                        datasets: [
+                            { label: 'Encarnados', data: labels.map(l => sem[l].e), backgroundColor: 'teal' }, 
+                            { label: 'Desencarnados', data: labels.map(l => sem[l].d), backgroundColor: 'blue' }
+                        ] 
+                    },
+                    options: {
+                        responsive: true,
+                        scales: {
+                            y: { beginAtZero: true }
+                        }
+                    }
+                });
             }
 
             async function carregarDadosCaritas() {
