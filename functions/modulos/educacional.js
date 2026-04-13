@@ -125,7 +125,25 @@ const aulasEAE = [
     { numeroDaAula: 115, titulo: "Problemas da propagação do Espiritismo", ano: 3 },
     { numeroDaAula: 116, titulo: "Exame espiritual", ano: 3 },
     { numeroDaAula: 117, titulo: "Exame espiritual", ano: 3 },
-    { numeroDaAula: 118, titulo: "Exame espiritual. Devolução das cadernetas.", ano: 3 }
+    { numeroDaAula: 118, titulo: "Exame espiritual. Devolução das cadernetas, Esclarecimentos sobre o período probatório de três meses após o estudo de O Livro dos Espíritos", ano: 3 },
+    { numeroDaAula: 119, titulo: "Metodologia de estudo e distribuição dos capítulos entre os alunos", ano: 3 },
+    { numeroDaAula: 120, titulo: "Introdução e Prolegômenos", ano: 3 },
+    { numeroDaAula: 121, titulo: "Livro I (Cap. 1 a 4) – Das Causas Primárias: Deus / Dos Elementos Gerais do Universo / Da Criação / Do Princípio Vital", ano: 3 },
+    { numeroDaAula: 122, titulo: "Livro II (Cap. 1 e 2) – Do mundo Espírita ou Mundo dos Espíritos: Dos Espíritos / Da Encarnação dos Espíritos", ano: 3 },
+    { numeroDaAula: 123, titulo: "Livro II (Cap. 3 e 4) – Da Volta do Espírito, extinta a vida corpórea, à vida espiritual / Da Pluralidade das existências", ano: 3 },
+    { numeroDaAula: 124, titulo: "Livro II (Cap. 5) – Considerações sobre a Pluralidade das existências", ano: 3 },
+    { numeroDaAula: 125, titulo: "Livro II (Cap. 6) – Da Vida Espírita", ano: 3 },
+    { numeroDaAula: 126, titulo: "Livro II (Cap. 7) – Da Volta do Espírito à vida corporal", ano: 3 },
+    { numeroDaAula: 127, titulo: "Livro II (Cap. 8) – Da Emancipação da Alma", ano: 3 },
+    { numeroDaAula: 128, titulo: "Livro II (Cap. 9) – Da Intervenção dos Espíritos no mundo corporal", ano: 3 },
+    { numeroDaAula: 129, titulo: "Livro II (Cap. 10 e 11) – Das ocupações e missões dos Espíritos / Dos Três Reinos", ano: 3 },
+    { numeroDaAula: 130, titulo: "Livro III (Cap. 1 a 3) – Das Leis Morais: Da Lei Divina ou Natural / Da Lei de Adoração / Da Lei do Trabalho", ano: 3 },
+    { numeroDaAula: 131, titulo: "Livro III (Cap. 4 a 7) – Da Lei da Reprodução / Da Lei de Conservação / Da Lei de Destruição / Da Lei de Sociedade", ano: 3 },
+    { numeroDaAula: 132, titulo: "Livro III (Cap. 8 a 10) – Da Lei do Progresso / Da Lei de Igualdade / Da Lei de Liberdade", ano: 3 },
+    { numeroDaAula: 133, titulo: "Livro III (Cap. 11 e 12) – Da Lei de Justiça, de Amor e de Caridade / Da Perfeição Moral", ano: 3 },
+    { numeroDaAula: 134, titulo: "Livro IV (Cap 1) – Das Esperanças e Consolações: Das Penas e Gozos Terrestres", ano: 3 },
+    { numeroDaAula: 135, titulo: "Livro IV ( Cap 2 ) e Conclusão – Das Penas e Gozos Futuros", ano: 3 },
+    { numeroDaAula: 136, titulo: "Confraternização pela conclusão das atividades presenciais", ano: 3 }
 ];
 
 const aulasMediuns = [
@@ -267,10 +285,91 @@ const calcularFrequencia = onDocumentWritten({ ...OPCOES_FUNCAO, document: 'turm
     return pRef.update({ [`avaliacoes.${tData.anoAtual || 1}`]: { notaFrequencia: porc, mediaAT: parseFloat(mAT.toFixed(1)), mediaRI: parseFloat(mRI.toFixed(1)), mediaFinal: parseFloat(((mAT + mRI) / 2).toFixed(1)), statusAprovacao: (mAT + mRI >= 11) ? "Aprovado" : "Reprovado" } });
 });
 
-const matricularNovoAluno = onCall(OPCOES_FUNCAO, async (req) => {
-    const aluno = await db.collection("alunos").add({ nome: req.data.nome, criadoEm: admin.firestore.FieldValue.serverTimestamp() });
-    await db.collection('turmas').doc(req.data.turmaId).collection('participantes').add({ participanteId: aluno.id, nome: req.data.nome, origem: 'aluno', statusGeral: 'ativo', avaliacoes: { 1: { notaFrequencia: 0, statusAprovacao: 'Em Andamento' } } });
-    return { success: true };
+const matricularNovoAluno = onCall(OPCOES_FUNCAO, async (request) => {
+    // 1. Verificação de autenticação
+    if (!request.auth) {
+        throw new HttpsError('unauthenticated', 'A função deve ser chamada por um usuário autenticado.');
+    }
+
+    const { turmaId, nome, endereco, telefone, nascimento } = request.data;
+    if (!turmaId || !nome) {
+        throw new HttpsError('invalid-argument', 'O ID da turma e o nome do aluno são obrigatórios.');
+    }
+
+    const callerAuthUid = request.auth.uid;
+    const callerClaims = request.auth.token || {};
+
+    try {
+        // 2. Busca o ID do documento Firestore do chamador (para validar se é facilitador)
+        const callerQuery = await db.collection('voluntarios').where('authUid', '==', callerAuthUid).limit(1).get();
+        if (callerQuery.empty) {
+            throw new HttpsError('not-found', 'Seu perfil de voluntário não foi encontrado.');
+        }
+        const callerFirestoreId = callerQuery.docs[0].id;
+
+        // 3. Busca dados da turma
+        const turmaRef = db.collection('turmas').doc(turmaId);
+        const turmaDoc = await turmaRef.get();
+        if (!turmaDoc.exists) {
+            throw new HttpsError('not-found', 'A turma especificada não foi encontrada.');
+        }
+        const turmaData = turmaDoc.data();
+
+        // 4. Verificação de segurança (Lógica original preservada)
+        const isAdminGlobal = ['super-admin', 'diretor', 'tesoureiro'].some(role => callerClaims[role] === true || callerClaims.role === role);
+        const isEducacionalAdminRole = callerClaims['dirigente-escola'] === true || callerClaims['secretario-escola'] === true || callerClaims.role === 'dirigente-escola' || callerClaims.role === 'secretario-escola';
+        const isFacilitatorInTurma = (turmaData.facilitadoresIds || []).includes(callerFirestoreId);
+
+        const temPermissao = isAdminGlobal || (isFacilitatorInTurma && isEducacionalAdminRole);
+
+        if (!temPermissao) {
+            throw new HttpsError('permission-denied', 'Você não tem permissão para inscrever alunos nesta turma.');
+        }
+
+        // 5. Criação do registro em 'alunos'
+        const novoAlunoRef = await db.collection("alunos").add({
+            nome,
+            endereco: endereco || '',
+            telefone: telefone || '',
+            nascimento: nascimento || '',
+            criadoEm: admin.firestore.FieldValue.serverTimestamp()
+        });
+
+        // 6. Estrutura de participação (Unindo segurança com campos de cálculo)
+        const anoAtual = turmaData.anoAtual || 1;
+        const novoParticipante = {
+            participanteId: novoAlunoRef.id,
+            nome: nome,
+            inscritoEm: admin.firestore.FieldValue.serverTimestamp(),
+            origem: 'aluno',
+            statusGeral: 'ativo',
+            avaliacoes: {}
+        };
+
+        if (turmaData.isEAE) {
+            novoParticipante.grau = 'Aluno';
+            novoParticipante.avaliacoes[anoAtual] = {
+                notaFrequencia: 0,
+                notaCadernoTemas: 0,
+                notaCadernetaPessoal: 0,
+                notaTrabalhos: 0,
+                notaExameEspiritual: 0,
+                mediaAT: 0,
+                mediaRI: 0,
+                mediaFinal: 0,
+                statusAprovacao: 'Em Andamento'
+            };
+        }
+
+        await turmaRef.collection("participantes").add(novoParticipante);
+
+        return { success: true, message: `Aluno "${nome}" matriculado com sucesso!` };
+
+    } catch (error) {
+        console.error("Erro na função matricularNovoAluno:", error);
+        if (error instanceof HttpsError) throw error;
+        throw new HttpsError('internal', 'Erro interno ao processar a matrícula.');
+    }
 });
 
 const promoverAlunoParaVoluntario = onCall(OPCOES_FUNCAO, async (req) => {

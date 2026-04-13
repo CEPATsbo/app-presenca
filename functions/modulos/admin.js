@@ -138,8 +138,15 @@ const atualizarNomesParaCracha = onDocumentWritten({ ...OPCOES_FUNCAO, document:
 
 const enviarNotificacaoImediata = onRequest(OPCOES_FUNCAO, (req, res) => {
     cors(req, res, async () => {
-        const result = await enviarNotificacoesParaTodos(req.body.titulo, req.body.corpo);
-        res.status(200).json(result);
+        // Proteção contra chamadas GET acidentais
+        if (req.method !== 'POST') return res.status(405).send('Método não permitido');
+        
+        try {
+            const result = await enviarNotificacoesParaTodos(req.body.titulo, req.body.corpo);
+            res.status(200).json(result);
+        } catch (e) {
+            res.status(500).send(e.message);
+        }
     });
 });
 
