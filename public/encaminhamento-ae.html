@@ -28,9 +28,18 @@
         .card-alta { border-left-color: var(--cor-alta); }
         
         /* Modificação Visual para Card Finalizado */
-        .card-finalizado { border-left-color: #28a745; background-color: #e8f5e9; opacity: 0.7; }
+        .card-finalizado { border-left-color: #28a745 !important; background-color: #e8f5e9 !important; opacity: 0.7; }
         .card-finalizado h3, .card-finalizado .info { text-decoration: line-through; }
         .card-finalizado button { display: none; } /* Esconde botões se finalizado */
+
+        /* CORES POR TIPO DE PASSE (Tons suaves para garantir a leitura) */
+        .cor-passe-P4B { background-color: #ffffff; border: 1px solid #ddd; } /* BRANCO */
+        .cor-passe-P4A { background-color: #fff5e1; } /* CREME */
+        .cor-passe-P2  { background-color: #e3f2fd; } /* AZUL */
+        .cor-passe-CH  { background-color: #e8f5e9; } /* VERDE */
+        .cor-passe-P3B { background-color: #fff3e0; } /* LARANJA */
+        .cor-passe-P1  { background-color: #fffde7; } /* AMARELO */
+        .cor-passe-P3A { background-color: #fce4ec; } /* ROSA */
 
         .hidden { display: none; }
         .filtro-data { text-align: center; margin-bottom: 25px; background-color: #fff; padding: 15px; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.05); }
@@ -42,6 +51,7 @@
         .toggle-inversao label { font-size: 0.9em; font-weight: bold; color: #856404; display: flex; align-items: center; cursor: pointer; }
         .toggle-inversao input { margin-right: 8px; width: 18px; height: 18px; }
 
+        /* Responsividade Celular/Tablet Padrão */
         @media (max-width: 768px) {
             body { padding: 10px; }
             .cards-container { grid-template-columns: 1fr; gap: 15px; }
@@ -50,6 +60,17 @@
             .actions-3-buttons .btn, .actions-1-button .btn { padding: 20px 10px; font-size: 1.1em; font-weight: bold; }
             .btn, .btn-voltar { padding: 15px 20px; font-size: 1.1em; }
             .filtro-data input, .filtro-data label { font-size: 1.1em; }
+        }
+
+        /* Responsividade Otimizada para Celulares e Tablets DEITADOS (Paisagem) */
+        @media (max-width: 1024px) and (orientation: landscape) {
+            body { padding: 15px; }
+            .cards-container { grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 15px; }
+            .assistido-card { padding: 15px; gap: 10px; }
+            .assistido-card h3 { font-size: 1.3em; }
+            .assistido-card .info { font-size: 0.95em; }
+            .actions-3-buttons .btn, .actions-1-button .btn { padding: 12px 5px; font-size: 0.85em; }
+            .filtro-data { margin-bottom: 15px; padding: 10px; }
         }
     </style>
 </head>
@@ -119,6 +140,25 @@
                 } catch (error) { console.error("Erro ao registrar log:", error); }
             }
 
+            // FUNÇÃO AUXILIAR: Verifica se o card cumpriu o ciclo para ir pro fim da fila
+            function verificarSeFinalizado(atendimento) {
+                if (!atendimento) return false;
+                const statusFila = atendimento.status;
+                const entrevistaConcluida = atendimento.entrevista_concluida === true;
+                const passeChamado = atendimento.passe_chamado === true || statusFila === 'chamado_passe';
+                
+                if (passeChamado) {
+                    if (!atendimento.precisaEntrevista) {
+                        return true;
+                    } else {
+                        if (entrevistaConcluida) {
+                            return true;
+                        }
+                    }
+                }
+                return false;
+            }
+
             const hoje = new Date();
             const offset = hoje.getTimezoneOffset();
             const hojeLocal = new Date(hoje.getTime() - (offset*60*1000));
@@ -183,11 +223,22 @@
                     cardsContainer.innerHTML = '<p>Nenhuma pessoa na fila de atendimento para este dia.</p>';
                     return;
                 }
+                
+                // ORDENAÇÃO ATUALIZADA: Joga os finalizados para o fim
                 atendimentosDoDia.sort((a, b) => {
+                    const aFinalizado = verificarSeFinalizado(a) ? 1 : 0;
+                    const bFinalizado = verificarSeFinalizado(b) ? 1 : 0;
+                    
+                    if (aFinalizado !== bFinalizado) {
+                        return aFinalizado - bFinalizado; // Move finalizados para baixo
+                    }
+
+                    // Se empatar (ambos finalizados ou ambos abertos), mantem a prioridade de entrevista
                     const prioridadeA = a.precisaEntrevista ? 1 : 0;
                     const prioridadeB = b.precisaEntrevista ? 1 : 0;
                     return prioridadeB - prioridadeA;
                 });
+
                 atendimentosDoDia.forEach(atendimento => {
                     if(atendimento) cardsContainer.appendChild(criarCard(atendimento));
                 });
@@ -200,34 +251,22 @@
                 // Variáveis de Estado
                 const statusFila = atendimento.status;
                 const ordemInvertida = atendimento.ordem_invertida === true;
-                const entrevistaConcluida = atendimento.entrevista_concluida === true; // Nova flag
-                const passeChamado = atendimento.passe_chamado === true || statusFila === 'chamado_passe'; // Nova flag ou status legado
+                const entrevistaConcluida = atendimento.entrevista_concluida === true;
+                const passeChamado = atendimento.passe_chamado === true || statusFila === 'chamado_passe';
 
-                // ===================================================================
-                // NOVA LÓGICA DE ENCERRAMENTO (Strikethrough)
-                // ===================================================================
-                // O card só encerra se NÃO precisar de entrevista OU se precisar E ela já estiver concluída.
-                // E claro, o passe tem que ter sido chamado.
-                let cardDeveFechar = false;
-                
-                if (passeChamado) {
-                    if (!atendimento.precisaEntrevista) {
-                        cardDeveFechar = true; // Só passe, passe chamado = fim.
-                    } else {
-                        // Precisa entrevista. Só fecha se entrevista estiver concluída.
-                        if (entrevistaConcluida) {
-                            cardDeveFechar = true;
-                        } else {
-                            // Passe chamado, mas entrevista pendente (caso invertido). Mantém aberto.
-                            cardDeveFechar = false;
-                        }
-                    }
-                }
+                // Verifica encerramento usando a nova função centralizada
+                const cardDeveFechar = verificarSeFinalizado(atendimento);
 
                 if (cardDeveFechar) {
                     card.classList.add('card-finalizado');
                     card.innerHTML = `<h3>${atendimento.nomeAssistido}</h3><p class="info">Atendimento finalizado.</p>`;
                     return card;
+                }
+
+                // APLICAÇÃO DE COR NO FUNDO COM BASE NO PASSE
+                const passeExibicao = atendimento.passeParaMostrar || 'N/A';
+                if (passeExibicao !== 'N/A') {
+                    card.classList.add(`cor-passe-${passeExibicao.toUpperCase()}`);
                 }
 
                 let buttonsHtml = '';
@@ -247,8 +286,6 @@
                     // Lógica de Habilitação INVERTIDA vs NORMAL
                     let entrevistaBtnDisabled = statusChamadoEntrevista || statusEntrevistaRealizada;
                     
-                    // O botão de passe fica desabilitado se não for invertido e a entrevista não tiver ocorrido.
-                    // SE for invertido, libera o passe sempre (desde que não chamado).
                     let passeBtnDisabled = true;
                     if (ordemInvertida) {
                          passeBtnDisabled = passeChamado; // Se invertido, só trava se já chamou
@@ -284,7 +321,6 @@
                 if (passeChamado && !cardDeveFechar) card.classList.add('chamado-passe'); // Visual de passe chamado mas ainda ativo
 
                 let tipoLabel = '';
-                const passeExibicao = atendimento.passeParaMostrar || 'N/A';
 
                 if (atendimento.tipoAtendimento === 'avulso') {
                     tipoLabel = `Passe Avulso (${passeExibicao})`;
