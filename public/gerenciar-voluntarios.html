@@ -418,31 +418,35 @@
                     const authUid = target.dataset.authUid;
 
                     if (target.classList.contains('btn-gerar-cracha')) {
-                        target.disabled = true;
-                        ui.loader.style.display = 'flex';
-                        const codigo = target.dataset.codigo;
-                        const nomeCracha = target.dataset.nomeCracha;
-                        try {
-                            const result = await gerarCracha({ codigoVoluntario: codigo, nomeParaCracha: nomeCracha });
-                            if (result.data.success) {
-                                const link = document.createElement('a');
-                                link.href = `data:image/png;base64,${result.data.imageBase64}`;
-                                link.download = `cracha_${nomeCracha.replace(/ /g, '_')}_${codigo}.png`;
-                                document.body.appendChild(link);
-                                link.click();
-                                document.body.removeChild(link);
-                            } else {
-                                alert('A função retornou um erro ao gerar o crachá.');
-                            }
-                        } catch (error) {
-                            console.error("Erro ao gerar crachá:", error);
-                            alert(`Não foi possível gerar o crachá: ${error.message}`);
-                        } finally {
-                            ui.loader.style.display = 'none';
-                            target.disabled = false;
-                        }
-                        return; 
-                    }
+    target.disabled = true;
+    ui.loader.style.display = 'flex';
+    const codigo = target.dataset.codigo;
+    const nomeCracha = target.dataset.nomeCracha;
+    try {
+        const result = await gerarCracha({ codigoVoluntario: codigo, nomeParaCracha: nomeCracha });
+        
+        // Ajuste para Functions v2: os dados estão em result.data
+        const dados = result.data;
+
+        if (dados && dados.imageBase64) {
+            const link = document.createElement('a');
+            link.href = `data:image/png;base64,${dados.imageBase64}`;
+            link.download = `cracha_${nomeCracha.replace(/ /g, '_')}_${codigo}.png`;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        } else {
+            alert('A função executou, mas não retornou a imagem do crachá.');
+        }
+    } catch (error) {
+        console.error("Erro ao gerar crachá:", error);
+        alert(`Não foi possível gerar o crachá: ${error.message}`);
+    } finally {
+        ui.loader.style.display = 'none';
+        target.disabled = false;
+    }
+    return; 
+}
 
                     if (docId) {
                         const docRef = doc(db, 'voluntarios', docId);
