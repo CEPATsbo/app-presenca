@@ -256,17 +256,70 @@ const gerarCronogramaAutomaticamente = onDocumentCreated({ ...OPCOES_FUNCAO, doc
     return batch.commit();
 });
 
-const recalcularCronogramaCompleto = onDocumentWritten({ ...OPCOES_FUNCAO, document: 'turmas/{turmaId}/{subcolecao}/{docId}' }, async (event) => {
-    const { turmaId, subcolecao } = event.params; if (subcolecao !== "cronograma" && subcolecao !== "recessos") return null;
+const recalcularCronogramaCompleto = onDocumentWritten({ 
+    ...OPCOES_FUNCAO, 
+    document: 'turmas/{turmaId}/{subcolecao}/{docId}' 
+}, async (event) => {
+    const { turmaId, subcolecao } = event.params;
+    
+    // Só reage se mexer no cronograma ou nos recessos
+    if (subcolecao !== "cronograma" && subcolecao !== "recessos") return null;
+
     const tDoc = await db.collection("turmas").doc(turmaId).get();
-    const d = tDoc.data(); let data = d.dataInicio.toDate();
-    const aulas = await db.collection("turmas").doc(turmaId).collection("cronograma").where("isExtra", "==", false).orderBy("numeroDaAula").get();
+    if (!tDoc.exists) return null;
+    const d = tDoc.data();
+    
+    let dataAulaAtual = d.dataInicio.toDate();
+    const diaDaSemana = d.diaDaSemana;
+
+    // Busca dados para a inteligência de datas (Aulas Extras e Recessos)
+    const [aulasNormaisSnap, aulasExtrasSnap, recessosSnap] = await Promise.all([
+        db.collection("turmas").doc(turmaId).collection("cronograma").where("isExtra", "==", false).orderBy("numeroDaAula").get(),
+        db.collection("turmas").doc(turmaId).collection("cronograma").where("isExtra", "==", true).get(),
+        db.collection("turmas").doc(turmaId).collection("recessos").get()
+    ]);
+
+    // Formatação para comparação de datas
+    const toYYYYMMDD = (date) => date.toISOString().split('T')[0];
+
+    const datasOcupadasExtras = new Set(aulasExtrasSnap.docs.map(doc => toYYYYMMDD(doc.data().dataAgendada.toDate())));
+    const periodosRecesso = recessosSnap.docs.map(doc => ({
+        inicio: doc.data().dataInicio.toDate(),
+        fim: doc.data().dataFim.toDate()
+    }));
+
     const batch = db.batch();
-    for (const doc of aulas.docs) {
-        while (data.getUTCDay() !== d.diaDaSemana) data.setDate(data.getDate() + 1);
-        batch.update(doc.ref, { dataAgendada: admin.firestore.Timestamp.fromDate(new Date(data)) });
-        data.setDate(data.getDate() + 7);
+    
+    for (const aulaDoc of aulasNormaisSnap.docs) {
+        // 1. Garante que começa no dia da semana correto
+        while (dataAulaAtual.getUTCDay() !== diaDaSemana) {
+            dataAulaAtual.setDate(dataAulaAtual.getDate() + 1);
+        }
+
+        // 2. Inteligência: Verifica se a data está em recesso ou ocupada por extra
+        let dataValida = false;
+        while (!dataValida) {
+            const dataStr = toYYYYMMDD(dataAulaAtual);
+            const isOcupadaExtra = datasOcupadasExtras.has(dataStr);
+            const isRecesso = periodosRecesso.some(p => dataAulaAtual >= p.inicio && dataAulaAtual <= p.fim);
+
+            if (isOcupadaExtra || isRecesso) {
+                // Pula para a próxima semana e testa de novo
+                dataAulaAtual.setDate(dataAulaAtual.getDate() + 7);
+            } else {
+                dataValida = true;
+            }
+        }
+
+        // 3. Atualiza a aula regular com a próxima data livre encontrada
+        batch.update(aulaDoc.ref, { 
+            dataAgendada: admin.firestore.Timestamp.fromDate(new Date(dataAulaAtual)) 
+        });
+
+        // Prepara para a próxima aula (avança 1 semana)
+        dataAulaAtual.setDate(dataAulaAtual.getDate() + 7);
     }
+
     return batch.commit();
 });
 
