@@ -121,11 +121,14 @@ const atribuirCodigosVoluntarios = onCall(OPCOES_FUNCAO, async (request) => {
     return { success: true };
 });
 
-const gerarCracha = onCall({ ...OPCOES_FUNCAO, memory: '1GiB' }, async (req) => {
+const gerarCracha = onCall({ ...OPCOES_FUNCAO, memory: '1GiB', timeoutSeconds: 120 }, async (req) => {
     const { nomeParaCracha, codigoVoluntario } = req.data;
-    const [template] = await storage.bucket().file('template_cracha.png').download();
+    const bucket = admin.storage().bucket();
+    const [template] = await bucket.file('template_cracha.png').download();
+    
     const barcode = await bwipjs.toBuffer({ bcid: 'code128', text: String(codigoVoluntario), scale: 3, height: 12, includetext: true, textcolor: '56ad59', barcolor: '56ad59' });
-    const textoSvg = Buffer.from(`<svg width="1011" height="150"><text x="50%" y="50%" font-family="sans-serif" font-size="70" font-weight="bold" fill="#56ad59" text-anchor="middle">${nomeParaCracha.toUpperCase()}</text></svg>`);
+    const textoSvg = Buffer.from(`<svg width="1011" height="150"><text x="50%" y="50%" font-family="sans-serif" font-size="70" font-weight="bold" fill="#56ad59" text-anchor="middle" dominant-baseline="middle">${nomeParaCracha.toUpperCase()}</text></svg>`);
+    
     const final = await sharp(template).composite([{ input: textoSvg, top: 380, left: 0 }, { input: barcode, top: 510, left: 425 }]).png().toBuffer();
     return { imageBase64: final.toString('base64') };
 });
