@@ -244,16 +244,37 @@ const cadastrarAulasAutomaticamente = onDocumentCreated({ ...OPCOES_FUNCAO, docu
     return batch.commit();
 });
 
+// 1. GERAR CRONOGRAMA (RESTAURADO: Agora busca o dia da semana correto antes de começar)
 const gerarCronogramaAutomaticamente = onDocumentCreated({ ...OPCOES_FUNCAO, document: 'turmas/{turmaId}' }, async (event) => {
-    const d = event.data.data(); const aulas = await db.collection('cursos').doc(d.cursoId).collection('curriculo').orderBy('numeroDaAula').get();
-    let data = d.dataInicio.toDate(); while (data.getUTCDay() !== d.diaDaSemana) data.setDate(data.getDate() + 1);
-    const batch = db.batch();
-    aulas.forEach(doc => {
-        const ref = db.collection('turmas').doc(event.params.turmaId).collection('cronograma').doc();
-        batch.set(ref, { ...doc.data(), dataAgendada: admin.firestore.Timestamp.fromDate(new Date(data)), status: 'agendada', isExtra: false });
-        data.setDate(data.getDate() + 7);
-    });
-    return batch.commit();
+    const snap = event.data;
+    if (!snap) return null;
+    const d = snap.data();
+    const turmaId = event.params.turmaId;
+
+    try {
+        const aulasGabarito = await db.collection('cursos').doc(d.cursoId).collection('curriculo').orderBy('numeroDaAula').get();
+        if (aulasGabarito.empty) return null;
+
+        let dataAtual = d.dataInicio.toDate();
+        // LÓGICA ORIGINAL: Garante que a primeira aula caia exatamente no dia da semana escolhido
+        while (dataAtual.getUTCDay() !== d.diaDaSemana) { 
+            dataAtual.setDate(dataAtual.getDate() + 1); 
+        }
+
+        const batch = db.batch();
+        aulasGabarito.forEach(doc => {
+            const ref = db.collection('turmas').doc(turmaId).collection('cronograma').doc();
+            batch.set(ref, { 
+                ...doc.data(), 
+                gabaritoAulaId: doc.id, 
+                dataAgendada: admin.firestore.Timestamp.fromDate(new Date(dataAtual)), 
+                status: 'agendada', 
+                isExtra: false 
+            });
+            dataAtual.setDate(dataAtual.getDate() + 7);
+        });
+        return batch.commit();
+    } catch (e) { console.error("Erro ao gerar cronograma:", e); }
 });
 
 const recalcularCronogramaCompleto = onDocumentWritten({ 
@@ -323,19 +344,71 @@ const recalcularCronogramaCompleto = onDocumentWritten({
     return batch.commit();
 });
 
+// 2. CALCULAR FREQUÊNCIA (RESTAURADO: Regra de "Justificado" e "Abono por Aula Extra")
 const calcularFrequencia = onDocumentWritten({ ...OPCOES_FUNCAO, document: 'turmas/{turmaId}/frequencias/{frequenciaId}' }, async (event) => {
-    const f = event.data.after.data(); const tId = event.params.turmaId;
-    const tData = (await db.collection('turmas').doc(tId).get()).data();
-    const aulas = await db.collection('turmas').doc(tId).collection('cronograma').where('status', '==', 'realizada').where('isExtra', '==', false).get();
-    const freqs = await db.collection('turmas').doc(tId).collection('frequencias').where('participanteId', '==', f.participanteId).get();
-    let pVal = 0; freqs.forEach(doc => { if (['presente', 'justificado'].includes(doc.data().status)) pVal++; });
-    const porc = Math.round((pVal / (aulas.size || 1)) * 100);
+    const { turmaId } = event.params;
+    const fData = event.data.after.exists ? event.data.after.data() : event.data.before.data();
+    const { participanteId, participanteDocId } = fData;
+
+    const tSnap = await db.collection('turmas').doc(turmaId).get();
+    const tData = tSnap.data();
+    const anoAtual = tData.anoAtual || 1;
+
+    // Busca aulas realizadas (Diferenciando Extras de Regulares)
+    const cronoSnap = await db.collection('turmas').doc(turmaId).collection('cronograma').where('status', '==', 'realizada').get();
+    const idsRegulares = [];
+    const idsExtras = [];
+    cronoSnap.forEach(doc => {
+        if (doc.data().isExtra) idsExtras.push(doc.id);
+        else idsRegulares.push(doc.id);
+    });
+
+    if (idsRegulares.length === 0) return null;
+
+    // Busca todas as presenças do aluno
+    const freqsSnap = await db.collection('turmas').doc(turmaId).collection('frequencias').where('participanteId', '==', participanteId).get();
+    
+    let presencasValidas = 0;
+    let abonosExtras = 0;
+
+    freqsSnap.forEach(doc => {
+        const fr = doc.data();
+        // REGRA ORIGINAL 1: Justificado conta como presença em aula regular
+        if (idsRegulares.includes(fr.aulaId) && (fr.status === 'presente' || fr.status === 'justificado')) {
+            presencasValidas++;
+        }
+        // REGRA ORIGINAL 2: Aula Extra (Presente) abona uma falta regular
+        if (idsExtras.includes(fr.aulaId) && fr.status === 'presente') {
+            abonosExtras++;
+        }
+    });
+
+    let efetivas = presencasValidas + abonosExtras;
+    if (efetivas > idsRegulares.length) efetivas = idsRegulares.length;
+
+    const porc = Math.round((efetivas / idsRegulares.length) * 100);
+    
+    // Cálculo de Notas e Aprovação (IDÊNTICO AO ORIGINAL)
+    const pRef = db.collection('turmas').doc(turmaId).collection('participantes').doc(participanteDocId);
+    const pSnap = await pRef.get();
+    const aval = pSnap.data().avaliacoes || {};
+    const aDoAno = aval[anoAtual] || {};
+
     const nF = porc >= 80 ? 10 : (porc >= 60 ? 5 : 1);
-    const pRef = db.collection('turmas').doc(tId).collection('participantes').doc(f.participanteDocId);
-    const pSnap = await pRef.get(); const a = pSnap.data().avaliacoes || {}; const aA = a[tData.anoAtual || 1] || {};
-    const mAT = (nF + (aA.notaCadernoTemas || 0)) / 2;
-    const mRI = ((aA.notaCadernetaPessoal || 0) + (aA.notaTrabalhos || 0) + (aA.notaExameEspiritual || 0)) / 3;
-    return pRef.update({ [`avaliacoes.${tData.anoAtual || 1}`]: { notaFrequencia: porc, mediaAT: parseFloat(mAT.toFixed(1)), mediaRI: parseFloat(mRI.toFixed(1)), mediaFinal: parseFloat(((mAT + mRI) / 2).toFixed(1)), statusAprovacao: (mAT + mRI >= 11) ? "Aprovado" : "Reprovado" } });
+    const mAT = (nF + (aDoAno.notaCadernoTemas || 0)) / 2;
+    const mRI = ((aDoAno.notaCadernetaPessoal || 0) + (aDoAno.notaTrabalhos || 0) + (aDoAno.notaExameEspiritual || 0)) / 3;
+    const mFinal = (mAT + mRI) / 2;
+    const aprovado = (mFinal >= 5 && mRI >= 6) ? "Aprovado" : "Reprovado";
+
+    return pRef.update({
+        [`avaliacoes.${anoAtual}`]: {
+            notaFrequencia: porc,
+            mediaAT: parseFloat(mAT.toFixed(1)),
+            mediaRI: parseFloat(mRI.toFixed(1)),
+            mediaFinal: parseFloat(mFinal.toFixed(1)),
+            statusAprovacao: aprovado
+        }
+    });
 });
 
 const matricularNovoAluno = onCall(OPCOES_FUNCAO, async (request) => {
