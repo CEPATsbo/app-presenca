@@ -32,20 +32,40 @@
         .form-item input { padding: 10px; border-radius: 6px; border: 1px solid #ccc; font-size: 1em; width: 100%; box-sizing: border-box; }
         .form-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; align-items: end; }
         .hidden { display: none; }
+        
         #lista-ativos { list-style-type: none; padding: 0; display: flex; flex-wrap: wrap; gap: 10px; }
+        
+        /* Modificação: Base dos Itens da Lista */
         #lista-ativos li {
-            background-color: var(--cor-pendente);
-            color: white;
+            color: #333; /* Cor escura para contrastar com passes claros */
+            font-weight: 600;
             padding: 10px 15px;
             border-radius: 20px;
             cursor: pointer;
-            transition: background-color 0.2s;
+            transition: opacity 0.2s, transform 0.1s;
             font-size: 0.9em;
+            border: 1px solid #ccc;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
         }
-        #lista-ativos li:hover { opacity: 0.8; }
-        #lista-ativos li.status-presente { background-color: var(--cor-presente); }
-        #lista-ativos li.status-alta-programada { background-color: var(--cor-alta); }
-        #lista-ativos li.status-novo-ciclo { background-color: var(--cor-migracao); }
+        #lista-ativos li:hover { opacity: 0.8; transform: translateY(-1px); }
+
+        /* CORES POR TIPO DE PASSE */
+        .cor-passe-P4B { background-color: #ffffff; border: 1px solid #ccc; } /* BRANCO */
+        .cor-passe-P4A { background-color: #fff5e1; } /* CREME */
+        .cor-passe-P2  { background-color: #a7c7e7; } /* AZUL */
+        .cor-passe-CH  { background-color: #98ff98; } /* VERDE */
+        .cor-passe-P3B { background-color: #ffc067; } /* LARANJA */
+        .cor-passe-P1  { background-color: #ffee8c; } /* AMARELO */
+        .cor-passe-P3A { background-color: #ffb6c1; } /* ROSA */
+
+        /* Indicadores de Status (Modificados para conviver com as cores de fundo) */
+        #lista-ativos li.status-presente { 
+            opacity: 0.55; /* Fica opaco para mostrar que já foi atendido */
+            border-style: dashed;
+        }
+        #lista-ativos li.status-alta-programada { border: 2px solid var(--cor-alta); box-shadow: 0 0 8px rgba(220, 53, 69, 0.4); }
+        #lista-ativos li.status-novo-ciclo { border: 2px solid var(--cor-migracao); box-shadow: 0 0 8px rgba(23, 162, 184, 0.4); }
+
         .actions-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-top: 20px; }
         .actions-grid-freq { display: flex; gap: 15px; margin-top: 10px; }
         #search-results-container { position: relative; }
@@ -164,7 +184,6 @@
             };
 
             async function calcularSemanaAtual(tratamentoId) {
-                // Conta atendimentos válidos (não-falta E com data preenchida) ANTES do início do dia de HOJE.
                 if (!tratamentoId) return 1;
                 const hojeInicio = new Date();
                 hojeInicio.setHours(0, 0, 0, 0);
@@ -173,21 +192,19 @@
                  const qHistorico = query(
                     atendimentosRef,
                     where("tratamentoId", "==", tratamentoId),
-                    where("dataAtendimento", "<", dataLimite) // Só atendimentos passados
+                    where("dataAtendimento", "<", dataLimite) 
                 );
                 const historicoSnapshot = await getDocs(qHistorico);
 
                 let atendimentosPassadosValidos = 0;
                 historicoSnapshot.forEach(doc => {
                     const data = doc.data();
-                    if (data.tipo !== 'falta' && data.dataAtendimento !== null) { // Garante que não conta faltas nem placeholders
+                    if (data.tipo !== 'falta' && data.dataAtendimento !== null) { 
                         atendimentosPassadosValidos++;
                     }
                 });
-                // A semana atual é o número de atendimentos passados válidos + 1
                 return atendimentosPassadosValidos + 1;
             }
-
 
             const resetarFormularioBusca = () => {
                 assistidoSelecionado = null;
@@ -290,13 +307,37 @@
                 const itensLista = (await Promise.all(promessas)).filter(item => item !== null);
                 itensLista.sort((a, b) => a.assistido.nome.localeCompare(b.assistido.nome));
                 ui.listaAtivos.innerHTML = '';
+                
                 itensLista.forEach(item => {
                     const li = document.createElement('li');
-                    li.textContent = item.assistido.nome;
-                    li.className = `status-${item.statusHoje}`;
-                    if (item.statusHoje === 'alta-programada') { li.title = "Decisão: ALTA PROGRAMADA (Aguardando Entrevista)"; }
-                    else if (item.statusHoje === 'novo-ciclo') { const passe = metadadosTratamento[item.tratamento.id]?.atendimento5semana?.passePara || 'N/I'; li.title = `Decisão: NOVO CICLO (Passe ${passe})`; }
-                    li.addEventListener('click', () => { tratamentoAtivoSelecionado = item.tratamento; assistidoSelecionado = item.assistido; ui.nomeFrequencia.textContent = item.assistido.nome; ui.painelAcoesFrequencia.classList.remove('hidden'); });
+                    
+                    // LÓGICA DE CORES DOS PASSES E INDICADORES VISUAIS
+                    const passeAtual = item.tratamento.passe_ciclo_atual || 'P4B';
+                    let iconeStatus = '';
+                    
+                    if (item.statusHoje === 'presente') {
+                        iconeStatus = ' ✅';
+                    } else if (item.statusHoje === 'alta-programada') {
+                        iconeStatus = ' 🔴 (Alta)';
+                        li.title = "Decisão: ALTA PROGRAMADA (Aguardando Entrevista)";
+                    } else if (item.statusHoje === 'novo-ciclo') {
+                        const passeNovo = metadadosTratamento[item.tratamento.id]?.atendimento5semana?.passePara || 'N/I';
+                        iconeStatus = ' 🔄 (Migração)';
+                        li.title = `Decisão: NOVO CICLO (Passe ${passeNovo})`;
+                    }
+
+                    // Define o texto concatenando Nome + Fase + Icone
+                    li.textContent = `${item.assistido.nome} (${passeAtual})${iconeStatus}`;
+                    
+                    // Aplica as classes CSS de cor do passe e de status
+                    li.className = `status-${item.statusHoje} cor-passe-${passeAtual}`;
+                    
+                    li.addEventListener('click', () => { 
+                        tratamentoAtivoSelecionado = item.tratamento; 
+                        assistidoSelecionado = item.assistido; 
+                        ui.nomeFrequencia.textContent = item.assistido.nome; 
+                        ui.painelAcoesFrequencia.classList.remove('hidden'); 
+                    });
                     ui.listaAtivos.appendChild(li);
                 });
             };
@@ -309,9 +350,6 @@
                 event.target.value = input;
             };
 
-            // ===================================================================
-            // INÍCIO DO BLOCO MODIFICADO: BOTÃO MARCAR PRESENÇA
-            // ===================================================================
              ui.btnMarcarPresenca.addEventListener('click', async (e) => {
                 e.target.disabled = true;
                 const hojeInicio = new Date();
@@ -334,7 +372,6 @@
                 try {
                     const dadosMeta = metadadosTratamento[tratamentoAtivoSelecionado.id];
 
-                    // CASO DE ATIVAÇÃO DA 5ª SEMANA
                     if (dadosMeta && dadosMeta.atendimento5semana) {
                         const atendimentoPreRegistrado = dadosMeta.atendimento5semana;
                         const atendimentoDocRef = doc(db, 'atendimentos_ae', atendimentoPreRegistrado.id);
@@ -348,7 +385,7 @@
                             });
                             await batch.commit();
                             await registrarLog('Ativação de Entrevista de Alta (AE)', { assistidoId: assistidoSelecionado.id, assistidoNome: assistidoSelecionado.nome, tratamentoId: tratamentoAtivoSelecionado.id });
-                            alert(`Presença registrada para ${assistidoSelecionado.nome}. Assistido encaminhado para a ENTREVISTA DE ALTA (não haverá passe).`);
+                            alert(`Presença registrada para ${assistidoSelecionado.nome}. Assistido encaminhado para a ENTREVISTA DE ALTA.`);
 
                         } else if (atendimentoPreRegistrado.passePara) {
                             const novoPasse = atendimentoPreRegistrado.passePara;
@@ -366,7 +403,6 @@
                             await registrarLog('Ativação de Novo Ciclo (AE)', { assistidoId: assistidoSelecionado.id, assistidoNome: assistidoSelecionado.nome, tratamentoAntigoId: tratamentoAtivoSelecionado.id, tratamentoNovoId: novoTratamentoRef.id, novoPasse: novoPasse });
                             alert(`Presença registrada. ${assistidoSelecionado.nome} iniciou um NOVO CICLO (Semana 1, Passe ${novoPasse}) e foi enviado para a fila.`);
                         } else {
-                            // Placeholder sem decisão clara (trata como semana 5 normal)
                             const semanaAtual = 5;
                             const passeDoCiclo = tratamentoAtivoSelecionado.passe_ciclo_atual;
                             batch.update(atendimentoDocRef, { dataAtendimento: dataAtual });
@@ -375,47 +411,23 @@
                             alert(`Presença de ${assistidoSelecionado.nome} (Semana ${semanaAtual}) registrada com sucesso!`);
                             await registrarLog('Marcação de Presença (AE)', { assistidoId: assistidoSelecionado.id, assistidoNome: assistidoSelecionado.nome, tratamentoId: tratamentoAtivoSelecionado.id, semana: semanaAtual });
                         }
-
-                    // --- CASO C: FLUXO NORMAL (Semanas 1-4 ou 5ª sem placeholder) ---
                     } else {
                         const semanaAtual = dadosMeta?.semanaAtual || await calcularSemanaAtual(tratamentoAtivoSelecionado.id);
                         const passeDoCiclo = tratamentoAtivoSelecionado.passe_ciclo_atual;
-
-                        // 1. Determinar se precisa de entrevista
                         let precisaEntrevista = false;
-                        // Regra: Semana 1, 4 ou 5 OU se o passe for P3A/P3B
-                        if ([1, 4, 5].includes(semanaAtual) || passeDoCiclo === 'P3A' || passeDoCiclo === 'P3B') {
-                           precisaEntrevista = true;
-                        }
+                        if ([1, 4, 5].includes(semanaAtual) || passeDoCiclo === 'P3A' || passeDoCiclo === 'P3B') { precisaEntrevista = true; }
 
-                        console.log(`[Debug Presença Normal] Semana=${semanaAtual}, Passe=${passeDoCiclo}, PrecisaEntrevista=${precisaEntrevista}`); // Log para depuração
-
-                        // 2. Criar o registro de atendimento com os campos corretos
                         const placeholderHistoricoRef = doc(collection(db, 'atendimentos_ae'));
                         batch.set(placeholderHistoricoRef, {
-                            assistidoId: assistidoSelecionado.id,
-                            tratamentoId: tratamentoAtivoSelecionado.id,
-                            tipo: 'tratamento_semanal',
-                            dataAtendimento: dataAtual,
-                            semana: semanaAtual,
-                            // Define entrevistador e detalhes_preenchidos com base na necessidade da entrevista
-                            entrevistador: precisaEntrevista ? 'Aguardando Detalhes' : 'Passe Direto',
-                            passeRecomendado: passeDoCiclo,
-                            notas: '', // Sempre inicia vazio
-                            detalhes_preenchidos: !precisaEntrevista // true se NÃO precisa entrevista, false se PRECISA
+                            assistidoId: assistidoSelecionado.id, tratamentoId: tratamentoAtivoSelecionado.id, tipo: 'tratamento_semanal',
+                            dataAtendimento: dataAtual, semana: semanaAtual, entrevistador: precisaEntrevista ? 'Aguardando Detalhes' : 'Passe Direto',
+                            passeRecomendado: passeDoCiclo, notas: '', detalhes_preenchidos: !precisaEntrevista
                         });
 
-                        // 3. Adicionar à fila (lógica inalterada)
                         batch.set(doc(filaRef), {
-                            assistidoId: assistidoSelecionado.id,
-                            nomeAssistido: assistidoSelecionado.nome,
-                            tratamentoId: tratamentoAtivoSelecionado.id,
-                            atendimentoId: placeholderHistoricoRef.id,
-                            status: 'aguardando_entrevista_ou_passe',
-                            passeRecomendado: passeDoCiclo,
-                            semana_atual: semanaAtual,
-                            chegadaEm: dataAtual,
-                            recepcionista: { uid: user.uid, nome: user.displayName }
+                            assistidoId: assistidoSelecionado.id, nomeAssistido: assistidoSelecionado.nome, tratamentoId: tratamentoAtivoSelecionado.id,
+                            atendimentoId: placeholderHistoricoRef.id, status: 'aguardando_entrevista_ou_passe', passeRecomendado: passeDoCiclo,
+                            semana_atual: semanaAtual, chegadaEm: dataAtual, recepcionista: { uid: user.uid, nome: user.displayName }
                         });
 
                         await batch.commit();
@@ -431,14 +443,10 @@
                     e.target.disabled = false;
                 }
             });
-            // ===================================================================
-            // FIM DO BLOCO MODIFICADO
-            // ===================================================================
 
              ui.btnMarcarFaltaRapido.addEventListener('click', async (e) => {
                 e.target.disabled = true;
                 if (confirm(`Confirmar uma falta para ${assistidoSelecionado.nome}?`)) {
-
                     const tratamentoDocRef = doc(db, 'tratamentos_ae', tratamentoAtivoSelecionado.id);
                     const novoTotalFaltas = (tratamentoAtivoSelecionado.faltas_acumuladas || 0) + 1;
                     const passeDoCiclo = tratamentoAtivoSelecionado.passe_ciclo_atual;
@@ -451,45 +459,23 @@
                     let motivo = '';
                     const logDetalhes = { assistidoId: assistidoSelecionado.id, assistidoNome: assistidoSelecionado.nome, tratamentoId: tratamentoAtivoSelecionado.id, totalFaltas: novoTotalFaltas, passe: passeDoCiclo, semana: semanaAtual };
 
-                    // console.log(`[Debug Falta] Verificando: Semana=${semanaAtual}, Passe Atual=${passeDoCiclo}, Faltas=${novoTotalFaltas}`);
-
                     if (semanaAtual === 5) {
-                        // console.log('[Debug Falta] É Semana 5.');
                         if (passeDoCiclo === 'P3A' || passeDoCiclo === 'P3B') {
-                            // console.log('[Debug Falta W5] Ciclo atual é P3A/P3B.');
                             const dadosMeta = metadadosTratamento[tratamentoAtivoSelecionado.id];
                             const decisao5Semana = dadosMeta?.atendimento5semana;
                             if (decisao5Semana) {
-                                // console.log('[Debug Falta W5] Decisão placeholder encontrada:', decisao5Semana);
-                                if (decisao5Semana.tipo === 'alta_programada') {
-                                    // console.log('[Debug Falta W5] Decisão é ALTA. Tolerando ausência.');
-                                    encerrarTratamento = false;
-                                } else if (decisao5Semana.passePara) {
+                                if (decisao5Semana.tipo === 'alta_programada') { encerrarTratamento = false; }
+                                else if (decisao5Semana.passePara) {
                                     const proximoPasse = decisao5Semana.passePara;
-                                    // console.log('[Debug Falta W5] Decisão é Novo Ciclo para:', proximoPasse);
                                     if (proximoPasse === 'P3A' || proximoPasse === 'P3B') {
-                                        // console.log('[Debug Falta W5] Próximo ciclo TAMBÉM é P3. Aplicando Tolerância Zero.');
                                         if (novoTotalFaltas >= 1) { encerrarTratamento = true; }
-                                    } else {
-                                        // console.log('[Debug Falta W5] Próximo ciclo NÃO é P3. Tolerando ausência.');
-                                        encerrarTratamento = false;
-                                    }
-                                } else {
-                                     // console.warn('[Debug Falta W5] Placeholder sem decisão clara. Tolerando ausência.');
-                                     encerrarTratamento = false;
-                                }
-                            } else {
-                                // console.warn('[Debug Falta W5] Placeholder não encontrado. Tolerando ausência.');
-                                encerrarTratamento = false;
-                            }
-                        } else {
-                             // console.log('[Debug Falta W5] Ciclo atual NÃO é P3A/P3B. Tolerando ausência.');
-                             encerrarTratamento = false;
-                        }
+                                    } else { encerrarTratamento = false; }
+                                } else { encerrarTratamento = false; }
+                            } else { encerrarTratamento = false; }
+                        } else { encerrarTratamento = false; }
                         if (!encerrarTratamento) { motivo = `Falta registrada (Semana 5). Total de faltas: ${novoTotalFaltas}.`; }
                         else { motivo = `Falta registrada (Semana 5). ATENÇÃO: Tratamento encerrado por falta (Tolerância Zero para P3A/P3B continuando P3).`; }
                     } else {
-                         // console.log(`[Debug Falta W${semanaAtual}] Aplicando regras padrão.`);
                         if (passeDoCiclo === 'P3A' || passeDoCiclo === 'P3B') {
                             if (novoTotalFaltas >= 1) { encerrarTratamento = true; motivo = 'Tratamento encerrado automaticamente por falta (Tolerância Zero para P3A/P3B).'; }
                             else { motivo = `Falta registrada com sucesso! Total de faltas: ${novoTotalFaltas}.`; }
@@ -502,12 +488,9 @@
                     if (encerrarTratamento) {
                         batch.update(tratamentoDocRef, { status: 'encerrado_por_falta', dataFim: dataAtualFalta });
                         await registrarLog('Encerramento por Falta (AE)', logDetalhes);
-                        // console.log(`[Debug Falta] Decisão: ENCERRAR tratamento. Motivo: ${motivo}`);
                     } else {
                          await registrarLog('Marcação de Falta (AE)', logDetalhes);
-                         // console.log(`[Debug Falta] Decisão: NÃO encerrar tratamento. Motivo: ${motivo}`);
                     }
-
                     await batch.commit();
                     alert(motivo);
                     ui.painelAcoesFrequencia.classList.add('hidden');
@@ -515,7 +498,6 @@
                 }
                 e.target.disabled = false;
             });
-
 
             ui.nomeInput.addEventListener('input', async (e) => {
                 const termo = e.target.value.trim();
@@ -563,7 +545,6 @@
                     const batch = writeBatch(db); const novoTratamentoRef = doc(tratamentosRef);
                     batch.set(novoTratamentoRef, { assistidoId: assistidoId, dataInicio: serverTimestamp(), status: 'ativo', faltas_acumuladas: 0, passe_ciclo_atual: passeInicial });
                     const dataAtual = serverTimestamp(); const novoAtendimentoRef = doc(collection(db, 'atendimentos_ae'));
-                    // Ao iniciar tratamento, sempre precisa de entrevista (Semana 1)
                     batch.set(novoAtendimentoRef, { assistidoId: assistidoId, tratamentoId: novoTratamentoRef.id, tipo: 'tratamento_semanal', dataAtendimento: dataAtual, semana: 1, entrevistador: 'Aguardando Detalhes', passeRecomendado: passeInicial, notas: '', detalhes_preenchidos: false });
                     batch.set(doc(filaRef), { assistidoId: assistidoId, nomeAssistido: nomeAssistido, tratamentoId: novoTratamentoRef.id, atendimentoId: novoAtendimentoRef.id, status: 'aguardando_entrevista_ou_passe', passeRecomendado: passeInicial, semana_atual: 1, chegadaEm: dataAtual, recepcionista: { uid: user.uid, nome: user.displayName } });
                     await batch.commit(); alert('Assistência Espiritual iniciada com sucesso e enviada para a fila!');
