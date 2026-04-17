@@ -38,54 +38,61 @@ function calcularCicloVibracoes(dataBase) {
     };
 }
 
-// --- EXPORTAÇÕES DO MÓDULO ---
-
-const enviarPedidoVibracao = onCall({ region: REGIAO }, async (req) => {
-    const { nome, endereco, tipo } = req.data;
+// 2. ENVIO DE PEDIDO COM TRAVA DE HORÁRIO (A FUNCIONALIDADE QUE FALTAVA)
+const enviarPedidoVibracao = onCall({ region: REGIAO }, async (request) => {
+    const { nome, endereco, tipo } = request.data;
     if (!nome || !tipo || (tipo === 'encarnado' && !endereco)) { 
-        throw new HttpsError('invalid-argument', 'Dados do pedido incompletos.'); 
+        throw new HttpsError('invalid-argument', 'Dados incompletos.'); 
     }
 
-    const col = tipo === 'encarnado' ? 'encarnados' : 'desencarnados';
-    const agoraSP = new Date();
+    // --- RESTAURAÇÃO DA LÓGICA DE HORÁRIO ---
+    const agoraSP = new Date(new Date().toLocaleString("en-US", { timeZone: "America/Sao_Paulo" }));
+    const diaDaSemana = agoraSP.getDay();
+    const horas = agoraSP.getHours();
+    const minutos = agoraSP.getMinutes();
     
-    // Determina o status (pendente se for feriado ou horário específico, conforme sua lógica original)
-    // Aqui usamos o cálculo do ciclo restaurado
+    let statusFinal = 'ativo';
+    
+    // Se for quinta-feira (4) durante o trabalho, entra como PENDENTE
+    if (diaDaSemana === 4 && ((horas === 19 && minutos >= 21) || (horas > 19 && horas < 22) || (horas === 22 && minutos <= 30))) {
+        statusFinal = 'pendente';
+    }
+    // --- FIM DA RESTAURAÇÃO ---
+
     const { dataArquivamento } = calcularCicloVibracoes(agoraSP);
+    const col = tipo === 'encarnado' ? 'encarnados' : 'desencarnados';
 
     const dadosParaSalvar = { 
         nome: nome.trim(), 
-        status: 'ativo', 
+        status: statusFinal, // Agora respeita a trava
         dataCriacao: admin.firestore.FieldValue.serverTimestamp(),
         dataArquivamento: dataArquivamento 
     };
 
-    if (tipo === 'encarnado') { dadosParaSalvar.endereco = endereco.trim(); }
+    if (tipo === 'encarnado') dadosParaSalvar.endereco = endereco.trim();
 
     await db.collection(col).add(dadosParaSalvar);
     return { success: true };
 });
 
+// 3. ARQUIVAMENTO AUTOMÁTICO (FORMATO COMPATÍVEL COM SEU GRÁFICO)
 const arquivarVibracoesConcluidas = onSchedule({ ...OPCOES_FUNCAO_SAOPAULO, schedule: '30 22 * * 4' }, async () => {
-    console.log("Iniciando arquivamento automático...");
     const agora = admin.firestore.Timestamp.now();
     const colecoes = ['encarnados', 'desencarnados'];
     
     for (const c of colecoes) {
         const snap = await db.collection(c).where('dataArquivamento', '<=', agora).get();
-        
         if (snap.empty) continue;
 
         const batch = db.batch(); 
         snap.forEach(doc => { 
             const dados = doc.data();
-            // Crucial para o seu gráfico: formata a label da semana (YYYY-MM-DD)
             const semanaDeReferencia = new Intl.DateTimeFormat('en-CA').format(dados.dataArquivamento.toDate());
             
             batch.set(db.collection('historico_vibracoes').doc(), {
                 ...dados,
-                tipo: c.slice(0, -1), // Remove o 's' do final (ex: encarnado)
-                semanaDeReferencia,
+                tipo: c.slice(0, -1),
+                semanaDeReferencia, // Campo vital para o gráfico
                 arquivadoEm: admin.firestore.FieldValue.serverTimestamp()
             }); 
             batch.delete(doc.ref); 
@@ -94,6 +101,7 @@ const arquivarVibracoesConcluidas = onSchedule({ ...OPCOES_FUNCAO_SAOPAULO, sche
     }
 });
 
+// 4. ATIVAÇÃO DE PENDENTES (RODA APÓS O TRABALHO DE QUINTA)
 const ativarNovosPedidos = onSchedule({ ...OPCOES_FUNCAO_SAOPAULO, schedule: '31 22 * * 4' }, async () => {
     for (const c of ['encarnados', 'desencarnados']) {
         const snap = await db.collection(c).where('status', '==', 'pendente').get();
