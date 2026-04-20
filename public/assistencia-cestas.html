@@ -17,7 +17,7 @@
         .familia-row { display: grid; grid-template-columns: 1fr auto; gap: 20px; padding: 15px; border-bottom: 1px solid #eee; align-items: center; }
         .info-nome { font-weight: bold; color: #34495e; font-size: 1.1em; }
         .info-dependentes { color: #27ae60; font-weight: 600; font-size: 0.9em; margin-top: 3px; display: block; }
-        .btn-entregar { background-color: var(--green); color: white; border: none; padding: 10px 20px; border-radius: 8px; cursor: pointer; font-weight: bold; }
+        .btn-entregar { background-color: var(--green); color: white; border: none; padding: 10px 20px; border-radius: 8px; cursor: pointer; font-weight: bold; min-width: 120px; }
         .btn-entregar:disabled { background-color: #bdc3c7; cursor: not-allowed; }
         .btn-zap { background-color: #25D366; color: white; border: none; padding: 10px 15px; border-radius: 8px; cursor: pointer; margin-left: 10px; }
         .modal { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.6); display: none; justify-content: center; align-items: center; z-index: 1000; }
@@ -36,7 +36,7 @@
     <main class="container">
         <h1><i class="fas fa-shopping-basket"></i> Entrega de Cestas</h1>
         <div class="search-box">
-            <input type="text" id="input-busca" placeholder="Pesquisar família...">
+            <input type="text" id="input-busca" placeholder="Pesquisar família por nome...">
         </div>
         <div id="lista-entrega">Carregando famílias...</div>
     </main>
@@ -47,11 +47,11 @@
             <p id="modal-info"></p>
             <div class="form-group">
                 <label><b>Observações da Entrega:</b></label>
-                <textarea id="obs-entrega" rows="3" placeholder="Ex: Entregue item extra devido ao número de dependentes..."></textarea>
+                <textarea id="obs-entrega" rows="3" placeholder="Ex: Itens extras incluídos..."></textarea>
             </div>
             <div style="margin-top: 25px; display: flex; gap: 10px;">
                 <button onclick="fecharModal()" style="flex:1; padding: 12px; border-radius: 8px; border: 1px solid #ccc; cursor:pointer;">Cancelar</button>
-                <button id="btn-finalizar" style="flex:1; background: var(--green); color: white; border: none; border-radius: 8px; font-weight: bold; cursor: pointer;">Finalizar</button>
+                <button id="btn-finalizar" style="flex:1; background: var(--green); color: white; border: none; border-radius: 8px; font-weight: bold; cursor: pointer;">Finalizar Entrega</button>
             </div>
         </div>
     </div>
@@ -64,19 +64,28 @@
         const firebaseConfig = { apiKey: "AIzaSyBV7RPjk3cFTqL-aIpflJcUojKg1ZXMLuU", authDomain: "voluntarios-ativos---cepat.firebaseapp.com", projectId: "voluntarios-ativos---cepat", storageBucket: "voluntarios-ativos---cepat.firebasestorage.app", messagingSenderId: "66122858261", appId: "1:66122858261:web:7fa21f1805463b5c08331c" };
         const db = getFirestore(initializeApp(firebaseConfig));
 
-        let todasFamilias = [], familiaSelecionada = null, configCesta = {};
+        let todasFamilias = [], familiaSelecionada = null, configCestaPadrao = {}, pickingAtivoIds = [];
 
         protegerPagina(['super-admin','diretor','caritas']).then(user => {
             inicializar(user);
         });
 
         function inicializar(user) {
+            // Escuta Receita Padrão
             onSnapshot(doc(db, "configuracoes", "cesta_padrao"), d => {
-                if (d.exists()) configCesta = d.data().itens;
+                if (d.exists()) configCestaPadrao = d.data().itens;
             });
 
+            // Escuta quem está no Picking atual (Elegibilidade)
+            onSnapshot(collection(db, "picking_estado"), snap => {
+                pickingAtivoIds = snap.docs.map(d => d.id);
+                renderizar(todasFamilias);
+            });
+
+            // Escuta Famílias e ordena Alfabeticamente
             onSnapshot(query(collection(db, "familiasAssistidas"), where("statusGeral", "==", "Ativa")), snap => {
-                todasFamilias = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+                todasFamilias = snap.docs.map(d => ({ id: d.id, ...d.data() }))
+                    .sort((a, b) => a.responsavel1.nome.localeCompare(b.responsavel1.nome));
                 renderizar(todasFamilias);
             });
 
@@ -86,17 +95,16 @@
             };
 
             window.abrirModal = (id, nome) => {
-                familiaSelecionada = { id, nome };
+                familiaSelecionada = todasFamilias.find(f => f.id === id);
                 document.getElementById('modal-titulo').innerText = `Entrega: ${nome}`;
-                document.getElementById('modal-info').innerText = "Confirme a entrega para atualizar o estoque automaticamente.";
+                document.getElementById('modal-info').innerText = "Esta ação registrará a entrega e dará baixa no estoque.";
                 document.getElementById('modal-confirmacao').style.display = 'flex';
                 document.getElementById('btn-finalizar').onclick = () => finalizarEntrega(user);
             };
 
-            // FUNÇÃO DISPARO WHATSAPP
             window.notificarZap = (nome) => {
                 const hora = new Date().toLocaleTimeString('pt-BR', {hour: '2-digit', minute:'2-digit'});
-                const msg = `✅ *Cáritas Informa:* Cesta entregue com sucesso para *${nome}* às ${hora}!`;
+                const msg = `✅ *Cáritas CEPAT:* Cesta básica entregue para *${nome}* às ${hora}. Fraternalmente agradecemos a presença.`;
                 window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`, '_blank');
             };
         }
@@ -104,40 +112,51 @@
         async function finalizarEntrega(user) {
             const btn = document.getElementById('btn-finalizar');
             btn.disabled = true;
-            btn.innerText = "Processando...";
+            btn.innerText = "Baixando Estoque...";
 
             try {
+                // Define qual receita usar para a baixa
+                const receitaParaBaixa = (familiaSelecionada.tipoCesta === 'Personalizada' && familiaSelecionada.receitaPersonalizada) 
+                    ? familiaSelecionada.receitaPersonalizada 
+                    : configCestaPadrao;
+
+                // 1. Grava histórico
                 await addDoc(collection(db, "entregasCestas"), {
                     familiaId: familiaSelecionada.id,
-                    responsavel: familiaSelecionada.nome,
+                    responsavel: familiaSelecionada.responsavel1.nome,
                     data: serverTimestamp(),
                     voluntario: user.email,
-                    observacoes: document.getElementById('obs-entrega').value
+                    observacoes: document.getElementById('obs-entrega').value,
+                    tipoReceita: familiaSelecionada.tipoCesta || 'Padrao'
                 });
 
+                // 2. Atualiza data na família
                 await updateDoc(doc(db, "familiasAssistidas", familiaSelecionada.id), {
                     ultimaCesta: serverTimestamp()
                 });
 
-                for (const [prodId, qtdParaBaixa] of Object.entries(configCesta)) {
+                // 3. Baixa de estoque item por item da receita aplicada
+                for (const [prodId, qtdParaBaixa] of Object.entries(receitaParaBaixa)) {
                     const docRef = doc(db, "estoque_caritas", prodId);
                     const docSnap = await getDoc(docRef);
+                    
                     if (docSnap.exists()) {
                         const saldoAtual = docSnap.data().quantidade || 0;
                         await updateDoc(docRef, { quantidade: Math.max(0, saldoAtual - qtdParaBaixa) });
-                    }
 
-                    const qLotes = query(collection(db, `estoque_caritas/${prodId}/lotes`), orderBy("validade", "asc"), limit(1));
-                    const loteSnap = await getDocs(qLotes);
-                    if (!loteSnap.empty) {
-                        const loteDoc = loteSnap.docs[0];
-                        const novoSaldoLote = (loteDoc.data().quantidade || 0) - qtdParaBaixa;
-                        if (novoSaldoLote <= 0) await deleteDoc(doc(db, `estoque_caritas/${prodId}/lotes`, loteDoc.id));
-                        else await updateDoc(doc(db, `estoque_caritas/${prodId}/lotes`, loteDoc.id), { quantidade: novoSaldoLote });
+                        // Baixa no lote mais antigo (FEFO)
+                        const qLotes = query(collection(db, `estoque_caritas/${prodId}/lotes`), orderBy("validade", "asc"), limit(1));
+                        const loteSnap = await getDocs(qLotes);
+                        if (!loteSnap.empty) {
+                            const loteDoc = loteSnap.docs[0];
+                            const novoSaldoLote = (loteDoc.data().quantidade || 0) - qtdParaBaixa;
+                            if (novoSaldoLote <= 0) await deleteDoc(doc(db, `estoque_caritas/${prodId}/lotes`, loteDoc.id));
+                            else await updateDoc(doc(db, `estoque_caritas/${prodId}/lotes`, loteDoc.id), { quantidade: novoSaldoLote });
+                        }
                     }
                 }
 
-                alert("Entrega realizada com sucesso! Clique no ícone do WhatsApp na lista para notificar a equipe.");
+                alert("Entrega finalizada!");
                 fecharModal();
             } catch (e) {
                 alert("Erro: " + e.message);
@@ -149,24 +168,44 @@
         function renderizar(dados) {
             const container = document.getElementById('lista-entrega');
             const hoje = new Date();
+            
+            if (dados.length === 0) {
+                container.innerHTML = "<p style='text-align:center; padding:20px; color:#666;'>Nenhuma família ativa encontrada.</p>";
+                return;
+            }
+
             container.innerHTML = dados.map(f => {
                 const dataEntrega = f.ultimaCesta ? f.ultimaCesta.toDate() : null;
-                const jaEntregue = dataEntrega && dataEntrega.getMonth() === hoje.getMonth() && dataEntrega.getFullYear() === hoje.getFullYear();
-                const numDependentes = f.filhos ? f.filhos.length : 0;
+                const jaEntregueNoMes = dataEntrega && dataEntrega.getMonth() === hoje.getMonth() && dataEntrega.getFullYear() === hoje.getFullYear();
                 
+                // Lógica de Elegibilidade: Só habilita se estiver no picking iniciado
+                const elegivelEsteMes = pickingAtivoIds.includes(f.id);
+                
+                let textoBotao = "Confirmar";
+                let desabilitar = false;
+
+                if (jaEntregueNoMes) {
+                    textoBotao = "Entregue";
+                    desabilitar = true;
+                } else if (!elegivelEsteMes && pickingAtivoIds.length > 0) {
+                    // Se o picking já começou e ele não está lá, é cadastro novo para o mês que vem
+                    textoBotao = "Próximo Ciclo";
+                    desabilitar = true;
+                }
+
                 return `
                     <div class="familia-row">
                         <div>
-                            <div class="info-nome">${f.responsavel1.nome}</div>
-                            <span class="info-dependentes"><i class="fas fa-child"></i> ${numDependentes} dependentes</span>
+                            <div class="info-nome">${f.responsavel1.nome} ${f.tipoCesta === 'Personalizada' ? '<small style="color:#9b59b6">(Personalizada)</small>' : ''}</div>
+                            <span class="info-dependentes"><i class="fas fa-child"></i> ${f.filhos ? f.filhos.length : 0} dependentes</span>
                             <small>Última: ${dataEntrega ? dataEntrega.toLocaleDateString() : 'Nunca'}</small>
                         </div>
                         <div style="display: flex; align-items: center;">
-                            <button class="btn-entregar" onclick="abrirModal('${f.id}', '${f.responsavel1.nome}')" ${jaEntregue ? 'disabled' : ''}>
-                                ${jaEntregue ? 'Entregue' : 'Confirmar'}
+                            <button class="btn-entregar" onclick="abrirModal('${f.id}', '${f.responsavel1.nome}')" ${desabilitar ? 'disabled' : ''}>
+                                ${textoBotao}
                             </button>
-                            ${jaEntregue ? `
-                                <button class="btn-zap" onclick="notificarZap('${f.responsavel1.nome}')" title="Notificar via WhatsApp">
+                            ${jaEntregueNoMes ? `
+                                <button class="btn-zap" onclick="notificarZap('${f.responsavel1.nome}')" title="Enviar comprovante">
                                     <i class="fab fa-whatsapp"></i>
                                 </button>
                             ` : ''}
