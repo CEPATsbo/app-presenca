@@ -26,14 +26,15 @@
         .btn-reset:hover { color: var(--red); }
         .alerta-proximo-ciclo { background: #fff3cd; border: 1px solid #ffeeba; color: #856404; padding: 30px; border-radius: 12px; text-align: center; margin-top: 20px; }
         
-        .badge-personalizada { background: #9b59b6; color: white; padding: 2px 8px; border-radius: 4px; font-size: 0.7em; margin-left: 10px; vertical-align: middle; }
-
         /* ESTILOS DO SEMÁFORO DE VALIDADE */
         .val-critica { color: var(--red) !important; font-weight: bold; }
         .val-alerta { color: #d4a017 !important; font-weight: bold; }
         .badge-val { font-size: 0.7em; padding: 2px 5px; border-radius: 4px; margin-left: 5px; color: white; }
         .bg-critica { background: var(--red); }
         .bg-alerta { background: #d4a017; }
+        
+        /* Novo estilo para identificação de cesta personalizada */
+        .badge-personalizada { background: #9b59b6; color: white; padding: 2px 8px; border-radius: 4px; font-size: 0.65em; margin-left: 10px; vertical-align: middle; }
     </style>
 </head>
 <body>
@@ -48,12 +49,12 @@
         <div style="display: flex; gap: 15px; margin-bottom: 20px; flex-wrap: wrap; background: #eee; padding: 10px; border-radius: 8px; font-size: 0.8em; justify-content: center;">
             <span style="display: flex; align-items: center; gap: 5px;"><i class="fas fa-square" style="color: var(--red);"></i> <b>Crítico:</b> Vence em até 15 dias</span>
             <span style="display: flex; align-items: center; gap: 5px;"><i class="fas fa-square" style="color: #d4a017;"></i> <b>Atenção:</b> Vence em até 45 dias</span>
-            <span style="display: flex; align-items: center; gap: 5px;"><i class="fas fa-square" style="color: var(--grey);"></i> <b>Seguro:</b> Validade longa</span>
+            <span style="display: flex; align-items: center; gap: 5px;"><i class="fas fa-square" style="color: var(--grey);"></i> <b>Seguro:</b> Validade longa ou geral</span>
         </div>
     
         <div class="resumo-dia">
             <div class="resumo-item"><h2 id="meta-total">0</h2><p>Meta (Famílias Ativas)</p></div>
-            <div class="resumo-item"><h2 id="entregas-feitas">0</h2><p>Já Entregues no Mês</p></div>
+            <div class="resumo-item"><h2 id="entregas-feitas">0</h2><p>Já Entregues</p></div>
             <div class="resumo-item"><h2 id="cestas-restantes" style="color: var(--green);">0</h2><p>Restam Montar</p></div>
         </div>
 
@@ -80,14 +81,14 @@
         });
 
         function iniciarSincronizacao() {
-            // Escuta marcações de Picking
+            // Escuta marcações de Picking (quadradinhos marcados)
             onSnapshot(collection(db, "picking_estado"), snap => {
                 pickingMarcados = {};
                 snap.docs.forEach(d => pickingMarcados[d.id] = d.data());
                 renderizar();
             });
 
-            // Escuta Estoque para nomes e saldos
+            // Escuta Estoque para carregar nomes e saldos reais
             onSnapshot(collection(db, "estoque_caritas"), snap => {
                 snap.docs.forEach(d => { 
                     saldoEstoque[d.id] = d.data().quantidade || 0; 
@@ -96,7 +97,7 @@
                 atualizarLotes();
             });
 
-            // Escuta Configuração Padrão
+            // Escuta Receita Padrão
             onSnapshot(doc(db, "configuracoes", "cesta_padrao"), d => {
                 if (d.exists()) { 
                     configPadrao = d.data().itens || {}; 
@@ -104,14 +105,14 @@
                 }
             });
 
-            // Escuta Famílias Ativas para definir a meta e quem deve aparecer
+            // Escuta Famílias Ativas (Para saber os nomes e se a cesta é personalizada)
             onSnapshot(query(collection(db, "familiasAssistidas"), where("statusGeral", "==", "Ativa")), snap => {
                 listaFamiliasAtivas = snap.docs.map(d => ({ id: d.id, ...d.data() }));
                 metaGlobal = listaFamiliasAtivas.length;
                 atualizarLotes();
             });
 
-            // Escuta entregas do mês
+            // Escuta entregas realizadas no mês atual
             const inicioMes = new Date(); inicioMes.setDate(1); inicioMes.setHours(0,0,0,0);
             onSnapshot(query(collection(db, "entregasCestas"), where("data", ">=", Timestamp.fromDate(inicioMes))), s => {
                 entregasNoMes = s.size; 
@@ -139,7 +140,8 @@
 
         function renderizar() {
             const montadasNoPicking = Object.values(pickingMarcados).filter(p => p.concluida).length;
-            const restantesParaMontar = Math.max(0, metaGlobal - entregasNoMes - montadasNoPicking);
+            const metaRestante = Math.max(0, metaGlobal - entregasNoMes);
+            const restantesParaMontar = Math.max(0, metaRestante - montadasNoPicking);
             
             document.getElementById('meta-total').innerText = metaGlobal;
             document.getElementById('entregas-feitas').innerText = entregasNoMes;
@@ -148,29 +150,34 @@
             const grid = document.getElementById('grid-cestas');
             grid.innerHTML = "";
 
-            if (restantesParaMontar === 0 && metaGlobal > 0 && montadasNoPicking === metaGlobal - entregasNoMes) {
-                grid.innerHTML = "<div style='grid-column: 1/-1;'><div class='alerta-proximo-ciclo'><h2>Tudo pronto!</h2><p>Todas as cestas do ciclo atual foram montadas ou entregues.</p></div></div>";
-                // Não damos return aqui para permitir ver as cestas concluídas abaixo do aviso se desejar
+            // Lógica de bloqueio visual preservada
+            if (metaRestante === 0 && metaGlobal > 0) {
+                const hoje = new Date();
+                const meses = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
+                grid.innerHTML = `
+                    <div style='grid-column: 1/-1;'>
+                        <div class="alerta-proximo-ciclo">
+                            <i class="fas fa-calendar-check" style="font-size: 3em; color: var(--green); margin-bottom: 15px; display: block;"></i>
+                            <h2>Ciclo de ${meses[hoje.getMonth()]} concluído!</h2>
+                            <p>Todas as cestas planejadas para este mês já foram entregues.</p>
+                        </div>
+                    </div>`;
+                return;
             }
 
             let lotesVirtuais = JSON.parse(JSON.stringify(mapaLotes));
             const hoje = new Date();
 
-            // Ordenar famílias (quem já está montado por último)
-            const familiasExibicao = listaFamiliasAtivas.sort((a,b) => {
-                const concluidaA = pickingMarcados[a.id]?.concluida || false;
-                const concluidaB = pickingMarcados[b.id]?.concluida || false;
-                return concluidaA - concluidaB;
-            });
-
-            familiasExibicao.forEach((fam) => {
-                const cestaId = fam.id;
+            // Gerar os cards baseados nas famílias ativas
+            listaFamiliasAtivas.forEach((fam) => {
+                const cestaId = fam.id; // Usamos o ID da família como ID do Picking
                 const est = pickingMarcados[cestaId] || { itens: {}, concluida: false };
                 const card = document.createElement('div');
                 card.id = `card-${cestaId}`;
                 card.className = `cesta-card ${est.concluida ? 'concluida' : ''}`;
                 
-                let receita = fam.tipoCesta === 'Personalizada' ? (fam.receitaPersonalizada || {}) : configPadrao;
+                // Decide qual receita usar
+                let receita = (fam.tipoCesta === 'Personalizada' && fam.receitaPersonalizada) ? fam.receitaPersonalizada : configPadrao;
                 let badge = fam.tipoCesta === 'Personalizada' ? '<span class="badge-personalizada">PERSONALIZADA</span>' : '';
 
                 let html = `<h3>${fam.responsavel1.nome}${badge}</h3>`;
@@ -198,7 +205,8 @@
                         
                         let classeCor = "", labelAviso = "";
                         if (p.val !== "9999-12-31") {
-                            const diffDias = Math.ceil((new Date(p.val) - hoje) / (1000 * 60 * 60 * 24));
+                            const dataVal = new Date(p.val);
+                            const diffDias = Math.ceil((dataVal - hoje) / (1000 * 60 * 60 * 24));
                             if (diffDias <= 15) { classeCor = "val-critica"; labelAviso = '<span class="badge-val bg-critica">USAR HOJE</span>'; }
                             else if (diffDias <= 45) { classeCor = "val-alerta"; labelAviso = '<span class="badge-val bg-alerta">ATENÇÃO</span>'; }
                         }
@@ -221,22 +229,20 @@
             const atual = pickingMarcados[cestaId] || { itens: {}, concluida: false };
             atual.itens[itemKey] = status;
             
-            // Re-checar conclusão do card físico
-            setTimeout(async () => {
-                const card = document.getElementById(`card-${cestaId}`);
-                const totalInputs = card.querySelectorAll('input[type="checkbox"]').length;
-                const marcados = card.querySelectorAll('input[type="checkbox"]:checked').length;
-                atual.concluida = (marcados === totalInputs && totalInputs > 0);
-                await setDoc(docRef, atual);
-            }, 100);
+            const card = document.getElementById(`card-${cestaId}`);
+            const totalInputs = card.querySelectorAll('input[type="checkbox"]').length;
+            const marcados = card.querySelectorAll('input[type="checkbox"]:checked').length;
+            atual.concluida = (marcados === totalInputs && totalInputs > 0);
+            
+            await setDoc(docRef, atual);
         };
 
         async function resetarPicking() {
-            if (confirm("Limpar marcações de montagem para o novo ciclo?")) {
+            if (confirm("ATENÇÃO: Isso limpará apenas as marcações (quadradinhos) do Picking. Confirmar reset?")) {
                 const snap = await getDocs(collection(db, "picking_estado"));
                 const promises = snap.docs.map(d => deleteDoc(d.ref));
                 await Promise.all(promises);
-                alert("Picking reiniciado!");
+                alert("Marcações reiniciadas!");
             }
         }
     </script>
