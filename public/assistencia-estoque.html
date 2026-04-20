@@ -132,9 +132,16 @@
         const firebaseConfig = { apiKey: "AIzaSyBV7RPjk3cFTqL-aIpflJcUojKg1ZXMLuU", authDomain: "voluntarios-ativos---cepat.firebaseapp.com", projectId: "voluntarios-ativos---cepat", storageBucket: "voluntarios-ativos---cepat.firebasestorage.app", messagingSenderId: "66122858261", appId: "1:66122858261:web:7fa21f1805463b5c08331c" };
         const db = getFirestore(initializeApp(firebaseConfig));
         
-        let itensEstoque = [], configCesta = {}, metaGlobal = 14;
+        let itensEstoque = [], configCestaPadrao = {}, metaGlobal = 14, listaFamiliasAtivas = [];
 
         protegerPagina(['super-admin','diretor','caritas']).then(() => {
+            // Escuta Famílias Ativas para o cálculo de prontidão individualizado
+            onSnapshot(query(collection(db, "familiasAssistidas"), where("statusGeral", "==", "Ativa")), snap => {
+                listaFamiliasAtivas = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+                metaGlobal = listaFamiliasAtivas.length;
+                calcular();
+            });
+
             onSnapshot(collection(db, "estoque_caritas"), async snap => {
                 const listaPromessas = snap.docs.map(async d => {
                     const qLote = query(collection(db, `estoque_caritas/${d.id}/lotes`), orderBy("validade", "asc"));
@@ -142,7 +149,6 @@
                     const lotes = lSnap.docs.map(ld => ({ id: ld.id, ...ld.data() }));
                     const totalLotes = lotes.reduce((acc, curr) => acc + parseInt(curr.quantidade || 0), 0);
                     
-                    // Ajuste de segurança: Garante saldo zero em vez de negativo e soma lotes
                     const quantidadeReal = Math.max(0, Math.max(parseInt(d.data().quantidade || 0), totalLotes));
                     const proxVal = lotes.length > 0 ? lotes[0].validade : d.data().validade || "9999-12-31";
                     
@@ -155,8 +161,8 @@
 
             onSnapshot(doc(db, "configuracoes", "cesta_padrao"), d => {
                 if(d.exists()){
-                    configCesta = d.data().itens || {};
-                    metaGlobal = d.data().meta || 14;
+                    configCestaPadrao = d.data().itens || {};
+                    // A metaGlobal agora é ditada pelo número de famílias ativas, mas mantemos o d.data().meta se necessário para auditoria
                     calcular();
                 }
             });
@@ -189,36 +195,73 @@
         function renderizarListaEstoque() {
             const hoje = new Date();
             document.getElementById('lista-produtos').innerHTML = itensEstoque.map(i => {
-                // CORREÇÃO: Se quantidade for zero, não exibe validade para evitar confusão
                 const valF = (i.proxVal === "9999-12-31" || i.quantidade <= 0) ? "N/A (Estoque Zerado)" : i.proxVal.split('-').reverse().join('/');
-                
                 let classeBorda = (i.proxVal === "9999-12-31" || i.quantidade <= 0) ? "borda-geral" : "borda-segura";
-                
                 if (i.proxVal !== "9999-12-31" && i.quantidade > 0) {
                     const diffDias = Math.ceil((new Date(i.proxVal) - hoje) / (1000 * 60 * 60 * 24));
                     if (diffDias <= 15) classeBorda = "borda-critica";
                     else if (diffDias <= 45) classeBorda = "borda-alerta";
                 }
-                
                 return `<div class="estoque-item ${classeBorda}"><div style="flex:1"><b>${i.nome}</b><span class="val-info">Próx: ${valF}</span><small style="color:#777">Saldo: ${i.quantidade}</small></div><div class="controles"><button class="btn-ajuste" style="background:var(--red)" onclick="window.ajustarEstoque('${i.id}', -1, '${i.nome}')">-</button><span style="font-weight:bold; min-width:30px; text-align:center;">${i.quantidade}</span><button class="btn-ajuste" style="background:var(--green)" onclick="window.ajustarEstoque('${i.id}', 1, '${i.nome}')">+</button></div></div>`;
             }).join('');
         }
 
         function calcular() {
-            if (Object.keys(configCesta).length === 0 || itensEstoque.length === 0) return;
-            let prontas = Infinity, pendencias = [];
-            Object.entries(configCesta).forEach(([id, qtdNec]) => {
-                const item = itensEstoque.find(i => i.id === id);
-                // CORREÇÃO: Tratamento de negativo no cálculo da prontidão
-                const saldoValido = item ? Math.max(0, item.quantidade) : 0;
-                const cap = Math.floor(saldoValido / qtdNec);
-                if (cap < prontas) prontas = cap;
-                if (saldoValido < (metaGlobal * qtdNec)) pendencias.push(`Faltam ${(metaGlobal * qtdNec) - saldoValido} un. de <b>${item ? item.nome : id}</b>.`);
+            if (Object.keys(configCestaPadrao).length === 0 || itensEstoque.length === 0 || listaFamiliasAtivas.length === 0) return;
+            
+            // Lógica Inteligente: Criar um estoque virtual para simular a montagem de cada cesta
+            let estoqueVirtual = {};
+            itensEstoque.forEach(i => estoqueVirtual[i.id] = Math.max(0, i.quantidade));
+            
+            let cestasMontaveis = 0;
+            let demandasTotais = {}; // Para calcular pendências globais
+
+            // 1. Calcular demandas totais necessárias para cumprir a meta das famílias ativas
+            listaFamiliasAtivas.forEach(fam => {
+                let receita = fam.tipoCesta === 'Personalizada' ? (fam.receitaPersonalizada || {}) : configCestaPadrao;
+                Object.entries(receita).forEach(([pId, qtd]) => {
+                    demandasTotais[pId] = (demandasTotais[pId] || 0) + qtd;
+                });
             });
-            document.getElementById('qtd-cestas-montaveis').innerText = prontas === Infinity ? 0 : prontas;
-            document.getElementById('status-meta').innerText = `Meta: ${metaGlobal} | Prontas: ${prontas === Infinity ? 0 : prontas}`;
+
+            // 2. Simular montagem de cada cesta individualmente para ver quantas ficam completas
+            listaFamiliasAtivas.forEach(fam => {
+                let receita = fam.tipoCesta === 'Personalizada' ? (fam.receitaPersonalizada || {}) : configCestaPadrao;
+                let podeMontarEsta = true;
+                
+                // Verifica se há estoque para TODOS os itens desta cesta específica
+                Object.entries(receita).forEach(([pId, qtdNec]) => {
+                    if ((estoqueVirtual[pId] || 0) < qtdNec) podeMontarEsta = false;
+                });
+
+                if (podeMontarEsta) {
+                    cestasMontaveis++;
+                    // "Consome" o estoque virtual para a próxima cesta
+                    Object.entries(receita).forEach(([pId, qtdNec]) => {
+                        estoqueVirtual[pId] -= qtdNec;
+                    });
+                }
+            });
+
+            // 3. Gerar lista de pendências baseada na demanda total vs estoque real
+            let pendencias = [];
+            Object.entries(demandasTotais).forEach(([pId, totalNec]) => {
+                const item = itensEstoque.find(i => i.id === pId);
+                const saldoReal = item ? Math.max(0, item.quantidade) : 0;
+                if (saldoReal < totalNec) {
+                    pendencias.push(`Faltam ${totalNec - saldoReal} un. de <b>${item ? item.nome : pId}</b> para atender todos ativos.`);
+                }
+            });
+
+            document.getElementById('qtd-cestas-montaveis').innerText = cestasMontaveis;
+            document.getElementById('status-meta').innerText = `Meta (Famílias Ativas): ${metaGlobal} | Prontas: ${cestasMontaveis}`;
             const box = document.getElementById('box-pendencias');
-            if (pendencias.length > 0) { box.style.display = 'block'; document.getElementById('lista-pendencias').innerHTML = pendencias.map(p => `<div class="pendencia-item">${p}</div>`).join(''); } else { box.style.display = 'none'; }
+            if (pendencias.length > 0) { 
+                box.style.display = 'block'; 
+                document.getElementById('lista-pendencias').innerHTML = pendencias.map(p => `<div class="pendencia-item">${p}</div>`).join(''); 
+            } else { 
+                box.style.display = 'none'; 
+            }
         }
 
         document.getElementById('btn-whatsapp-lista').onclick = () => {
@@ -227,19 +270,24 @@
             let dc = 0; while (dc < 3) { if (d3d.getDay() === 0) dc++; if (dc < 3) d3d.setDate(d3d.getDate() + 1); }
             const mesTxt = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"][(h.getDate() > d3d.getDate() ? h.getMonth() + 1 : h.getMonth()) % 12];
             
-            let t = `*Queridos irmãos,*%0A%0ACom carinho e confiança na fraternidade que nos une, compartilhamos as necessidades atuais para a montagem de *${metaGlobal} cestas básicas* do nosso trabalho de assistência de *${mesTxt}*.%0A%0ACada item doado representa mais do que alimento material — é um gesto de amor, solidariedade e cuidado com aqueles que mais necessitam. Toda colaboração, por menor que pareça, soma-se como luz na construção deste trabalho.%0A%0A📦 *Itens em aberto:*%0A`;
+            let t = `*Queridos irmãos,*%0A%0ACom carinho e confiança na fraternidade que nos une, compartilhamos as necessidades atuais para o atendimento de *${metaGlobal} famílias* do nosso trabalho de assistência de *${mesTxt}*.%0A%0A📦 *Itens em aberto:*%0A`;
             
             let f = false;
-            Object.entries(configCesta).forEach(([id, q]) => {
-                const i = itensEstoque.find(x => x.id === id);
+            let demandasTotais = {};
+            listaFamiliasAtivas.forEach(fam => {
+                let receita = fam.tipoCesta === 'Personalizada' ? (fam.receitaPersonalizada || {}) : configCestaPadrao;
+                Object.entries(receita).forEach(([pId, qtd]) => demandasTotais[pId] = (demandasTotais[pId] || 0) + qtd);
+            });
+
+            Object.entries(demandasTotais).forEach(([pId, totalNec]) => {
+                const i = itensEstoque.find(x => x.id === pId);
                 const s = i ? Math.max(0, i.quantidade) : 0;
-                if (s < (metaGlobal * q)) { t += `• *${i ? i.nome : id}*: Faltam ${(metaGlobal * q) - s} un.%0A`; f = true; }
+                if (s < totalNec) { t += `• *${i ? i.nome : pId}*: Faltam ${totalNec - s} un.%0A`; f = true; }
             });
             
-            if (!f) t = `*Cáritas CEPAT*%0A✅ Gratidão irmãos! O estoque para o trabalho de *${mesTxt}* já está completo.`;
-            else { 
-                t += `%0ASe estiver ao seu alcance colaborar, receberemos com muita gratidão na *Casa Espírita Paulo de Tarso*.%0A%0AComo nos ensina a Doutrina Espírita, é na simplicidade da caridade que encontramos as maiores oportunidades de servir e amar.%0A%0ADesde já, nossa gratidão a todos que puderem contribuir. Que Jesus abençoe cada gesto de generosidade.`;
-            }
+            if (!f) t = `*Cáritas CEPAT*%0A✅ Gratidão irmãos! O estoque para atender as *${metaGlobal} famílias* de *${mesTxt}* já está completo.`;
+            else t += `%0AQue Jesus abençoe cada gesto de generosidade.`;
+            
             window.open(`https://wa.me/?text=${t}`, '_blank');
         };
 
@@ -262,7 +310,7 @@
         document.getElementById('btn-abrir-novo').onclick = () => { document.getElementById('form-novo-item').reset(); document.getElementById('modal-novo-item').style.display='flex'; };
         document.getElementById('btn-config-cesta').onclick = () => {
             document.getElementById('input-meta').value = metaGlobal;
-            document.getElementById('lista-composicao').innerHTML = Object.entries(configCesta).map(([id, qtd]) => {
+            document.getElementById('lista-composicao').innerHTML = Object.entries(configCestaPadrao).map(([id, qtd]) => {
                 const item = itensEstoque.find(i => i.id === id);
                 return `<div class="linha-receita" id="receita-${id}"><button type="button" class="btn-remover-linha" onclick="removerLinhaDaReceita('${id}')"><i class="fas fa-trash-alt"></i></button><span>${item ? item.nome : id}</span><input type="number" class="input-receita" data-id="${id}" value="${qtd}" style="width:60px;"></div>`;
             }).join('');
