@@ -106,12 +106,16 @@
             const limiteStr = new Date(domSoc.getTime() + 14 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
 
             let estoqueGlobal = [];
-            let configCesta = null; 
-            let metaGlobal = 14; 
+            let configCestaPadrao = null; 
+            let metaGlobal = 0; 
             let entregasRealizadas = 0;
+            let familiasAtivas = [];
 
+            // Escuta famílias ativas (Nomes e se são personalizadas)
             onSnapshot(query(collection(db, "familiasAssistidas"), where("statusGeral", "==", "Ativa")), s => {
+                familiasAtivas = s.docs.map(doc => ({ id: doc.id, ...doc.data() }));
                 document.getElementById('total-familias').innerText = s.size;
+                recalcularProntidao();
             });
             
             const inicioMes = new Date(); inicioMes.setDate(1); inicioMes.setHours(0,0,0,0);
@@ -123,20 +127,17 @@
 
             onSnapshot(doc(db, "configuracoes", "cesta_padrao"), d => {
                 if (d.exists()) {
-                    configCesta = d.data().itens || {};
-                    metaGlobal = d.data().meta || 14;
+                    configCestaPadrao = d.data().itens || {};
                     recalcularProntidao();
                 }
             });
 
-            // LOGICA SINCRONIZADA COM ALMOXARIFADO (SOMA DE LOTES)
             onSnapshot(collection(db, "estoque_caritas"), async snap => {
                 const listaPromessas = snap.docs.map(async d => {
                     const lSnap = await getDocs(collection(db, `estoque_caritas/${d.id}/lotes`));
                     const lotes = lSnap.docs.map(ld => ld.data());
                     const totalLotes = lotes.reduce((acc, curr) => acc + parseInt(curr.quantidade || 0), 0);
-                    // Garante que o saldo seja o maior valor entre o campo estático e a soma real dos lotes
-                    const quantidadeReal = Math.max(parseInt(d.data().quantidade || 0), totalLotes);
+                    const quantidadeReal = Math.max(0, Math.max(parseInt(d.data().quantidade || 0), totalLotes));
                     return { id: d.id, ...d.data(), quantidade: quantidadeReal };
                 });
 
@@ -157,33 +158,54 @@
             });
 
             function recalcularProntidao() {
-                if (!configCesta || estoqueGlobal.length === 0) return;
+                // SÓ CALCULA SE TIVER TUDO CARREGADO
+                if (!configCestaPadrao || estoqueGlobal.length === 0 || familiasAtivas.length === 0) return;
                 
-                let montaveis = Infinity;
-                let itemGargalo = "";
-                const metaRestante = Math.max(0, metaGlobal - entregasRealizadas);
+                // Simulação de estoque virtual para calcular cestas completas
+                let estoqueVirtual = {};
+                estoqueGlobal.forEach(i => estoqueVirtual[i.id] = i.quantidade);
 
-                Object.entries(configCesta).forEach(([id, qtdNecessaria]) => {
-                    const item = estoqueGlobal.find(i => i.id === id);
-                    const saldo = item ? (item.quantidade || 0) : 0;
-                    const capacidade = Math.floor(saldo / qtdNecessaria);
-                    
-                    if (capacidade < montaveis) {
-                        montaveis = capacidade;
-                        itemGargalo = item ? item.nome : "Item não vinculado";
+                let montaveis = 0;
+                let itemGargalo = "Meta atingida";
+                
+                // Filtramos quem ainda não recebeu este mês para ver quem "resta" montar
+                // (Para simplicidade do painel, calculamos a capacidade sobre o saldo atual)
+                
+                // Ordenamos as famílias (opcional) e tentamos montar a cesta de cada uma
+                familiasAtivas.forEach(fam => {
+                    let receita = fam.tipoCesta === 'Personalizada' ? (fam.receitaPersonalizada || {}) : configCestaPadrao;
+                    let podeMontarDesta = true;
+                    let possivelGargaloLocal = "";
+
+                    Object.entries(receita).forEach(([pId, qtdNec]) => {
+                        if ((estoqueVirtual[pId] || 0) < qtdNec) {
+                            podeMontarDesta = false;
+                            possivelGargaloLocal = estoqueGlobal.find(x => x.id === pId)?.nome || "Item não vinculado";
+                        }
+                    });
+
+                    if (podeMontarDesta) {
+                        montaveis++;
+                        // Deduz do virtual para a próxima simulação
+                        Object.entries(receita).forEach(([pId, qtdNec]) => {
+                            estoqueVirtual[pId] -= qtdNec;
+                        });
+                    } else if (itemGargalo === "Meta atingida") {
+                        itemGargalo = possivelGargaloLocal;
                     }
                 });
 
-                const total = montaveis === Infinity ? 0 : montaveis;
                 const display = document.getElementById('total-cestas-prontas');
                 const label = document.getElementById('item-limitante');
                 
-                display.innerText = `${total} Cestas`;
+                display.innerText = `${montaveis} Cestas`;
                 
-                if (total < metaRestante) {
-                    label.innerHTML = `⚠️ <b>${itemGargalo}</b> limita a meta de ${metaRestante} restantes.`;
+                const metaRestante = Math.max(0, familiasAtivas.length - entregasRealizadas);
+
+                if (montaveis < metaRestante) {
+                    label.innerHTML = `⚠️ <b>${itemGargalo}</b> limita o atendimento das ${metaRestante} famílias restantes.`;
                 } else {
-                    label.innerHTML = `<span style="color:#2e7d32">✅ Estoque pronto para atender as ${metaRestante} famílias restantes!</span>`;
+                    label.innerHTML = `<span style="color:#2e7d32">✅ Estoque suficiente para as ${metaRestante} famílias restantes!</span>`;
                 }
             }
         });
