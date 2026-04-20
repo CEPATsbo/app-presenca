@@ -24,7 +24,7 @@
         .btn-novo { background-color: #e67e22; }
         .btn-excel { background-color: #27ae60; }
         .btn-recibo { background-color: #3498db; }
-        .btn-status-toggle { margin-right: auto; } /* Posiciona à esquerda no rodapé do modal */
+        .btn-status-toggle { margin-right: auto; }
 
         .familia-card { border: 1px solid #eee; padding: 20px; border-radius: 10px; margin-bottom: 15px; display: flex; justify-content: space-between; align-items: center; border-left: 6px solid #3498db; transition: transform 0.2s; }
         .familia-card:hover { transform: translateY(-2px); box-shadow: 0 4px 10px rgba(0,0,0,0.05); }
@@ -67,6 +67,12 @@
         .ficha-textarea { width: 100%; height: 80px; padding: 10px; border-radius: 6px; border: 1px solid #ccc; font-family: inherit; resize: vertical; margin-top: 5px; box-sizing: border-box;}
         .historico-atendimentos { margin-top: 20px; border-top: 2px solid #eee; padding-top: 15px; }
         .atendimento-item { background: #f8f9fa; padding: 10px; border-radius: 6px; margin-bottom: 8px; border-left: 4px solid #2c3e50; font-size: 0.9em; cursor: pointer; }
+
+        /* Estilo Botão Cesta Personalizada */
+        .btn-config-cesta { background-color: #9b59b6; color: white; margin-bottom: 15px; width: 100%; justify-content: center; font-weight: bold; }
+        .item-personalizado { display: flex; justify-content: space-between; align-items: center; padding: 12px; border-bottom: 1px solid #eee; }
+        .item-personalizado span { font-weight: bold; color: #2c3e50; }
+        .item-personalizado input { width: 70px; padding: 8px; text-align: center; border-radius: 6px; border: 1px solid #ccc; }
     </style>
 </head>
 <body>
@@ -116,6 +122,15 @@
                             <option value="Pai">Pai</option>
                             <option value="Avó/Avô">Avó/Avô</option>
                             <option value="Tutor(a)">Tutor(a)</option>
+                        </select>
+                    </div>
+
+                    <div class="secao-titulo">Modelo de Assistência</div>
+                    <div class="form-group full-width">
+                        <label>Tipo de Cesta Básica</label>
+                        <select id="novo-tipo-cesta">
+                            <option value="Padrao">Receita Padrão (Fixo)</option>
+                            <option value="Personalizada">Receita Personalizada (Individual)</option>
                         </select>
                     </div>
 
@@ -171,7 +186,7 @@
     </div>
 
     <div id="modal-detalhes" class="modal">
-        <div class="modal-content">
+        <div class="modal-content" style="max-width: 850px;">
             <h2 id="det-titulo" style="color: #3498db; margin-bottom: 25px;">Detalhes da Família</h2>
             
             <div id="det-conteudo">
@@ -179,6 +194,19 @@
                 <div class="detalhe-item"><label>Segundo Responsável</label><span id="det-resp2"></span></div>
                 <div class="detalhe-item"><label>Contato</label><span id="det-tel"></span></div>
                 <div class="detalhe-item"><label>Endereço</label><span id="det-end"></span></div>
+
+                <div class="secao-titulo">Configuração de Cesta</div>
+                <div class="form-group" style="margin-bottom:15px;">
+                    <label>Modelo de Cesta</label>
+                    <select id="det-tipo-cesta" class="form-group" style="padding:10px; border-radius:8px; width:100%;">
+                        <option value="Padrao">Receita Padrão</option>
+                        <option value="Personalizada">Receita Personalizada</option>
+                    </select>
+                </div>
+
+                <button id="btn-abrir-config-cesta" class="btn-acao btn-config-cesta" style="display:none;">
+                    <i class="fas fa-sliders-h"></i> CONFIGURAR ITENS DA CESTA PERSONALIZADA
+                </button>
                 
                 <h4 style="margin: 20px 0 10px 0; color: #555;"><i class="fas fa-child"></i> Dependentes (Ajuste Medidas e Nomes aqui)</h4>
                 <div id="det-lista-filhos" style="background: #f9f9f9; padding: 15px; border-radius: 8px;"></div>
@@ -218,7 +246,7 @@
                     <div class="ficha-grid">
                         <div class="form-group">
                             <label>ESTADO CIVIL</label>
-                            <input type="text" id="ficha-estado-civil" placeholder="Estado Civil do(s) Responsável(is)" class="input-medida">
+                            <input type="text" id="ficha-estado-civil" placeholder="Estado Civil" class="input-medida">
                         </div>
                         <div class="form-group">
                             <label>VOLUNTÁRIO RESPONSÁVEL</label>
@@ -255,9 +283,21 @@
 
             <div style="margin-top: 30px; display: flex; justify-content: flex-end; gap: 10px;">
                 <button id="btn-desativar-familia" class="btn-acao btn-status-toggle"></button>
-                
                 <button onclick="gerarReciboImpressao()" class="btn-acao btn-recibo"><i class="fas fa-print"></i> Gerar Recibo</button>
                 <button onclick="document.getElementById('modal-detalhes').style.display='none'" style="padding: 10px 20px; border-radius: 8px; border: 1px solid #ccc; cursor: pointer;">Fechar</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="modal-cesta-personalizada" class="modal">
+        <div class="modal-content" style="max-width: 500px;">
+            <h3>Personalizar Receita da Família</h3>
+            <p style="font-size: 0.85em; color: #666; margin-bottom: 20px;">Defina as quantidades específicas de cada item para esta cesta.</p>
+            <div id="lista-itens-personalizados" style="max-height: 400px; overflow-y: auto; border: 1px solid #eee; padding: 10px; border-radius: 8px;">
+                </div>
+            <div style="margin-top: 25px; display: flex; gap: 10px;">
+                <button onclick="document.getElementById('modal-cesta-personalizada').style.display='none'" style="flex:1; padding:12px; border-radius:8px; border:1px solid #ccc; cursor:pointer;">Sair sem salvar</button>
+                <button id="btn-salvar-receita-individual" style="flex:1; padding:12px; border-radius:8px; background:#27ae60; color:white; border:none; font-weight:bold; cursor:pointer;">Gravar Receita</button>
             </div>
         </div>
     </div>
@@ -273,6 +313,7 @@
 
         let todasFamilias = [];
         let familiaSelecionadaId = null; 
+        let itensEstoqueGlobal = [];
 
         protegerPagina(['super-admin','diretor','tesoureiro','conselheiro','recepcionista','entrevistador','caritas'])
             .then(user => inicializar(user))
@@ -302,6 +343,7 @@
             const ui = {
                 modal: document.getElementById('modal-familia'),
                 modalDet: document.getElementById('modal-detalhes'),
+                modalCesta: document.getElementById('modal-cesta-personalizada'),
                 form: document.getElementById('form-familia'),
                 btnNovo: document.getElementById('btn-abrir-modal'),
                 btnFechar: document.getElementById('btn-fechar-modal'),
@@ -316,8 +358,16 @@
                 btnNovoFilhoDet: document.getElementById('btn-novo-filho-detalhe'),
                 btnGravarAtendimento: document.getElementById('btn-gravar-atendimento'),
                 btnToggleStatus: document.getElementById('btn-desativar-familia'),
-                filtroStatus: document.getElementById('filtro-status')
+                filtroStatus: document.getElementById('filtro-status'),
+                tipoCestaDet: document.getElementById('det-tipo-cesta'),
+                btnConfigCesta: document.getElementById('btn-abrir-config-cesta'),
+                listaPersonalizada: document.getElementById('lista-itens-personalizados')
             };
+
+            // Carregar itens do estoque para o modal de personalização
+            onSnapshot(collection(db, "estoque_caritas"), snap => {
+                itensEstoqueGlobal = snap.docs.map(d => ({ id: d.id, nome: d.data().nome }));
+            });
 
             ui.btnNovo.onclick = () => { ui.form.reset(); ui.listaFilhos.innerHTML = ''; ui.modal.style.display = 'flex'; };
             ui.btnFechar.onclick = () => ui.modal.style.display = 'none';
@@ -341,7 +391,6 @@
                 ui.listaFilhos.appendChild(div);
             };
 
-            // Escuta as famílias com base no filtro selecionado
             const atualizarListaRealtime = () => {
                 const statusSelecionado = ui.filtroStatus.value;
                 const q = query(collection(db, "familiasAssistidas"), where("statusGeral", "==", statusSelecionado), orderBy("cadastradoEm", "desc"));
@@ -368,7 +417,8 @@
                                 <strong>${f.responsavel1.nome}</strong> <span class="badge-parentesco">${f.responsavel1.tipo}</span>
                                 ${f.responsavel2?.nome ? `<br><strong>${f.responsavel2.nome}</strong> <span class="badge-parentesco">${f.responsavel2.tipo}</span>` : ''}
                                 <div style="font-size: 0.85em; color: #666; margin-top: 5px;">
-                                    <i class="fas fa-phone"></i> ${f.contato.telefone} | <i class="fas fa-child"></i> ${f.filhos.length} dependentes
+                                    <i class="fas fa-phone"></i> ${f.contato.telefone} | <i class="fas fa-child"></i> ${f.filhos.length} dependentes 
+                                    | <i class="fas fa-shopping-basket"></i> ${f.tipoCesta || 'Padrao'}
                                 </div>
                             </div>
                             <button class="btn-acao" style="background: white; border: 1px solid #ddd; color: #3498db;" onclick="abrirDetalhes('${f.id}')">
@@ -380,18 +430,20 @@
 
             window.abrirDetalhes = async (id) => {
                 familiaSelecionadaId = id;
-                const familia = todasFamilias.find(f => f.id === id);
-                if (!familia) return;
+                const f = todasFamilias.find(x => x.id === id);
+                if (!f) return;
 
-                document.getElementById('det-resp1').textContent = familia.responsavel1.nome;
-                document.getElementById('det-resp2').textContent = familia.responsavel2?.nome ? familia.responsavel2.nome : "Não informado";
-                document.getElementById('det-tel').textContent = familia.contato.telefone;
-                document.getElementById('det-end').textContent = familia.contato.endereco;
+                document.getElementById('det-resp1').textContent = f.responsavel1.nome;
+                document.getElementById('det-resp2').textContent = f.responsavel2?.nome ? f.responsavel2.nome : "Não informado";
+                document.getElementById('det-tel').textContent = f.contato.telefone;
+                document.getElementById('det-end').textContent = f.contato.endereco;
                 
-                renderizarListaFilhosEdicao(familia.filhos);
+                ui.tipoCestaDet.value = f.tipoCesta || 'Padrao';
+                ui.btnConfigCesta.style.display = ui.tipoCestaDet.value === 'Personalizada' ? 'flex' : 'none';
+                
+                renderizarListaFilhosEdicao(f.filhos);
 
-                // Configura o botão de status
-                if (familia.statusGeral === "Inativa") {
+                if (f.statusGeral === "Inativa") {
                     ui.btnToggleStatus.innerHTML = '<i class="fas fa-user-check"></i> Reativar Família';
                     ui.btnToggleStatus.style.backgroundColor = "#27ae60";
                 } else {
@@ -399,14 +451,13 @@
                     ui.btnToggleStatus.style.backgroundColor = "#e74c3c";
                 }
 
-                // Limpeza da ficha para novo uso
                 document.querySelectorAll('.ficha-container input[type="checkbox"]').forEach(c => c.checked = false);
                 document.querySelectorAll('.ficha-container input[type="radio"]').forEach(r => r.checked = false);
                 document.getElementById('ficha-situacao-outros').value = "";
                 document.getElementById('ficha-necessidades-outros').value = "";
                 document.getElementById('ficha-relato').value = "";
                 document.getElementById('ficha-obs').value = "";
-                document.getElementById('ficha-estado-civil').value = familia.estadoCivil || "";
+                document.getElementById('ficha-estado-civil').value = f.estadoCivil || "";
                 document.getElementById('ficha-voluntario').value = user.displayName || "";
 
                 try {
@@ -418,31 +469,45 @@
                 ui.modalDet.style.display = 'flex';
             };
 
-            // Função para Alternar Status (Ativa/Inativa)
+            ui.tipoCestaDet.onchange = async () => {
+                ui.btnConfigCesta.style.display = ui.tipoCestaDet.value === 'Personalizada' ? 'flex' : 'none';
+                await updateDoc(doc(db, "familiasAssistidas", familiaSelecionadaId), { tipoCesta: ui.tipoCestaDet.value });
+            };
+
+            ui.btnConfigCesta.onclick = () => {
+                const f = todasFamilias.find(x => x.id === familiaSelecionadaId);
+                const receita = f.receitaPersonalizada || {};
+                ui.listaPersonalizada.innerHTML = itensEstoqueGlobal.map(i => `
+                    <div class="item-personalizado">
+                        <span>${i.nome}</span>
+                        <input type="number" class="input-receita-f" data-id="${i.id}" value="${receita[i.id] || 0}" min="0">
+                    </div>`).join('');
+                ui.modalCesta.style.display = 'flex';
+            };
+
+            document.getElementById('btn-salvar-receita-individual').onclick = async () => {
+                const novaRec = {};
+                document.querySelectorAll('.input-receita-f').forEach(inp => {
+                    const q = parseInt(inp.value);
+                    if(q > 0) novaRec[inp.dataset.id] = q;
+                });
+                try {
+                    await updateDoc(doc(db, "familiasAssistidas", familiaSelecionadaId), { receitaPersonalizada: novaRec });
+                    alert("Receita personalizada salva!");
+                    ui.modalCesta.style.display = 'none';
+                } catch (e) { alert("Erro: " + e.message); }
+            };
+
             ui.btnToggleStatus.onclick = async () => {
                 if(!familiaSelecionadaId) return;
-                const familia = todasFamilias.find(f => f.id === familiaSelecionadaId);
-                const novoStatus = familia.statusGeral === "Inativa" ? "Ativa" : "Inativa";
+                const f = todasFamilias.find(x => x.id === familiaSelecionadaId);
+                const novoStatus = f.statusGeral === "Inativa" ? "Ativa" : "Inativa";
                 
-                const confirmacao = confirm(`Deseja realmente alterar o status desta família para ${novoStatus.toUpperCase()}?`);
-                if(confirmacao) {
-                    try {
-                        await updateDoc(doc(db, "familiasAssistidas", familiaSelecionadaId), { 
-                            statusGeral: novoStatus,
-                            ultimaAlteracaoEm: serverTimestamp(),
-                            alteradoPor: user.email
-                        });
-                        await addDoc(collection(db, "log_auditoria"), { 
-                            timestamp: serverTimestamp(), 
-                            autor: { nome: user.displayName || user.email }, 
-                            acao: "ALTERAR_STATUS_FAMILIA", 
-                            detalhes: `Status de ${familiaSelecionadaId} alterado para ${novoStatus}` 
-                        });
-                        alert(`Família ${novoStatus === "Ativa" ? "reativada" : "desativada"} com sucesso!`);
-                        ui.modalDet.style.display = 'none';
-                    } catch (e) {
-                        alert("Erro ao alterar status: " + e.message);
-                    }
+                if(confirm(`Deseja alterar status para ${novoStatus.toUpperCase()}?`)) {
+                    await updateDoc(doc(db, "familiasAssistidas", familiaSelecionadaId), { 
+                        statusGeral: novoStatus, ultimaAlteracaoEm: serverTimestamp()
+                    });
+                    ui.modalDet.style.display = 'none';
                 }
             };
 
@@ -451,15 +516,14 @@
                 document.getElementById('lista-historico').innerHTML = histSnap.docs.map(d => {
                     const data = d.data();
                     const dStr = data.data?.toDate().toLocaleDateString('pt-BR') || "Data N/A";
-                    return `
-                        <div class="atendimento-item" onclick="window.open('assistencia-prontuario.html?id=${id}', '_blank')">
+                    return `<div class="atendimento-item" onclick="window.open('assistencia-prontuario.html?id=${id}', '_blank')">
                             <div style="display:flex; justify-content:space-between;">
                                 <strong>${dStr}</strong>
                                 <span>Voluntário: ${data.voluntario}</span>
                             </div>
                             <small>Situação: ${data.situacao?.join(', ') || ''} | Cesta: ${data.cesta}</small>
                         </div>`;
-                }).join('') || "<p style='color:#999; font-size:0.9em;'>Sem atendimentos registrados anteriormente.</p>";
+                }).join('') || "<p style='color:#999; font-size:0.9em;'>Sem atendimentos registrados.</p>";
             }
 
             function renderizarListaFilhosEdicao(filhos) {
@@ -475,32 +539,14 @@
                                 <small style="color:#7f8c8d; font-size:0.8em; text-align:center;">${calcularIdade(filho.nascimento)} anos</small>
                             </div>
                             <button type="button" class="btn-del-child" onclick="removerDependenteLocal(this)"><i class="fas fa-trash-alt"></i></button>
-                        </div>
-                    `).join('') : "Sem dependentes cadastrados.";
+                        </div>`).join('') : "Sem dependentes cadastrados.";
             }
 
             window.removerDependenteLocal = (btn) => {
-                if(!confirm("Deseja realmente remover este dependente? A alteração só será definitiva ao salvar.")) return;
+                if(!confirm("Deseja realmente remover este dependente?")) return;
                 const row = btn.closest('.edicao-medidas-grid');
                 row.style.display = 'none';
                 row.classList.add('deleted-flag');
-            };
-
-            ui.btnNovoFilhoDet.onclick = () => {
-                const container = document.getElementById('det-lista-filhos');
-                const div = document.createElement('div');
-                div.className = "edicao-medidas-grid new-child-row";
-                div.innerHTML = `
-                    <input type="text" class="input-medida input-nome-filho edit-nome" placeholder="Nome do Novo Dependente">
-                    <input type="date" class="input-medida input-data-filho edit-nasc">
-                    <div style="display:flex; flex-direction:column; gap:5px;">
-                        <input type="text" class="input-medida edit-roupa" placeholder="Roupa">
-                        <input type="text" class="input-medida edit-calcado" placeholder="Calçado">
-                    </div>
-                    <button type="button" class="btn-del-child" onclick="this.closest('.edicao-medidas-grid').remove()"><i class="fas fa-times"></i></button>
-                `;
-                if(container.innerText.includes("Sem dependentes")) container.innerHTML = '';
-                container.appendChild(div);
             };
 
             ui.btnAtualizarMedidas.onclick = async () => {
@@ -522,20 +568,17 @@
                 });
                 try {
                     await updateDoc(doc(db, "familiasAssistidas", familiaSelecionadaId), { filhos: novosFilhos });
-                    await addDoc(collection(db, "log_auditoria"), { timestamp: serverTimestamp(), autor: { nome: user.displayName || user.email }, acao: "ATUALIZAR_DEPENDENTES", detalhes: `Atualizou dependentes da família: ${familiaSelecionadaId}` });
                     alert("Dados salvos com sucesso!");
                     abrirDetalhes(familiaSelecionadaId);
                 } catch (e) { alert("Erro: " + e.message); }
             };
 
             ui.btnGravarAtendimento.onclick = async () => {
-                if(!confirm("Deseja gravar e arquivar esta ficha de atendimento mensal?")) return;
+                if(!confirm("Deseja gravar e arquivar esta ficha?")) return;
                 const dadosFicha = {
                     data: serverTimestamp(),
                     situacao: Array.from(document.querySelectorAll('#ficha-situacao input:checked')).map(c => c.value),
-                    situacaoOutros: document.getElementById('ficha-situacao-outros').value,
                     necessidades: Array.from(document.querySelectorAll('#ficha-necessidades input:checked')).map(c => c.value),
-                    necessidadesOutros: document.getElementById('ficha-necessidades-outros').value,
                     estadoCivil: document.getElementById('ficha-estado-civil').value,
                     voluntario: document.getElementById('ficha-voluntario').value,
                     relato: document.getElementById('ficha-relato').value,
@@ -544,30 +587,9 @@
                 };
                 try {
                     await addDoc(collection(db, `familiasAssistidas/${familiaSelecionadaId}/atendimentos`), dadosFicha);
-                    await updateDoc(doc(db, "familiasAssistidas", familiaSelecionadaId), { estadoCivil: dadosFicha.estadoCivil });
-                    await addDoc(collection(db, "log_auditoria"), { timestamp: serverTimestamp(), autor: { nome: user.displayName || user.email }, acao: "GRAVAR_FICHA_MENSAL", detalhes: `Ficha mensal arquivada para família: ${familiaSelecionadaId}` });
                     alert("Ficha arquivada com sucesso!");
-                    
-                    // Limpeza automática após salvar
-                    document.querySelectorAll('.ficha-container input[type="checkbox"]').forEach(c => c.checked = false);
-                    document.querySelectorAll('.ficha-container input[type="radio"]').forEach(r => r.checked = false);
-                    document.getElementById('ficha-situacao-outros').value = "";
-                    document.getElementById('ficha-necessidades-outros').value = "";
-                    document.getElementById('ficha-relato').value = "";
-                    document.getElementById('ficha-obs').value = "";
-                    
                     carregarHistoricoAtendimentos(familiaSelecionadaId);
-                } catch (e) { alert("Erro ao arquivar: " + e.message); }
-            };
-
-            window.gerarReciboImpressao = () => {
-                const f = todasFamilias.find(x => x.id === familiaSelecionadaId);
-                if (!f) return;
-                const data = new Date().toLocaleDateString('pt-BR');
-                const win = window.open('', '', 'height=600,width=800');
-                win.document.write(`<html><head><title>Recibo CEPAT</title><style>body{font-family:sans-serif;padding:40px;line-height:1.6;border:2px solid #333;} h2{text-align:center;border-bottom:1px solid #000;padding-bottom:10px;}</style></head><body><h2 style="text-transform: uppercase;">Casa Espírita Paulo de Tarso - Assistência Cáritas</h2><p style="text-align:right;"><b>Data do Atendimento:</b> ${data}</p><p><b>Responsável Assistido:</b> ${f.responsavel1.nome}</p><p><b>Endereço Cadastrado:</b> ${f.contato.endereco}</p><div style="margin: 40px 0; border: 1px solid #eee; padding: 20px;">Declaramos que a família acima recebeu o auxílio fraterno de <b>01 (uma) Cesta Básica</b> e demais itens complementares nesta data, conforme as normas de assistência da casa.</div><div style="margin-top: 80px; text-align: center;">_______________________________________________________<br>Assinatura do Responsável da Família</div></body></html>`);
-                win.document.close();
-                win.print();
+                } catch (e) { alert("Erro: " + e.message); }
             };
 
             ui.form.onsubmit = async (e) => {
@@ -582,41 +604,36 @@
                     responsavel1: { nome: formatarNome(document.getElementById('resp1-nome').value), nascimento: document.getElementById('resp1-nasc').value, tipo: document.getElementById('resp1-tipo').value },
                     responsavel2: { nome: formatarNome(document.getElementById('resp2-nome').value), nascimento: document.getElementById('resp2-nasc').value, tipo: document.getElementById('resp2-tipo').value },
                     contato: { telefone: document.getElementById('familia-tel').value, endereco: ui.inputEndereco.value, emSituacaoDeRua: ui.checkRua.checked },
+                    tipoCesta: document.getElementById('novo-tipo-cesta').value,
                     filhos: dependentes,
                     statusGeral: 'Ativa',
-                    criadoPor: user.uid,
                     cadastradoEm: serverTimestamp()
                 };
                 try {
                     await addDoc(collection(db, "familiasAssistidas"), novaFamilia);
-                    await addDoc(collection(db, "log_auditoria"), { timestamp: serverTimestamp(), autor: { nome: user.displayName || user.email }, acao: "CADASTRO_FAMILIA", detalhes: `Cadastrou a família de: ${novaFamilia.responsavel1.nome}` });
-                    alert("Sucesso!"); ui.modal.style.display = 'none';
+                    alert("Família cadastrada com sucesso!");
+                    ui.modal.style.display = 'none';
                 } catch (err) { alert("Erro: " + err.message); }
             };
 
             ui.busca.oninput = () => {
                 const termo = ui.busca.value.toLowerCase();
-                renderizarLista(todasFamilias.filter(fam => fam.responsavel1.nome.toLowerCase().includes(termo) || (fam.responsavel2?.nome?.toLowerCase().includes(termo))));
+                renderizarLista(todasFamilias.filter(fam => fam.responsavel1.nome.toLowerCase().includes(termo)));
             };
 
             ui.btnExcel.onclick = () => {
-                const dadosXls = [];
-                todasFamilias.forEach(f => {
-                    const infoComum = { "Responsável": f.responsavel1.nome, "Telefone": f.contato.telefone, "Endereço": f.contato.endereco, "Status": f.statusGeral, "Estado Civil": f.estadoCivil || "" };
-                    if (f.filhos.length === 0) {
-                        dadosXls.push({ ...infoComum, "Dependente": "Nenhum" });
-                    } else {
-                        f.filhos.forEach(filho => {
-                            dadosXls.push({ ...infoComum, "Dependente": filho.nome, "Idade": calcularIdade(filho.nascimento), "Roupa": filho.tamanho, "Calçado": filho.calcado });
-                        });
-                    }
-                });
-                const ws = XLSX.utils.json_to_sheet(dadosXls);
-                const wb = XLSX.utils.book_new();
-                XLSX.utils.book_append_sheet(wb, ws, "Base Caritas CEPAT");
-                XLSX.writeFile(wb, `CEPAT_Familias_${new Date().toLocaleDateString('pt-BR').replace(/\//g, '-')}.xlsx`);
+                const ws = XLSX.utils.json_to_sheet(todasFamilias.map(f => ({ Responsavel: f.responsavel1.nome, Contato: f.contato.telefone, Cesta: f.tipoCesta || 'Padrao', Status: f.statusGeral })));
+                const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, "Base Famílias");
+                XLSX.writeFile(wb, `Base_Caritas_${new Date().toLocaleDateString('pt-BR').replace(/\//g, '-')}.xlsx`);
             };
         }
+
+        window.gerarReciboImpressao = () => {
+            const f = todasFamilias.find(x => x.id === familiaSelecionadaId);
+            const win = window.open('', '', 'height=600,width=800');
+            win.document.write(`<html><head><title>Recibo CEPAT</title></head><body><h2>Casa Espírita Paulo de Tarso - Assistência Cáritas</h2><p><b>Responsável:</b> ${f.responsavel1.nome}</p><p><b>Data:</b> ${new Date().toLocaleDateString('pt-BR')}</p><p>Declaramos o recebimento do auxílio social conforme normas da casa.</p></body></html>`);
+            win.document.close(); win.print();
+        };
     </script>
 </body>
 </html>
