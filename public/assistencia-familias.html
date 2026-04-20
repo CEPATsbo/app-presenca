@@ -16,13 +16,15 @@
         .container { background: white; padding: 30px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); width: 100%; max-width: 1000px; box-sizing: border-box; }
         h1 { color: #2c3e50; margin-top: 0; border-bottom: 2px solid #e67e22; padding-bottom: 10px; margin-bottom: 20px; }
         
-        .search-container { margin-bottom: 25px; display: flex; gap: 10px; flex-wrap: wrap; }
+        .search-container { margin-bottom: 25px; display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
         #search-input { flex-grow: 1; padding: 12px; border: 1px solid #ddd; border-radius: 8px; font-size: 1em; min-width: 250px; }
+        #filtro-status { padding: 11px; border-radius: 8px; border: 1px solid #ddd; background: white; font-weight: bold; color: #2c3e50; }
+        
         .btn-acao { border: none; padding: 12px 20px; border-radius: 8px; cursor: pointer; font-weight: bold; color: white; display: flex; align-items: center; gap: 8px; }
         .btn-novo { background-color: #e67e22; }
         .btn-excel { background-color: #27ae60; }
         .btn-recibo { background-color: #3498db; }
-        .btn-desativar { background-color: #e74c3c; margin-right: auto; } /* Botão vermelho para desativar */
+        .btn-status-toggle { margin-right: auto; } /* Posiciona à esquerda no rodapé do modal */
 
         .familia-card { border: 1px solid #eee; padding: 20px; border-radius: 10px; margin-bottom: 15px; display: flex; justify-content: space-between; align-items: center; border-left: 6px solid #3498db; transition: transform 0.2s; }
         .familia-card:hover { transform: translateY(-2px); box-shadow: 0 4px 10px rgba(0,0,0,0.05); }
@@ -31,7 +33,7 @@
         .badge-parentesco { background: #e9ecef; padding: 2px 8px; border-radius: 4px; font-size: 0.75em; color: #495057; font-weight: bold; margin-left: 5px; }
 
         .modal { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.6); display: none; justify-content: center; align-items: center; z-index: 1000; }
-        .modal-content { background: white; padding: 30px; border-radius: 12px; width: 95%; max-width: 800px; max-height: 90vh; overflow-y: auto; position: relative; }
+        .modal-content { background: white; padding: 30px; border-radius: 12px; width: 95%; max-width: 850px; max-height: 90vh; overflow-y: auto; position: relative; }
         .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; }
         .full-width { grid-column: 1 / -1; }
         .form-group { display: flex; flex-direction: column; gap: 5px; margin-bottom: 12px; }
@@ -78,6 +80,12 @@
         
         <div class="search-container">
             <input type="text" id="search-input" placeholder="Buscar por qualquer nome de responsável...">
+            
+            <select id="filtro-status">
+                <option value="Ativa">Ver Ativas</option>
+                <option value="Inativa">Ver Inativas</option>
+            </select>
+
             <button id="btn-abrir-modal" class="btn-acao btn-novo"><i class="fas fa-plus"></i> Nova Família</button>
             <button id="btn-exportar" class="btn-acao btn-excel"><i class="fas fa-file-excel"></i> Exportar Base</button>
         </div>
@@ -163,7 +171,7 @@
     </div>
 
     <div id="modal-detalhes" class="modal">
-        <div class="modal-content" style="max-width: 850px;">
+        <div class="modal-content">
             <h2 id="det-titulo" style="color: #3498db; margin-bottom: 25px;">Detalhes da Família</h2>
             
             <div id="det-conteudo">
@@ -246,7 +254,8 @@
             </div>
 
             <div style="margin-top: 30px; display: flex; justify-content: flex-end; gap: 10px;">
-                <button id="btn-desativar-familia" class="btn-acao btn-desativar"><i class="fas fa-user-slash"></i> Desativar Família</button>
+                <button id="btn-desativar-familia" class="btn-acao btn-status-toggle"></button>
+                
                 <button onclick="gerarReciboImpressao()" class="btn-acao btn-recibo"><i class="fas fa-print"></i> Gerar Recibo</button>
                 <button onclick="document.getElementById('modal-detalhes').style.display='none'" style="padding: 10px 20px; border-radius: 8px; border: 1px solid #ccc; cursor: pointer;">Fechar</button>
             </div>
@@ -306,7 +315,8 @@
                 btnAtualizarMedidas: document.getElementById('btn-atualizar-medidas'),
                 btnNovoFilhoDet: document.getElementById('btn-novo-filho-detalhe'),
                 btnGravarAtendimento: document.getElementById('btn-gravar-atendimento'),
-                btnDesativar: document.getElementById('btn-desativar-familia')
+                btnToggleStatus: document.getElementById('btn-desativar-familia'),
+                filtroStatus: document.getElementById('filtro-status')
             };
 
             ui.btnNovo.onclick = () => { ui.form.reset(); ui.listaFilhos.innerHTML = ''; ui.modal.style.display = 'flex'; };
@@ -331,15 +341,23 @@
                 ui.listaFilhos.appendChild(div);
             };
 
-            // FILTRAR APENAS AS ATIVAS PARA A LISTA PRINCIPAL
-            onSnapshot(query(collection(db, "familiasAssistidas"), where("statusGeral", "==", "Ativa")), (snapshot) => {
-                todasFamilias = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-                renderizarLista(todasFamilias);
-            });
+            // Escuta as famílias com base no filtro selecionado
+            const atualizarListaRealtime = () => {
+                const statusSelecionado = ui.filtroStatus.value;
+                const q = query(collection(db, "familiasAssistidas"), where("statusGeral", "==", statusSelecionado), orderBy("cadastradoEm", "desc"));
+                
+                onSnapshot(q, (snapshot) => {
+                    todasFamilias = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                    renderizarLista(todasFamilias);
+                });
+            };
+
+            ui.filtroStatus.onchange = atualizarListaRealtime;
+            atualizarListaRealtime();
 
             function renderizarLista(dados) {
                 if (dados.length === 0) {
-                    ui.lista.innerHTML = '<p style="text-align:center; padding: 40px;">Nenhuma família encontrada.</p>';
+                    ui.lista.innerHTML = '<p style="text-align:center; padding: 40px;">Nenhuma família encontrada com este status.</p>';
                     return;
                 }
                 ui.lista.innerHTML = dados.map(f => {
@@ -372,6 +390,16 @@
                 
                 renderizarListaFilhosEdicao(familia.filhos);
 
+                // Configura o botão de status
+                if (familia.statusGeral === "Inativa") {
+                    ui.btnToggleStatus.innerHTML = '<i class="fas fa-user-check"></i> Reativar Família';
+                    ui.btnToggleStatus.style.backgroundColor = "#27ae60";
+                } else {
+                    ui.btnToggleStatus.innerHTML = '<i class="fas fa-user-slash"></i> Desativar Família';
+                    ui.btnToggleStatus.style.backgroundColor = "#e74c3c";
+                }
+
+                // Limpeza da ficha para novo uso
                 document.querySelectorAll('.ficha-container input[type="checkbox"]').forEach(c => c.checked = false);
                 document.querySelectorAll('.ficha-container input[type="radio"]').forEach(r => r.checked = false);
                 document.getElementById('ficha-situacao-outros').value = "";
@@ -390,27 +418,30 @@
                 ui.modalDet.style.display = 'flex';
             };
 
-            // FUNÇÃO PARA DESATIVAR FAMÍLIA
-            ui.btnDesativar.onclick = async () => {
+            // Função para Alternar Status (Ativa/Inativa)
+            ui.btnToggleStatus.onclick = async () => {
                 if(!familiaSelecionadaId) return;
-                const confirmacao = confirm("Deseja realmente DESATIVAR esta família? Ela não aparecerá mais na lista de assistidos ativos.");
+                const familia = todasFamilias.find(f => f.id === familiaSelecionadaId);
+                const novoStatus = familia.statusGeral === "Inativa" ? "Ativa" : "Inativa";
+                
+                const confirmacao = confirm(`Deseja realmente alterar o status desta família para ${novoStatus.toUpperCase()}?`);
                 if(confirmacao) {
                     try {
                         await updateDoc(doc(db, "familiasAssistidas", familiaSelecionadaId), { 
-                            statusGeral: "Inativa",
-                            desativadaEm: serverTimestamp(),
-                            desativadaPor: user.email
+                            statusGeral: novoStatus,
+                            ultimaAlteracaoEm: serverTimestamp(),
+                            alteradoPor: user.email
                         });
                         await addDoc(collection(db, "log_auditoria"), { 
                             timestamp: serverTimestamp(), 
                             autor: { nome: user.displayName || user.email }, 
-                            acao: "DESATIVAR_FAMILIA", 
-                            detalhes: `Desativou a família ID: ${familiaSelecionadaId}` 
+                            acao: "ALTERAR_STATUS_FAMILIA", 
+                            detalhes: `Status de ${familiaSelecionadaId} alterado para ${novoStatus}` 
                         });
-                        alert("Família desativada com sucesso!");
+                        alert(`Família ${novoStatus === "Ativa" ? "reativada" : "desativada"} com sucesso!`);
                         ui.modalDet.style.display = 'none';
                     } catch (e) {
-                        alert("Erro ao desativar: " + e.message);
+                        alert("Erro ao alterar status: " + e.message);
                     }
                 }
             };
@@ -426,7 +457,7 @@
                                 <strong>${dStr}</strong>
                                 <span>Voluntário: ${data.voluntario}</span>
                             </div>
-                            <small>Situação: ${data.situacao.join(', ')} | Cesta: ${data.cesta}</small>
+                            <small>Situação: ${data.situacao?.join(', ') || ''} | Cesta: ${data.cesta}</small>
                         </div>`;
                 }).join('') || "<p style='color:#999; font-size:0.9em;'>Sem atendimentos registrados anteriormente.</p>";
             }
@@ -516,13 +547,15 @@
                     await updateDoc(doc(db, "familiasAssistidas", familiaSelecionadaId), { estadoCivil: dadosFicha.estadoCivil });
                     await addDoc(collection(db, "log_auditoria"), { timestamp: serverTimestamp(), autor: { nome: user.displayName || user.email }, acao: "GRAVAR_FICHA_MENSAL", detalhes: `Ficha mensal arquivada para família: ${familiaSelecionadaId}` });
                     alert("Ficha arquivada com sucesso!");
-                    document.querySelectorAll('#ficha-situacao input[type="checkbox"]').forEach(c => c.checked = false);
-                    document.querySelectorAll('#ficha-necessidades input[type="checkbox"]').forEach(c => c.checked = false);
-                    document.querySelectorAll('input[name="ficha-cesta"]').forEach(r => r.checked = false);
+                    
+                    // Limpeza automática após salvar
+                    document.querySelectorAll('.ficha-container input[type="checkbox"]').forEach(c => c.checked = false);
+                    document.querySelectorAll('.ficha-container input[type="radio"]').forEach(r => r.checked = false);
                     document.getElementById('ficha-situacao-outros').value = "";
                     document.getElementById('ficha-necessidades-outros').value = "";
                     document.getElementById('ficha-relato').value = "";
                     document.getElementById('ficha-obs').value = "";
+                    
                     carregarHistoricoAtendimentos(familiaSelecionadaId);
                 } catch (e) { alert("Erro ao arquivar: " + e.message); }
             };
@@ -569,11 +602,12 @@
             ui.btnExcel.onclick = () => {
                 const dadosXls = [];
                 todasFamilias.forEach(f => {
+                    const infoComum = { "Responsável": f.responsavel1.nome, "Telefone": f.contato.telefone, "Endereço": f.contato.endereco, "Status": f.statusGeral, "Estado Civil": f.estadoCivil || "" };
                     if (f.filhos.length === 0) {
-                        dadosXls.push({ "Responsável": f.responsavel1.nome, "Telefone": f.contato.telefone, "Endereço": f.contato.endereco, "Dependente": "Nenhum", "Estado Civil": f.estadoCivil || "" });
+                        dadosXls.push({ ...infoComum, "Dependente": "Nenhum" });
                     } else {
                         f.filhos.forEach(filho => {
-                            dadosXls.push({ "Responsável": f.responsavel1.nome, "Telefone": f.contato.telefone, "Endereço": f.contato.endereco, "Dependente": filho.nome, "Idade": calcularIdade(filho.nascimento), "Roupa": filho.tamanho, "Calçado": filho.calcado, "Estado Civil": f.estadoCivil || "" });
+                            dadosXls.push({ ...infoComum, "Dependente": filho.nome, "Idade": calcularIdade(filho.nascimento), "Roupa": filho.tamanho, "Calçado": filho.calcado });
                         });
                     }
                 });
