@@ -393,10 +393,12 @@
 
             const atualizarListaRealtime = () => {
                 const statusSelecionado = ui.filtroStatus.value;
-                const q = query(collection(db, "familiasAssistidas"), where("statusGeral", "==", statusSelecionado), orderBy("cadastradoEm", "desc"));
+                const q = query(collection(db, "familiasAssistidas"), where("statusGeral", "==", statusSelecionado));
                 
                 onSnapshot(q, (snapshot) => {
-                    todasFamilias = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                    // Mapeia os dados e ordena por ordem alfabética no JavaScript
+                    todasFamilias = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }))
+                        .sort((a, b) => a.responsavel1.nome.localeCompare(b.responsavel1.nome));
                     renderizarLista(todasFamilias);
                 });
             };
