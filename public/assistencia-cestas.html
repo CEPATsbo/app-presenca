@@ -165,54 +165,64 @@
             }
         }
 
-        function renderizar(dados) {
-            const container = document.getElementById('lista-entrega');
-            const hoje = new Date();
-            
-            if (dados.length === 0) {
-                container.innerHTML = "<p style='text-align:center; padding:20px; color:#666;'>Nenhuma família ativa encontrada.</p>";
-                return;
-            }
+       function renderizar(dados) {
+    const container = document.getElementById('lista-entrega');
+    const hoje = new Date();
+    
+    if (dados.length === 0) {
+        container.innerHTML = "<p style='text-align:center; padding:20px; color:#666;'>Nenhuma família ativa encontrada.</p>";
+        return;
+    }
 
-            container.innerHTML = dados.map(f => {
-                const dataEntrega = f.ultimaCesta ? f.ultimaCesta.toDate() : null;
-                const jaEntregueNoMes = dataEntrega && dataEntrega.getMonth() === hoje.getMonth() && dataEntrega.getFullYear() === hoje.getFullYear();
-                
-                // Lógica de Elegibilidade: Só habilita se estiver no picking iniciado
-                const elegivelEsteMes = pickingAtivoIds.includes(f.id);
-                
-                let textoBotao = "Confirmar";
-                let desabilitar = false;
+    // Ordenação Alfabética solicitada
+    const dadosOrdenados = [...dados].sort((a, b) => 
+        a.responsavel1.nome.localeCompare(b.responsavel1.nome)
+    );
 
-                if (jaEntregueNoMes) {
-                    textoBotao = "Entregue";
-                    desabilitar = true;
-                } else if (!elegivelEsteMes && pickingAtivoIds.length > 0) {
-                    // Se o picking já começou e ele não está lá, é cadastro novo para o mês que vem
-                    textoBotao = "Próximo Ciclo";
-                    desabilitar = true;
-                }
+    container.innerHTML = dadosOrdenados.map(f => {
+        const dataEntrega = f.ultimaCesta ? f.ultimaCesta.toDate() : null;
+        const jaEntregueNoMes = dataEntrega && 
+                               dataEntrega.getMonth() === hoje.getMonth() && 
+                               dataEntrega.getFullYear() === hoje.getFullYear();
+        
+        // NOVA TRAVA: Verifica se a família está na lista de picking ativa para este mês
+        const estaNoPickingAtual = pickingAtivoIds.includes(f.id);
+        
+        let textoBotao = "Confirmar";
+        let desabilitar = false;
 
-                return `
-                    <div class="familia-row">
-                        <div>
-                            <div class="info-nome">${f.responsavel1.nome} ${f.tipoCesta === 'Personalizada' ? '<small style="color:#9b59b6">(Personalizada)</small>' : ''}</div>
-                            <span class="info-dependentes"><i class="fas fa-child"></i> ${f.filhos ? f.filhos.length : 0} dependentes</span>
-                            <small>Última: ${dataEntrega ? dataEntrega.toLocaleDateString() : 'Nunca'}</small>
-                        </div>
-                        <div style="display: flex; align-items: center;">
-                            <button class="btn-entregar" onclick="abrirModal('${f.id}', '${f.responsavel1.nome}')" ${desabilitar ? 'disabled' : ''}>
-                                ${textoBotao}
-                            </button>
-                            ${jaEntregueNoMes ? `
-                                <button class="btn-zap" onclick="notificarZap('${f.responsavel1.nome}')" title="Enviar comprovante">
-                                    <i class="fab fa-whatsapp"></i>
-                                </button>
-                            ` : ''}
-                        </div>
-                    </div>`;
-            }).join('');
+        if (jaEntregueNoMes) {
+            textoBotao = "Entregue";
+            desabilitar = true;
+        } else if (!estaNoPickingAtual) {
+            // Se não está no picking e o mês já está em andamento, é uma família para o próximo mês
+            textoBotao = "Próximo Ciclo";
+            desabilitar = true;
         }
+
+        return `
+            <div class="familia-row">
+                <div>
+                    <div class="info-nome">${f.responsavel1.nome}</div>
+                    <span class="info-dependentes"><i class="fas fa-child"></i> ${f.filhos ? f.filhos.length : 0} dependentes</span>
+                    <small>Última entrega: ${dataEntrega ? dataEntrega.toLocaleDateString() : 'Nunca'}</small>
+                </div>
+                <div style="display: flex; align-items: center;">
+                    <button class="btn-entregar" 
+                        onclick="abrirModal('${f.id}', '${f.responsavel1.nome}')" 
+                        ${desabilitar ? 'disabled' : ''} 
+                        style="${!estaNoPickingAtual && !jaEntregueNoMes ? 'background-color: #95a5a6;' : ''}">
+                        ${textoBotao}
+                    </button>
+                    ${jaEntregueNoMes ? `
+                        <button class="btn-zap" onclick="notificarZap('${f.responsavel1.nome}')" title="Notificar via WhatsApp">
+                            <i class="fab fa-whatsapp"></i>
+                        </button>
+                    ` : ''}
+                </div>
+            </div>`;
+    }).join('');
+}
 
         window.fecharModal = () => {
             document.getElementById('modal-confirmacao').style.display = 'none';
