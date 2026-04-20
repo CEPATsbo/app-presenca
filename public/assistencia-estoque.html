@@ -141,8 +141,11 @@
                     const lSnap = await getDocs(qLote);
                     const lotes = lSnap.docs.map(ld => ({ id: ld.id, ...ld.data() }));
                     const totalLotes = lotes.reduce((acc, curr) => acc + parseInt(curr.quantidade || 0), 0);
-                    const quantidadeReal = Math.max(parseInt(d.data().quantidade || 0), totalLotes);
+                    
+                    // Ajuste de segurança: Garante saldo zero em vez de negativo e soma lotes
+                    const quantidadeReal = Math.max(0, Math.max(parseInt(d.data().quantidade || 0), totalLotes));
                     const proxVal = lotes.length > 0 ? lotes[0].validade : d.data().validade || "9999-12-31";
+                    
                     return { id: d.id.trim(), ...d.data(), quantidade: quantidadeReal, proxVal, lotes };
                 });
                 itensEstoque = await Promise.all(listaPromessas);
@@ -169,11 +172,12 @@
                 return;
             }
             try {
-                await updateDoc(doc(db, "estoque_caritas", cleanId), { quantidade: increment(-1) });
-                const qLote = query(collection(db, `estoque_caritas/${cleanId}/lotes`), orderBy("validade", "asc"), limit(1));
-                const lSnap = await getDocs(qLote);
-                if (!lSnap.empty) {
-                    const loteDoc = lSnap.docs[0];
+                const itemRef = doc(db, "estoque_caritas", cleanId);
+                const itemSnap = await getDocs(query(collection(db, `estoque_caritas/${cleanId}/lotes`), orderBy("validade", "asc"), limit(1)));
+                
+                await updateDoc(itemRef, { quantidade: increment(-1) });
+                if (!itemSnap.empty) {
+                    const loteDoc = itemSnap.docs[0];
                     const novaQtd = (loteDoc.data().quantidade || 0) - 1;
                     if (novaQtd <= 0) await deleteDoc(doc(db, `estoque_caritas/${cleanId}/lotes`, loteDoc.id));
                     else await updateDoc(doc(db, `estoque_caritas/${cleanId}/lotes`, loteDoc.id), { quantidade: novaQtd });
@@ -185,13 +189,17 @@
         function renderizarListaEstoque() {
             const hoje = new Date();
             document.getElementById('lista-produtos').innerHTML = itensEstoque.map(i => {
-                const valF = i.proxVal === "9999-12-31" ? "Não definida" : i.proxVal.split('-').reverse().join('/');
-                let classeBorda = (i.proxVal === "9999-12-31") ? "borda-geral" : "borda-segura";
-                if (i.proxVal !== "9999-12-31") {
+                // CORREÇÃO: Se quantidade for zero, não exibe validade para evitar confusão
+                const valF = (i.proxVal === "9999-12-31" || i.quantidade <= 0) ? "N/A (Estoque Zerado)" : i.proxVal.split('-').reverse().join('/');
+                
+                let classeBorda = (i.proxVal === "9999-12-31" || i.quantidade <= 0) ? "borda-geral" : "borda-segura";
+                
+                if (i.proxVal !== "9999-12-31" && i.quantidade > 0) {
                     const diffDias = Math.ceil((new Date(i.proxVal) - hoje) / (1000 * 60 * 60 * 24));
                     if (diffDias <= 15) classeBorda = "borda-critica";
                     else if (diffDias <= 45) classeBorda = "borda-alerta";
                 }
+                
                 return `<div class="estoque-item ${classeBorda}"><div style="flex:1"><b>${i.nome}</b><span class="val-info">Próx: ${valF}</span><small style="color:#777">Saldo: ${i.quantidade}</small></div><div class="controles"><button class="btn-ajuste" style="background:var(--red)" onclick="window.ajustarEstoque('${i.id}', -1, '${i.nome}')">-</button><span style="font-weight:bold; min-width:30px; text-align:center;">${i.quantidade}</span><button class="btn-ajuste" style="background:var(--green)" onclick="window.ajustarEstoque('${i.id}', 1, '${i.nome}')">+</button></div></div>`;
             }).join('');
         }
@@ -201,7 +209,8 @@
             let prontas = Infinity, pendencias = [];
             Object.entries(configCesta).forEach(([id, qtdNec]) => {
                 const item = itensEstoque.find(i => i.id === id);
-                const saldoValido = item ? item.quantidade : 0;
+                // CORREÇÃO: Tratamento de negativo no cálculo da prontidão
+                const saldoValido = item ? Math.max(0, item.quantidade) : 0;
                 const cap = Math.floor(saldoValido / qtdNec);
                 if (cap < prontas) prontas = cap;
                 if (saldoValido < (metaGlobal * qtdNec)) pendencias.push(`Faltam ${(metaGlobal * qtdNec) - saldoValido} un. de <b>${item ? item.nome : id}</b>.`);
@@ -223,7 +232,7 @@
             let f = false;
             Object.entries(configCesta).forEach(([id, q]) => {
                 const i = itensEstoque.find(x => x.id === id);
-                const s = i ? i.quantidade : 0;
+                const s = i ? Math.max(0, i.quantidade) : 0;
                 if (s < (metaGlobal * q)) { t += `• *${i ? i.nome : id}*: Faltam ${(metaGlobal * q) - s} un.%0A`; f = true; }
             });
             
