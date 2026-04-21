@@ -51,13 +51,13 @@
         
         .detalhe-item { margin-bottom: 10px; padding-bottom: 10px; border-bottom: 1px solid #f1f1f1; }
         .detalhe-item label { font-weight: bold; color: #7f8c8d; font-size: 0.8em; text-transform: uppercase; display: block; }
-        .detalhe-item span { font-size: 1.1em; color: #2c3e50; }
+        .detalhe-item input { width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 6px; margin-top: 5px; box-sizing: border-box; font-size: 1em; }
 
         .edicao-medidas-grid { display: grid; grid-template-columns: 1fr auto auto 40px; gap: 10px; background: #fff; padding: 12px; border-radius: 8px; border: 1px solid #ddd; margin-bottom: 12px; align-items: center; }
         .input-medida { padding: 10px; border: 1px solid #ccc; border-radius: 6px; width: 100%; box-sizing: border-box; font-size: 0.95em; color: #2c3e50; }
         .input-nome-filho { border: 2px solid #3498db !important; background: #f0f7ff !important; font-weight: bold !important; min-width: 150px; }
         .input-data-filho { width: 160px !important; }
-        .btn-update-medidas { background: #27ae60; color: white; border: none; padding: 12px 15px; border-radius: 6px; cursor: pointer; font-weight: bold; font-size: 0.85em; margin-top: 10px; width: 100%; }
+        .btn-update-medidas { background: #27ae60; color: white; border: none; padding: 12px 15px; border-radius: 6px; cursor: pointer; font-weight: bold; font-size: 0.95em; margin-top: 20px; width: 100%; }
         .btn-del-child { color: #e74c3c; background: none; border: none; cursor: pointer; font-size: 1.2em; display: flex; align-items: center; justify-content: center; }
 
         .ficha-container { background: #fff; border: 2px solid #2c3e50; padding: 20px; border-radius: 8px; margin-top: 25px; }
@@ -68,7 +68,6 @@
         .historico-atendimentos { margin-top: 20px; border-top: 2px solid #eee; padding-top: 15px; }
         .atendimento-item { background: #f8f9fa; padding: 10px; border-radius: 6px; margin-bottom: 8px; border-left: 4px solid #2c3e50; font-size: 0.9em; cursor: pointer; }
 
-        /* Estilo Botão Cesta Personalizada */
         .btn-config-cesta { background-color: #9b59b6; color: white; margin-bottom: 15px; width: 100%; justify-content: center; font-weight: bold; }
         .item-personalizado { display: flex; justify-content: space-between; align-items: center; padding: 12px; border-bottom: 1px solid #eee; }
         .item-personalizado span { font-weight: bold; color: #2c3e50; }
@@ -187,13 +186,25 @@
 
     <div id="modal-detalhes" class="modal">
         <div class="modal-content" style="max-width: 850px;">
-            <h2 id="det-titulo" style="color: #3498db; margin-bottom: 25px;">Detalhes da Família</h2>
+            <h2 id="det-titulo" style="color: #3498db; margin-bottom: 25px;">Editar Prontuário da Família</h2>
             
             <div id="det-conteudo">
-                <div class="detalhe-item"><label>Responsável Principal</label><span id="det-resp1"></span></div>
-                <div class="detalhe-item"><label>Segundo Responsável</label><span id="det-resp2"></span></div>
-                <div class="detalhe-item"><label>Contato</label><span id="det-tel"></span></div>
-                <div class="detalhe-item"><label>Endereço</label><span id="det-end"></span></div>
+                <div class="detalhe-item">
+                    <label>Responsável Principal</label>
+                    <input type="text" id="det-edit-resp1">
+                </div>
+                <div class="detalhe-item">
+                    <label>Segundo Responsável (Opcional)</label>
+                    <input type="text" id="det-edit-resp2">
+                </div>
+                <div class="detalhe-item">
+                    <label>Contato / WhatsApp</label>
+                    <input type="tel" id="det-edit-tel">
+                </div>
+                <div class="detalhe-item">
+                    <label>Endereço Completo</label>
+                    <input type="text" id="det-edit-end">
+                </div>
 
                 <div class="secao-titulo">Configuração de Cesta</div>
                 <div class="form-group" style="margin-bottom:15px;">
@@ -215,7 +226,7 @@
                     <i class="fas fa-plus"></i> Incluir Novo Dependente
                 </button>
 
-                <button id="btn-atualizar-medidas" class="btn-update-medidas"><i class="fas fa-sync-alt"></i> Salvar Alterações de Medidas e Nomes</button>
+                <button id="btn-atualizar-medidas" class="btn-update-medidas"><i class="fas fa-save"></i> SALVAR TODAS ALTERAÇÕES DE CADASTRO</button>
 
                 <div class="ficha-container">
                     <h3 style="text-align:center; border-bottom: 2px solid #2c3e50; padding-bottom: 10px; margin-bottom: 20px;">FICHA DE ATENDIMENTO - AÇÃO SOCIAL / CÁRITAS</h3>
@@ -364,7 +375,6 @@
                 listaPersonalizada: document.getElementById('lista-itens-personalizados')
             };
 
-            // Carregar itens do estoque para o modal de personalização
             onSnapshot(collection(db, "estoque_caritas"), snap => {
                 itensEstoqueGlobal = snap.docs.map(d => ({ id: d.id, nome: d.data().nome }));
             });
@@ -394,9 +404,7 @@
             const atualizarListaRealtime = () => {
                 const statusSelecionado = ui.filtroStatus.value;
                 const q = query(collection(db, "familiasAssistidas"), where("statusGeral", "==", statusSelecionado));
-                
                 onSnapshot(q, (snapshot) => {
-                    // Mapeia os dados e ordena por ordem alfabética no JavaScript
                     todasFamilias = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }))
                         .sort((a, b) => a.responsavel1.nome.localeCompare(b.responsavel1.nome));
                     renderizarLista(todasFamilias);
@@ -435,10 +443,11 @@
                 const f = todasFamilias.find(x => x.id === id);
                 if (!f) return;
 
-                document.getElementById('det-resp1').textContent = f.responsavel1.nome;
-                document.getElementById('det-resp2').textContent = f.responsavel2?.nome ? f.responsavel2.nome : "Não informado";
-                document.getElementById('det-tel').textContent = f.contato.telefone;
-                document.getElementById('det-end').textContent = f.contato.endereco;
+                // Carrega dados editáveis no modal
+                document.getElementById('det-edit-resp1').value = f.responsavel1.nome;
+                document.getElementById('det-edit-resp2').value = f.responsavel2?.nome || "";
+                document.getElementById('det-edit-tel').value = f.contato.telefone;
+                document.getElementById('det-edit-end').value = f.contato.endereco;
                 
                 ui.tipoCestaDet.value = f.tipoCesta || 'Padrao';
                 ui.btnConfigCesta.style.display = ui.tipoCestaDet.value === 'Personalizada' ? 'flex' : 'none';
@@ -504,7 +513,6 @@
                 if(!familiaSelecionadaId) return;
                 const f = todasFamilias.find(x => x.id === familiaSelecionadaId);
                 const novoStatus = f.statusGeral === "Inativa" ? "Ativa" : "Inativa";
-                
                 if(confirm(`Deseja alterar status para ${novoStatus.toUpperCase()}?`)) {
                     await updateDoc(doc(db, "familiasAssistidas", familiaSelecionadaId), { 
                         statusGeral: novoStatus, ultimaAlteracaoEm: serverTimestamp()
@@ -551,8 +559,11 @@
                 row.classList.add('deleted-flag');
             };
 
+            // SALVAMENTO COMPLETO (RESPONSÁVEIS + DEPENDENTES)
             ui.btnAtualizarMedidas.onclick = async () => {
                 if (!familiaSelecionadaId) return;
+                
+                const f = todasFamilias.find(x => x.id === familiaSelecionadaId);
                 const novosFilhos = [];
                 document.querySelectorAll('.edicao-medidas-grid').forEach(row => {
                     if(!row.classList.contains('deleted-flag')) {
@@ -568,9 +579,28 @@
                         }
                     }
                 });
+
+                const dadosAtualizados = {
+                    responsavel1: { 
+                        ...f.responsavel1, 
+                        nome: formatarNome(document.getElementById('det-edit-resp1').value) 
+                    },
+                    responsavel2: { 
+                        ...f.responsavel2, 
+                        nome: formatarNome(document.getElementById('det-edit-resp2').value) 
+                    },
+                    contato: {
+                        ...f.contato,
+                        telefone: document.getElementById('det-edit-tel').value,
+                        endereco: document.getElementById('det-edit-end').value
+                    },
+                    filhos: novosFilhos,
+                    ultimaAlteracaoEm: serverTimestamp()
+                };
+
                 try {
-                    await updateDoc(doc(db, "familiasAssistidas", familiaSelecionadaId), { filhos: novosFilhos });
-                    alert("Dados salvos com sucesso!");
+                    await updateDoc(doc(db, "familiasAssistidas", familiaSelecionadaId), dadosAtualizados);
+                    alert("Prontuário atualizado com sucesso!");
                     abrirDetalhes(familiaSelecionadaId);
                 } catch (e) { alert("Erro: " + e.message); }
             };
