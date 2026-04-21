@@ -17,7 +17,9 @@
         
         .info-crianca b { font-size: 1.2em; color: #2c3e50; }
         .info-p { margin: 5px 0; color: #7f8c8d; font-size: 0.9em; }
-        .badge-idade { background: #ef5350; color: white; padding: 2px 8px; border-radius: 4px; font-size: 0.8em; font-weight: bold; }
+        
+        /* CORREÇÃO VISUAL: Impede a quebra da idade no badge */
+        .badge-idade { background: #ef5350; color: white; padding: 4px 10px; border-radius: 4px; font-size: 0.8em; font-weight: bold; white-space: nowrap; display: inline-block; }
         
         .padrinho-form { display: flex; gap: 10px; }
         .padrinho-form input { padding: 10px; border: 1px solid #ddd; border-radius: 8px; flex-grow: 1; }
@@ -62,21 +64,23 @@
         const app = initializeApp(firebaseConfig);
         const db = getFirestore(app);
 
-        // Apenas cargos autorizados gerenciam padrinhos
         protegerPagina(['super-admin','diretor','tesoureiro','conselheiro','recepcionista','entrevistador','caritas'])
             .then(user => {
                 const container = document.getElementById('lista-padrinhos');
 
-                // Monitoramento em tempo real das famílias ativas
                 onSnapshot(query(collection(db, "familiasAssistidas"), where("statusGeral", "==", "Ativa")), (snapshot) => {
                     let html = '';
-                    snapshot.docs.forEach(docSnap => {
+                    
+                    // Ordenação alfabética das famílias para facilitar busca
+                    const docsOrdenados = snapshot.docs.sort((a, b) => a.data().responsavel1.nome.localeCompare(b.data().responsavel1.nome));
+
+                    docsOrdenados.forEach(docSnap => {
                         const familia = docSnap.data();
                         const familiaId = docSnap.id;
                         
                         (familia.filhos || []).forEach((filho, index) => {
                             const idade = calcularIdade(filho.nascimento);
-                            // Filtro de idade da Campanha de Natal
+                            
                             if (idade <= 12) {
                                 const padrinho = filho.padrinho || { nome: '', tel: '' };
                                 const isAtivo = padrinho.nome !== '';
@@ -102,7 +106,6 @@
                     container.innerHTML = html || '<p style="text-align:center;">Nenhuma criança encontrada.</p>';
                 });
 
-                // Função de Vínculo com Registro de Auditoria Unificado
                 window.vincularPadrinho = async (famId, filhoIdx, nomeCrianca, nomeUsuario) => {
                     const nomeP = document.getElementById(`p-nome-${famId}-${filhoIdx}`).value;
                     const telP = document.getElementById(`p-tel-${famId}-${filhoIdx}`).value;
@@ -112,12 +115,10 @@
                         const famSnap = await getDoc(famRef);
                         const filhosAtuais = famSnap.data().filhos;
                         
-                        // Atualiza apenas o filho específico no array
                         filhosAtuais[filhoIdx].padrinho = { nome: nomeP, tel: telP };
                         
                         await updateDoc(famRef, { filhos: filhosAtuais });
 
-                        // REGISTRO DE AUDITORIA UNIFICADO (CORREÇÃO DE SINGULAR E OBJETO AUTOR)
                         await addDoc(collection(db, "log_auditoria"), {
                             timestamp: serverTimestamp(),
                             autor: { nome: nomeUsuario },
@@ -133,13 +134,21 @@
                 };
             });
 
+        // CORREÇÃO DA IDADE: Trata a data para evitar erros de fuso horário
         function calcularIdade(nascimento) {
             if (!nascimento) return 0;
-            const nasc = new Date(nascimento);
+            
+            // Força a data a ser interpretada como local (ano, mês-1, dia)
+            const partes = nascimento.split('-');
+            const nasc = new Date(partes[0], partes[1] - 1, partes[2]);
             const hoje = new Date();
+            
             let idade = hoje.getFullYear() - nasc.getFullYear();
             const m = hoje.getMonth() - nasc.getMonth();
-            if (m < 0 || (m === 0 && hoje.getDate() < nasc.getDate())) idade--;
+            
+            if (m < 0 || (m === 0 && hoje.getDate() < nasc.getDate())) {
+                idade--;
+            }
             return idade;
         }
     </script>
