@@ -17,8 +17,6 @@
         
         .info-crianca b { font-size: 1.2em; color: #2c3e50; }
         .info-p { margin: 5px 0; color: #7f8c8d; font-size: 0.9em; }
-        
-        /* CORREÇÃO VISUAL: Impede a quebra da idade no badge */
         .badge-idade { background: #ef5350; color: white; padding: 4px 10px; border-radius: 4px; font-size: 0.8em; font-weight: bold; white-space: nowrap; display: inline-block; }
         
         .padrinho-form { display: flex; gap: 10px; }
@@ -40,7 +38,7 @@
 
     <main class="container">
         <h1><i class="fas fa-gift"></i> Apadrinhamento de Natal</h1>
-        <p style="color: #666; margin-bottom: 30px;">Lista de crianças até 12 anos aguardando ou vinculadas a um padrinho.</p>
+        <p style="color: #666; margin-bottom: 30px;">Lista organizada por família. Crianças até 12 anos.</p>
         
         <div id="lista-padrinhos">
             <p style="text-align:center; color:#999;">Buscando crianças elegíveis...</p>
@@ -71,12 +69,16 @@
                 onSnapshot(query(collection(db, "familiasAssistidas"), where("statusGeral", "==", "Ativa")), (snapshot) => {
                     let html = '';
                     
-                    // Ordenação alfabética das famílias para facilitar busca
-                    const docsOrdenados = snapshot.docs.sort((a, b) => a.data().responsavel1.nome.localeCompare(b.data().responsavel1.nome));
+                    // ORDENAÇÃO POR GRUPO FAMILIAR (Nome do Responsável 1)
+                    const familiasOrdenadas = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }))
+                        .sort((a, b) => {
+                            const nomeA = a.responsavel1?.nome || "";
+                            const nomeB = b.responsavel1?.nome || "";
+                            return nomeA.localeCompare(nomeB);
+                        });
 
-                    docsOrdenados.forEach(docSnap => {
-                        const familia = docSnap.data();
-                        const familiaId = docSnap.id;
+                    familiasOrdenadas.forEach(familia => {
+                        const familiaId = familia.id;
                         
                         (familia.filhos || []).forEach((filho, index) => {
                             const idade = calcularIdade(filho.nascimento);
@@ -89,7 +91,7 @@
                                     <div class="child-card ${isAtivo ? 'padrinho-ativo' : ''}">
                                         <div class="info-crianca">
                                             <b>${filho.nome}</b> <span class="badge-idade">${idade} anos</span>
-                                            <p class="info-p"><i class="fas fa-home"></i> Resp: ${familia.responsavel1.nome}</p>
+                                            <p class="info-p"><i class="fas fa-home"></i> Família: ${familia.responsavel1.nome}</p>
                                             <p class="info-p"><i class="fas fa-tshirt"></i> Roupa: ${filho.tamanho || 'N/A'} | Calçado: ${filho.calcado || 'N/A'}</p>
                                         </div>
                                         <div class="padrinho-form">
@@ -134,21 +136,14 @@
                 };
             });
 
-        // CORREÇÃO DA IDADE: Trata a data para evitar erros de fuso horário
         function calcularIdade(nascimento) {
             if (!nascimento) return 0;
-            
-            // Força a data a ser interpretada como local (ano, mês-1, dia)
             const partes = nascimento.split('-');
             const nasc = new Date(partes[0], partes[1] - 1, partes[2]);
             const hoje = new Date();
-            
             let idade = hoje.getFullYear() - nasc.getFullYear();
             const m = hoje.getMonth() - nasc.getMonth();
-            
-            if (m < 0 || (m === 0 && hoje.getDate() < nasc.getDate())) {
-                idade--;
-            }
+            if (m < 0 || (m === 0 && hoje.getDate() < nasc.getDate())) idade--;
             return idade;
         }
     </script>
