@@ -36,7 +36,6 @@
         .btn-remover-linha { background: none; border: none; color: var(--red); cursor: pointer; font-size: 1.1em; padding: 5px; }
         .val-info { font-size: 0.85em; color: var(--grey); display: block; margin-top: 4px; }
 
-        /* Estilos Novos para Entrada de Lotes */
         .container-lotes-dinamico { border: 1px solid #eee; padding: 15px; border-radius: 10px; background: #fcfcfc; margin-bottom: 15px; }
         .lote-entrada-row { display: grid; grid-template-columns: 1fr 2fr 1fr auto; gap: 10px; margin-bottom: 10px; align-items: end; padding-bottom: 10px; border-bottom: 1px solid #f1f1f1; }
         .btn-add-lote-row { background: var(--primary); color: white; border: none; padding: 8px 15px; border-radius: 6px; cursor: pointer; font-size: 0.85em; font-weight: bold; margin-bottom: 20px; }
@@ -82,17 +81,12 @@
         <div class="modal-content">
             <h3 id="titulo-entrada">Registrar Entradas</h3>
             <p style="font-size: 0.85em; color: #666; margin-bottom: 15px;">Cadastre diferentes validades para o mesmo produto de uma vez.</p>
-            
             <form id="form-entrada-lote">
                 <input type="hidden" id="entrada-item-id">
-                
-                <div id="lista-rows-lotes" class="container-lotes-dinamico">
-                    </div>
-
+                <div id="lista-rows-lotes" class="container-lotes-dinamico"></div>
                 <button type="button" class="btn-add-lote-row" onclick="adicionarLinhaEntrada()">
                     <i class="fas fa-plus-circle"></i> + Adicionar outro lote / validade
                 </button>
-
                 <div style="display: flex; gap: 10px; margin-top: 10px; border-top: 1px solid #eee; padding-top: 15px;">
                     <button type="button" onclick="fecharModais()" style="flex:1; padding: 12px; border: 1px solid #ccc; border-radius: 8px; cursor:pointer;">Cancelar</button>
                     <button type="submit" style="flex:1; padding: 12px; background: var(--green); color: white; border: none; border-radius: 8px; font-weight: bold; cursor:pointer;">Gravar Todos Lotes</button>
@@ -120,8 +114,8 @@
         <div class="modal-content">
             <h3>Configurar Entrega Social</h3>
             <div class="form-group" style="background: #f0f4f8; padding: 15px; border-radius: 10px;">
-                <label>META DE ATENDIMENTO</label>
-                <input type="number" id="input-meta" style="text-align:center; font-weight:bold;">
+                <label>META DE ATENDIMENTO (Calculado Automaticamente)</label>
+                <input type="number" id="input-meta" disabled style="text-align:center; font-weight:bold; background:#e9ecef;">
             </div>
             <div id="lista-composicao" style="margin-top: 15px;"></div>
             <div style="margin-top:20px; border-top:1px dashed #ccc; padding-top:15px;">
@@ -143,7 +137,7 @@
         const firebaseConfig = { apiKey: "AIzaSyBV7RPjk3cFTqL-aIpflJcUojKg1ZXMLuU", authDomain: "voluntarios-ativos---cepat.firebaseapp.com", projectId: "voluntarios-ativos---cepat", storageBucket: "voluntarios-ativos---cepat.firebasestorage.app", messagingSenderId: "66122858261", appId: "1:66122858261:web:7fa21f1805463b5c08331c" };
         const db = getFirestore(initializeApp(firebaseConfig));
         
-        let itensEstoque = [], configCestaPadrao = {}, metaGlobal = 14, listaFamiliasAtivas = [];
+        let itensEstoque = [], configCestaPadrao = {}, metaGlobal = 0, listaFamiliasAtivas = [];
 
         protegerPagina(['super-admin','diretor','caritas']).then(() => {
             onSnapshot(query(collection(db, "familiasAssistidas"), where("statusGeral", "==", "Ativa")), snap => {
@@ -162,7 +156,7 @@
                     const proxVal = lotes.length > 0 ? lotes[0].validade : d.data().validade || "9999-12-31";
                     return { id: d.id.trim(), ...d.data(), quantidade: quantidadeReal, proxVal, lotes };
                 });
-                itensEstoque = await Promise.all(listaPromessas);
+                itensEstoque = (await Promise.all(listaPromessas)).sort((a, b) => a.nome.localeCompare(b.nome));
                 renderizarListaEstoque();
                 calcular();
             });
@@ -175,17 +169,11 @@
             });
         });
 
-        // NOVA FUNÇÃO: ADICIONAR LINHA NO MODAL DE ENTRADA
         window.adicionarLinhaEntrada = () => {
             const container = document.getElementById('lista-rows-lotes');
             const div = document.createElement('div');
             div.className = 'lote-entrada-row';
-            div.innerHTML = `
-                <div class="form-group"><label>Qtd</label><input type="number" class="in-qtd" value="1" min="1" required></div>
-                <div class="form-group"><label>Validade</label><input type="date" class="in-val" required></div>
-                <div class="form-group"><label>Doador</label><input type="text" class="in-doador" placeholder="Opcional"></div>
-                <button type="button" class="btn-remover-linha" onclick="this.parentElement.remove()" style="margin-bottom:12px;"><i class="fas fa-trash"></i></button>
-            `;
+            div.innerHTML = `<div class="form-group"><label>Qtd</label><input type="number" class="in-qtd" value="1" min="1" required></div><div class="form-group"><label>Validade</label><input type="date" class="in-val" required></div><div class="form-group"><label>Doador</label><input type="text" class="in-doador" placeholder="Opcional"></div><button type="button" class="btn-remover-linha" onclick="this.parentElement.remove()" style="margin-bottom:12px;"><i class="fas fa-trash"></i></button>`;
             container.appendChild(div);
         };
 
@@ -195,8 +183,8 @@
             if (delta > 0) {
                 document.getElementById('entrada-item-id').value = cleanId;
                 document.getElementById('titulo-entrada').innerText = `Entradas: ${nome}`;
-                document.getElementById('lista-rows-lotes').innerHTML = ''; // Limpa
-                adicionarLinhaEntrada(); // Começa com uma linha
+                document.getElementById('lista-rows-lotes').innerHTML = '';
+                adicionarLinhaEntrada();
                 document.getElementById('modal-entrada-lote').style.display = 'flex';
                 return;
             }
@@ -243,7 +231,11 @@
                 if (podeMontarEsta) { cestasMontaveis++; Object.entries(receita).forEach(([pId, qtdNec]) => { estoqueVirtual[pId] -= qtdNec; }); }
             });
             let pendencias = [];
-            Object.entries(demandasTotais).forEach(([pId, totalNec]) => {
+            Object.entries(demandasTotais).sort((a, b) => {
+                const nomeA = itensEstoque.find(i => i.id === a[0])?.nome || "";
+                const nomeB = itensEstoque.find(i => i.id === b[0])?.nome || "";
+                return nomeA.localeCompare(nomeB);
+            }).forEach(([pId, totalNec]) => {
                 const item = itensEstoque.find(i => i.id === pId);
                 const saldoReal = item ? Math.max(0, item.quantidade) : 0;
                 if (saldoReal < totalNec) pendencias.push(`Faltam ${totalNec - saldoReal} un. de <b>${item ? item.nome : pId}</b>.`);
@@ -266,7 +258,11 @@
                 let receita = fam.tipoCesta === 'Personalizada' ? (fam.receitaPersonalizada || {}) : configCestaPadrao;
                 Object.entries(receita).forEach(([pId, qtd]) => demandasTotais[pId] = (demandasTotais[pId] || 0) + qtd);
             });
-            Object.entries(demandasTotais).forEach(([pId, totalNec]) => {
+            Object.entries(demandasTotais).sort((a, b) => {
+                const nomeA = itensEstoque.find(i => i.id === a[0])?.nome || "";
+                const nomeB = itensEstoque.find(i => i.id === b[0])?.nome || "";
+                return nomeA.localeCompare(nomeB);
+            }).forEach(([pId, totalNec]) => {
                 const i = itensEstoque.find(x => x.id === pId), s = i ? Math.max(0, i.quantidade) : 0;
                 if (s < totalNec) { t += `• *${i ? i.nome : pId}*: Faltam ${totalNec - s} un.%0A`; f = true; }
             });
@@ -275,41 +271,25 @@
             window.open(`https://wa.me/?text=${t}`, '_blank');
         };
 
-        // NOVA FUNÇÃO SALVAR: PROCESSA MULTI-LOTES
         document.getElementById('form-entrada-lote').onsubmit = async (e) => {
             e.preventDefault();
             const id = document.getElementById('entrada-item-id').value;
             const rows = document.querySelectorAll('.lote-entrada-row');
             let totalSoma = 0;
-
             try {
                 for (let row of rows) {
                     const qtd = parseInt(row.querySelector('.in-qtd').value);
                     const val = row.querySelector('.in-val').value;
                     const doador = row.querySelector('.in-doador').value;
-
                     if (qtd > 0 && val) {
                         totalSoma += qtd;
-                        // Grava cada lote na subcoleção
-                        await addDoc(collection(db, `estoque_caritas/${id}/lotes`), {
-                            quantidade: qtd,
-                            validade: val,
-                            doador: doador || "Doação Diversa",
-                            dataEntrada: serverTimestamp()
-                        });
+                        await addDoc(collection(db, `estoque_caritas/${id}/lotes`), { quantidade: qtd, validade: val, doador: doador || "Doação Diversa", dataEntrada: serverTimestamp() });
                     }
                 }
-
-                // Atualiza o saldo principal somando todos os lotes novos
-                await updateDoc(doc(db, "estoque_caritas", id), {
-                    quantidade: increment(totalSoma)
-                });
-
-                alert("Todas as entradas foram registradas com sucesso!");
+                await updateDoc(doc(db, "estoque_caritas", id), { quantidade: increment(totalSoma) });
+                alert("Todas as entradas registradas!");
                 fecharModais();
-            } catch (err) {
-                alert("Erro ao gravar lotes: " + err.message);
-            }
+            } catch (err) { alert("Erro ao gravar: " + err.message); }
         };
 
         document.getElementById('form-novo-item').onsubmit = async (e) => {
@@ -322,7 +302,12 @@
         document.getElementById('btn-abrir-novo').onclick = () => { document.getElementById('form-novo-item').reset(); document.getElementById('modal-novo-item').style.display='flex'; };
         document.getElementById('btn-config-cesta').onclick = () => {
             document.getElementById('input-meta').value = metaGlobal;
-            document.getElementById('lista-composicao').innerHTML = Object.entries(configCestaPadrao).map(([id, qtd]) => {
+            const itensOrdenados = Object.entries(configCestaPadrao).sort((a, b) => {
+                const nomeA = itensEstoque.find(i => i.id === a[0])?.nome || "";
+                const nomeB = itensEstoque.find(i => i.id === b[0])?.nome || "";
+                return nomeA.localeCompare(nomeB);
+            });
+            document.getElementById('lista-composicao').innerHTML = itensOrdenados.map(([id, qtd]) => {
                 const item = itensEstoque.find(i => i.id === id);
                 return `<div class="linha-receita" id="receita-${id}"><button type="button" class="btn-remover-linha" onclick="removerLinhaDaReceita('${id}')"><i class="fas fa-trash-alt"></i></button><span>${item ? item.nome : id}</span><input type="number" class="input-receita" data-id="${id}" value="${qtd}" style="width:60px;"></div>`;
             }).join('');
@@ -336,12 +321,17 @@
             const item = itensEstoque.find(x => x.id === id);
             const div = document.createElement('div'); div.className = "linha-receita"; div.id = `receita-${id}`;
             div.innerHTML = `<button type="button" class="btn-remover-linha" onclick="removerLinhaDaReceita('${id}')"><i class="fas fa-trash-alt"></i></button><span>${item.nome}</span><input type="number" class="input-receita" data-id="${id}" value="1" style="width:60px;">`;
-            document.getElementById('lista-composicao').appendChild(div);
+            const lista = document.getElementById('lista-composicao');
+            lista.appendChild(div);
+            // Reordenar após adicionar (Opcional, mas mantém limpo)
+            const rows = Array.from(lista.children);
+            rows.sort((a, b) => a.querySelector('span').innerText.localeCompare(b.querySelector('span').innerText));
+            rows.forEach(r => lista.appendChild(r));
         };
         document.getElementById('btn-salvar-receita').onclick = async () => {
             const novosItens = {};
             document.querySelectorAll('.input-receita').forEach(inp => { novosItens[inp.dataset.id] = parseInt(inp.value); });
-            await setDoc(doc(db, "configuracoes", "cesta_padrao"), { itens: novosItens, meta: parseInt(document.getElementById('input-meta').value) });
+            await setDoc(doc(db, "configuracoes", "cesta_padrao"), { itens: novosItens, meta: metaGlobal });
             fecharModais();
         };
         window.fecharModais = () => document.querySelectorAll('.modal').forEach(m => m.style.display = 'none');
