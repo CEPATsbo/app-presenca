@@ -55,15 +55,33 @@
         
         let ultimoTimestamp = null;
         let somNotificacao = null;
+        let timerOciosidade = null; // Nova variável para o temporizador
+
         try {
             somNotificacao = new Audio('/notification.mp3');
             somNotificacao.onerror = () => { somNotificacao = null; };
         } catch (e) { somNotificacao = null; }
 
+        function aplicarModoDescanso() {
+            // Função ativada apenas após 3 minutos sem chamadas
+            chamadaPrincipalEl.classList.remove('fade-in');
+            void chamadaPrincipalEl.offsetWidth; // Trigger reflow para reiniciar animação
+            chamadaPrincipalEl.classList.add('fade-in');
+            
+            nomeAtualEl.textContent = 'O Silêncio é uma Prece...';
+            salaAtualEl.textContent = '';
+            // Nota: O histórico NÃO é apagado aqui, permanece visível!
+        }
+
         function atualizarPainel(dados) {
             const nome = dados.nome || 'O Silêncio é uma Prece...';
             const sala = dados.sala || '';
             const historico = dados.historico || [];
+
+            // Limpa o timer antigo sempre que uma atualização chega
+            if (timerOciosidade) {
+                clearTimeout(timerOciosidade);
+            }
 
             if (dados.timestamp && dados.timestamp.toMillis() !== ultimoTimestamp) {
                 if (somNotificacao) somNotificacao.play().catch(()=>{});
@@ -73,14 +91,16 @@
                 ultimoTimestamp = dados.timestamp.toMillis();
             }
 
+            // Atualiza os dados principais normalmente
             nomeAtualEl.textContent = nome;
             salaAtualEl.textContent = sala;
 
+            // Preenche o histórico (preservando o que veio do banco)
             historicoItems.forEach((item, index) => {
                 const chamadaHist = historico[index];
                 const nomeEl = item.querySelector('.nome');
                 const salaEl = item.querySelector('.sala');
-                if (chamadaHist && nome !== 'O Silêncio é uma Prece...') { // Condição adicionada para limpar histórico junto
+                if (chamadaHist) { 
                     nomeEl.textContent = chamadaHist.nome || '';
                     salaEl.textContent = chamadaHist.sala || '';
                 } else {
@@ -88,6 +108,11 @@
                     salaEl.textContent = '';
                 }
             });
+
+            // Se for uma chamada real de pessoa, inicia o timer de 3 minutos (180.000 ms) para o descanso
+            if (nome !== 'O Silêncio é uma Prece...') {
+                timerOciosidade = setTimeout(aplicarModoDescanso, 180000); 
+            }
         }
 
         const painelEstadoRef = doc(db, 'painel_estado', 'atual');
@@ -97,22 +122,25 @@
                 const agora = new Date();
                 const timestampChamada = dados.timestamp ? dados.timestamp.toDate() : null;
                 
-                let chamadaExpirou = false;
+                let chamadaExpirou6Horas = false;
                 if (timestampChamada) {
                     const diffHoras = (agora.getTime() - timestampChamada.getTime()) / 3600000;
+                    // Mantém a regra de 6h para limpar o painel inteiro caso esqueçam ligado de um dia para o outro
                     if (diffHoras > 6) { 
-                        chamadaExpirou = true;
+                        chamadaExpirou6Horas = true;
                     }
                 }
 
-                if (chamadaExpirou || !timestampChamada) {
+                if (chamadaExpirou6Horas || !timestampChamada) {
+                    // Limpeza geral profunda
                     atualizarPainel({ nome: 'O Silêncio é uma Prece...', sala: '', historico: [] });
                 } else {
+                    // Atualiza com os dados do banco (a função atualizarPainel cuidará dos 3 minutos)
                     atualizarPainel(dados);
                 }
 
             } else {
-                atualizarPainel({ nome: 'O Silêncio é uma Prece...', sala: '', historico: [] }); // Garante limpeza se o doc for deletado
+                atualizarPainel({ nome: 'O Silêncio é uma Prece...', sala: '', historico: [] }); 
             }
         });
         
