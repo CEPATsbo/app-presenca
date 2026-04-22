@@ -77,13 +77,31 @@
         #search-results li { padding: 10px; cursor: pointer; border-bottom: 1px solid #eee; color: #000; font-weight: 500; }
         #search-results li:hover { background-color: #f0f0f0; }
         .btn-historico { font-size: 1.5em; text-decoration: none; margin-left: 15px; cursor: pointer; }
+
+        /* Estilo da tela de bloqueio temporal */
+        #bloqueio-temporal { text-align: center; padding: 50px 20px; }
+        #bloqueio-temporal h1 { color: #dc3545; font-size: 2.5em; margin-bottom: 10px; }
+        #bloqueio-temporal p { font-size: 1.2em; color: #555; margin-bottom: 30px; }
+        .bypass-container { margin-top: 50px; opacity: 0.1; transition: opacity 0.3s; }
+        .bypass-container:hover { opacity: 1; }
+        .bypass-input { padding: 5px; border: 1px solid #ccc; border-radius: 4px; font-size: 0.8em; }
     </style>
 </head>
 <body>
     <nav class="nav-voltar"><a href="/dashboard-ae.html" class="btn-voltar">⬅ Voltar para o Dashboard AE</a></nav>
     <div id="acesso-negado" class="container hidden"><h1>Acesso Negado</h1></div>
 
-    <div id="main-content" class="container">
+    <div id="bloqueio-temporal" class="container hidden">
+        <h1>⛔ Acesso Bloqueado</h1>
+        <p>O Módulo de Recepção da Assistência Espiritual só funciona às <strong>Terças-feiras</strong>.</p>
+        <p>Para evitar lançamentos equivocados fora da data de trabalho, o sistema encontra-se temporariamente inativo.</p>
+        
+        <div class="bypass-container">
+            <input type="password" id="input-bypass" class="bypass-input" placeholder="Admin Override...">
+        </div>
+    </div>
+
+    <div id="main-content" class="container hidden">
         <h1>Recepção do Atendimento Espiritual</h1>
 
         <fieldset>
@@ -133,8 +151,28 @@
         initializeApp(firebaseConfig);
 
         protegerPagina(['recepcionista', 'diretor', 'conselheiro', 'tesoureiro', 'entrevistador', 'super-admin']).then(user => {
-            document.getElementById('main-content').classList.remove('hidden');
-            inicializarPagina(user);
+            // VERIFICAÇÃO DO DIA DA SEMANA ANTES DE LIBERAR O SISTEMA
+            const dataAtual = new Date();
+            const diaDaSemana = dataAtual.getDay(); // 0 = Dom, 1 = Seg, 2 = Ter, 3 = Qua, 4 = Qui, 5 = Sex, 6 = Sáb
+            
+            // Bypass da trava
+            const inputBypass = document.getElementById('input-bypass');
+            inputBypass.addEventListener('keypress', function (e) {
+                if (e.key === 'Enter' && this.value === 'liberar-ae') {
+                    document.getElementById('bloqueio-temporal').classList.add('hidden');
+                    document.getElementById('main-content').classList.remove('hidden');
+                    inicializarPagina(user);
+                }
+            });
+
+            // Se for Terça-feira (2), libera. Senão, bloqueia.
+            if (diaDaSemana === 2) {
+                document.getElementById('main-content').classList.remove('hidden');
+                inicializarPagina(user);
+            } else {
+                document.getElementById('bloqueio-temporal').classList.remove('hidden');
+            }
+
         }).catch(err => {
             document.getElementById('acesso-negado').classList.remove('hidden');
             document.getElementById('main-content').classList.add('hidden');
