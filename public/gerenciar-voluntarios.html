@@ -536,18 +536,27 @@
                                 target.disabled = true;
                                 target.textContent = "Processando...";
                                 try {
-                                    const acaoFuncao = funcoesCargos[functionName];
-                                    if (!acaoFuncao) throw new Error(`Função ${functionName} não encontrada no map.`);
-                                    const resultado = await acaoFuncao({ uid: authUid });
-                                    alert(resultado.data.message);
-                                    await registrarLog(logAction, { alvo: { nome, uid: authUid } });
-                                } catch (error) {
-                                    console.error(`Erro ao ${acaoTexto}:`, error);
-                                    alert(`Erro: ${error.message}`);
-                                } finally {
-                                    // Após processar, recarregar para atualizar botões
-                                    target.disabled = false;
-                                }
+    const acaoFuncao = funcoesCargos[functionName];
+    if (!acaoFuncao) throw new Error(`Função ${functionName} não encontrada no map.`);
+    
+    const resultado = await acaoFuncao({ uid: authUid });
+    
+    // --- TRECHO CORRIGIDO ---
+    // Verifica se existe a mensagem no retorno, senão exibe um texto padrão de sucesso
+    const mensagemParaExibir = (resultado.data && resultado.data.message) 
+        ? resultado.data.message 
+        : "Operação realizada com sucesso!";
+    
+    alert(mensagemParaExibir);
+    // ------------------------
+
+    await registrarLog(logAction, { alvo: { nome, uid: authUid } });
+} catch (error) {
+    console.error(`Erro ao ${acaoTexto}:`, error);
+    alert(`Erro: ${error.message}`);
+} finally {
+    target.disabled = false;
+}
                             }
                         }
                     }

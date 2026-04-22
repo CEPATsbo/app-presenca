@@ -45,15 +45,26 @@ async function enviarNotificacoesParaTodos(titulo, corpo) {
 }
 
 const promoverUsuario = async (uid, novoPapel) => {
-    if (!uid) return;
+    if (!uid) throw new HttpsError('invalid-argument', 'UID não fornecido.');
+    
     let claims = { role: novoPapel };
     if (['dirigente-escola', 'secretario-escola', 'facilitador'].includes(novoPapel)) {
         claims[novoPapel.replace('-', '_')] = true;
         if (['dirigente-escola', 'secretario-escola'].includes(novoPapel)) claims['facilitador'] = true;
-    } else if (novoPapel === 'voluntario') { claims = { role: 'voluntario' }; }
+    } else if (novoPapel === 'voluntario') { 
+        claims = { role: 'voluntario' }; 
+    }
+    
+    // Atualiza Claims no Auth
     await admin.auth().setCustomUserClaims(uid, claims);
+    
+    // Sincroniza papel no Firestore
     const userQuery = await db.collection('voluntarios').where('authUid', '==', uid).limit(1).get();
-    if (!userQuery.empty) await userQuery.docs[0].ref.update({ role: novoPapel });
+    if (!userQuery.empty) {
+        await userQuery.docs[0].ref.update({ role: novoPapel });
+        return { message: `Usuário atualizado para ${novoPapel} com sucesso!`, success: true };
+    }
+    return { message: "Papel atualizado no Auth, mas documento de voluntário não encontrado para sincronizar.", success: true };
 };
 
 // --- EXPORTAÇÕES (ROBÓS ADMIN) ---
@@ -69,27 +80,29 @@ const definirSuperAdmin = onRequest(OPCOES_FUNCAO, async (req, res) => {
     } catch (e) { return res.status(500).send(e.message); }
 });
 
-const promoverParaDiretor = onCall(OPCOES_FUNCAO, async (req) => { await promoverUsuario(req.data.uid, 'diretor'); return {success:true}; });
-const promoverParaTesoureiro = onCall(OPCOES_FUNCAO, async (req) => { await promoverUsuario(req.data.uid, 'tesoureiro'); return {success:true}; });
-const promoverParaConselheiro = onCall(OPCOES_FUNCAO, async (req) => { await promoverUsuario(req.data.uid, 'conselheiro'); return {success:true}; });
-const promoverParaProdutorEvento = onCall(OPCOES_FUNCAO, async (req) => { await promoverUsuario(req.data.uid, 'produtor-evento'); return {success:true}; });
-const promoverParaIrradiador = onCall(OPCOES_FUNCAO, async (req) => { await promoverUsuario(req.data.uid, 'irradiador'); return {success:true}; });
-const promoverParaBibliotecario = onCall(OPCOES_FUNCAO, async (req) => { await promoverUsuario(req.data.uid, 'bibliotecario'); return {success:true}; });
-const promoverParaRecepcionista = onCall(OPCOES_FUNCAO, async (req) => { await promoverUsuario(req.data.uid, 'recepcionista'); return {success:true}; });
-const promoverParaEntrevistador = onCall(OPCOES_FUNCAO, async (req) => { await promoverUsuario(req.data.uid, 'entrevistador'); return {success:true}; });
-const promoverParaDirigenteEscola = onCall(OPCOES_FUNCAO, async (req) => { await promoverUsuario(req.data.uid, 'dirigente-escola'); return {success:true}; });
-const promoverParaSecretarioEscola = onCall(OPCOES_FUNCAO, async (req) => { await promoverUsuario(req.data.uid, 'secretario-escola'); return {success:true}; });
+// PROMOÇÕES (Ajustado para retornar o campo 'message')
+const promoverParaDiretor = onCall(OPCOES_FUNCAO, async (req) => { return await promoverUsuario(req.data.uid, 'diretor'); });
+const promoverParaTesoureiro = onCall(OPCOES_FUNCAO, async (req) => { return await promoverUsuario(req.data.uid, 'tesoureiro'); });
+const promoverParaConselheiro = onCall(OPCOES_FUNCAO, async (req) => { return await promoverUsuario(req.data.uid, 'conselheiro'); });
+const promoverParaProdutorEvento = onCall(OPCOES_FUNCAO, async (req) => { return await promoverUsuario(req.data.uid, 'produtor-evento'); });
+const promoverParaIrradiador = onCall(OPCOES_FUNCAO, async (req) => { return await promoverUsuario(req.data.uid, 'irradiador'); });
+const promoverParaBibliotecario = onCall(OPCOES_FUNCAO, async (req) => { return await promoverUsuario(req.data.uid, 'bibliotecario'); });
+const promoverParaRecepcionista = onCall(OPCOES_FUNCAO, async (req) => { return await promoverUsuario(req.data.uid, 'recepcionista'); });
+const promoverParaEntrevistador = onCall(OPCOES_FUNCAO, async (req) => { return await promoverUsuario(req.data.uid, 'entrevistador'); });
+const promoverParaDirigenteEscola = onCall(OPCOES_FUNCAO, async (req) => { return await promoverUsuario(req.data.uid, 'dirigente-escola'); });
+const promoverParaSecretarioEscola = onCall(OPCOES_FUNCAO, async (req) => { return await promoverUsuario(req.data.uid, 'secretario-escola'); });
 
-const revogarAcessoDiretor = onCall(OPCOES_FUNCAO, async (req) => { await promoverUsuario(req.data.uid, 'voluntario'); return {success:true}; });
-const revogarAcessoTesoureiro = onCall(OPCOES_FUNCAO, async (req) => { await promoverUsuario(req.data.uid, 'voluntario'); return {success:true}; });
-const revogarAcessoConselheiro = onCall(OPCOES_FUNCAO, async (req) => { await promoverUsuario(req.data.uid, 'voluntario'); return {success:true}; });
-const revogarAcessoProdutorEvento = onCall(OPCOES_FUNCAO, async (req) => { await promoverUsuario(req.data.uid, 'voluntario'); return {success:true}; });
-const revogarAcessoIrradiador = onCall(OPCOES_FUNCAO, async (req) => { await promoverUsuario(req.data.uid, 'voluntario'); return {success:true}; });
-const revogarAcessoBibliotecario = onCall(OPCOES_FUNCAO, async (req) => { await promoverUsuario(req.data.uid, 'voluntario'); return {success:true}; });
-const revogarAcessoRecepcionista = onCall(OPCOES_FUNCAO, async (req) => { await promoverUsuario(req.data.uid, 'voluntario'); return {success:true}; });
-const revogarAcessoEntrevistador = onCall(OPCOES_FUNCAO, async (req) => { await promoverUsuario(req.data.uid, 'voluntario'); return {success:true}; });
-const revogarAcessoDirigenteEscola = onCall(OPCOES_FUNCAO, async (req) => { await promoverUsuario(req.data.uid, 'voluntario'); return {success:true}; });
-const revogarAcessoSecretarioEscola = onCall(OPCOES_FUNCAO, async (req) => { await promoverUsuario(req.data.uid, 'voluntario'); return {success:true}; });
+// REVOGAÇÕES (Ajustado para retornar o campo 'message')
+const revogarAcessoDiretor = onCall(OPCOES_FUNCAO, async (req) => { return await promoverUsuario(req.data.uid, 'voluntario'); });
+const revogarAcessoTesoureiro = onCall(OPCOES_FUNCAO, async (req) => { return await promoverUsuario(req.data.uid, 'voluntario'); });
+const revogarAcessoConselheiro = onCall(OPCOES_FUNCAO, async (req) => { return await promoverUsuario(req.data.uid, 'voluntario'); });
+const revogarAcessoProdutorEvento = onCall(OPCOES_FUNCAO, async (req) => { return await promoverUsuario(req.data.uid, 'voluntario'); });
+const revogarAcessoIrradiador = onCall(OPCOES_FUNCAO, async (req) => { return await promoverUsuario(req.data.uid, 'voluntario'); });
+const revogarAcessoBibliotecario = onCall(OPCOES_FUNCAO, async (req) => { return await promoverUsuario(req.data.uid, 'voluntario'); });
+const revogarAcessoRecepcionista = onCall(OPCOES_FUNCAO, async (req) => { return await promoverUsuario(req.data.uid, 'voluntario'); });
+const revogarAcessoEntrevistador = onCall(OPCOES_FUNCAO, async (req) => { return await promoverUsuario(req.data.uid, 'voluntario'); });
+const revogarAcessoDirigenteEscola = onCall(OPCOES_FUNCAO, async (req) => { return await promoverUsuario(req.data.uid, 'voluntario'); });
+const revogarAcessoSecretarioEscola = onCall(OPCOES_FUNCAO, async (req) => { return await promoverUsuario(req.data.uid, 'voluntario'); });
 
 const sincronizarStatusVoluntario = onDocumentWritten({ ...OPCOES_FUNCAO, document: 'presencas/{presencaId}' }, async (event) => {
     const d = event.data.after.data(); if (!d || d.status !== 'presente') return null;
@@ -110,7 +123,7 @@ const atribuirCodigoVoluntario = onDocumentCreated({ ...OPCOES_FUNCAO, document:
 const atribuirCodigosVoluntarios = onCall(OPCOES_FUNCAO, async (request) => {
     const snap = await db.collection('voluntarios').get();
     const semCodigo = snap.docs.filter(doc => !doc.data().codigoVoluntario);
-    if (semCodigo.length === 0) return { message: "Todos OK" };
+    if (semCodigo.length === 0) return { message: "Todos os voluntários já possuem código." };
     const counterRef = db.doc('counters/voluntarios');
     await db.runTransaction(async (t) => {
         const cDoc = await t.get(counterRef);
@@ -118,7 +131,7 @@ const atribuirCodigosVoluntarios = onCall(OPCOES_FUNCAO, async (request) => {
         semCodigo.forEach(doc => { next++; t.update(doc.ref, { codigoVoluntario: next }); });
         t.set(counterRef, { lastCode: next }, { merge: true });
     });
-    return { success: true };
+    return { message: `${semCodigo.length} códigos atribuídos com sucesso!`, success: true };
 });
 
 const gerarCracha = onCall({ ...OPCOES_FUNCAO, memory: '1GiB', timeoutSeconds: 120 }, async (req) => {
@@ -130,7 +143,7 @@ const gerarCracha = onCall({ ...OPCOES_FUNCAO, memory: '1GiB', timeoutSeconds: 1
     const textoSvg = Buffer.from(`<svg width="1011" height="150"><text x="50%" y="50%" font-family="sans-serif" font-size="70" font-weight="bold" fill="#56ad59" text-anchor="middle" dominant-baseline="middle">${nomeParaCracha.toUpperCase()}</text></svg>`);
     
     const final = await sharp(template).composite([{ input: textoSvg, top: 380, left: 0 }, { input: barcode, top: 510, left: 425 }]).png().toBuffer();
-    return { imageBase64: final.toString('base64') };
+    return { imageBase64: final.toString('base64'), success: true };
 });
 
 const atualizarNomesParaCracha = onDocumentWritten({ ...OPCOES_FUNCAO, document: 'voluntarios/{voluntarioId}' }, async (event) => {
@@ -141,9 +154,7 @@ const atualizarNomesParaCracha = onDocumentWritten({ ...OPCOES_FUNCAO, document:
 
 const enviarNotificacaoImediata = onRequest(OPCOES_FUNCAO, (req, res) => {
     cors(req, res, async () => {
-        // Proteção contra chamadas GET acidentais
         if (req.method !== 'POST') return res.status(405).send('Método não permitido');
-        
         try {
             const result = await enviarNotificacoesParaTodos(req.body.titulo, req.body.corpo);
             res.status(200).json(result);
@@ -172,7 +183,7 @@ const verificarInatividadeVoluntarios = onSchedule({ ...OPCOES_FUNCAO_SAOPAULO, 
 
 const registrarLogDeAcesso = onCall(OPCOES_FUNCAO, async (req) => {
     await db.collection('log_auditoria').add({ acao: req.data.acao, autor: req.auth.uid, timestamp: admin.firestore.FieldValue.serverTimestamp() });
-    return { success: true };
+    return { success: true, message: "Log registrado." };
 });
 
 const uploadAtaParaStorage = onCall(OPCOES_FUNCAO, async (req) => {
@@ -180,14 +191,15 @@ const uploadAtaParaStorage = onCall(OPCOES_FUNCAO, async (req) => {
     const file = storage.bucket().file(`atas/${Date.now()}-${req.data.fileName}`);
     await file.save(buffer, { metadata: { contentType: req.data.fileType }, public: true });
     await db.collection('atas').add({ titulo: req.data.tituloAta, fileUrl: file.publicUrl(), criadoEm: admin.firestore.FieldValue.serverTimestamp() });
-    return { success: true };
+    return { success: true, message: "Ata enviada com sucesso!" };
 });
 
 const backfillNomesCracha = onCall(OPCOES_FUNCAO, async () => {
     const snap = await db.collection('voluntarios').get();
     const batch = db.batch();
     snap.forEach(doc => { const pNome = (doc.data().nome || "").split(' ')[0]; batch.update(doc.ref, { primeiroNome: pNome, nomeParaCracha: pNome }); });
-    await batch.commit(); return { success: true };
+    await batch.commit(); 
+    return { success: true, message: "Sincronização de nomes concluída!" };
 });
 
 const resetarTasvAnual = onSchedule({ ...OPCOES_FUNCAO_SAOPAULO, schedule: '0 4 1 1 *' }, async () => {
@@ -196,7 +208,7 @@ const resetarTasvAnual = onSchedule({ ...OPCOES_FUNCAO_SAOPAULO, schedule: '0 4 
     await batch.commit();
 });
 
-// --- AJUSTE DE EXPORTAÇÃO (IMPORTANTE) ---
+// EXPORTAÇÕES
 module.exports = {
     definirSuperAdmin,
     promoverParaDiretor,
