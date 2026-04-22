@@ -60,20 +60,19 @@
         .cor-passe-P1  { background-color: #ffee8c; } /* AMARELO */
         .cor-passe-P3A { background-color: #ffb6c1; } /* ROSA */
 
-        /* Indicadores de Status (Otimizados para não perder leitura) */
+        /* Indicadores de Status */
         #lista-ativos li.status-presente { 
-            opacity: 1; /* Removida a transparência totalmente! */
-            border: 2px dashed #444; /* Borda tracejada indicando que 'já foi processado' */
-            box-shadow: none; /* Tira a sombra para dar sensação de botão afundado */
-            background-image: linear-gradient(rgba(255,255,255,0.4), rgba(255,255,255,0.4)); /* Joga uma "névoa" branca SÓ no fundo, sem afetar a letra preta */
+            opacity: 1;
+            border: 2px dashed #444;
+            box-shadow: none;
+            background-image: linear-gradient(rgba(255,255,255,0.4), rgba(255,255,255,0.4));
         }
         #lista-ativos li.status-alta-programada { border: 3px solid var(--cor-alta); }
         #lista-ativos li.status-novo-ciclo { border: 3px solid var(--cor-migracao); }
-        /* Adicionando cor laranja para alta suspensa se quiser destacar visualmente */
-        #lista-ativos li.status-alta-suspensa { border: 3px solid #fd7e14; }
+        #lista-ativos li.status-alta-suspensa { border: 3px solid #fd7e14; } /* Destaca a Alta Suspensa */
 
         .actions-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-top: 20px; }
-        .actions-grid-freq { display: flex; gap: 15px; margin-top: 10px; flex-wrap: wrap; } /* Adicionado flex-wrap */
+        .actions-grid-freq { display: flex; gap: 15px; margin-top: 10px; flex-wrap: wrap; }
         #search-results-container { position: relative; }
         #search-results { list-style-type: none; padding: 0; margin: 0; position: absolute; background: white; border: 1px solid var(--cor-borda); border-top: none; width: 100%; max-height: 200px; overflow-y: auto; z-index: 10; border-radius: 0 0 6px 6px; }
         #search-results li { padding: 10px; cursor: pointer; border-bottom: 1px solid #eee; color: #000; font-weight: 500; }
@@ -110,7 +109,7 @@
             <legend>Tratamentos Ativos (Acesso Rápido)</legend>
             <ul id="lista-ativos"><li>Carregando...</li></ul>
             <div id="painel-acoes-frequencia" class="hidden" style="margin-top: 20px; padding-top: 20px; border-top: 1px solid #eee;">
-                <h4>Registrar Frequência para: <span id="nome-frequencia"></span></h4>
+                <h4>Registrar Ação para: <span id="nome-frequencia"></span></h4>
                 <div class="actions-grid-freq">
                     <button id="btn-marcar-presenca" class="btn btn-success">Marcar Presença</button>
                     <button id="btn-marcar-falta-rapido" class="btn btn-warning">Marcar Falta</button>
@@ -154,11 +153,9 @@
         initializeApp(firebaseConfig);
 
         protegerPagina(['recepcionista', 'diretor', 'conselheiro', 'tesoureiro', 'entrevistador', 'super-admin']).then(user => {
-            // VERIFICAÇÃO DO DIA DA SEMANA ANTES DE LIBERAR O SISTEMA
             const dataAtual = new Date();
-            const diaDaSemana = dataAtual.getDay(); // 0 = Dom, 1 = Seg, 2 = Ter, 3 = Qua, 4 = Qui, 5 = Sex, 6 = Sáb
+            const diaDaSemana = dataAtual.getDay();
             
-            // Bypass da trava
             const inputBypass = document.getElementById('input-bypass');
             inputBypass.addEventListener('keypress', function (e) {
                 if (e.key === 'Enter' && this.value === 'liberar-ae') {
@@ -168,14 +165,12 @@
                 }
             });
 
-            // Se for Terça-feira (2), libera. Senão, bloqueia.
             if (diaDaSemana === 2) {
                 document.getElementById('main-content').classList.remove('hidden');
                 inicializarPagina(user);
             } else {
                 document.getElementById('bloqueio-temporal').classList.remove('hidden');
             }
-
         }).catch(err => {
             document.getElementById('acesso-negado').classList.remove('hidden');
             document.getElementById('main-content').classList.add('hidden');
@@ -219,9 +214,7 @@
                         acao: acao,
                         detalhes: detalhes
                     });
-                } catch (error) {
-                    console.error("Erro ao registrar log:", error);
-                }
+                } catch (error) { console.error("Erro ao registrar log:", error); }
             }
 
             const capitalizarNome = (nome) => {
@@ -290,12 +283,7 @@
                 };
                 const docRef = await addDoc(assistidosRef, novoAssistidoData);
                 assistidoSelecionado = { id: docRef.id, ...novoAssistidoData };
-
-                await registrarLog('Criação de Novo Assistido (AE)', {
-                    assistidoId: docRef.id,
-                    assistidoNome: nomeCapitalizado
-                });
-
+                await registrarLog('Criação de Novo Assistido (AE)', { assistidoId: docRef.id, assistidoNome: nomeCapitalizado });
                 return { id: docRef.id, nome: nomeCapitalizado };
             };
 
@@ -305,9 +293,7 @@
                 const snapshot = await getDocs(qTratamentos);
                 if (!snapshot.empty) {
                     ui.btnVerHistorico.classList.remove('hidden');
-                    ui.btnVerHistorico.onclick = () => {
-                        window.open(`/arquivo-geral-ae.html?assistidoId=${assistidoId}`, '_blank');
-                    };
+                    ui.btnVerHistorico.onclick = () => { window.open(`/arquivo-geral-ae.html?assistidoId=${assistidoId}`, '_blank'); };
                 } else {
                     ui.btnVerHistorico.classList.add('hidden');
                 }
@@ -332,10 +318,8 @@
                     let placeholderSnapshot = null;
                     const semanaAtualHoje = await calcularSemanaAtual(tratamento.id);
 
-                    // Nova checagem: o tratamento tem a tag de alta suspensa?
                     const isAltaSuspensa = tratamento.alta_suspensa === true;
 
-                    // Se estiver em alta suspensa, NUNCA busca o placeholder da semana 5, ele ignora.
                     if (semanaAtualHoje === 5 && !isAltaSuspensa) {
                          const qPlaceholder5Semana = query(atendimentosRef, where("tratamentoId", "==", tratamento.id), where("semana", "==", 5), where("decisao_pre_registrada", "==", true), where("dataAtendimento", "==", null), limit(1));
                          placeholderSnapshot = await getDocs(qPlaceholder5Semana);
@@ -345,7 +329,7 @@
                         statusHoje = 'presente';
                          metadadosTratamento[tratamento.id] = { semanaAtual: semanaAtualHoje, alta_suspensa: isAltaSuspensa };
                     } else if (isAltaSuspensa) {
-                         statusHoje = 'alta-suspensa'; // Cria um visual diferenciado se quiser
+                         statusHoje = 'alta-suspensa';
                          metadadosTratamento[tratamento.id] = { semanaAtual: semanaAtualHoje, alta_suspensa: true };
                     } else if (placeholderSnapshot && !placeholderSnapshot.empty) {
                         const placeholderData = { id: placeholderSnapshot.docs[0].id, ...placeholderSnapshot.docs[0].data() };
@@ -367,9 +351,11 @@
                     
                     const passeAtual = item.tratamento.passe_ciclo_atual || 'P4B';
                     let iconeStatus = '';
+                    const isSuspensa = metadadosTratamento[item.tratamento.id]?.alta_suspensa === true;
                     
                     if (item.statusHoje === 'presente') {
                         iconeStatus = ' ✅';
+                        if (isSuspensa) { iconeStatus += ' ⚠️ (Prolongado)'; }
                     } else if (item.statusHoje === 'alta-programada') {
                         iconeStatus = ' 🔴 (Alta)';
                         li.title = "Decisão: ALTA PROGRAMADA (Aguardando Entrevista)";
@@ -391,9 +377,19 @@
                         ui.nomeFrequencia.textContent = item.assistido.nome; 
                         ui.painelAcoesFrequencia.classList.remove('hidden'); 
                         
-                        // Mostra ou esconde o botão de Liberar Alta se ele estiver em Alta Suspensa e não marcou presença ainda
-                        if (item.statusHoje === 'alta-suspensa') {
+                        if (isSuspensa) {
                             ui.btnLiberarAltaSuspensa.classList.remove('hidden');
+                            if (item.statusHoje === 'presente') {
+                                ui.btnLiberarAltaSuspensa.disabled = false;
+                                ui.btnLiberarAltaSuspensa.style.opacity = '1';
+                                ui.btnLiberarAltaSuspensa.textContent = "Liberar Alta Definitiva";
+                                ui.btnLiberarAltaSuspensa.title = "";
+                            } else {
+                                ui.btnLiberarAltaSuspensa.disabled = true;
+                                ui.btnLiberarAltaSuspensa.style.opacity = '0.6';
+                                ui.btnLiberarAltaSuspensa.textContent = "Bloqueado: Marque Presença 1º";
+                                ui.btnLiberarAltaSuspensa.title = "A liberação da Alta deve ser a última ação do dia após o passe.";
+                            }
                         } else {
                             ui.btnLiberarAltaSuspensa.classList.add('hidden');
                         }
@@ -431,13 +427,12 @@
                     const semanaCalculada = dadosMeta?.semanaAtual || await calcularSemanaAtual(tratamentoAtivoSelecionado.id);
                     const isAltaSuspensa = dadosMeta?.alta_suspensa === true;
 
-                    // 🚨 TRAVA DE SEGURANÇA DA 5ª SEMANA (Ignorada se for Alta Suspensa) 🚨
                     if (semanaCalculada === 5 && !isAltaSuspensa) {
                         const placeholder = dadosMeta?.atendimento5semana;
                         const temDecisaoValida = placeholder && (placeholder.tipo === 'alta_programada' || placeholder.passePara);
 
                         if (!temDecisaoValida) {
-                            alert(`⚠️ BLOQUEIO DE SEGURANÇA!\n\n${assistidoSelecionado.nome} está na 5ª semana, mas a decisão do Colegiado NÃO foi registrada.\n\nVá ao Arquivo Geral, crie a Reavaliação (se não existir) e preencha a decisão (Alta ou Novo Ciclo) antes de dar presença.`);
+                            alert(`⚠️ BLOQUEIO DE SEGURANÇA!\n\n${assistidoSelecionado.nome} está na 5ª semana, mas a decisão do Colegiado NÃO foi registrada.\n\nVá ao Arquivo Geral e preencha a decisão antes de dar presença.`);
                             e.target.disabled = false;
                             ui.painelAcoesFrequencia.classList.add('hidden');
                             return; 
@@ -447,7 +442,6 @@
                     const dataAtual = serverTimestamp();
                     const batch = writeBatch(db);
 
-                    // CASO A: ATIVAÇÃO DA 5ª SEMANA (Apenas se tiver decisão normal e NÃO for alta suspensa)
                     if (dadosMeta && dadosMeta.atendimento5semana && semanaCalculada === 5 && !isAltaSuspensa) {
                         const atendimentoPreRegistrado = dadosMeta.atendimento5semana;
                         const atendimentoDocRef = doc(db, 'atendimentos_ae', atendimentoPreRegistrado.id);
@@ -480,10 +474,8 @@
                             alert(`Presença registrada. ${assistidoSelecionado.nome} iniciou um NOVO CICLO (Semana 1, Passe ${novoPasse}) e foi enviado para a fila.`);
                         }
                     } else {
-                        // CASO B: FLUXO NORMAL OU ALTA SUSPENSA (Vai para a fila gerar a semana 6, 7, etc)
                         const passeDoCiclo = tratamentoAtivoSelecionado.passe_ciclo_atual;
                         
-                        // Quem está em alta suspensa também precisa de entrevista e passe toda semana (comportamento de semana 2,3,4)
                         let precisaEntrevista = false;
                         if ([1, 4, 5].includes(semanaCalculada) || passeDoCiclo === 'P3A' || passeDoCiclo === 'P3B' || isAltaSuspensa) { precisaEntrevista = true; }
 
@@ -524,7 +516,7 @@
             // ===================================================================
             ui.btnLiberarAltaSuspensa.addEventListener('click', async (e) => {
                 e.target.disabled = true;
-                if(confirm(`Tem certeza que deseja EFETIVAR A ALTA para ${assistidoSelecionado.nome}?\n\nEle será atendido normalmente hoje, mas na próxima terça-feira o sistema puxará o fluxo de Encerramento/Alta Programada.`)) {
+                if(confirm(`Tem certeza que deseja EFETIVAR A ALTA para ${assistidoSelecionado.nome}?\n\nComo ele já registrou presença hoje, a partir da próxima terça-feira o sistema puxará automaticamente o fluxo de Encerramento (Alta Programada).`)) {
                     try {
                         const tratamentoAtualDocRef = doc(db, 'tratamentos_ae', tratamentoAtivoSelecionado.id);
                         const dadosMeta = metadadosTratamento[tratamentoAtivoSelecionado.id];
@@ -532,17 +524,15 @@
                         
                         const batch = writeBatch(db);
                         
-                        // 1. Remove a flag de suspensão do tratamento para que ele pare de "fugir" da semana 5
                         batch.update(tratamentoAtualDocRef, { alta_suspensa: false });
 
-                        // 2. Prepara o gatilho: Cria um placeholder cravado na semana seguinte (ex: Semana 7) com a instrução de alta_programada
                         const novoAtendimentoRef = doc(collection(db, 'atendimentos_ae'));
                         batch.set(novoAtendimentoRef, { 
                             assistidoId: assistidoSelecionado.id, 
                             tratamentoId: tratamentoAtivoSelecionado.id, 
                             tipo: 'alta_programada', 
-                            dataAtendimento: null, // Deixa pendente para a semana que vem
-                            semana: semanaCalculada + 1, // Agenda para o próximo encontro
+                            dataAtendimento: null, 
+                            semana: semanaCalculada + 1, 
                             entrevistador: 'Aguardando Decisão', 
                             passeRecomendado: tratamentoAtivoSelecionado.passe_ciclo_atual, 
                             notas: '', 
@@ -556,7 +546,7 @@
 
                         await batch.commit();
                         await registrarLog('Efetivação de Alta Suspensa (AE)', { assistidoId: assistidoSelecionado.id, assistidoNome: assistidoSelecionado.nome, tratamentoId: tratamentoAtivoSelecionado.id });
-                        alert(`A Alta de ${assistidoSelecionado.nome} foi liberada com sucesso!\n\nPor favor, clique agora em "Marcar Presença" para gerar o atendimento de hoje dele.`);
+                        alert(`A Alta de ${assistidoSelecionado.nome} foi efetivada com sucesso!\n\nEle está programado para a Entrevista de Encerramento na semana que vem.`);
                     } catch(error) {
                         console.error("Erro ao liberar alta suspensa:", error);
                         alert("Ocorreu uma falha. Tente novamente.");
@@ -574,13 +564,12 @@
                     const semanaAtual = metadadosTratamento[tratamentoAtivoSelecionado.id]?.semanaAtual || await calcularSemanaAtual(tratamentoAtivoSelecionado.id);
                     const isAltaSuspensa = metadadosTratamento[tratamentoAtivoSelecionado.id]?.alta_suspensa === true;
 
-                    // 🚨 TRAVA DE SEGURANÇA DA 5ª SEMANA PARA FALTAS (Ignorada se Alta Suspensa) 🚨
                     if (semanaAtual === 5 && !isAltaSuspensa) {
                         const placeholder = metadadosTratamento[tratamentoAtivoSelecionado.id]?.atendimento5semana;
                         const temDecisaoValida = placeholder && (placeholder.tipo === 'alta_programada' || placeholder.passePara);
 
                         if (!temDecisaoValida) {
-                            alert(`⚠️ BLOQUEIO DE SEGURANÇA!\n\n${assistidoSelecionado.nome} está na 5ª semana.\nO sistema não pode registrar falta sem saber a decisão do Colegiado (pois a tolerância de faltas depende da decisão do novo ciclo).\n\nVá ao Arquivo Geral e registre a decisão antes de marcar a falta.`);
+                            alert(`⚠️ BLOQUEIO DE SEGURANÇA!\n\n${assistidoSelecionado.nome} está na 5ª semana.\nO sistema não pode registrar falta sem saber a decisão do Colegiado.\n\nVá ao Arquivo Geral e registre a decisão antes de marcar a falta.`);
                             e.target.disabled = false;
                             ui.painelAcoesFrequencia.classList.add('hidden');
                             return; 
@@ -613,7 +602,6 @@
                         if (!encerrarTratamento) { motivo = `Falta registrada (Semana 5). Total de faltas: ${novoTotalFaltas}.`; }
                         else { motivo = `Falta registrada (Semana 5). ATENÇÃO: Tratamento encerrado por falta (Tolerância Zero para P3A/P3B continuando P3).`; }
                     } else {
-                        // Trata Alta Suspensa como fluxo normal P3
                         if (passeDoCiclo === 'P3A' || passeDoCiclo === 'P3B') {
                             if (novoTotalFaltas >= 1) { encerrarTratamento = true; motivo = 'Tratamento encerrado automaticamente por falta (Tolerância Zero para P3A/P3B).'; }
                             else { motivo = `Falta registrada com sucesso! Total de faltas: ${novoTotalFaltas}.`; }
