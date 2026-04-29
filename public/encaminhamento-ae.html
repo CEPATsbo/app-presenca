@@ -389,8 +389,12 @@
 
                 try {
                     if (target.classList.contains('btn-chamar-entrevista')) {
-                        await atualizarPainelTV(atendimentoChamado, 'chamado_entrevista');
-                        await updateDoc(doc(db, 'fila_atendimento_ae', id), { status: 'chamado_entrevista' });
+                        if (confirm(`Confirmar chamada de ${atendimentoChamado.nomeAssistido} para a ENTREVISTA no painel?`)) {
+                            await atualizarPainelTV(atendimentoChamado, 'chamado_entrevista');
+                            await updateDoc(doc(db, 'fila_atendimento_ae', id), { status: 'chamado_entrevista' });
+                        } else {
+                            target.disabled = false;
+                        }
                     
                     } else if (target.classList.contains('btn-entrevista-realizada')) {
                         if (atendimentoChamado.tipoAtendimento === 'alta_programada') {
@@ -416,12 +420,16 @@
                              alert("Este assistido está de alta e não deve ser chamado para o passe.");
                              target.disabled = true; return;
                          }
-                        await atualizarPainelTV(atendimentoChamado, 'chamado_passe');
-                        // MARCA QUE PASSE FOI CHAMADO
-                        await updateDoc(doc(db, 'fila_atendimento_ae', id), { 
-                            status: 'chamado_passe',
-                            passe_chamado: true
-                        });
+                         if (confirm(`Confirmar chamada de ${atendimentoChamado.nomeAssistido} para o PASSE no painel?`)) {
+                             await atualizarPainelTV(atendimentoChamado, 'chamado_passe');
+                             // MARCA QUE PASSE FOI CHAMADO
+                             await updateDoc(doc(db, 'fila_atendimento_ae', id), { 
+                                 status: 'chamado_passe',
+                                 passe_chamado: true
+                             });
+                         } else {
+                             target.disabled = false;
+                         }
                     }
                 } catch (error) {
                     console.error("Erro ao processar chamada:", error);
