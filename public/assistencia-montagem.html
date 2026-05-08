@@ -27,9 +27,6 @@
         .alerta-proximo-ciclo { background: #fff3cd; border: 1px solid #ffeeba; color: #856404; padding: 30px; border-radius: 12px; text-align: center; margin-top: 20px; }
         .val-critica { color: var(--red) !important; font-weight: bold; }
         .val-alerta { color: #d4a017 !important; font-weight: bold; }
-        .badge-val { font-size: 0.7em; padding: 2px 5px; border-radius: 4px; margin-left: 5px; color: white; }
-        .bg-critica { background: var(--red); }
-        .bg-alerta { background: #d4a017; }
         .badge-personalizada { background: #9b59b6; color: white; padding: 2px 8px; border-radius: 4px; font-size: 0.65em; margin-left: 10px; vertical-align: middle; }
     </style>
 </head>
@@ -49,7 +46,7 @@
         </div>
     
         <div class="resumo-dia">
-            <div class="resumo-item"><h2 id="meta-total">0</h2><p>Meta do Ciclo</p></div>
+            <div class="resumo-item"><h2 id="meta-total">0</h2><p>Meta das Ativas</p></div>
             <div class="resumo-item"><h2 id="entregas-feitas">0</h2><p>Já Entregues</p></div>
             <div class="resumo-item"><h2 id="cestas-restantes" style="color: var(--green);">0</h2><p>Restam Montar</p></div>
         </div>
@@ -77,12 +74,14 @@
         });
 
         function iniciarSincronizacao() {
+            // Monitora o progresso do picking
             onSnapshot(collection(db, "picking_estado"), snap => {
                 pickingMarcados = {};
                 snap.docs.forEach(d => pickingMarcados[d.id] = d.data());
                 renderizar();
             });
 
+            // Monitora o estoque
             onSnapshot(collection(db, "estoque_caritas"), snap => {
                 snap.docs.forEach(d => { 
                     saldoEstoque[d.id] = d.data().quantidade || 0; 
@@ -91,19 +90,23 @@
                 atualizarLotes();
             });
 
+            // Monitora a receita padrão
             onSnapshot(doc(db, "configuracoes", "cesta_padrao"), d => {
                 if (d.exists()) { configPadrao = d.data().itens || {}; atualizarLotes(); }
             });
 
+            // Monitora famílias ativas
             onSnapshot(query(collection(db, "familiasAssistidas"), where("statusGeral", "==", "Ativa")), snap => {
-                listaFamiliasAtivas = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+                listaFamiliasAtivas = snap.docs.map(d => ({ id: d.id, ...d.data() }))
+                    .sort((a,b) => a.responsavel1.nome.localeCompare(b.responsavel1.nome));
                 atualizarLotes();
             });
 
+            // Monitora entregas do mês
             const inicioMes = new Date(); inicioMes.setDate(1); inicioMes.setHours(0,0,0,0);
             onSnapshot(query(collection(db, "entregasCestas"), where("data", ">=", Timestamp.fromDate(inicioMes))), s => {
                 entregasNoMes = s.size; 
-                atualizarLotes();
+                renderizar();
             });
         }
 
@@ -124,47 +127,39 @@
         }
 
         function renderizar() {
-            const idsNoPicking = Object.keys(pickingMarcados);
-            const montadasNoPicking = Object.values(pickingMarcados).filter(p => p.concluida).length;
-
-            // NOVA LÓGICA DE META: 
-            // A meta do ciclo atual é: Quem já recebeu + Quem está com picking aberto agora.
-            // Isso ignora famílias novas que ainda não entraram no processo de montagem.
-            const metaAjustada = Math.max(entregasNoMes, idsNoPicking.length);
-            const restantesParaMontar = Math.max(0, idsNoPicking.length - montadasNoPicking);
+            const grid = document.getElementById('grid-cestas');
+            const hoje = new Date();
             
-            document.getElementById('meta-total').innerText = metaAjustada;
+            // Meta baseada no total de famílias que realmente existem ativas
+            const metaReal = listaFamiliasAtivas.length;
+            const montadasNoPicking = Object.values(pickingMarcados).filter(p => p.concluida).length;
+            const restantesParaMontar = Math.max(0, metaReal - montadasNoPicking);
+
+            document.getElementById('meta-total').innerText = metaReal;
             document.getElementById('entregas-feitas').innerText = entregasNoMes;
             document.getElementById('cestas-restantes').innerText = restantesParaMontar;
 
-            const grid = document.getElementById('grid-cestas');
-            grid.innerHTML = "";
-
-            // BLOQUEIO VISUAL: Só bloqueia se as entregas feitas cobrirem as montagens abertas.
-            if (entregasNoMes >= metaAjustada && metaAjustada > 0 && restantesParaMontar === 0) {
-                const hoje = new Date();
+            // Se todas as famílias ativas já receberam suas cestas, mostramos o aviso de fim de ciclo
+            if (entregasNoMes >= metaReal && metaReal > 0) {
                 const meses = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
                 grid.innerHTML = `
                     <div style='grid-column: 1/-1;'>
                         <div class="alerta-proximo-ciclo">
                             <i class="fas fa-calendar-check" style="font-size: 3em; color: var(--green); margin-bottom: 15px; display: block;"></i>
-                            <h2>Ciclo de ${meses[hoje.getMonth()]} Concluído!</h2>
-                            <p>Foram entregues ${entregasNoMes} cestas. Novos cadastros entrarão no próximo ciclo.</p>
+                            <h2>Ciclo de ${meses[hoje.getMonth()]} Finalizado!</h2>
+                            <p>Todas as ${metaReal} famílias ativas foram atendidas.</p>
                         </div>
                     </div>`;
                 return;
             }
 
+            // CORREÇÃO DA LISTA: Limpamos apenas se a quantidade de cards mudou drasticamente
+            // Isso previne que a tela pisque ou "filtre" famílias ao clicar.
+            grid.innerHTML = ""; 
+
             let lotesVirtuais = JSON.parse(JSON.stringify(mapaLotes));
-            const hoje = new Date();
 
-            // Filtra o grid: Mostra apenas quem já está no picking deste mês.
-            // No dia do reset (início do mês), ele mostrará todas as ativas novamente.
-            const familiasExibir = idsNoPicking.length > 0 
-                ? listaFamiliasAtivas.filter(f => idsNoPicking.includes(f.id))
-                : listaFamiliasAtivas;
-
-            familiasExibir.forEach((fam) => {
+            listaFamiliasAtivas.forEach((fam) => {
                 const cestaId = fam.id;
                 const est = pickingMarcados[cestaId] || { itens: {}, concluida: false };
                 const card = document.createElement('div');
@@ -183,18 +178,36 @@
                         for (let lote of lotesVirtuais[pId]) {
                             if (faltam <= 0) break;
                             const usar = Math.min(lote.quantidade, faltam);
-                            if (usar > 0) { lote.quantidade -= usar; faltam -= usar; picksDestaCesta.push({ qtd: usar, val: lote.validade }); }
+                            if (usar > 0) { 
+                                lote.quantidade -= usar; 
+                                faltam -= usar; 
+                                picksDestaCesta.push({ qtd: usar, val: lote.validade }); 
+                            }
                         }
                     }
+                    
                     picksDestaCesta.forEach((p, idx) => {
                         const itemKey = `${pId}_${idx}`;
                         const isChecked = est.itens[itemKey] || false;
                         const dataF = p.val === "9999-12-31" ? "Geral" : p.val.split('-').reverse().join('/');
-                        let cl = ""; if (p.val !== "9999-12-31") { const dV = new Date(p.val); const diff = Math.ceil((dV-hoje)/(1000*60*60*24)); if(diff<=15) cl="val-critica"; else if(diff<=45) cl="val-alerta"; }
-                        html += `<label class="item-montagem ${isChecked ? 'marcado' : ''} ${cl}"><input type="checkbox" ${isChecked ? 'checked' : ''} onchange="salvarProgresso('${cestaId}', '${itemKey}', this.checked)"><span><b>${p.qtd}x</b> ${nomesProdutos[pId] || pId}<small class="validade-info">Validade: ${dataF}</small></span></label>`;
+                        
+                        let cl = ""; 
+                        if (p.val !== "9999-12-31") { 
+                            const dV = new Date(p.val); 
+                            const diff = Math.ceil((dV-hoje)/(1000*60*60*24)); 
+                            if(diff<=15) cl="val-critica"; else if(diff<=45) cl="val-alerta"; 
+                        }
+
+                        html += `
+                            <label class="item-montagem ${isChecked ? 'marcado' : ''} ${cl}">
+                                <input type="checkbox" ${isChecked ? 'checked' : ''} 
+                                    onchange="salvarProgresso('${cestaId}', '${itemKey}', this.checked)">
+                                <span><b>${p.qtd}x</b> ${nomesProdutos[pId] || pId}<small class="validade-info">Validade: ${dataF}</small></span>
+                            </label>`;
                     });
                     if (faltam > 0) html += `<span class="txt-falta">⚠️ FALTA ${faltam}x ${nomesProdutos[pId] || 'Item'}</span>`;
                 });
+                
                 card.innerHTML = html;
                 grid.appendChild(card);
             });
@@ -203,12 +216,18 @@
         window.salvarProgresso = async (cestaId, itemKey, status) => {
             const docRef = doc(db, "picking_estado", cestaId);
             const atual = pickingMarcados[cestaId] || { itens: {}, concluida: false };
+            
+            // Atualiza apenas o item clicado sem resetar o resto do objeto
+            if (!atual.itens) atual.itens = {};
             atual.itens[itemKey] = status;
+            
+            // Recalcula se a cesta está concluída
             const card = document.getElementById(`card-${cestaId}`);
-            const total = card.querySelectorAll('input[type="checkbox"]').length;
-            const marc = card.querySelectorAll('input[type="checkbox"]:checked').length;
-            atual.concluida = (marc === total && total > 0);
-            await setDoc(docRef, atual);
+            const checks = card.querySelectorAll('input[type="checkbox"]');
+            const marcados = Array.from(checks).filter(c => c.checked).length;
+            atual.concluida = (marcados === checks.length && checks.length > 0);
+            
+            await setDoc(docRef, atual, { merge: true });
         };
 
         async function resetarPicking() {
@@ -216,6 +235,7 @@
                 const snap = await getDocs(collection(db, "picking_estado"));
                 await Promise.all(snap.docs.map(d => deleteDoc(d.ref)));
                 alert("Picking reiniciado!");
+                location.reload();
             }
         }
     </script>
