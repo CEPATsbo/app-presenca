@@ -166,7 +166,12 @@
                 document.getElementById('main-content').style.display = 'flex';
                 inicializarPainel(user);
                 
-                registrarLogDeAcesso({ acao: 'ACESSOU_PAINEL_VIBRACOES' });
+                // CORREÇÃO: Envia o Nome ou E-mail como parâmetro explícito para o log de acesso
+                const quemAcessou = user.displayName ? user.displayName : user.email;
+                registrarLogDeAcesso({ 
+                    acao: 'ACESSOU_PAINEL_VIBRACOES',
+                    autor: quemAcessou
+                });
             })
             .catch(error => {
                 console.log(error.message);
@@ -180,8 +185,12 @@
             escutarLista('desencarnados', 'carousel-desencarnados');
 
             document.getElementById('btn-imprimir').addEventListener('click', () => {
+                // CORREÇÃO: Envia o Nome ou E-mail como parâmetro explícito para o log de impressão
+                const quemImprimiu = user.displayName ? user.displayName : user.email;
+                
                 registrarLogDeAcesso({ 
                     acao: 'IMPRIMIU_LISTA_VIBRACOES',
+                    autor: quemImprimiu,
                     detalhes: { pagina: 'painel-vibracoes' } 
                 }).then(() => {
                     imprimirListas();
