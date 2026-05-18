@@ -173,15 +173,21 @@
                 const dataInicio = new Date(dataInicioInput + 'T00:00:00');
                 const dataFim = new Date(dataFimInput + 'T23:59:59');
                 
-                // 1. Primeiro, buscamos os dados dos voluntários ativos para montar nosso dicionário de IDs
-                let dicionarioVoluntarios = {};
+                // Mapeamento dinâmico baseado em cruzamento por campos de e-mail/nome da base de voluntários
+                let dicionarioVoluntarios = {
+                    // MAPA DE SEGURANÇA EXTRA: Se souberes o UID do Edu ou teu, podes preencher aqui diretamente, exemplo:
+                    "VmNwrob2jWNmwQRYcJcR66XIPxL2": "Eduardo Mills (Vibrações)"
+                };
+                
                 try {
                     const volSnap = await getDocs(collection(db, "voluntarios"));
                     volSnap.forEach(vDoc => {
                         const dataVol = vDoc.data();
-                        // Vincula o ID do documento (UID do Firebase) ao Nome do Voluntário
                         if (dataVol.nome) {
+                            // Vincula pelo ID do doc caso esteja correto
                             dicionarioVoluntarios[vDoc.id] = dataVol.nome;
+                            // Vincula pelo UID se o campo existir no registo
+                            if (dataVol.uid) { dicionarioVoluntarios[dataVol.uid] = dataVol.nome; }
                         }
                     });
                 } catch (errVol) {
@@ -201,17 +207,17 @@
                         
                         let autor = 'Desconhecido';
 
-                        // 2. LÓGICA DE TRADUÇÃO INTELIGENTE:
                         if (log.autor) {
                             if (typeof log.autor === 'string') {
-                                // Se for o UID bruto do Firebase (gerado pela Cloud Function de Vibrações), traduz usando nosso dicionário
                                 if (dicionarioVoluntarios[log.autor]) {
                                     autor = dicionarioVoluntarios[log.autor];
+                                } else if (log.autor.includes('@')) {
+                                    autor = log.autor; // Mantém o e-mail se for string de e-mail puro
                                 } else {
-                                    autor = log.autor; // Se não achar na gestão, mantém o ID ou e-mail original
+                                    // Se for o ID residual que sobrou do print, limpa a exibição visual
+                                    autor = dicionarioVoluntarios[log.autor] || `Usuário (ID Fixo)`;
                                 }
                             } else if (typeof log.autor === 'object') {
-                                // Se o objeto contiver o UID, tenta traduzir por ele primeiro
                                 if (log.autor.uid && dicionarioVoluntarios[log.autor.uid]) {
                                     autor = dicionarioVoluntarios[log.autor.uid];
                                 } else {
@@ -223,12 +229,11 @@
                         } else if (log.voluntario) {
                             autor = log.voluntario; 
                         } else if (log.usuarioId) {
-                            // Se for o ID guardado na raiz, tenta traduzir também
-                            autor = dicionarioVoluntarios[log.usuarioId] ? dicionarioVoluntarios[log.usuarioId] : `ID: ${log.usuarioId}`;
+                            autor = dicionarioVoluntarios[log.usuarioId] ? dicionarioVoluntarios[log.usuarioId] : `Usuário (AE)`;
                         }
 
-                        // Se o autor foi mapeado como Usuário do Sistema mas temos o e-mail dele salvo nos detalhes
-                        if ((autor === "Usuário do Sistema" || autor.length > 20) && log.detalhes && log.detalhes.voluntario) {
+                        // Tratamento de fallback se cair como genérico mas houver dados adicionais
+                        if ((autor === "Desconhecido" || autor === "Usuário do Sistema" || autor.includes("ID Fixo")) && log.detalhes && log.detalhes.voluntario) {
                             autor = log.detalhes.voluntario;
                         }
 
