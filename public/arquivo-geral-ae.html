@@ -7,7 +7,7 @@
     <style>
         :root { --cor-primaria: #007bff; --cor-borda: #ddd; --fundo-selecionado: #e9ecef; }
         body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background-color: #f4f6f9; margin: 0; padding: 20px; }
-        .container { width: 100%; max-width: 1400px; margin: 0 auto; background-color: #fff; padding: 30px; border-radius: 12px; box-shadow: 0 6px 24px rgba(0,0,0,0.1); box-sizing: border-box; /* Adicionado para padding */ }
+        .container { width: 100%; max-width: 1400px; margin: 0 auto; background-color: #fff; padding: 30px; border-radius: 12px; box-shadow: 0 6px 24px rgba(0,0,0,0.1); box-sizing: border-box; }
         .nav-voltar { margin-bottom: 20px; }
         .btn, .btn-voltar, .btn-editar, .btn-acao { background-color: var(--cor-primaria); color: white; border: none; padding: 12px 20px; border-radius: 8px; font-weight: bold; text-decoration: none; display: inline-block; cursor: pointer; }
         .btn-voltar { background-color: #6c757d; }
@@ -43,53 +43,16 @@
         .atendimento-info { display: flex; align-items: center; gap: 10px; }
         .btn-editar { background-color: #17a2b8; padding: 6px 12px; border-radius: 6px; font-size: 0.9em; }
 
-        /* =================================================================== */
-        /* INÍCIO DA MODIFICAÇÃO CSS: Layout Responsivo */
-        /* =================================================================== */
         @media (max-width: 768px) {
             body { padding: 10px; }
             .container { padding: 20px; }
-            /* Empilha as colunas em telas pequenas */
-            .main-grid {
-                grid-template-columns: 1fr; /* 1 coluna */
-                gap: 20px;
-            }
-            .lista-assistidos-col {
-                border-right: none; /* Remove a borda lateral */
-                padding-right: 0;
-                border-bottom: 1px solid var(--cor-borda); /* Adiciona borda inferior */
-                padding-bottom: 20px;
-            }
-            /* Ajusta a altura da lista e do histórico para evitar rolagem dupla */
-            #lista-assistidos {
-                max-height: 40vh; /* Altura máxima para a lista */
-            }
-            #historico-container {
-                max-height: 60vh; /* Altura máxima para o histórico */
-            }
+            .main-grid { grid-template-columns: 1fr; gap: 20px; }
+            .lista-assistidos-col { border-right: none; padding-bottom: 20px; border-bottom: 1px solid var(--cor-borda); }
+            #lista-assistidos { max-height: 40vh; }
+            #historico-container { max-height: 60vh; }
         }
-        /* =================================================================== */
-        /* FIM DA MODIFICAÇÃO CSS */
-        /* =================================================================== */
-
-        /* =================================================================== */
-        /* INÍCIO DA ADIÇÃO CSS: Link para Prontuário Unificado */
-        /* =================================================================== */
-        .prontuario-link { 
-            font-size: 0.8em; 
-            text-decoration: none; 
-            margin-left: 10px; 
-            color: #6c757d; 
-            font-weight: normal;
-            display: inline-block; /* Para alinhar melhor */
-        }
-        .prontuario-link:hover { 
-            color: var(--cor-primaria); /* Azul da AE */
-        }
-        /* =================================================================== */
-        /* FIM DA ADIÇÃO CSS */
-        /* =================================================================== */
-
+        .prontuario-link { font-size: 0.8em; text-decoration: none; margin-left: 10px; color: #6c757d; font-weight: normal; display: inline-block; }
+        .prontuario-link:hover { color: var(--cor-primaria); }
     </style>
 </head>
 <body>
@@ -165,18 +128,19 @@
 
             async function registrarLog(acao, detalhes) {
                 try {
-                    // 1. Cria uma referência para um NOVO documento com ID automático
                     const newLogRef = doc(logAuditoriaRef); 
                     
-                    // 2. Salva os dados usando setDoc, que não tem esse bug de colisão
+                    // CORREÇÃO: Regra de ouro aplicada para evitar "Usuário do Sistema" fixo quando há e-mail
+                    const identificadorAutor = user.displayName ? user.displayName : user.email;
+
                     await setDoc(newLogRef, { 
                         timestamp: serverTimestamp(),
-                        autor: { uid: user.uid, nome: user.displayName || 'Usuário do Sistema' },
+                        autor: identificadorAutor,
                         acao: acao,
                         detalhes: detalhes
                     });
                 } catch (error) { 
-                    console.error("Erro ao registrar log (com setDoc):", error); 
+                    console.error("Erro ao registrar log:", error); 
                 }
             }
 
@@ -191,7 +155,7 @@
                 const btnTodos = document.createElement('button');
                 btnTodos.textContent = 'Todos';
                 btnTodos.dataset.letra = '';
-                btnTodos.classList.add('ativo');
+                btnTodos.classList.add('active');
                 ui.alfabetoFiltro.appendChild(btnTodos);
             }
 
@@ -202,7 +166,7 @@
                 const btn = document.getElementById(`btn-preparar-${ciclo.id}`);
                 btn.disabled = true; btn.textContent = 'Criando...';
                 try {
-                    const novoAtendimento = { assistidoId: ciclo.assistidoId, tratamentoId: ciclo.id, tipo: 'tratamento_semanal', dataAtendimento: null, semana: 5, entrevistador: 'Aguardando Decisão', passeRecomendado: ciclo.passe_ciclo_atual, notas: '', detalhes_preenchidos: false, decisao_pre_registrada: false, criadoPor: { uid: user.uid, nome: user.displayName || 'Usuário do Sistema' }, criadoEm: serverTimestamp() };
+                    const novoAtendimento = { assistidoId: ciclo.assistidoId, tratamentoId: ciclo.id, tipo: 'tratamento_semanal', dataAtendimento: null, semana: 5, entrevistador: 'Aguardando Decisão', passeRecomendado: ciclo.passe_ciclo_atual, notas: '', detalhes_preenchidos: false, decisao_pre_registrada: false, criadoPor: { uid: user.uid, nome: user.displayName || user.email } , criadoEm: serverTimestamp() };
                     const docRef = await addDoc(atendimentosRef, novoAtendimento);
                     registrarLog('Preparação de Reavaliação (AE)', { assistidoId: ciclo.assistidoId, tratamentoId: ciclo.id, atendimentoId: docRef.id });
                     alert('Placeholder da 5ª Semana criado. Você já pode registrar a decisão do colegiado.');
@@ -216,14 +180,8 @@
             function renderizarHistorico(assistido, ciclos, todosAtendimentos, user) {
                 const dnFormatado = assistido.dn ? new Date(assistido.dn + 'T12:00:00').toLocaleDateString('pt-br') : 'Não informado';
                 
-                // ===================================================================
-                // INÍCIO DA MODIFICAÇÃO JAVASCRIPT: Adiciona link do Prontuário
-                // ===================================================================
                 let linkProntuario = `<a href="/perfil-assistido.html?id=${assistido.id}" class="prontuario-link" title="Ver Prontuário Unificado 📜">Ver Prontuário Completo</a>`;
                 let html = `<h2>Histórico de ${assistido.nome} ${linkProntuario}</h2>`;
-                // ===================================================================
-                // FIM DA MODIFICAÇÃO JAVASCRIPT
-                // ===================================================================
                 
                 html += `<p><strong>DN:</strong> ${dnFormatado} | <strong>Telefone:</strong> ${assistido.telefone || 'Não informado'}</p>`;
                 html += '<div id="historico-container">';
@@ -254,9 +212,6 @@
                 ciclos.forEach(ciclo => { const btn = document.getElementById(`btn-preparar-${ciclo.id}`); if (btn) { btn.addEventListener('click', () => prepararReavaliacao(ciclo, user)); } });
             }
 
-            // ===================================================================
-            // INÍCIO DA MODIFICAÇÃO JAVASCRIPT: renderizarItemAtendimento (remoção do target="_blank")
-            // ===================================================================
             function renderizarItemAtendimento(a, passe_ciclo_atual) {
                 const dataAtendimento = a.dataAtendimento ? a.dataAtendimento.toDate().toLocaleDateString('pt-br') : "Aguardando Presença";
                 let tipoAtendimento = a.tipo?.replace(/_/g, ' ') || 'N/A';
@@ -274,15 +229,11 @@
                     if (a.semana === 5 && a.decisao_pre_registrada === true && a.dataAtendimento === null) { iconeHtml = '<span>🔵</span>'; tipoAtendimento = "Reavaliação (Decisão Pronta)"; }
                     else if (a.detalhes_preenchidos === true) { iconeHtml = '<span>✅</span>'; }
                     else { iconeHtml = '<span>📝</span>'; }
-                    // target="_blank" REMOVIDO DA LINHA ABAIXO:
                     botaoEditarHtml = `<a href="/entrevista-ae.html?atendimentoId=${a.id}" class="btn btn-editar">Ver / Editar</a>`;
                 }
                 let estiloItem = ''; if (a.dataAtendimento === null && a.semana === 5) { estiloItem = 'style="background-color: #fffbe6;"'; }
                 return `<li ${estiloItem}><div class="atendimento-info">${iconeHtml}<span><strong>${dataAtendimento}</strong> - ${tipoAtendimento} ${infoExtra}</span></div>${botaoEditarHtml}</li>`;
             }
-            // ===================================================================
-            // FIM DA MODIFICAÇÃO JAVASCRIPT
-            // ===================================================================
 
             async function carregarAssistidos(filtroLetra = '', termoBusca = '') {
                 ui.listaAssistidos.innerHTML = '<p>Buscando...</p>';
@@ -374,7 +325,7 @@
             function renderizarListaAssistidos(assistidos, pendingAssistidoIds) {
                 ui.listaAssistidos.innerHTML = '';
                 if (assistidos.length === 0) {
-                    ui.listaAssistidos.innerHTML = '<p>Nenhum assistido encontrado para os critérios atuais.</p>';
+                    ui.listaAssistidos.innerHTML = '<p>Nenhum assistido encontrado para os critérios antigos.</p>';
                     return;
                 }
                 assistidos.forEach(assistido => {
