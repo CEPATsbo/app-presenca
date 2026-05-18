@@ -314,34 +314,24 @@
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
         import { getFirestore, collection, addDoc, onSnapshot, query, orderBy, serverTimestamp, doc, updateDoc, getDocs, where, setDoc } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
-        import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-auth.js";
         import { protegerPagina } from '/auth.js';
 
         const firebaseConfig = { apiKey: "AIzaSyBV7RPjk3cFTqL-aIpflJcUojKg1ZXMLuU", authDomain: "voluntarios-ativos---cepat.firebaseapp.com", projectId: "voluntarios-ativos---cepat", storageBucket: "voluntarios-ativos---cepat.firebasestorage.app", messagingSenderId: "66122858261", appId: "1:66122858261:web:7fa21f1805463b5c08331c" };
         const app = initializeApp(firebaseConfig);
         const db = getFirestore(app);
-        const auth = getAuth(app);
 
         let todasFamilias = [];
         let familiaSelecionadaId = null; 
         let itensEstoqueGlobal = [];
         let usuarioLogado = null; 
 
-        // CORREÇÃO: Aguarda o Firebase Auth carregar o estado antes de validar as permissões da página
-        onAuthStateChanged(auth, (user) => {
-            if (user) {
-                protegerPagina(['super-admin','diretor','tesoureiro','conselheiro','recepcionista','entrevistador','caritas'])
-                    .then(validatedUser => {
-                        usuarioLogado = validatedUser;
-                        inicializar(validatedUser);
-                    })
-                    .catch(() => {
-                        window.location.href = '/dashboard.html';
-                    });
-            } else {
-                window.location.href = '/dashboard.html';
-            }
-        });
+        // VOLTOU AO COMPORTAMENTO ORIGINAL DE TRAVA DE SEGURANÇA: Sem mexer no ecossistema do auth.js
+        protegerPagina(['super-admin','diretor','tesoureiro','conselheiro','recepcionista','entrevistador','caritas'])
+            .then(user => {
+                usuarioLogado = user;
+                inicializar(user);
+            })
+            .catch(() => window.location.href = '/dashboard.html');
 
         function formatarNome(nome) {
             if (!nome) return "";
@@ -363,6 +353,7 @@
             return idade;
         }
 
+        // FUNÇÃO CENTRALIZADA DE LOGS: Corrigida de details para detalhes sem quebrar o JavaScript
         async function registrarAuditoriaFamilia(acao, detalhes) {
             try {
                 const autorIdentificado = usuarioLogado?.displayName ? usuarioLogado.displayName : (usuarioLogado?.email || "Operador Cáritas");
@@ -370,7 +361,7 @@
                     timestamp: serverTimestamp(),
                     autor: autorIdentificado,
                     acao: acao,
-                    detalhes: details // Mantido o mapeamento original interno
+                    detalhes: detalhes
                 });
             } catch (err) {
                 console.error("Falha ao registrar log na auditoria das famílias:", err);
@@ -679,7 +670,7 @@
                         totalDependentesAjustado: novosFilhos.length
                     });
 
-                    alert("Prontuário updated com sucesso!");
+                    alert("Prontuário atualizado com sucesso!");
                     abrirDetalhes(familiaSelecionadaId);
                 } catch (e) { alert("Erro: " + e.message); }
             };
