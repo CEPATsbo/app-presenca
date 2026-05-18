@@ -314,23 +314,34 @@
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
         import { getFirestore, collection, addDoc, onSnapshot, query, orderBy, serverTimestamp, doc, updateDoc, getDocs, where, setDoc } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
+        import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-auth.js";
         import { protegerPagina } from '/auth.js';
 
         const firebaseConfig = { apiKey: "AIzaSyBV7RPjk3cFTqL-aIpflJcUojKg1ZXMLuU", authDomain: "voluntarios-ativos---cepat.firebaseapp.com", projectId: "voluntarios-ativos---cepat", storageBucket: "voluntarios-ativos---cepat.firebasestorage.app", messagingSenderId: "66122858261", appId: "1:66122858261:web:7fa21f1805463b5c08331c" };
         const app = initializeApp(firebaseConfig);
         const db = getFirestore(app);
+        const auth = getAuth(app);
 
         let todasFamilias = [];
         let familiaSelecionadaId = null; 
         let itensEstoqueGlobal = [];
-        let usuarioLogado = null; // Guardará o operador logado do sistema
+        let usuarioLogado = null; 
 
-        protegerPagina(['super-admin','diretor','tesoureiro','conselheiro','recepcionista','entrevistador','caritas'])
-            .then(user => {
-                usuarioLogado = user;
-                inicializar(user);
-            })
-            .catch(() => window.location.href = '/dashboard.html');
+        // CORREÇÃO: Aguarda o Firebase Auth carregar o estado antes de validar as permissões da página
+        onAuthStateChanged(auth, (user) => {
+            if (user) {
+                protegerPagina(['super-admin','diretor','tesoureiro','conselheiro','recepcionista','entrevistador','caritas'])
+                    .then(validatedUser => {
+                        usuarioLogado = validatedUser;
+                        inicializar(validatedUser);
+                    })
+                    .catch(() => {
+                        window.location.href = '/dashboard.html';
+                    });
+            } else {
+                window.location.href = '/dashboard.html';
+            }
+        });
 
         function formatarNome(nome) {
             if (!nome) return "";
@@ -352,7 +363,6 @@
             return idade;
         }
 
-        // FUNÇÃO CENTRALIZADA DE LOGS: Garante rastro limpo com a Regra de Ouro para a diretoria
         async function registrarAuditoriaFamilia(acao, detalhes) {
             try {
                 const autorIdentificado = usuarioLogado?.displayName ? usuarioLogado.displayName : (usuarioLogado?.email || "Operador Cáritas");
@@ -360,7 +370,7 @@
                     timestamp: serverTimestamp(),
                     autor: autorIdentificado,
                     acao: acao,
-                    detalhes: detalhes
+                    detalhes: details // Mantido o mapeamento original interno
                 });
             } catch (err) {
                 console.error("Falha ao registrar log na auditoria das famílias:", err);
@@ -539,7 +549,6 @@
                 try {
                     await updateDoc(doc(db, "familiasAssistidas", familiaSelecionadaId), { receitaPersonalizada: novaRec });
                     
-                    // AUDITORIA: Registra a receita customizada da família
                     await registrarAuditoriaFamilia("REGISTRO_MANUAL", {
                         atividade: "Cáritas - Prontuário",
                         operacao: "Personalização de Itens da Cesta",
@@ -561,7 +570,6 @@
                         statusGeral: novoStatus, ultimaAlteracaoEm: serverTimestamp()
                     });
                     
-                    // AUDITORIA: Registra a alteração de ativação da família
                     await registrarAuditoriaFamilia("REGISTRO_MANUAL", {
                         atividade: "Cáritas - Status",
                         operacao: novoStatus === "Ativa" ? "Reativação de Família" : "Desativação de Família",
@@ -664,7 +672,6 @@
                 try {
                     await updateDoc(doc(db, "familiasAssistidas", familiaSelecionadaId), dadosAtualizados);
                     
-                    // AUDITORIA: Registra alterações nos cadastros e prontuários existentes
                     await registrarAuditoriaFamilia("REGISTRO_MANUAL", {
                         atividade: "Cáritas - Prontuário",
                         operacao: "Atualização de Cadastro/Dependentes",
@@ -672,7 +679,7 @@
                         totalDependentesAjustado: novosFilhos.length
                     });
 
-                    alert("Prontuário atualizado com sucesso!");
+                    alert("Prontuário updated com sucesso!");
                     abrirDetalhes(familiaSelecionadaId);
                 } catch (e) { alert("Erro: " + e.message); }
             };
@@ -701,7 +708,6 @@
                 try {
                     await addDoc(collection(db, `familiasAssistidas/${familiaSelecionadaId}/atendimentos`), dadosFicha);
                     
-                    // AUDITORIA: Registra o arquivamento mensal da entrevista social
                     await registrarAuditoriaFamilia("REGISTRO_MANUAL", {
                         atividade: "Cáritas - Ficha Atendimento",
                         operacao: "Arquivamento de Atendimento Mensal",
@@ -736,7 +742,6 @@
                 try {
                     await addDoc(collection(db, "familiasAssistidas"), novaFamilia);
                     
-                    // AUDITORIA: Registra o nascimento de um novo cadastro na assistência social
                     await registrarAuditoriaFamilia("REGISTRO_MANUAL", {
                         atividade: "Cáritas - Cadastro",
                         operacao: "Inclusão de Nova Família",
