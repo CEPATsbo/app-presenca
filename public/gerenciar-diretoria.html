@@ -117,7 +117,7 @@
                 ];
                 const cargosGestao_Parte2 = [
                     "irradiador", "recepcionista", "entrevistador",
-                    "dirigente-escola", "secretario-escola", "caritas" // Incluído cargo Cáritas
+                    "dirigente-escola", "secretario-escola", "caritas"
                 ];
                 
                 const colRef = collection(db, "voluntarios");
@@ -173,7 +173,6 @@
                 const dataInicio = new Date(dataInicioInput + 'T00:00:00');
                 const dataFim = new Date(dataFimInput + 'T23:59:59');
                 
-                // Qery unificada na coleção log_auditoria
                 const q = query(collection(db, "log_auditoria"), where("timestamp", ">=", Timestamp.fromDate(dataInicio)), where("timestamp", "<=", Timestamp.fromDate(dataFim)), orderBy("timestamp", "desc"));
                 
                 try {
@@ -185,17 +184,33 @@
                         const log = doc.data();
                         const data = log.timestamp ? log.timestamp.toDate().toLocaleString('pt-BR') : 'N/A';
                         
-                        // Fallback para capturar autor de diferentes módulos
+                        // CORREÇÃO: Estrutura inteligente em cascata para ler os autores sem mistério
                         let autor = 'Desconhecido';
-                        if (log.autor && log.autor.nome) autor = log.autor.nome;
-                        else if (log.voluntarioNome) autor = log.voluntarioNome;
-                        else if (log.usuarioId) autor = `ID: ${log.usuarioId}`;
+
+                        if (log.autor) {
+                            if (typeof log.autor === 'string') {
+                                autor = log.autor; // Trata nomes salvos direto como string pura
+                            } else if (typeof log.autor === 'object') {
+                                autor = log.autor.nome || log.autor.email || 'Desconhecido';
+                            }
+                        } else if (log.voluntarioNome) {
+                            autor = log.voluntarioNome;
+                        } else if (log.voluntario) {
+                            autor = log.voluntario; // Fallback se salvou apenas a string de e-mail/nome na raiz
+                        } else if (log.usuarioId) {
+                            autor = `ID: ${log.usuarioId}`;
+                        }
+
+                        // Limpeza visual para evitar a frase ambígua "Usuário do Sistema" se houver e-mail no detalhe
+                        if (autor === "Usuário do Sistema" && log.detalhes && log.detalhes.voluntario) {
+                            autor = log.detalhes.voluntario;
+                        }
 
                         const acao = log.acao || 'N/A';
                         const detalhes = log.detalhes ? (typeof log.detalhes === 'object' ? JSON.stringify(log.detalhes, null, 2) : log.detalhes) : '{}';
                         
                         const tr = document.createElement('tr');
-                        tr.innerHTML = `<td>${data}</td><td>${autor}</td><td>${acao}</td><td><pre class="log-details">${detalhes}</pre></td>`;
+                        tr.innerHTML = `<td>${data}</td><td><b>${autor}</b></td><td>${acao}</td><td><pre class="log-details">${detalhes}</pre></td>`;
                         tabelaLogs.appendChild(tr);
                     });
                 } catch (error) { 
