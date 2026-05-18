@@ -142,16 +142,23 @@
                     
                     if (docSnap.exists()) {
                         const saldoAtual = docSnap.data().quantidade || 0;
+                        // TRAVA 1: Garante que o Saldo Geral nunca fique negativo
                         await updateDoc(docRef, { quantidade: Math.max(0, saldoAtual - qtdParaBaixa) });
 
-                        // Baixa no lote mais antigo (FEFO)
-                        const qLotes = query(collection(db, `estoque_caritas/${pId}/lotes`), orderBy("validade", "asc"), limit(1));
+                        // Baixa no lote mais antigo (FEFO) - Correção do ID da coleção (prodId)
+                        const qLotes = query(collection(db, `estoque_caritas/${prodId}/lotes`), orderBy("validade", "asc"), limit(1));
                         const loteSnap = await getDocs(qLotes);
                         if (!loteSnap.empty) {
                             const loteDoc = loteSnap.docs[0];
-                            const novoSaldoLote = (loteDoc.data().quantidade || 0) - qtdParaBaixa;
-                            if (novoSaldoLote <= 0) await deleteDoc(doc(db, `estoque_caritas/${prodId}/lotes`, loteDoc.id));
-                            else await updateDoc(doc(db, `estoque_caritas/${prodId}/lotes`, loteDoc.id), { quantidade: novoSaldoLote });
+                            const saldoLoteAtual = loteDoc.data().quantidade || 0;
+                            // TRAVA 2: Impede inconsistência de valor negativo no cálculo do lote
+                            const novoSaldoLote = Math.max(0, saldoLoteAtual - qtdParaBaixa);
+                            
+                            if (novoSaldoLote <= 0) {
+                                await deleteDoc(doc(db, `estoque_caritas/${prodId}/lotes`, loteDoc.id));
+                            } else {
+                                await updateDoc(doc(db, `estoque_caritas/${prodId}/lotes`, loteDoc.id), { quantidade: novoSaldoLote });
+                            }
                         }
                     }
                 }
@@ -160,7 +167,6 @@
                 fecharModal();
             } catch (e) {
                 alert("Erro: " + e.message);
-                // Restaura o botão em caso de erro na execução
                 btn.disabled = false;
                 btn.innerText = "Finalizar Entrega";
             }
@@ -226,7 +232,7 @@
             document.getElementById('modal-confirmacao').style.display = 'none';
             document.getElementById('obs-entrega').value = "";
             
-            // CORREÇÃO: Reseta o botão de envio para que a próxima família possa usar o modal sem travar
+            // CORREÇÃO: Limpa referências antigas na memória e restaura o botão para a próxima família da fila
             const btn = document.getElementById('btn-finalizar');
             btn.onclick = null;
             btn.disabled = false;
