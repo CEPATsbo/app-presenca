@@ -60,15 +60,16 @@
 
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
-        import { getFirestore, collection, onSnapshot, doc, query, where, Timestamp, getDocs, orderBy, setDoc, deleteDoc } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
+        import { getFirestore, collection, onSnapshot, doc, query, where, Timestamp, getDocs, orderBy, setDoc, deleteDoc, addDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
         import { protegerPagina } from '/auth.js';
 
         const firebaseConfig = { apiKey: "AIzaSyBV7RPjk3cFTqL-aIpflJcUojKg1ZXMLuU", authDomain: "voluntarios-ativos---cepat.firebaseapp.com", projectId: "voluntarios-ativos---cepat", storageBucket: "voluntarios-ativos---cepat.firebasestorage.app", messagingSenderId: "66122858261", appId: "1:66122858261:web:7fa21f1805463b5c08331c" };
         const db = getFirestore(initializeApp(firebaseConfig));
 
-        let configPadrao = {}, entregasNoMes = 0, pickingMarcados = {}, mapaLotes = {}, nomesProdutos = {}, saldoEstoque = {}, listaFamiliasAtivas = [];
+        let configPadrao = {}, entregasNoMes = 0, pickingMarcados = {}, mapaLotes = {}, nomesProdutos = {}, saldoEstoque = {}, listaFamiliasAtivas = [], usuarioLogado = null;
 
-        protegerPagina(['super-admin','diretor','caritas']).then(() => { 
+        protegerPagina(['super-admin','diretor','caritas']).then(user => { 
+            usuarioLogado = user;
             iniciarSincronizacao();
             document.getElementById('trigger-reset').onclick = resetarPicking;
         });
@@ -130,7 +131,6 @@
             const grid = document.getElementById('grid-cestas');
             const hoje = new Date();
             
-            // Meta baseada no total de famílias que realmente existem ativas
             const metaReal = listaFamiliasAtivas.length;
             const montadasNoPicking = Object.values(pickingMarcados).filter(p => p.concluida).length;
             const restantesParaMontar = Math.max(0, metaReal - montadasNoPicking);
@@ -139,7 +139,6 @@
             document.getElementById('entregas-feitas').innerText = entregasNoMes;
             document.getElementById('cestas-restantes').innerText = restantesParaMontar;
 
-            // Se todas as famílias ativas já receberam suas cestas, mostramos o aviso de fim de ciclo
             if (entregasNoMes >= metaReal && metaReal > 0) {
                 const meses = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
                 grid.innerHTML = `
@@ -153,8 +152,6 @@
                 return;
             }
 
-            // CORREÇÃO DA LISTA: Limpamos apenas se a quantidade de cards mudou drasticamente
-            // Isso previne que a tela pisque ou "filtre" famílias ao clicar.
             grid.innerHTML = ""; 
 
             let lotesVirtuais = JSON.parse(JSON.stringify(mapaLotes));
@@ -217,11 +214,9 @@
             const docRef = doc(db, "picking_estado", cestaId);
             const atual = pickingMarcados[cestaId] || { itens: {}, concluida: false };
             
-            // Atualiza apenas o item clicado sem resetar o resto do objeto
             if (!atual.itens) atual.itens = {};
             atual.itens[itemKey] = status;
             
-            // Recalcula se a cesta está concluída
             const card = document.getElementById(`card-${cestaId}`);
             const checks = card.querySelectorAll('input[type="checkbox"]');
             const marcados = Array.from(checks).filter(c => c.checked).length;
@@ -232,10 +227,29 @@
 
         async function resetarPicking() {
             if (confirm("Resetar Picking para o novo ciclo? Isso limpará os nomes atuais e carregará todos os cadastros ativos.")) {
-                const snap = await getDocs(collection(db, "picking_estado"));
-                await Promise.all(snap.docs.map(d => deleteDoc(d.ref)));
-                alert("Picking reiniciado!");
-                location.reload();
+                try {
+                    const snap = await getDocs(collection(db, "picking_estado"));
+                    
+                    // CORREÇÃO: Dispara a linha de log com o identificador dinâmico real antes de expirar a coleção
+                    const identificadorAutor = usuarioLogado?.displayName ? usuarioLogado.displayName : (usuarioLogado?.email || "Montador Cáritas");
+                    await addDoc(collection(db, "log_auditoria"), {
+                        timestamp: serverTimestamp(),
+                        autor: identificadorAutor,
+                        acao: "Finalização de Ciclo (Cáritas)",
+                        detalhes: {
+                            atividade: "Cáritas - Linha de Montagem",
+                            operacao: "Reset Mensal de Picking",
+                            totalCardsLimpos: snap.size
+                        }
+                    });
+
+                    await Promise.all(snap.docs.map(d => deleteDoc(d.ref)));
+                    alert("Picking reiniciado!");
+                    location.reload();
+                } catch (err) {
+                    console.error("Erro ao resetar picking:", err);
+                    alert("Erro ao reiniciar ciclo.");
+                }
             }
         }
     </script>

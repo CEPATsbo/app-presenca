@@ -47,7 +47,7 @@
 
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
-        import { getFirestore, doc, getDoc, collection, query, orderBy, getDocs } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
+        import { getFirestore, doc, getDoc, collection, query, orderBy, getDocs, addDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
         import { protegerPagina } from '/auth.js';
 
         const firebaseConfig = { apiKey: "AIzaSyBV7RPjk3cFTqL-aIpflJcUojKg1ZXMLuU", authDomain: "voluntarios-ativos---cepat.firebaseapp.com", projectId: "voluntarios-ativos---cepat", storageBucket: "voluntarios-ativos---cepat.firebasestorage.app", messagingSenderId: "66122858261", appId: "1:66122858261:web:7fa21f1805463b5c08331c" };
@@ -55,6 +55,7 @@
 
         const urlParams = new URLSearchParams(window.location.search);
         const familiaId = urlParams.get('id');
+        let usuarioLogado = null; // Guardará o voluntário autenticado
 
         function calcularIdade(nasc) { 
             if(!nasc) return "?";
@@ -65,10 +66,30 @@
             return i; 
         }
 
-        protegerPagina(['super-admin','diretor','caritas','recepcionista','conselheiro','tesoureiro','entrevistador']).then(() => {
+        protegerPagina(['super-admin','diretor','caritas','recepcionista','conselheiro','tesoureiro','entrevistador']).then(user => {
+            usuarioLogado = user;
             if (familiaId) carregarProntuarioCompleto();
             else window.location.href = 'assistencia-familias.html';
         });
+
+        // FUNÇÃO DE AUDITORIA: Registra o acesso de leitura ao prontuário social
+        async function registrarLogConsulta(nomeResponsavel) {
+            try {
+                const identificadorAutor = usuarioLogado?.displayName ? usuarioLogado.displayName : (usuarioLogado?.email || "Voluntário Cáritas");
+                await addDoc(collection(db, "log_auditoria"), {
+                    timestamp: serverTimestamp(),
+                    autor: identificadorAutor,
+                    acao: "Visualização de Histórico (Cáritas)",
+                    detalhes: {
+                        atividade: "Cáritas - Prontuário",
+                        assistidoNome: nomeResponsavel,
+                        assistidoId: familiaId
+                    }
+                });
+            } catch (err) {
+                console.error("Erro ao gerar log do prontuário:", err);
+            }
+        }
 
         async function carregarProntuarioCompleto() {
             try {
@@ -78,6 +99,9 @@
                     return;
                 }
                 const fam = famSnap.data();
+
+                // DISPARO DO LOG: Registra a consulta imediatamente ao terminar o carregamento dos dados principais
+                await registrarLogConsulta(fam.responsavel1.nome);
 
                 document.getElementById('dados-familia').innerHTML = `
                     <div class="secao-titulo">Informações Gerais</div>

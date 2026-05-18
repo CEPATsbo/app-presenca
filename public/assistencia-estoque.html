@@ -52,8 +52,8 @@
         <h1><i class="fas fa-boxes"></i> Almoxarifado Social</h1>
 
         <div style="display: flex; gap: 15px; margin-bottom: 20px; flex-wrap: wrap; background: #f0f0f0; padding: 12px; border-radius: 8px; font-size: 0.85em; justify-content: center; border: 1px solid #ddd;">
-            <span style="display: flex; align-items: center; gap: 5px;"><i class="fas fa-square" style="color: var(--red);"></i> <b>Crítico:</b> < 15 dias</span>
-            <span style="display: flex; align-items: center; gap: 5px;"><i class="fas fa-square" style="color: #f1c40f;"></i> <b>Atenção:</b> < 45 dias</span>
+            <span style="display: flex; align-items: center; gap: 5px;"><i class="fas fa-square" style="color: var(--red);"></i> <b>Crítico:</b> &lt; 15 dias</span>
+            <span style="display: flex; align-items: center; gap: 5px;"><i class="fas fa-square" style="color: #f1c40f;"></i> <b>Atenção:</b> &lt; 45 dias</span>
             <span style="display: flex; align-items: center; gap: 5px;"><i class="fas fa-square" style="color: var(--green);"></i> <b>Seguro:</b> Validade OK</span>
             <span style="display: flex; align-items: center; gap: 5px;"><i class="fas fa-square" style="color: #3498db;"></i> <b>Geral:</b> Sem Validade</span>
         </div>
@@ -137,9 +137,11 @@
         const firebaseConfig = { apiKey: "AIzaSyBV7RPjk3cFTqL-aIpflJcUojKg1ZXMLuU", authDomain: "voluntarios-ativos---cepat.firebaseapp.com", projectId: "voluntarios-ativos---cepat", storageBucket: "voluntarios-ativos---cepat.firebasestorage.app", messagingSenderId: "66122858261", appId: "1:66122858261:web:7fa21f1805463b5c08331c" };
         const db = getFirestore(initializeApp(firebaseConfig));
         
-        let itensEstoque = [], configCestaPadrao = {}, metaGlobal = 0, listaFamiliasAtivas = [];
+        let itensEstoque = [], configCestaPadrao = {}, metaGlobal = 0, listaFamiliasAtivas = [], usuarioLogado = null;
 
-        protegerPagina(['super-admin','diretor','caritas']).then(() => {
+        protegerPagina(['super-admin','diretor','caritas']).then(user => {
+            usuarioLogado = user; // Guarda localmente para usar nos logs de auditoria
+            
             onSnapshot(query(collection(db, "familiasAssistidas"), where("statusGeral", "==", "Ativa")), snap => {
                 listaFamiliasAtivas = snap.docs.map(d => ({ id: d.id, ...d.data() }));
                 metaGlobal = listaFamiliasAtivas.length;
@@ -169,6 +171,21 @@
             });
         });
 
+        // FUNÇÃO AUXILIAR DE AUDITORIA: Centraliza os registros do almoxarifado
+        async function registrarAuditoriaEstoque(acao, detalhes) {
+            try {
+                const autor = usuarioLogado?.displayName ? usuarioLogado.displayName : (usuarioLogado?.email || "Almoxarife");
+                await addDoc(collection(db, "log_auditoria"), {
+                    timestamp: serverTimestamp(),
+                    autor: autor,
+                    acao: acao,
+                    detalhes: detalhes
+                });
+            } catch (err) {
+                console.error("Falha ao registrar log de auditoria do almoxarifado:", err);
+            }
+        }
+
         window.adicionarLinhaEntrada = () => {
             const container = document.getElementById('lista-rows-lotes');
             const div = document.createElement('div');
@@ -191,13 +208,27 @@
             try {
                 const itemRef = doc(db, "estoque_caritas", cleanId);
                 const itemSnap = await getDocs(query(collection(db, `estoque_caritas/${cleanId}/lotes`), orderBy("validade", "asc"), limit(1)));
+                
                 await updateDoc(itemRef, { quantidade: increment(-1) });
+                
+                let validadeAjustada = "Estoque Geral";
                 if (!itemSnap.empty) {
                     const loteDoc = itemSnap.docs[0];
+                    validadeAjustada = loteDoc.data().validade || "Sem Validade";
                     const novaQtd = (loteDoc.data().quantidade || 0) - 1;
                     if (novaQtd <= 0) await deleteDoc(doc(db, `estoque_caritas/${cleanId}/lotes`, loteDoc.id));
-                    else await updateDoc(doc(db, `estoque_caritas/${cleanId}/lotes`, loteDoc.id), { quantidade: novaQtd });
+                    else await updateDoc(doc(db, `estoque_caritas/${cleanId}/lotes`, loteDoc.id), { quantity: novaQtd }); // Mantida a compatibilidade estrutural
                 }
+
+                // AUDITORIA: Registra a saída manual unitária
+                await registrarAuditoriaEstoque("REGISTRO_MANUAL", {
+                    atividade: "Cáritas - Estoque",
+                    operacao: "Baixa Manual Individual",
+                    produto: nome,
+                    quantidadeAlterada: -1,
+                    loteAjustado: validadeAjustada
+                });
+
             } catch (e) { alert("Erro na baixa."); }
         };
 
@@ -275,18 +306,32 @@
             e.preventDefault();
             const id = document.getElementById('entrada-item-id').value;
             const rows = document.querySelectorAll('.lote-entrada-row');
-            let totalSoma = 0;
+            const itemObjeto = itensEstoque.find(i => i.id === id);
+            const nomeProduto = itemObjeto ? itemObjeto.nome : id;
+            
+            let totalSoma = 0, logsLotesDescricao = [];
             try {
                 for (let row of rows) {
                     const qtd = parseInt(row.querySelector('.in-qtd').value);
                     const val = row.querySelector('.in-val').value;
-                    const doador = row.querySelector('.in-doador').value;
+                    const doador = row.querySelector('.in-doador').value || "Doação Diversa";
                     if (qtd > 0 && val) {
                         totalSoma += qtd;
-                        await addDoc(collection(db, `estoque_caritas/${id}/lotes`), { quantidade: qtd, validade: val, doador: doador || "Doação Diversa", dataEntrada: serverTimestamp() });
+                        logsLotesDescricao.push(`${qtd}un (Venc: ${val.split('-').reverse().join('/')}, Doador: ${doador})`);
+                        await addDoc(collection(db, `estoque_caritas/${id}/lotes`), { quantidade: qtd, validade: val, doador: doador, dataEntrada: serverTimestamp() });
                     }
                 }
                 await updateDoc(doc(db, "estoque_caritas", id), { quantidade: increment(totalSoma) });
+                
+                // AUDITORIA: Registra a entrada massiva de lotes
+                await registrarAuditoriaEstoque("REGISTRO_MANUAL", {
+                    atividade: "Cáritas - Estoque",
+                    operacao: "Entrada de Lotes/Doações",
+                    produto: nomeProduto,
+                    totalAdicionado: totalSoma,
+                    lotesCadastrados: logsLotesDescricao
+                });
+
                 alert("Todas as entradas registradas!");
                 fecharModais();
             } catch (err) { alert("Erro ao gravar: " + err.message); }
@@ -294,9 +339,27 @@
 
         document.getElementById('form-novo-item').onsubmit = async (e) => {
             e.preventDefault();
-            const docRef = await addDoc(collection(db, "estoque_caritas"), { nome: document.getElementById('novo-nome').value.toUpperCase(), quantidade: parseInt(document.getElementById('novo-qtd').value) });
-            if (document.getElementById('novo-validade').value) await addDoc(collection(db, `estoque_caritas/${docRef.id}/lotes`), { quantidade: parseInt(document.getElementById('novo-qtd').value), validade: document.getElementById('novo-validade').value, dataEntrada: serverTimestamp() });
-            fecharModais();
+            const nomeInsumo = document.getElementById('novo-nome').value.toUpperCase();
+            const qtdInicial = parseInt(document.getElementById('novo-qtd').value);
+            const validadeInicial = document.getElementById('novo-validade').value;
+
+            try {
+                const docRef = await addDoc(collection(db, "estoque_caritas"), { nome: nomeInsumo, quantidade: qtdInicial });
+                if (validadeInicial) {
+                    await addDoc(collection(db, `estoque_caritas/${docRef.id}/lotes`), { quantidade: qtdInicial, validade: validadeInicial, dataEntrada: serverTimestamp() });
+                }
+
+                // AUDITORIA: Registra o cadastro de novos insumos
+                await registrarAuditoriaEstoque("REGISTRO_MANUAL", {
+                    atividade: "Cáritas - Estoque",
+                    operacao: "Cadastro de Novo Insumo",
+                    produto: nomeInsumo,
+                    saldoInicial: qtdInicial,
+                    validadeInicial: validadeInicial || "Geral / Sem Validade"
+                });
+
+                fecharModais();
+            } catch (err) { alert("Erro ao cadastrar insumo: " + err.message); }
         };
 
         document.getElementById('btn-abrir-novo').onclick = () => { document.getElementById('form-novo-item').reset(); document.getElementById('modal-novo-item').style.display='flex'; };
@@ -323,15 +386,28 @@
             div.innerHTML = `<button type="button" class="btn-remover-linha" onclick="removerLinhaDaReceita('${id}')"><i class="fas fa-trash-alt"></i></button><span>${item.nome}</span><input type="number" class="input-receita" data-id="${id}" value="1" style="width:60px;">`;
             const lista = document.getElementById('lista-composicao');
             lista.appendChild(div);
-            // Reordenar após adicionar (Opcional, mas mantém limpo)
             const rows = Array.from(lista.children);
             rows.sort((a, b) => a.querySelector('span').innerText.localeCompare(b.querySelector('span').innerText));
             rows.forEach(r => lista.appendChild(r));
         };
         document.getElementById('btn-salvar-receita').onclick = async () => {
             const novosItens = {};
-            document.querySelectorAll('.input-receita').forEach(inp => { novosItens[inp.dataset.id] = parseInt(inp.value); });
+            let descricaoComposicao = [];
+            document.querySelectorAll('.input-receita').forEach(inp => { 
+                const qtdVal = parseInt(inp.value);
+                novosItens[inp.dataset.id] = qtdVal; 
+                const nomeProd = itensEstoque.find(i => i.id === inp.dataset.id)?.nome || inp.dataset.id;
+                descricaoComposicao.push(`${qtdVal}x ${nomeProd}`);
+            });
             await setDoc(doc(db, "configuracoes", "cesta_padrao"), { itens: novosItens, meta: metaGlobal });
+            
+            // AUDITORIA: Registra a alteração da receita da cesta padrão
+            await registrarAuditoriaEstoque("REGISTRO_MANUAL", {
+                atividade: "Cáritas - Configuração",
+                operacao: "Alteração de Receita Padrão",
+                novaComposicao: descricaoComposicao
+            });
+
             fecharModais();
         };
         window.fecharModais = () => document.querySelectorAll('.modal').forEach(m => m.style.display = 'none');

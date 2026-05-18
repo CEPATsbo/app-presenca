@@ -120,7 +120,7 @@
                     ? familiaSelecionada.receitaPersonalizada 
                     : configCestaPadrao;
 
-                // 1. Grava histórico
+                // 1. Grava histórico detalhado na coleção de assistência
                 await addDoc(collection(db, "entregasCestas"), {
                     familiaId: familiaSelecionada.id,
                     responsavel: familiaSelecionada.responsavel1.nome,
@@ -128,6 +128,19 @@
                     voluntario: user.email,
                     observacoes: document.getElementById('obs-entrega').value,
                     tipoReceita: familiaSelecionada.tipoCesta || 'Padrao'
+                });
+
+                // CORREÇÃO ESSENCIAL: Dispara o Log para a auditoria da diretoria aparecer na tabela geral
+                const identificadorAutor = user.displayName ? user.displayName : user.email;
+                await addDoc(collection(db, "log_auditoria"), {
+                    timestamp: serverTimestamp(),
+                    autor: identificadorAutor,
+                    acao: "REGISTRO_MANUAL",
+                    detalhes: {
+                        atividade: "Cáritas",
+                        voluntario: familiaSelecionada.responsavel1.nome,
+                        observacoes: document.getElementById('obs-entrega').value || "Nenhuma"
+                    }
                 });
 
                 // 2. Atualiza data na família
@@ -145,7 +158,7 @@
                         // TRAVA 1: Garante que o Saldo Geral nunca fique negativo
                         await updateDoc(docRef, { quantidade: Math.max(0, saldoAtual - qtdParaBaixa) });
 
-                        // Baixa no lote mais antigo (FEFO) - Correção do ID da coleção (prodId)
+                        // Baixa no lote mais antigo (FEFO)
                         const qLotes = query(collection(db, `estoque_caritas/${prodId}/lotes`), orderBy("validade", "asc"), limit(1));
                         const loteSnap = await getDocs(qLotes);
                         if (!loteSnap.empty) {
@@ -232,7 +245,6 @@
             document.getElementById('modal-confirmacao').style.display = 'none';
             document.getElementById('obs-entrega').value = "";
             
-            // CORREÇÃO: Limpa referências antigas na memória e restaura o botão para a próxima família da fila
             const btn = document.getElementById('btn-finalizar');
             btn.onclick = null;
             btn.disabled = false;

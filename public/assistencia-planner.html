@@ -98,8 +98,7 @@
                 <label>Preletor(a)</label>
                 <select id="escala-preletor" class="select-voluntario"><option value="">Carregando...</option></select>
             </div>
-            <div class="form-group">
-                </div>
+            <div class="form-group"></div>
             <div class="form-group">
                 <label>Entrevistador(a) 1</label>
                 <select id="escala-entrevistador1" class="select-voluntario"><option value="">Carregando...</option></select>
@@ -137,14 +136,19 @@
 
     <script type="module">
         import { initializeApp, getApps, getApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
-        import { getFirestore, collection, getDocs, query, where, orderBy, serverTimestamp, Timestamp, doc, setDoc, getDoc } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
+        import { getFirestore, collection, getDocs, query, where, orderBy, serverTimestamp, Timestamp, doc, setDoc, getDoc, addDoc } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
         import { protegerPagina } from '/auth.js';
 
         const firebaseConfig = { apiKey: "AIzaSyBV7RPjk3cFTqL-aIpflJcUojKg1ZXMLuU", authDomain: "voluntarios-ativos---cepat.firebaseapp.com", projectId: "voluntarios-ativos---cepat", storageBucket: "voluntarios-ativos---cepat.firebasestorage.app", messagingSenderId: "66122858261", appId: "1:66122858261:web:7fa21f1805463b5c08331c" };
         const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
         const db = getFirestore(app);
 
-        protegerPagina(['super-admin','diretor','tesoureiro','conselheiro','recepcionista','entrevistador','caritas']).then(user => { inicializarPlanner(user); });
+        let usuarioLogado = null; // Guardará a sessão do voluntário
+
+        protegerPagina(['super-admin','diretor','tesoureiro','conselheiro','recepcionista','entrevistador','caritas']).then(user => { 
+            usuarioLogado = user;
+            inicializarPlanner(user); 
+        });
 
         async function inicializarPlanner(user) {
             const selectMes = document.getElementById('mes-referencia');
@@ -200,11 +204,13 @@
                 e.preventDefault();
                 const btn = document.getElementById('btn-gravar');
                 btn.disabled = true; btn.textContent = "Gravando...";
-                const idDoc = selectMes.options[selectMes.selectedIndex].text.replace(/\s+/g, '').replace(/\//g, '_');
+                
+                const textoMesReferencia = selectMes.options[selectMes.selectedIndex].text;
+                const idDoc = textoMesReferencia.replace(/\s+/g, '').replace(/\//g, '_');
 
                 const escala = {
                     dataTrabalho: Timestamp.fromDate(new Date(inputData.value + 'T12:00:00')),
-                    mesReferencia: selectMes.options[selectMes.selectedIndex].text,
+                    mesReferencia: textoMesReferencia,
                     tema: temaFinal.value,
                     equipe: {
                         mediuns: [document.getElementById('escala-medium1').value, document.getElementById('escala-medium2').value],
@@ -219,6 +225,21 @@
 
                 try {
                     await setDoc(doc(db, "escalaCaritas", idDoc), escala, { merge: true });
+
+                    // CORREÇÃO: Dispara a linha de log em texto puro antes de reativar o botão da tela
+                    const identificadorAutor = usuarioLogado?.displayName ? usuarioLogado.displayName : (usuarioLogado?.email || "Coordenador");
+                    await addDoc(collection(db, "log_auditoria"), {
+                        timestamp: serverTimestamp(),
+                        autor: identificadorAutor,
+                        acao: "REGISTRO_MANUAL",
+                        detalhes: {
+                            atividade: "Cáritas - Escala",
+                            operacao: "Montagem de Escala Mensal",
+                            mesDefinido: textoMesReferencia,
+                            dataDoTrabalho: inputData.value.split('-').reverse().join('/')
+                        }
+                    });
+
                     alert("Escala gravada com sucesso!");
                 } catch (err) { alert("Erro: " + err.message); }
                 btn.disabled = false; btn.textContent = "Gravar Escala Mensal";

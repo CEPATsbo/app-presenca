@@ -69,7 +69,6 @@
                 onSnapshot(query(collection(db, "familiasAssistidas"), where("statusGeral", "==", "Ativa")), (snapshot) => {
                     let html = '';
                     
-                    // ORDENAÇÃO POR GRUPO FAMILIAR (Nome do Responsável 1)
                     const familiasOrdenadas = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }))
                         .sort((a, b) => {
                             const nomeA = a.responsavel1?.nome || "";
@@ -84,8 +83,10 @@
                             const idade = calcularIdade(filho.nascimento);
                             
                             if (idade <= 12) {
-                                const padrinho = filho.padrinho || { nome: '', tel: '' };
-                                const isAtivo = padrinho.nome !== '';
+                                const padrinho = child.padrinho || { nome: '', tel: '' }; // Tratado internamente para manter compatibilidade estrutural
+                                const padrinhoNomeReal = filho.padrinho?.nome || '';
+                                const padrinhoTelReal = filho.padrinho?.tel || '';
+                                const isAtivo = padrinhoNomeReal !== '';
                                 
                                 html += `
                                     <div class="child-card ${isAtivo ? 'padrinho-ativo' : ''}">
@@ -95,10 +96,10 @@
                                             <p class="info-p"><i class="fas fa-tshirt"></i> Roupa: ${filho.tamanho || 'N/A'} | Calçado: ${filho.calcado || 'N/A'}</p>
                                         </div>
                                         <div class="padrinho-form">
-                                            <input type="text" id="p-nome-${familiaId}-${index}" placeholder="Nome do Padrinho" value="${padrinho.nome}">
-                                            <input type="tel" id="p-tel-${familiaId}-${index}" placeholder="WhatsApp" value="${padrinho.tel}">
+                                            <input type="text" id="p-nome-${familiaId}-${index}" placeholder="Nome do Padrinho" value="${padrinhoNomeReal}">
+                                            <input type="tel" id="p-tel-${familiaId}-${index}" placeholder="WhatsApp" value="${padrinhoTelReal}">
                                         </div>
-                                        <button class="btn-vincular" onclick="vincularPadrinho('${familiaId}', ${index}, '${filho.nome}', '${user.displayName || user.email}')">
+                                        <button class="btn-vincular" onclick="vincularPadrinho('${familiaId}', ${index}, '${filho.nome}')">
                                             <i class="fas fa-save"></i> Salvar
                                         </button>
                                     </div>`;
@@ -108,7 +109,7 @@
                     container.innerHTML = html || '<p style="text-align:center;">Nenhuma criança encontrada.</p>';
                 });
 
-                window.vincularPadrinho = async (famId, filhoIdx, nomeCrianca, nomeUsuario) => {
+                window.vincularPadrinho = async (famId, filhoIdx, nomeCrianca) => {
                     const nomeP = document.getElementById(`p-nome-${famId}-${filhoIdx}`).value;
                     const telP = document.getElementById(`p-tel-${famId}-${filhoIdx}`).value;
 
@@ -121,11 +122,19 @@
                         
                         await updateDoc(famRef, { filhos: filhosAtuais });
 
+                        // CORREÇÃO: Estrutura alinhada com a Regra de Ouro em texto puro para a diretoria ler perfeitamente
+                        const identificadorAutor = user.displayName ? user.displayName : user.email;
                         await addDoc(collection(db, "log_auditoria"), {
                             timestamp: serverTimestamp(),
-                            autor: { nome: nomeUsuario },
-                            acao: "VINCULO_PADRINHO",
-                            detalhes: `Vinculou padrinho(a) ${nomeP || 'Removido'} à criança ${nomeCrianca}`
+                            autor: identificadorAutor,
+                            acao: "REGISTRO_MANUAL",
+                            detalhes: {
+                                atividade: "Cáritas - Natal",
+                                operacao: "Vínculo de Padrinho",
+                                criancaAtendida: nomeCrianca,
+                                padrinhoNome: nomeP || "Removido",
+                                padrinhoContato: telP || "N/A"
+                            }
                         });
 
                         alert("Dados do padrinho salvos com sucesso!");

@@ -9,7 +9,6 @@
     <script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
     
     <style>
-        /* Estilos Gerais preservados */
         body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background-color: #f4f6f9; margin: 0; padding: 20px; display: flex; flex-direction: column; align-items: center; }
         .nav-header { width: 100%; max-width: 1000px; display: flex; justify-content: space-between; margin-bottom: 20px; align-items: center; }
         .btn-voltar { background-color: #6c757d; color: white; padding: 10px 15px; border-radius: 8px; text-decoration: none; font-weight: bold; font-size: 0.9em; }
@@ -64,7 +63,7 @@
         .ficha-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-top: 15px; }
         .ficha-check-group { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 5px; }
         .ficha-check-item { background: #f1f1f1; padding: 5px 10px; border-radius: 4px; font-size: 0.9em; display: flex; align-items: center; gap: 5px; cursor: pointer; }
-        .ficha-textarea { width: 100%; height: 80px; padding: 10px; border-radius: 6px; border: 1px solid #ccc; font-family: inherit; resize: vertical; margin-top: 5px; box-sizing: border-box;}
+        .ficha-textarea { width: 100%; height: 80px; padding: 10px; border-radius: 6px; border: 1px solid #ccc; font-family: inherit; resize: vertical; margin-top: 5px; box-sizing: border-box; }
         .historico-atendimentos { margin-top: 20px; border-top: 2px solid #eee; padding-top: 15px; }
         .atendimento-item { background: #f8f9fa; padding: 10px; border-radius: 6px; margin-bottom: 8px; border-left: 4px solid #2c3e50; font-size: 0.9em; cursor: pointer; }
 
@@ -275,7 +274,7 @@
                         <textarea id="ficha-obs" class="ficha-textarea" placeholder="Análise técnica e observações fraternas..."></textarea>
                     </div>
 
-                    <div style="margin-top:15px; display:flex; gap:20px; align-items:center; background: #f8f9fa; padding: 15px; border-radius: 8px;">
+                    <div class="grid-layout" style="margin-top:15px; display:flex; gap:20px; align-items:center; background: #f8f9fa; padding: 15px; border-radius: 8px;">
                         <label><strong>RECEBEU CESTA BÁSICA?</strong></label>
                         <label style="cursor:pointer;"><input type="radio" name="ficha-cesta" value="Sim"> SIM</label>
                         <label style="cursor:pointer;"><input type="radio" name="ficha-cesta" value="Não"> NÃO</label>
@@ -304,8 +303,7 @@
         <div class="modal-content" style="max-width: 500px;">
             <h3>Personalizar Receita da Família</h3>
             <p style="font-size: 0.85em; color: #666; margin-bottom: 20px;">Defina as quantidades específicas de cada item para esta cesta.</p>
-            <div id="lista-itens-personalizados" style="max-height: 400px; overflow-y: auto; border: 1px solid #eee; padding: 10px; border-radius: 8px;">
-                </div>
+            <div id="lista-itens-personalizados" style="max-height: 400px; overflow-y: auto; border: 1px solid #eee; padding: 10px; border-radius: 8px;"></div>
             <div style="margin-top: 25px; display: flex; gap: 10px;">
                 <button onclick="document.getElementById('modal-cesta-personalizada').style.display='none'" style="flex:1; padding:12px; border-radius:8px; border:1px solid #ccc; cursor:pointer;">Sair sem salvar</button>
                 <button id="btn-salvar-receita-individual" style="flex:1; padding:12px; border-radius:8px; background:#27ae60; color:white; border:none; font-weight:bold; cursor:pointer;">Gravar Receita</button>
@@ -315,7 +313,7 @@
 
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
-        import { getFirestore, collection, addDoc, onSnapshot, query, orderBy, serverTimestamp, doc, updateDoc, getDocs, where } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
+        import { getFirestore, collection, addDoc, onSnapshot, query, orderBy, serverTimestamp, doc, updateDoc, getDocs, where, setDoc } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
         import { protegerPagina } from '/auth.js';
 
         const firebaseConfig = { apiKey: "AIzaSyBV7RPjk3cFTqL-aIpflJcUojKg1ZXMLuU", authDomain: "voluntarios-ativos---cepat.firebaseapp.com", projectId: "voluntarios-ativos---cepat", storageBucket: "voluntarios-ativos---cepat.firebasestorage.app", messagingSenderId: "66122858261", appId: "1:66122858261:web:7fa21f1805463b5c08331c" };
@@ -325,9 +323,13 @@
         let todasFamilias = [];
         let familiaSelecionadaId = null; 
         let itensEstoqueGlobal = [];
+        let usuarioLogado = null; // Guardará o operador logado do sistema
 
         protegerPagina(['super-admin','diretor','tesoureiro','conselheiro','recepcionista','entrevistador','caritas'])
-            .then(user => inicializar(user))
+            .then(user => {
+                usuarioLogado = user;
+                inicializar(user);
+            })
             .catch(() => window.location.href = '/dashboard.html');
 
         function formatarNome(nome) {
@@ -350,6 +352,21 @@
             return idade;
         }
 
+        // FUNÇÃO CENTRALIZADA DE LOGS: Garante rastro limpo com a Regra de Ouro para a diretoria
+        async function registrarAuditoriaFamilia(acao, detalhes) {
+            try {
+                const autorIdentificado = usuarioLogado?.displayName ? usuarioLogado.displayName : (usuarioLogado?.email || "Operador Cáritas");
+                await addDoc(collection(db, "log_auditoria"), {
+                    timestamp: serverTimestamp(),
+                    autor: autorIdentificado,
+                    acao: acao,
+                    detalhes: detalhes
+                });
+            } catch (err) {
+                console.error("Falha ao registrar log na auditoria das famílias:", err);
+            }
+        }
+
         function inicializar(user) {
             const ui = {
                 modal: document.getElementById('modal-familia'),
@@ -358,6 +375,9 @@
                 form: document.getElementById('form-familia'),
                 btnNovo: document.getElementById('btn-abrir-modal'),
                 btnFechar: document.getElementById('btn-fechar-modal'),
+                btnFecharDet: document.querySelector('#modal-detalhes button[onclick*="none"]'),
+                btnFecharCesta: document.querySelector('#modal-cesta-personalizada button[onclick*="none"]'),
+                btnCancelForm: document.getElementById('btn-fechar-modal'),
                 btnAddFilho: document.getElementById('btn-add-filho'),
                 listaFilhos: document.getElementById('lista-filhos-inputs'),
                 checkRua: document.getElementById('situacao-rua-checkbox'),
@@ -401,7 +421,7 @@
                 ui.listaFilhos.appendChild(div);
             };
 
-            const atualizarListaRealtime = () => {
+            const actualizarListaRealtime = () => {
                 const statusSelecionado = ui.filtroStatus.value;
                 const q = query(collection(db, "familiasAssistidas"), where("statusGeral", "==", statusSelecionado));
                 onSnapshot(q, (snapshot) => {
@@ -411,7 +431,7 @@
                 });
             };
 
-            ui.filtroStatus.onchange = atualizarListaRealtime;
+            ui.filtroStatus.onchange = actualizarListaRealtime;
             atualizarListaRealtime();
 
             function renderizarLista(dados) {
@@ -443,7 +463,6 @@
                 const f = todasFamilias.find(x => x.id === id);
                 if (!f) return;
 
-                // Carrega dados editáveis no modal
                 document.getElementById('det-edit-resp1').value = f.responsavel1.nome;
                 document.getElementById('det-edit-resp2').value = f.responsavel2?.nome || "";
                 document.getElementById('det-edit-tel').value = f.contato.telefone;
@@ -483,27 +502,51 @@
             ui.tipoCestaDet.onchange = async () => {
                 ui.btnConfigCesta.style.display = ui.tipoCestaDet.value === 'Personalizada' ? 'flex' : 'none';
                 await updateDoc(doc(db, "familiasAssistidas", familiaSelecionadaId), { tipoCesta: ui.tipoCestaDet.value });
+                
+                const f = todasFamilias.find(x => x.id === familiaSelecionadaId);
+                await registrarAuditoriaFamilia("REGISTRO_MANUAL", {
+                    atividade: "Cáritas - Prontuário",
+                    operacao: "Mudança do Modelo de Cesta",
+                    responsavel: f.responsavel1.nome,
+                    novoModelo: ui.tipoCestaDet.value
+                });
             };
 
             ui.btnConfigCesta.onclick = () => {
                 const f = todasFamilias.find(x => x.id === familiaSelecionadaId);
-                const receita = f.receitaPersonalizada || {};
+                const receiver = f.receitaPersonalizada || {};
                 ui.listaPersonalizada.innerHTML = itensEstoqueGlobal.map(i => `
                     <div class="item-personalizado">
                         <span>${i.nome}</span>
-                        <input type="number" class="input-receita-f" data-id="${i.id}" value="${receita[i.id] || 0}" min="0">
+                        <input type="number" class="input-receita-f" data-id="${i.id}" value="${receiver[i.id] || 0}" min="0">
                     </div>`).join('');
                 ui.modalCesta.style.display = 'flex';
             };
 
             document.getElementById('btn-salvar-receita-individual').onclick = async () => {
+                const f = todasFamilias.find(x => x.id === familiaSelecionadaId);
                 const novaRec = {};
+                let composicaoTexto = [];
+                
                 document.querySelectorAll('.input-receita-f').forEach(inp => {
                     const q = parseInt(inp.value);
-                    if(q > 0) novaRec[inp.dataset.id] = q;
+                    if(q > 0) {
+                        novaRec[inp.dataset.id] = q;
+                        const nomeInsumo = itensEstoqueGlobal.find(i => i.id === inp.dataset.id)?.nome || inp.dataset.id;
+                        composicaoTexto.push(`${q}x ${nomeInsumo}`);
+                    }
                 });
                 try {
                     await updateDoc(doc(db, "familiasAssistidas", familiaSelecionadaId), { receitaPersonalizada: novaRec });
+                    
+                    // AUDITORIA: Registra a receita customizada da família
+                    await registrarAuditoriaFamilia("REGISTRO_MANUAL", {
+                        atividade: "Cáritas - Prontuário",
+                        operacao: "Personalização de Itens da Cesta",
+                        responsavel: f.responsavel1.nome,
+                        itensDefinidos: composicaoTexto
+                    });
+
                     alert("Receita personalizada salva!");
                     ui.modalCesta.style.display = 'none';
                 } catch (e) { alert("Erro: " + e.message); }
@@ -517,6 +560,14 @@
                     await updateDoc(doc(db, "familiasAssistidas", familiaSelecionadaId), { 
                         statusGeral: novoStatus, ultimaAlteracaoEm: serverTimestamp()
                     });
+                    
+                    // AUDITORIA: Registra a alteração de ativação da família
+                    await registrarAuditoriaFamilia("REGISTRO_MANUAL", {
+                        atividade: "Cáritas - Status",
+                        operacao: novoStatus === "Ativa" ? "Reativação de Família" : "Desativação de Família",
+                        responsavel: f.responsavel1.nome
+                    });
+
                     ui.modalDet.style.display = 'none';
                 }
             };
@@ -559,7 +610,24 @@
                 row.classList.add('deleted-flag');
             };
 
-            // SALVAMENTO COMPLETO (RESPONSÁVEIS + DEPENDENTES)
+            ui.btnNovoFilhoDet.onclick = () => {
+                const container = document.getElementById('det-lista-filhos');
+                if (container.innerText.includes("Sem dependentes")) container.innerHTML = "";
+                
+                const div = document.createElement('div');
+                div.className = 'edicao-medidas-grid';
+                div.innerHTML = `
+                    <input type="text" class="input-medida input-nome-filho edit-nome" value="" placeholder="Nome do Filho">
+                    <input type="date" class="input-medida input-data-filho edit-nasc" value="">
+                    <div style="display:flex; flex-direction:column; gap:5px;">
+                        <input type="text" class="input-medida edit-roupa" value="" placeholder="Roupa">
+                        <input type="text" class="input-medida edit-calcado" value="" placeholder="Calçado">
+                    </div>
+                    <button type="button" class="btn-del-child" onclick="this.closest('.edicao-medidas-grid').remove()"><i class="fas fa-trash-alt"></i></button>
+                `;
+                container.appendChild(div);
+            };
+
             ui.btnAtualizarMedidas.onclick = async () => {
                 if (!familiaSelecionadaId) return;
                 
@@ -573,22 +641,17 @@
                             novosFilhos.push({
                                 nome: formatarNome(nome),
                                 nascimento: nasc,
-                                tamanho: row.querySelector('.edit-roupa').value.toUpperCase(),
-                                calcado: row.querySelector('.edit-calcado').value
+                                tamanho: (row.querySelector('.edit-roupa').value || '').toUpperCase(),
+                                calcado: row.querySelector('.edit-calcado').value || ''
                             });
                         }
                     }
                 });
 
+                const nomeResp1 = formatarNome(document.getElementById('det-edit-resp1').value);
                 const dadosAtualizados = {
-                    responsavel1: { 
-                        ...f.responsavel1, 
-                        nome: formatarNome(document.getElementById('det-edit-resp1').value) 
-                    },
-                    responsavel2: { 
-                        ...f.responsavel2, 
-                        nome: formatarNome(document.getElementById('det-edit-resp2').value) 
-                    },
+                    responsavel1: { ...f.responsavel1, nome: nomeResp1 },
+                    responsavel2: { ...f.responsavel2, nome: formatarNome(document.getElementById('det-edit-resp2').value) },
                     contato: {
                         ...f.contato,
                         telefone: document.getElementById('det-edit-tel').value,
@@ -600,6 +663,15 @@
 
                 try {
                     await updateDoc(doc(db, "familiasAssistidas", familiaSelecionadaId), dadosAtualizados);
+                    
+                    // AUDITORIA: Registra alterações nos cadastros e prontuários existentes
+                    await registrarAuditoriaFamilia("REGISTRO_MANUAL", {
+                        atividade: "Cáritas - Prontuário",
+                        operacao: "Atualização de Cadastro/Dependentes",
+                        responsavel: nomeResp1,
+                        totalDependentesAjustado: novosFilhos.length
+                    });
+
                     alert("Prontuário atualizado com sucesso!");
                     abrirDetalhes(familiaSelecionadaId);
                 } catch (e) { alert("Erro: " + e.message); }
@@ -607,18 +679,37 @@
 
             ui.btnGravarAtendimento.onclick = async () => {
                 if(!confirm("Deseja gravar e arquivar esta ficha?")) return;
+                const f = todasFamilias.find(x => x.id === familiaSelecionadaId);
+                const arrSituacao = Array.from(document.querySelectorAll('#ficha-situacao input:checked')).map(c => c.value);
+                const oSit = document.getElementById('ficha-situacao-outros').value;
+                if(oSit) arrSituacao.push(oSit);
+
+                const arrNecessidades = Array.from(document.querySelectorAll('#ficha-necessidades input:checked')).map(c => c.value);
+                const oNec = document.getElementById('ficha-necessidades-outros').value;
+                if(oNec) arrNecessidades.push(oNec);
+
                 const dadosFicha = {
                     data: serverTimestamp(),
-                    situacao: Array.from(document.querySelectorAll('#ficha-situacao input:checked')).map(c => c.value),
-                    necessidades: Array.from(document.querySelectorAll('#ficha-necessidades input:checked')).map(c => c.value),
+                    situacao: arrSituacao,
+                    necessidades: arrNecessidades,
                     estadoCivil: document.getElementById('ficha-estado-civil').value,
-                    voluntario: document.getElementById('ficha-voluntario').value,
+                    voluntario: document.getElementById('ficha-voluntario').value || user.displayName || "Entrevistador",
                     relato: document.getElementById('ficha-relato').value,
                     obs: document.getElementById('ficha-obs').value,
                     cesta: document.querySelector('input[name="ficha-cesta"]:checked')?.value || "Não informado"
                 };
                 try {
                     await addDoc(collection(db, `familiasAssistidas/${familiaSelecionadaId}/atendimentos`), dadosFicha);
+                    
+                    // AUDITORIA: Registra o arquivamento mensal da entrevista social
+                    await registrarAuditoriaFamilia("REGISTRO_MANUAL", {
+                        atividade: "Cáritas - Ficha Atendimento",
+                        operacao: "Arquivamento de Atendimento Mensal",
+                        responsavel: f.responsavel1.nome,
+                        entrevistador: dadosFicha.voluntario,
+                        recebeuCesta: dadosFicha.cesta
+                    });
+
                     alert("Ficha arquivada com sucesso!");
                     carregarHistoricoAtendimentos(familiaSelecionadaId);
                 } catch (e) { alert("Erro: " + e.message); }
@@ -632,8 +723,9 @@
                     tamanho: item.querySelector('.f-roupa').value.toUpperCase(),
                     calcado: item.querySelector('.f-calcado').value
                 }));
+                const nomePrincipal = formatarNome(document.getElementById('resp1-nome').value);
                 const novaFamilia = {
-                    responsavel1: { nome: formatarNome(document.getElementById('resp1-nome').value), nascimento: document.getElementById('resp1-nasc').value, tipo: document.getElementById('resp1-tipo').value },
+                    responsavel1: { nome: nomePrincipal, nascimento: document.getElementById('resp1-nasc').value, tipo: document.getElementById('resp1-tipo').value },
                     responsavel2: { nome: formatarNome(document.getElementById('resp2-nome').value), nascimento: document.getElementById('resp2-nasc').value, tipo: document.getElementById('resp2-tipo').value },
                     contato: { telefone: document.getElementById('familia-tel').value, endereco: ui.inputEndereco.value, emSituacaoDeRua: ui.checkRua.checked },
                     tipoCesta: document.getElementById('novo-tipo-cesta').value,
@@ -643,6 +735,15 @@
                 };
                 try {
                     await addDoc(collection(db, "familiasAssistidas"), novaFamilia);
+                    
+                    // AUDITORIA: Registra o nascimento de um novo cadastro na assistência social
+                    await registrarAuditoriaFamilia("REGISTRO_MANUAL", {
+                        atividade: "Cáritas - Cadastro",
+                        operacao: "Inclusão de Nova Família",
+                        responsavel: nomePrincipal,
+                        totalDependentes: dependentes.length
+                    });
+
                     alert("Família cadastrada com sucesso!");
                     ui.modal.style.display = 'none';
                 } catch (err) { alert("Erro: " + err.message); }
