@@ -145,7 +145,7 @@
                         await updateDoc(docRef, { quantidade: Math.max(0, saldoAtual - qtdParaBaixa) });
 
                         // Baixa no lote mais antigo (FEFO)
-                        const qLotes = query(collection(db, `estoque_caritas/${prodId}/lotes`), orderBy("validade", "asc"), limit(1));
+                        const qLotes = query(collection(db, `estoque_caritas/${pId}/lotes`), orderBy("validade", "asc"), limit(1));
                         const loteSnap = await getDocs(qLotes);
                         if (!loteSnap.empty) {
                             const loteDoc = loteSnap.docs[0];
@@ -160,73 +160,77 @@
                 fecharModal();
             } catch (e) {
                 alert("Erro: " + e.message);
+                // Restaura o botão em caso de erro na execução
                 btn.disabled = false;
-                btn.innerText = "Finalizar";
+                btn.innerText = "Finalizar Entrega";
             }
         }
 
-       function renderizar(dados) {
-    const container = document.getElementById('lista-entrega');
-    const hoje = new Date();
-    
-    if (dados.length === 0) {
-        container.innerHTML = "<p style='text-align:center; padding:20px; color:#666;'>Nenhuma família ativa encontrada.</p>";
-        return;
-    }
+        function renderizar(dados) {
+            const container = document.getElementById('lista-entrega');
+            const hoje = new Date();
+            
+            if (dados.length === 0) {
+                container.innerHTML = "<p style='text-align:center; padding:20px; color:#666;'>Nenhuma família ativa encontrada.</p>";
+                return;
+            }
 
-    // Ordenação Alfabética solicitada
-    const dadosOrdenados = [...dados].sort((a, b) => 
-        a.responsavel1.nome.localeCompare(b.responsavel1.nome)
-    );
+            const dadosOrdenados = [...dados].sort((a, b) => 
+                a.responsavel1.nome.localeCompare(b.responsavel1.nome)
+            );
 
-    container.innerHTML = dadosOrdenados.map(f => {
-        const dataEntrega = f.ultimaCesta ? f.ultimaCesta.toDate() : null;
-        const jaEntregueNoMes = dataEntrega && 
-                               dataEntrega.getMonth() === hoje.getMonth() && 
-                               dataEntrega.getFullYear() === hoje.getFullYear();
-        
-        // NOVA TRAVA: Verifica se a família está na lista de picking ativa para este mês
-        const estaNoPickingAtual = pickingAtivoIds.includes(f.id);
-        
-        let textoBotao = "Confirmar";
-        let desabilitar = false;
+            container.innerHTML = dadosOrdenados.map(f => {
+                const dataEntrega = f.ultimaCesta ? f.ultimaCesta.toDate() : null;
+                const jaEntregueNoMes = dataEntrega && 
+                                       dataEntrega.getMonth() === hoje.getMonth() && 
+                                       dataEntrega.getFullYear() === hoje.getFullYear();
+                
+                const estaNoPickingAtual = pickingAtivoIds.includes(f.id);
+                
+                let textoBotao = "Confirmar";
+                let desabilitar = false;
 
-        if (jaEntregueNoMes) {
-            textoBotao = "Entregue";
-            desabilitar = true;
-        } else if (!estaNoPickingAtual) {
-            // Se não está no picking e o mês já está em andamento, é uma família para o próximo mês
-            textoBotao = "Próximo Ciclo";
-            desabilitar = true;
+                if (jaEntregueNoMes) {
+                    textoBotao = "Entregue";
+                    desabilitar = true;
+                } else if (!estaNoPickingAtual) {
+                    textoBotao = "Próximo Ciclo";
+                    desabilitar = true;
+                }
+
+                return `
+                    <div class="familia-row">
+                        <div>
+                            <div class="info-nome">${f.responsavel1.nome}</div>
+                            <span class="info-dependentes"><i class="fas fa-child"></i> ${f.filhos ? f.filhos.length : 0} dependentes</span>
+                            <small>Última entrega: ${dataEntrega ? dataEntrega.toLocaleDateString() : 'Nunca'}</small>
+                        </div>
+                        <div style="display: flex; align-items: center;">
+                            <button class="btn-entregar" 
+                                onclick="abrirModal('${f.id}', '${f.responsavel1.nome}')" 
+                                ${desabilitar ? 'disabled' : ''} 
+                                style="${!estaNoPickingAtual && !jaEntregueNoMes ? 'background-color: #95a5a6;' : ''}">
+                                ${textoBotao}
+                            </button>
+                            ${jaEntregueNoMes ? `
+                                <button class="btn-zap" onclick="notificarZap('${f.responsavel1.nome}')" title="Notificar via WhatsApp">
+                                    <i class="fab fa-whatsapp"></i>
+                                </button>
+                            ` : ''}
+                        </div>
+                    </div>`;
+            }).join('');
         }
-
-        return `
-            <div class="familia-row">
-                <div>
-                    <div class="info-nome">${f.responsavel1.nome}</div>
-                    <span class="info-dependentes"><i class="fas fa-child"></i> ${f.filhos ? f.filhos.length : 0} dependentes</span>
-                    <small>Última entrega: ${dataEntrega ? dataEntrega.toLocaleDateString() : 'Nunca'}</small>
-                </div>
-                <div style="display: flex; align-items: center;">
-                    <button class="btn-entregar" 
-                        onclick="abrirModal('${f.id}', '${f.responsavel1.nome}')" 
-                        ${desabilitar ? 'disabled' : ''} 
-                        style="${!estaNoPickingAtual && !jaEntregueNoMes ? 'background-color: #95a5a6;' : ''}">
-                        ${textoBotao}
-                    </button>
-                    ${jaEntregueNoMes ? `
-                        <button class="btn-zap" onclick="notificarZap('${f.responsavel1.nome}')" title="Notificar via WhatsApp">
-                            <i class="fab fa-whatsapp"></i>
-                        </button>
-                    ` : ''}
-                </div>
-            </div>`;
-    }).join('');
-}
 
         window.fecharModal = () => {
             document.getElementById('modal-confirmacao').style.display = 'none';
             document.getElementById('obs-entrega').value = "";
+            
+            // CORREÇÃO: Reseta o botão de envio para que a próxima família possa usar o modal sem travar
+            const btn = document.getElementById('btn-finalizar');
+            btn.onclick = null;
+            btn.disabled = false;
+            btn.innerText = "Finalizar Entrega";
         };
     </script>
 </body>
