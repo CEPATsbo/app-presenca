@@ -83,7 +83,8 @@
                             const idade = calcularIdade(filho.nascimento);
                             
                             if (idade <= 12) {
-                                const padrinho = child.padrinho || { nome: '', tel: '' }; // Tratado internamente para manter compatibilidade estrutural
+                                // CORREÇÃO DO BUG CRÍTICO: Alterado de 'child.padrinho' para 'filho.padrinho'
+                                const padrinho = filho.padrinho || { nome: '', tel: '' }; 
                                 const padrinhoNomeReal = filho.padrinho?.nome || '';
                                 const padrinhoTelReal = filho.padrinho?.tel || '';
                                 const isAtivo = padrinhoNomeReal !== '';
@@ -122,11 +123,11 @@
                         
                         await updateDoc(famRef, { filhos: filhosAtuais });
 
-                        // CORREÇÃO: Estrutura alinhada com a Regra de Ouro em texto puro para a diretoria ler perfeitamente
-                        const identificadorAutor = user.displayName ? user.displayName : user.email;
+                        // LOG DE AUDITORIA ADICIONADO: Totalmente integrado no formato síncrono da diretoria
+                        const quemFez = user.displayName ? user.displayName : user.email;
                         await addDoc(collection(db, "log_auditoria"), {
                             timestamp: serverTimestamp(),
-                            autor: identificadorAutor,
+                            autor: quemFez,
                             acao: "REGISTRO_MANUAL",
                             detalhes: {
                                 atividade: "Cáritas - Natal",
