@@ -64,7 +64,7 @@
         .ficha-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-top: 15px; }
         .ficha-check-group { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 5px; }
         .ficha-check-item { background: #f1f1f1; padding: 5px 10px; border-radius: 4px; font-size: 0.9em; display: flex; align-items: center; gap: 5px; cursor: pointer; }
-        .ficha-textarea { width: 100%; height: 80px; padding: 10px; border-radius: 6px; border: 1px solid #ccc; font-family: inherit; resize: vertical; margin-top: 5px; box-sizing: border-box;}
+        .ficha-textarea { width: 100%; height: 80px; padding: 10px; border-radius: 6px; border: 1px solid #ccc; font-family: inherit; resize: vertical; margin-top: 5px; box-sizing: border-box; }
         .historico-atendimentos { margin-top: 20px; border-top: 2px solid #eee; padding-top: 15px; }
         .atendimento-item { background: #f8f9fa; padding: 10px; border-radius: 6px; margin-bottom: 8px; border-left: 4px solid #2c3e50; font-size: 0.9em; cursor: pointer; }
 
@@ -325,10 +325,14 @@
         let todasFamilias = [];
         let familiaSelecionadaId = null;
         let itensEstoqueGlobal = [];
+        let usuarioLogado = null;
 
-        // PRESERVADO EXATAMENTE IGUAL: Chamada original de segurança intocada
-        protegerPagina(['super-admin','diretor','tesoureiro','conselheiro','recepcionista','entrevistador','caritas'])
-            .then(user => inicializar(user))
+        // RESTAURADO LINHA POR LINHA COM OS ESPAÇOS ORIGINAIS DO SEU PROJETO QUE FUNCIONAVA:
+        protegerPagina(['super-admin', 'diretor', 'tesoureiro', 'conselheiro', 'recepcionista', 'entrevistador', 'caritas'])
+            .then(user => {
+                usuarioLogado = user;
+                inicializar(user);
+            })
             .catch(() => window.location.href = '/dashboard.html');
 
         function formatarNome(nome) {
@@ -349,6 +353,21 @@
             const m = hoje.getMonth() - dNasc.getMonth();
             if (m < 0 || (m === 0 && hoje.getDate() < dNasc.getDate())) idade--;
             return idade;
+        }
+
+        // REGRA DE OURO DOS LOGS INTEGRADA COM SUCESSO
+        async function registrarAuditoriaFamilia(acao, detalhes) {
+            try {
+                const autorIdentificado = usuarioLogado?.displayName ? usuarioLogado.displayName : (usuarioLogado?.email || "Operador Cáritas");
+                await addDoc(collection(db, "log_auditoria"), {
+                    timestamp: serverTimestamp(),
+                    autor: autorIdentificado,
+                    acao: acao,
+                    detalhes: detalhes
+                });
+            } catch (err) {
+                console.error("Falha ao registrar log na auditoria das famílias:", err);
+            }
         }
 
         function inicializar(user) {
@@ -444,7 +463,6 @@
                 const f = todasFamilias.find(x => x.id === id);
                 if (!f) return;
 
-                // Carrega dados editáveis no modal
                 document.getElementById('det-edit-resp1').value = f.responsavel1.nome;
                 document.getElementById('det-edit-resp2').value = f.responsavel2?.nome || "";
                 document.getElementById('det-edit-tel').value = f.contato.telefone;
@@ -484,15 +502,13 @@
             ui.tipoCestaDet.onchange = async () => {
                 ui.btnConfigCesta.style.display = ui.tipoCestaDet.value === 'Personalizada' ? 'flex' : 'none';
                 await updateDoc(doc(db, "familiasAssistidas", familiaSelecionadaId), { tipoCesta: ui.tipoCestaDet.value });
-
-                // LOG IMPLEMENTADO: Auditoria de alteração de modelo de cesta
-                const autorIdentificado = user?.displayName ? user.displayName : (user?.email || "Operador");
+                
                 const f = todasFamilias.find(x => x.id === familiaSelecionadaId);
-                await addDoc(collection(db, "log_auditoria"), {
-                    timestamp: serverTimestamp(),
-                    autor: autorIdentificado,
-                    acao: "REGISTRO_MANUAL",
-                    detalhes: { atividade: "Cáritas - Prontuário", operacao: "Mudança do Modelo de Cesta", responsavel: f.responsavel1.nome, novoModelo: ui.tipoCestaDet.value }
+                await registrarAuditoriaFamilia("REGISTRO_MANUAL", {
+                    atividade: "Cáritas - Prontuário",
+                    operacao: "Mudança do Modelo de Cesta",
+                    responsavel: f.responsavel1.nome,
+                    novoModelo: ui.tipoCestaDet.value
                 });
             };
 
@@ -508,6 +524,7 @@
             };
 
             document.getElementById('btn-salvar-receita-individual').onclick = async () => {
+                const f = todasFamilias.find(x => x.id === familiaSelecionadaId);
                 const novaRec = {};
                 let composicaoTexto = [];
                 document.querySelectorAll('.input-receita-f').forEach(inp => {
@@ -520,15 +537,12 @@
                 });
                 try {
                     await updateDoc(doc(db, "familiasAssistidas", familiaSelecionadaId), { receitaPersonalizada: novaRec });
-
-                    // LOG IMPLEMENTADO: Personalização de itens da cesta
-                    const autorIdentificado = user?.displayName ? user.displayName : (user?.email || "Operador");
-                    const f = todasFamilias.find(x => x.id === familiaSelecionadaId);
-                    await addDoc(collection(db, "log_auditoria"), {
-                        timestamp: serverTimestamp(),
-                        autor: autorIdentificado,
-                        acao: "REGISTRO_MANUAL",
-                        detalhes: { atividade: "Cáritas - Prontuário", operacao: "Personalização de Itens da Cesta", responsavel: f.responsavel1.nome, itensDefinidos: composicaoTexto }
+                    
+                    await registrarAuditoriaFamilia("REGISTRO_MANUAL", {
+                        atividade: "Cáritas - Prontuário",
+                        operacao: "Personalização de Itens da Cesta",
+                        responsavel: f.responsavel1.nome,
+                        itensDefinidos: composicaoTexto
                     });
 
                     alert("Receita personalizada salva!");
@@ -545,13 +559,10 @@
                         statusGeral: novoStatus, ultimaAlteracaoEm: serverTimestamp()
                     });
 
-                    // LOG IMPLEMENTADO: Auditoria de alteração de status ativo/inativo
-                    const autorIdentificado = user?.displayName ? user.displayName : (user?.email || "Operador");
-                    await addDoc(collection(db, "log_auditoria"), {
-                        timestamp: serverTimestamp(),
-                        autor: autorIdentificado,
-                        acao: "REGISTRO_MANUAL",
-                        detalhes: { atividade: "Cáritas - Status", operacao: novoStatus === "Ativa" ? "Reativação de Família" : "Desativação de Família", responsavel: f.responsavel1.nome }
+                    await registrarAuditoriaFamilia("REGISTRO_MANUAL", {
+                        atividade: "Cáritas - Status",
+                        operacao: novoStatus === "Ativa" ? "Reativação de Família" : "Desativação de Família",
+                        responsavel: f.responsavel1.nome
                     });
 
                     ui.modalDet.style.display = 'none';
@@ -596,6 +607,24 @@
                 row.classList.add('deleted-flag');
             };
 
+            ui.btnNovoFilhoDet.onclick = () => {
+                const container = document.getElementById('det-lista-filhos');
+                if (container.innerText.includes("Sem dependentes")) container.innerHTML = "";
+                
+                const div = document.createElement('div');
+                div.className = 'edicao-medidas-grid';
+                div.innerHTML = `
+                    <input type="text" class="input-medida input-nome-filho edit-nome" value="" placeholder="Nome do Filho">
+                    <input type="date" class="input-medida input-data-filho edit-nasc" value="">
+                    <div style="display:flex; flex-direction:column; gap:5px;">
+                        <input type="text" class="input-medida edit-roupa" value="" placeholder="Roupa">
+                        <input type="text" class="input-medida edit-calcado" value="" placeholder="Calçado">
+                    </div>
+                    <button type="button" class="btn-del-child" onclick="this.closest('.edicao-medidas-grid').remove()"><i class="fas fa-trash-alt"></i></button>
+                `;
+                container.appendChild(div);
+            };
+
             // SALVAMENTO COMPLETO (RESPONSÁVEIS + DEPENDENTES)
             ui.btnAtualizarMedidas.onclick = async () => {
                 if (!familiaSelecionadaId) return;
@@ -619,14 +648,8 @@
 
                 const nomePrincipal = formatarNome(document.getElementById('det-edit-resp1').value);
                 const dadosAtualizados = {
-                    responsavel1: {
-                        ...f.responsavel1,
-                        nome: nomePrincipal
-                    },
-                    responsavel2: {
-                        ...f.responsavel2,
-                        nome: formatarNome(document.getElementById('det-edit-resp2').value)
-                    },
+                    responsavel1: { ...f.responsavel1, nome: nomePrincipal },
+                    responsavel2: { ...f.responsavel2, nome: formatarNome(document.getElementById('det-edit-resp2').value) },
                     contato: {
                         ...f.contato,
                         telefone: document.getElementById('det-edit-tel').value,
@@ -639,13 +662,11 @@
                 try {
                     await updateDoc(doc(db, "familiasAssistidas", familiaSelecionadaId), dadosAtualizados);
 
-                    // LOG IMPLEMENTADO: Auditoria de edição de prontuário existente
-                    const autorIdentificado = user?.displayName ? user.displayName : (user?.email || "Operador");
-                    await addDoc(collection(db, "log_auditoria"), {
-                        timestamp: serverTimestamp(),
-                        autor: autorIdentificado,
-                        acao: "REGISTRO_MANUAL",
-                        detalhes: { atividade: "Cáritas - Prontuário", operacao: "Atualização de Cadastro/Dependentes", responsavel: nomePrincipal, totalDependentesAjustado: novosFilhos.length }
+                    await registrarAuditoriaFamilia("REGISTRO_MANUAL", {
+                        atividade: "Cáritas - Prontuário",
+                        operacao: "Atualização de Cadastro/Dependentes",
+                        responsavel: nomePrincipal,
+                        totalDependentesAjustado: novosFilhos.length
                     });
 
                     alert("Prontuário atualizado com sucesso!");
@@ -654,7 +675,7 @@
             };
 
             ui.btnGravarAtendimento.onclick = async () => {
-                if(!confirm("Deseja gravar e archivear esta ficha?")) return;
+                if(!confirm("Deseja gravar e arquivar esta ficha?")) return;
                 
                 const arrSituacao = Array.from(document.querySelectorAll('#ficha-situacao input:checked')).map(c => c.value);
                 const oSit = document.getElementById('ficha-situacao-outros').value;
@@ -677,14 +698,13 @@
                 try {
                     await addDoc(collection(db, `familiasAssistidas/${familiaSelecionadaId}/atendimentos`), dadosFicha);
 
-                    // LOG IMPLEMENTADO: Auditoria de arquivamento mensal da ficha
-                    const autorIdentificado = user?.displayName ? user.displayName : (user?.email || "Operador");
                     const f = todasFamilias.find(x => x.id === familiaSelecionadaId);
-                    await addDoc(collection(db, "log_auditoria"), {
-                        timestamp: serverTimestamp(),
-                        autor: autorIdentificado,
-                        acao: "REGISTRO_MANUAL",
-                        detalhes: { atividade: "Cáritas - Ficha Atendimento", operacao: "Arquivamento de Atendimento Mensal", responsavel: f.responsavel1.nome, entrevistador: dadosFicha.voluntario, recebeuCesta: dadosFicha.cesta }
+                    await registrarAuditoriaFamilia("REGISTRO_MANUAL", {
+                        atividade: "Cáritas - Ficha Atendimento",
+                        operacao: "Arquivamento de Atendimento Mensal",
+                        responsavel: f.responsavel1.nome,
+                        entrevistador: dadosFicha.voluntario,
+                        recebeuCesta: dadosFicha.cesta
                     });
 
                     alert("Ficha arquivada com sucesso!");
@@ -713,13 +733,11 @@
                 try {
                     await addDoc(collection(db, "familiasAssistidas"), novaFamilia);
 
-                    // LOG IMPLEMENTADO: Auditoria de novo cadastro de família
-                    const autorIdentificado = user?.displayName ? user.displayName : (user?.email || "Operador");
-                    await addDoc(collection(db, "log_auditoria"), {
-                        timestamp: serverTimestamp(),
-                        autor: autorIdentificado,
-                        acao: "REGISTRO_MANUAL",
-                        detalhes: { atividade: "Cáritas - Cadastro", operacao: "Inclusão de Nova Família", responsavel: nomePrincipal, totalDependentes: dependentes.length }
+                    await registrarAuditoriaFamilia("REGISTRO_MANUAL", {
+                        atividade: "Cáritas - Cadastro",
+                        operacao: "Inclusão de Nova Família",
+                        responsavel: nomePrincipal,
+                        totalDependentes: dependentes.length
                     });
 
                     alert("Família cadastrada com sucesso!");
