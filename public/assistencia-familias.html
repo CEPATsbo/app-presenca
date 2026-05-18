@@ -1,763 +1,2681 @@
 <!DOCTYPE html>
+
+
+
 <html lang="pt-br">
+
+
+
 <head>
+
+
+
     <meta charset="UTF-8">
+
+
+
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+
+
     <title>Cáritas - Gestão de Famílias Assistidas</title>
+
+
+
    
+
+
+
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+
+
+
     <script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
+
+
+
    
+
+
+
     <style>
+
+
+
         /* Estilos Gerais preservados */
+
+
+
         body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background-color: #f4f6f9; margin: 0; padding: 20px; display: flex; flex-direction: column; align-items: center; }
+
+
+
         .nav-header { width: 100%; max-width: 1000px; display: flex; justify-content: space-between; margin-bottom: 20px; align-items: center; }
+
+
+
         .btn-voltar { background-color: #6c757d; color: white; padding: 10px 15px; border-radius: 8px; text-decoration: none; font-weight: bold; font-size: 0.9em; }
+
+
+
         .container { background: white; padding: 30px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); width: 100%; max-width: 1000px; box-sizing: border-box; }
+
+
+
         h1 { color: #2c3e50; margin-top: 0; border-bottom: 2px solid #e67e22; padding-bottom: 10px; margin-bottom: 20px; }
+
+
+
        
+
+
+
         .search-container { margin-bottom: 25px; display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+
+
+
         #search-input { flex-grow: 1; padding: 12px; border: 1px solid #ddd; border-radius: 8px; font-size: 1em; min-width: 250px; }
+
+
+
         #filtro-status { padding: 11px; border-radius: 8px; border: 1px solid #ddd; background: white; font-weight: bold; color: #2c3e50; }
+
+
+
        
+
+
+
         .btn-acao { border: none; padding: 12px 20px; border-radius: 8px; cursor: pointer; font-weight: bold; color: white; display: flex; align-items: center; gap: 8px; }
+
+
+
         .btn-novo { background-color: #e67e22; }
+
+
+
         .btn-excel { background-color: #27ae60; }
+
+
+
         .btn-recibo { background-color: #3498db; }
+
+
+
         .btn-status-toggle { margin-right: auto; }
 
+
+
+
+
+
+
         .familia-card { border: 1px solid #eee; padding: 20px; border-radius: 10px; margin-bottom: 15px; display: flex; justify-content: space-between; align-items: center; border-left: 6px solid #3498db; transition: transform 0.2s; }
+
+
+
         .familia-card:hover { transform: translateY(-2px); box-shadow: 0 4px 10px rgba(0,0,0,0.05); }
+
+
+
         .card-rua { border-left-color: #e67e22; background-color: #fff8f0; }
+
+
+
         .info-responsaveis strong { font-size: 1.1em; color: #2c3e50; }
+
+
+
         .badge-parentesco { background: #e9ecef; padding: 2px 8px; border-radius: 4px; font-size: 0.75em; color: #495057; font-weight: bold; margin-left: 5px; }
 
+
+
+
+
+
+
         .modal { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.6); display: none; justify-content: center; align-items: center; z-index: 1000; }
+
+
+
         .modal-content { background: white; padding: 30px; border-radius: 12px; width: 95%; max-width: 850px; max-height: 90vh; overflow-y: auto; position: relative; }
+
+
+
         .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; }
+
+
+
         .full-width { grid-column: 1 / -1; }
+
+
+
         .form-group { display: flex; flex-direction: column; gap: 5px; margin-bottom: 12px; }
+
+
+
         .form-group label { font-weight: bold; color: #555; font-size: 0.85em; text-transform: uppercase; }
+
+
+
         .form-group input, .form-group select { padding: 12px; border: 1px solid #ccc; border-radius: 8px; font-size: 1em; }
+
+
+
        
+
+
+
         .secao-titulo { grid-column: 1 / -1; background: #f8f9fa; padding: 10px; border-radius: 6px; font-weight: bold; color: #e67e22; margin-top: 15px; border-left: 4px solid #e67e22; }
 
+
+
+
+
+
+
         .filhos-section { margin-top: 20px; border-top: 2px dashed #eee; padding-top: 20px; }
+
+
+
         .filho-item { display: grid; grid-template-columns: 2fr 1fr 1fr 1fr auto; gap: 10px; margin-bottom: 12px; align-items: end; background: #fcfcfc; padding: 10px; border-radius: 8px; border: 1px solid #f1f1f1; }
+
+
+
         .btn-remove-filho { color: #e74c3c; cursor: pointer; background: none; border: none; font-size: 1.5em; line-height: 1; }
+
+
+
         .btn-add-filho { background: #3498db; color: white; border: none; padding: 10px 20px; border-radius: 8px; cursor: pointer; font-weight: bold; margin-top: 10px; }
 
+
+
+
+
+
+
         .situacao-rua-toggle { display: flex; align-items: center; gap: 10px; background: #fff3e0; padding: 15px; border-radius: 8px; margin: 15px 0; border: 1px solid #ffe0b2; }
+
+
+
        
+
+
+
         .detalhe-item { margin-bottom: 10px; padding-bottom: 10px; border-bottom: 1px solid #f1f1f1; }
+
+
+
         .detalhe-item label { font-weight: bold; color: #7f8c8d; font-size: 0.8em; text-transform: uppercase; display: block; }
+
+
+
         .detalhe-item input { width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 6px; margin-top: 5px; box-sizing: border-box; font-size: 1em; }
 
+
+
+
+
+
+
         .edicao-medidas-grid { display: grid; grid-template-columns: 1fr auto auto 40px; gap: 10px; background: #fff; padding: 12px; border-radius: 8px; border: 1px solid #ddd; margin-bottom: 12px; align-items: center; }
+
+
+
         .input-medida { padding: 10px; border: 1px solid #ccc; border-radius: 6px; width: 100%; box-sizing: border-box; font-size: 0.95em; color: #2c3e50; }
+
+
+
         .input-nome-filho { border: 2px solid #3498db !important; background: #f0f7ff !important; font-weight: bold !important; min-width: 150px; }
+
+
+
         .input-data-filho { width: 160px !important; }
+
+
+
         .btn-update-medidas { background: #27ae60; color: white; border: none; padding: 12px 15px; border-radius: 6px; cursor: pointer; font-weight: bold; font-size: 0.95em; margin-top: 20px; width: 100%; }
+
+
+
         .btn-del-child { color: #e74c3c; background: none; border: none; cursor: pointer; font-size: 1.2em; display: flex; align-items: center; justify-content: center; }
 
+
+
+
+
+
+
         .ficha-container { background: #fff; border: 2px solid #2c3e50; padding: 20px; border-radius: 8px; margin-top: 25px; }
+
+
+
         .ficha-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-top: 15px; }
+
+
+
         .ficha-check-group { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 5px; }
+
+
+
         .ficha-check-item { background: #f1f1f1; padding: 5px 10px; border-radius: 4px; font-size: 0.9em; display: flex; align-items: center; gap: 5px; cursor: pointer; }
-        .ficha-textarea { width: 100%; height: 80px; padding: 10px; border-radius: 6px; border: 1px solid #ccc; font-family: inherit; resize: vertical; margin-top: 5px; box-sizing: border-box; }
+
+
+
+        .ficha-textarea { width: 100%; height: 80px; padding: 10px; border-radius: 6px; border: 1px solid #ccc; font-family: inherit; resize: vertical; margin-top: 5px; box-sizing: border-box;}
+
+
+
         .historico-atendimentos { margin-top: 20px; border-top: 2px solid #eee; padding-top: 15px; }
+
+
+
         .atendimento-item { background: #f8f9fa; padding: 10px; border-radius: 6px; margin-bottom: 8px; border-left: 4px solid #2c3e50; font-size: 0.9em; cursor: pointer; }
 
+
+
+
+
+
+
         .btn-config-cesta { background-color: #9b59b6; color: white; margin-bottom: 15px; width: 100%; justify-content: center; font-weight: bold; }
+
+
+
         .item-personalizado { display: flex; justify-content: space-between; align-items: center; padding: 12px; border-bottom: 1px solid #eee; }
+
+
+
         .item-personalizado span { font-weight: bold; color: #2c3e50; }
+
+
+
         .item-personalizado input { width: 70px; padding: 8px; text-align: center; border-radius: 6px; border: 1px solid #ccc; }
+
+
+
     </style>
+
+
+
 </head>
+
+
+
 <body>
+
+
+
     <header class="nav-header">
+
+
+
         <a href="/modulo-caritas.html" class="btn-voltar"><i class="fas fa-arrow-left"></i> Voltar ao Painel</a>
+
+
+
         <img src="/logo-cepat.png" alt="Logo CEPAT" style="height: 60px;">
+
+
+
     </header>
 
+
+
+
+
+
+
     <main class="container">
+
+
+
         <h1><i class="fas fa-users"></i> Gestão de Famílias Assistidas</h1>
+
+
+
        
+
+
+
         <div class="search-container">
+
+
+
             <input type="text" id="search-input" placeholder="Buscar por qualquer nome de responsável...">
+
+
+
            
+
+
+
             <select id="filtro-status">
+
+
+
                 <option value="Ativa">Ver Ativas</option>
+
+
+
                 <option value="Inativa">Ver Inativas</option>
+
+
+
             </select>
 
+
+
+
+
+
+
             <button id="btn-abrir-modal" class="btn-acao btn-novo"><i class="fas fa-plus"></i> Nova Família</button>
+
+
+
             <button id="btn-exportar" class="btn-acao btn-excel"><i class="fas fa-file-excel"></i> Exportar Base</button>
+
+
+
         </div>
+
+
+
+
+
+
 
         <div id="lista-familias">
+
+
+
             <p style="text-align:center; color:#999; padding: 40px;">Carregando banco de dados...</p>
+
+
+
         </div>
+
+
+
     </main>
 
+
+
+
+
+
+
     <div id="modal-familia" class="modal">
+
+
+
         <div class="modal-content">
+
+
+
             <h2>Cadastrar Nova Família</h2>
+
+
+
             <form id="form-familia">
+
+
+
                 <div class="form-grid">
+
+
+
                     <div class="secao-titulo">Responsável Principal (Obrigatório)</div>
+
+
+
                     <div class="form-group full-width">
+
+
+
                         <label>Nome Completo *</label>
+
+
+
                         <input type="text" id="resp1-nome" required>
+
+
+
                     </div>
+
+
+
                     <div class="form-group">
+
+
+
                         <label>Data de Nascimento</label>
+
+
+
                         <input type="date" id="resp1-nasc">
+
+
+
                     </div>
+
+
+
                     <div class="form-group">
+
+
+
                         <label>Relação Parental / Parentesco</label>
+
+
+
                         <select id="resp1-tipo">
+
+
+
                             <option value="Mãe">Mãe</option>
+
+
+
                             <option value="Pai">Pai</option>
+
+
+
                             <option value="Avó/Avô">Avó/Avô</option>
+
+
+
                             <option value="Tutor(a)">Tutor(a)</option>
+
+
+
                         </select>
+
+
+
                     </div>
+
+
+
+
+
+
 
                     <div class="secao-titulo">Modelo de Assistência</div>
+
+
+
                     <div class="form-group full-width">
+
+
+
                         <label>Tipo de Cesta Básica</label>
+
+
+
                         <select id="novo-tipo-cesta">
+
+
+
                             <option value="Padrao">Receita Padrão (Fixo)</option>
+
+
+
                             <option value="Personalizada">Receita Personalizada (Individual)</option>
+
+
+
                         </select>
+
+
+
                     </div>
+
+
+
+
+
+
 
                     <div class="secao-titulo">Responsável Secundário (Opcional)</div>
+
+
+
                     <div class="form-group full-width">
+
+
+
                         <label>Nome Completo</label>
+
+
+
                         <input type="text" id="resp2-nome">
+
+
+
                     </div>
+
+
+
                     <div class="form-group">
+
+
+
                         <label>Data de Nascimento</label>
+
+
+
                         <input type="date" id="resp2-nasc">
+
+
+
                     </div>
+
+
+
                     <div class="form-group">
+
+
+
                         <label>Relação Parental / Parentesco</label>
+
+
+
                         <select id="resp2-tipo">
+
+
+
                             <option value="">Nenhum</option>
+
+
+
                             <option value="Pai">Pai</option>
+
+
+
                             <option value="Mãe">Mãe</option>
+
+
+
                             <option value="Avó/Avô">Avó/Avô</option>
+
+
+
                             <option value="Outro">Outro</option>
+
+
+
                         </select>
+
+
+
                     </div>
+
+
+
+
+
+
 
                     <div class="secao-titulo">Contato e Localização</div>
+
+
+
                     <div class="form-group full-width">
+
+
+
                         <label>Telefone / WhatsApp *</label>
+
+
+
                         <input type="tel" id="familia-tel" required placeholder="(00) 00000-0000">
+
+
+
                     </div>
+
+
+
+
+
+
 
                     <div class="full-width situacao-rua-toggle">
+
+
+
                         <input type="checkbox" id="situacao-rua-checkbox">
+
+
+
                         <label for="situacao-rua-checkbox" style="font-weight: bold; color: #e67e22;">FAMÍLIA EM SITUAÇÃO DE RUA</label>
+
+
+
                     </div>
+
+
+
+
+
+
 
                     <div class="form-group full-width">
+
+
+
                         <label>Endereço de Moradia</label>
+
+
+
                         <input type="text" id="familia-endereco" placeholder="Logradouro, Nº, Bairro, Cidade">
+
+
+
                     </div>
+
+
+
                 </div>
+
+
+
+
+
+
 
                 <div class="filhos-section">
+
+
+
                     <h3>Dependentes e Filhos</h3>
+
+
+
                     <div id="lista-filhos-inputs"></div>
+
+
+
                     <button type="button" id="btn-add-filho" class="btn-add-filho"><i class="fas fa-plus"></i> Adicionar Dependente</button>
+
+
+
                 </div>
+
+
+
+
+
+
 
                 <div style="margin-top: 35px; display: flex; justify-content: flex-end; gap: 15px; border-top: 1px solid #eee; padding-top: 20px;">
+
+
+
                     <button type="button" id="btn-fechar-modal" style="padding: 12px 25px; border: none; cursor: pointer; background: #eee; border-radius: 8px;">Cancelar</button>
+
+
+
                     <button type="submit" class="btn-acao btn-novo" style="padding: 12px 40px;">Salvar Cadastro</button>
+
+
+
                 </div>
+
+
+
             </form>
+
+
+
         </div>
+
+
+
     </div>
 
+
+
+
+
+
+
     <div id="modal-detalhes" class="modal">
+
+
+
         <div class="modal-content" style="max-width: 850px;">
+
+
+
             <h2 id="det-titulo" style="color: #3498db; margin-bottom: 25px;">Editar Prontuário da Família</h2>
-            
+
+
+
+           
+
+
+
             <div id="det-conteudo">
+
+
+
                 <div class="detalhe-item">
+
+
+
                     <label>Responsável Principal</label>
+
+
+
                     <input type="text" id="det-edit-resp1">
+
+
+
                 </div>
+
+
+
                 <div class="detalhe-item">
+
+
+
                     <label>Segundo Responsável (Opcional)</label>
+
+
+
                     <input type="text" id="det-edit-resp2">
+
+
+
                 </div>
+
+
+
                 <div class="detalhe-item">
+
+
+
                     <label>Contato / WhatsApp</label>
+
+
+
                     <input type="tel" id="det-edit-tel">
+
+
+
                 </div>
+
+
+
                 <div class="detalhe-item">
+
+
+
                     <label>Endereço Completo</label>
+
+
+
                     <input type="text" id="det-edit-end">
+
+
+
                 </div>
+
+
+
+
+
+
 
                 <div class="secao-titulo">Configuração de Cesta</div>
+
+
+
                 <div class="form-group" style="margin-bottom:15px;">
+
+
+
                     <label>Modelo de Cesta</label>
+
+
+
                     <select id="det-tipo-cesta" class="form-group" style="padding:10px; border-radius:8px; width:100%;">
+
+
+
                         <option value="Padrao">Receita Padrão</option>
+
+
+
                         <option value="Personalizada">Receita Personalizada</option>
+
+
+
                     </select>
+
+
+
                 </div>
 
+
+
+
+
+
+
                 <button id="btn-abrir-config-cesta" class="btn-acao btn-config-cesta" style="display:none;">
+
+
+
                     <i class="fas fa-sliders-h"></i> CONFIGURAR ITENS DA CESTA PERSONALIZADA
+
+
+
                 </button>
-                
+
+
+
+               
+
+
+
                 <h4 style="margin: 20px 0 10px 0; color: #555;"><i class="fas fa-child"></i> Dependentes (Ajuste Medidas e Nomes aqui)</h4>
+
+
+
                 <div id="det-lista-filhos" style="background: #f9f9f9; padding: 15px; border-radius: 8px;"></div>
-                
+
+
+
+               
+
+
+
                 <button type="button" id="btn-novo-filho-detalhe" class="btn-acao" style="background:#3498db; width:100%; justify-content:center; margin-top:10px;">
+
+
+
                     <i class="fas fa-plus"></i> Incluir Novo Dependente
+
+
+
                 </button>
+
+
+
+
+
+
 
                 <button id="btn-atualizar-medidas" class="btn-update-medidas"><i class="fas fa-save"></i> SALVAR TODAS ALTERAÇÕES DE CADASTRO</button>
 
+
+
+
+
+
+
                 <div class="ficha-container">
+
+
+
                     <h3 style="text-align:center; border-bottom: 2px solid #2c3e50; padding-bottom: 10px; margin-bottom: 20px;">FICHA DE ATENDIMENTO - AÇÃO SOCIAL / CÁRITAS</h3>
-                    
+
+
+
+                   
+
+
+
                     <div class="ficha-grid">
+
+
+
                         <div class="form-group">
+
+
+
                             <label>SITUAÇÃO ATUAL</label>
+
+
+
                             <div class="ficha-check-group" id="ficha-situacao">
+
+
+
                                 <label class="ficha-check-item"><input type="checkbox" value="Desemprego"> Desemprego</label>
+
+
+
                                 <label class="ficha-check-item"><input type="checkbox" value="Doença na família"> Doença na família</label>
+
+
+
                                 <label class="ficha-check-item"><input type="checkbox" value="Dificuldade financeira"> Dificuldade financeira</label>
+
+
+
                                 <label class="ficha-check-item"><input type="checkbox" value="Separação familiar"> Separação familiar</label>
+
+
+
                             </div>
+
+
+
                             <input type="text" id="ficha-situacao-outros" placeholder="Outros (especificar)..." class="input-medida" style="margin-top:8px;">
+
+
+
                         </div>
+
+
+
                         <div class="form-group">
+
+
+
                             <label>NECESSIDADES PRINCIPAIS</label>
+
+
+
                             <div class="ficha-check-group" id="ficha-necessidades">
+
+
+
                                 <label class="ficha-check-item"><input type="checkbox" value="Cesta básica"> Cesta básica</label>
+
+
+
                                 <label class="ficha-check-item"><input type="checkbox" value="Roupa"> Roupa</label>
+
+
+
                                 <label class="ficha-check-item"><input type="checkbox" value="Orientação espiritual"> Orientação espiritual</label>
+
+
+
                                 <label class="ficha-check-item"><input type="checkbox" value="Encaminhamento social"> Encaminhamento social</label>
+
+
+
                             </div>
+
+
+
                             <input type="text" id="ficha-necessidades-outros" placeholder="Outros (especificar)..." class="input-medida" style="margin-top:8px;">
+
+
+
                         </div>
+
+
+
                     </div>
+
+
+
+
+
+
 
                     <div class="ficha-grid">
+
+
+
                         <div class="form-group">
+
+
+
                             <label>ESTADO CIVIL</label>
+
+
+
                             <input type="text" id="ficha-estado-civil" placeholder="Estado Civil" class="input-medida">
+
+
+
                         </div>
+
+
+
                         <div class="form-group">
+
+
+
                             <label>VOLUNTÁRIO RESPONSÁVEL</label>
+
+
+
                             <input type="text" id="ficha-voluntario" placeholder="Nome do Entrevistador" class="input-medida">
+
+
+
                         </div>
+
+
+
                     </div>
 
+
+
+
+
+
+
                     <div class="form-group" style="margin-top:15px;">
+
+
+
                         <label>RELATO DA PESSOA ATENDIDA:</label>
+
+
+
                         <textarea id="ficha-relato" class="ficha-textarea" placeholder="Transcreva aqui o relato da família..."></textarea>
+
+
+
                     </div>
+
+
+
+
+
+
 
                     <div class="form-group" style="margin-top:15px;">
+
+
+
                         <label>OBSERVAÇÃO DO ENTREVISTADOR:</label>
+
+
+
                         <textarea id="ficha-obs" class="ficha-textarea" placeholder="Análise técnica e observações fraternas..."></textarea>
+
+
+
                     </div>
 
-                    <div class="grid-layout" style="margin-top:15px; display:flex; gap:20px; align-items:center; background: #f8f9fa; padding: 15px; border-radius: 8px;">
+
+
+
+
+
+
+                    <div style="margin-top:15px; display:flex; gap:20px; align-items:center; background: #f8f9fa; padding: 15px; border-radius: 8px;">
+
+
+
                         <label><strong>RECEBEU CESTA BÁSICA?</strong></label>
+
+
+
                         <label style="cursor:pointer;"><input type="radio" name="ficha-cesta" value="Sim"> SIM</label>
+
+
+
                         <label style="cursor:pointer;"><input type="radio" name="ficha-cesta" value="Não"> NÃO</label>
+
+
+
                     </div>
+
+
+
+
+
+
 
                     <button id="btn-gravar-atendimento" class="btn-acao" style="background:#e67e22; width:100%; margin-top:20px; height:55px; justify-content:center; font-size: 1.1em;">
+
+
+
                         <i class="fas fa-file-medical"></i> GRAVAR ATENDIMENTO MENSAL (ARQUIVAR)
+
+
+
                     </button>
+
+
+
                 </div>
+
+
+
+
+
+
 
                 <div class="historico-atendimentos">
+
+
+
                     <h4 style="color: #2c3e50; border-bottom: 2px solid #eee; padding-bottom: 5px;"><i class="fas fa-history"></i> Histórico de Atendimentos Arquivados</h4>
+
+
+
                     <div id="lista-historico" style="margin-top:10px;"></div>
+
+
+
                 </div>
+
+
+
             </div>
+
+
+
+
+
+
 
             <div style="margin-top: 30px; display: flex; justify-content: flex-end; gap: 10px;">
+
+
+
                 <button id="btn-desativar-familia" class="btn-acao btn-status-toggle"></button>
+
+
+
                 <button onclick="gerarReciboImpressao()" class="btn-acao btn-recibo"><i class="fas fa-print"></i> Gerar Recibo</button>
+
+
+
                 <button onclick="document.getElementById('modal-detalhes').style.display='none'" style="padding: 10px 20px; border-radius: 8px; border: 1px solid #ccc; cursor: pointer;">Fechar</button>
+
+
+
             </div>
+
+
+
         </div>
+
+
+
     </div>
+
+
+
+
+
+
 
     <div id="modal-cesta-personalizada" class="modal">
+
+
+
         <div class="modal-content" style="max-width: 500px;">
+
+
+
             <h3>Personalizar Receita da Família</h3>
+
+
+
             <p style="font-size: 0.85em; color: #666; margin-bottom: 20px;">Defina as quantidades específicas de cada item para esta cesta.</p>
+
+
+
             <div id="lista-itens-personalizados" style="max-height: 400px; overflow-y: auto; border: 1px solid #eee; padding: 10px; border-radius: 8px;">
+
+
+
                 </div>
+
+
+
             <div style="margin-top: 25px; display: flex; gap: 10px;">
+
+
+
                 <button onclick="document.getElementById('modal-cesta-personalizada').style.display='none'" style="flex:1; padding:12px; border-radius:8px; border:1px solid #ccc; cursor:pointer;">Sair sem salvar</button>
+
+
+
                 <button id="btn-salvar-receita-individual" style="flex:1; padding:12px; border-radius:8px; background:#27ae60; color:white; border:none; font-weight:bold; cursor:pointer;">Gravar Receita</button>
+
+
+
             </div>
+
+
+
         </div>
+
+
+
     </div>
 
+
+
+
+
+
+
     <script type="module">
+
+
+
         import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
+
+
+
         import { getFirestore, collection, addDoc, onSnapshot, query, orderBy, serverTimestamp, doc, updateDoc, getDocs, where } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
+
+
+
         import { protegerPagina } from '/auth.js';
 
+
+
+
+
+
+
         const firebaseConfig = { apiKey: "AIzaSyBV7RPjk3cFTqL-aIpflJcUojKg1ZXMLuU", authDomain: "voluntarios-ativos---cepat.firebaseapp.com", projectId: "voluntarios-ativos---cepat", storageBucket: "voluntarios-ativos---cepat.firebasestorage.app", messagingSenderId: "66122858261", appId: "1:66122858261:web:7fa21f1805463b5c08331c" };
+
+
+
         const app = initializeApp(firebaseConfig);
+
+
+
         const db = getFirestore(app);
 
+
+
+
+
+
+
         let todasFamilias = [];
+
+
+
         let familiaSelecionadaId = null;
+
+
+
         let itensEstoqueGlobal = [];
 
-        protegerPagina(['super-admin', 'diretor', 'tesoureiro', 'conselheiro', 'recepcionista', 'entrevistador', 'caritas'])
+
+
+
+
+
+
+        protegerPagina(['super-admin','diretor','tesoureiro','conselheiro','recepcionista','entrevistador','caritas'])
+
+
+
             .then(user => inicializar(user))
+
+
+
             .catch(() => window.location.href = '/dashboard.html');
 
+
+
+
+
+
+
         function formatarNome(nome) {
+
+
+
             if (!nome) return "";
+
+
+
             const excessoes = ['de', 'da', 'do', 'das', 'dos', 'e'];
+
+
+
             return nome.toLowerCase().trim().split(/\s+/).map(palavra => {
+
+
+
                 if (excessoes.includes(palavra)) return palavra;
+
+
+
                 return palavra.charAt(0).toUpperCase() + palavra.slice(1);
+
+
+
             }).join(' ');
+
+
+
         }
+
+
+
+
+
+
 
         function calcularIdade(nasc) {
+
+
+
             if(!nasc) return "N/A";
+
+
+
             const hoje = new Date();
+
+
+
             const dNasc = new Date(nasc);
+
+
+
             if (isNaN(dNasc.getTime())) return "N/A";
+
+
+
             let idade = hoje.getFullYear() - dNasc.getFullYear();
+
+
+
             const m = hoje.getMonth() - dNasc.getMonth();
+
+
+
             if (m < 0 || (m === 0 && hoje.getDate() < dNasc.getDate())) idade--;
+
+
+
             return idade;
+
+
+
         }
+
+
+
+
+
+
 
         function inicializar(user) {
+
+
+
             const ui = {
+
+
+
                 modal: document.getElementById('modal-familia'),
+
+
+
                 modalDet: document.getElementById('modal-detalhes'),
+
+
+
                 modalCesta: document.getElementById('modal-cesta-personalizada'),
+
+
+
                 form: document.getElementById('form-familia'),
+
+
+
                 btnNovo: document.getElementById('btn-abrir-modal'),
+
+
+
                 btnFechar: document.getElementById('btn-fechar-modal'),
+
+
+
                 btnAddFilho: document.getElementById('btn-add-filho'),
+
+
+
                 listaFilhos: document.getElementById('lista-filhos-inputs'),
+
+
+
                 checkRua: document.getElementById('situacao-rua-checkbox'),
+
+
+
                 inputEndereco: document.getElementById('familia-endereco'),
+
+
+
                 lista: document.getElementById('lista-familias'),
+
+
+
                 busca: document.getElementById('search-input'),
+
+
+
                 btnExcel: document.getElementById('btn-exportar'),
+
+
+
                 btnAtualizarMedidas: document.getElementById('btn-atualizar-medidas'),
+
+
+
                 btnNovoFilhoDet: document.getElementById('btn-novo-filho-detalhe'),
+
+
+
                 btnGravarAtendimento: document.getElementById('btn-gravar-atendimento'),
+
+
+
                 btnToggleStatus: document.getElementById('btn-desativar-familia'),
+
+
+
                 filtroStatus: document.getElementById('filtro-status'),
+
+
+
                 tipoCestaDet: document.getElementById('det-tipo-cesta'),
+
+
+
                 btnConfigCesta: document.getElementById('btn-abrir-config-cesta'),
+
+
+
                 listaPersonalizada: document.getElementById('lista-itens-personalizados')
+
+
+
             };
+
+
+
+
+
+
 
             onSnapshot(collection(db, "estoque_caritas"), snap => {
+
+
+
                 itensEstoqueGlobal = snap.docs.map(d => ({ id: d.id, nome: d.data().nome }));
+
+
+
             });
 
+
+
+
+
+
+
             ui.btnNovo.onclick = () => { ui.form.reset(); ui.listaFilhos.innerHTML = ''; ui.modal.style.display = 'flex'; };
+
+
+
             ui.btnFechar.onclick = () => ui.modal.style.display = 'none';
 
+
+
+
+
+
+
             ui.checkRua.onchange = () => {
+
+
+
                 ui.inputEndereco.disabled = ui.checkRua.checked;
+
+
+
                 ui.inputEndereco.value = ui.checkRua.checked ? "EM SITUAÇÃO DE RUA" : "";
+
+
+
             };
+
+
+
+
+
+
 
             ui.btnAddFilho.onclick = () => {
+
+
+
                 const div = document.createElement('div');
+
+
+
                 div.className = 'filho-item';
+
+
+
                 div.innerHTML = `
+
+
+
                     <input type="text" placeholder="Nome" class="f-nome" required>
+
+
+
                     <input type="date" class="f-nasc" required>
+
+
+
                     <input type="text" placeholder="Roupa" class="f-roupa">
+
+
+
                     <input type="text" placeholder="Calçado" class="f-calcado">
+
+
+
                     <button type="button" class="btn-remove-filho">&times;</button>
+
+
+
                 `;
+
+
+
                 div.querySelector('.btn-remove-filho').onclick = () => div.remove();
+
+
+
                 ui.listaFilhos.appendChild(div);
+
+
+
             };
 
-            const actualizarListaRealtime = () => {
+
+
+
+
+
+
+            const atualizarListaRealtime = () => {
+
+
+
                 const statusSelecionado = ui.filtroStatus.value;
+
+
+
                 const q = query(collection(db, "familiasAssistidas"), where("statusGeral", "==", statusSelecionado));
+
+
+
                 onSnapshot(q, (snapshot) => {
+
+
+
                     todasFamilias = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }))
+
+
+
                         .sort((a, b) => a.responsavel1.nome.localeCompare(b.responsavel1.nome));
+
+
+
                     renderizarLista(todasFamilias);
+
+
+
                 });
+
+
+
             };
 
-            ui.filtroStatus.onchange = actualizarListaRealtime;
+
+
+
+
+
+
+            ui.filtroStatus.onchange = atualizarListaRealtime;
+
+
+
             atualizarListaRealtime();
 
+
+
+
+
+
+
             function renderizarLista(dados) {
+
+
+
                 if (dados.length === 0) {
+
+
+
                     ui.lista.innerHTML = '<p style="text-align:center; padding: 40px;">Nenhuma família encontrada com este status.</p>';
+
+
+
                     return;
+
+
+
                 }
+
+
+
                 ui.lista.innerHTML = dados.map(f => {
+
+
+
                     const cardClasse = f.contato.emSituacaoDeRua ? 'familia-card card-rua' : 'familia-card';
+
+
+
                     return `
+
+
+
                         <div class="${cardClasse}">
+
+
+
                             <div class="info-responsaveis">
+
+
+
                                 <strong>${f.responsavel1.nome}</strong> <span class="badge-parentesco">${f.responsavel1.tipo}</span>
+
+
+
                                 ${f.responsavel2?.nome ? `<br><strong>${f.responsavel2.nome}</strong> <span class="badge-parentesco">${f.responsavel2.tipo}</span>` : ''}
+
+
+
                                 <div style="font-size: 0.85em; color: #666; margin-top: 5px;">
+
+
+
                                     <i class="fas fa-phone"></i> ${f.contato.telefone} | <i class="fas fa-child"></i> ${f.filhos.length} dependentes
+
+
+
                                     | <i class="fas fa-shopping-basket"></i> ${f.tipoCesta || 'Padrao'}
+
+
+
                                 </div>
+
+
+
                             </div>
+
+
+
                             <button class="btn-acao" style="background: white; border: 1px solid #ddd; color: #3498db;" onclick="abrirDetalhes('${f.id}')">
+
+
+
                                 <i class="fas fa-eye"></i> Ver Mais
+
+
+
                             </button>
+
+
+
                         </div>`;
+
+
+
                 }).join('');
+
+
+
             }
+
+
+
+
+
+
 
             window.abrirDetalhes = async (id) => {
+
+
+
                 familiaSelecionadaId = id;
+
+
+
                 const f = todasFamilias.find(x => x.id === id);
+
+
+
                 if (!f) return;
 
+
+
+
+
+
+
+                // Carrega dados editáveis no modal
+
+
+
                 document.getElementById('det-edit-resp1').value = f.responsavel1.nome;
+
+
+
                 document.getElementById('det-edit-resp2').value = f.responsavel2?.nome || "";
+
+
+
                 document.getElementById('det-edit-tel').value = f.contato.telefone;
+
+
+
                 document.getElementById('det-edit-end').value = f.contato.endereco;
+
+
+
                
+
+
+
                 ui.tipoCestaDet.value = f.tipoCesta || 'Padrao';
+
+
+
                 ui.btnConfigCesta.style.display = ui.tipoCestaDet.value === 'Personalizada' ? 'flex' : 'none';
+
+
+
                
+
+
+
                 renderizarListaFilhosEdicao(f.filhos);
 
+
+
+
+
+
+
                 if (f.statusGeral === "Inativa") {
+
+
+
                     ui.btnToggleStatus.innerHTML = '<i class="fas fa-user-check"></i> Reativar Família';
+
+
+
                     ui.btnToggleStatus.style.backgroundColor = "#27ae60";
+
+
+
                 } else {
+
+
+
                     ui.btnToggleStatus.innerHTML = '<i class="fas fa-user-slash"></i> Desativar Família';
+
+
+
                     ui.btnToggleStatus.style.backgroundColor = "#e74c3c";
+
+
+
                 }
+
+
+
+
+
+
 
                 document.querySelectorAll('.ficha-container input[type="checkbox"]').forEach(c => c.checked = false);
+
+
+
                 document.querySelectorAll('.ficha-container input[type="radio"]').forEach(r => r.checked = false);
+
+
+
                 document.getElementById('ficha-situacao-outros').value = "";
+
+
+
                 document.getElementById('ficha-necessidades-outros').value = "";
+
+
+
                 document.getElementById('ficha-relato').value = "";
+
+
+
                 document.getElementById('ficha-obs').value = "";
+
+
+
                 document.getElementById('ficha-estado-civil').value = f.estadoCivil || "";
+
+
+
                 document.getElementById('ficha-voluntario').value = user.displayName || "";
 
+
+
+
+
+
+
                 try {
+
+
+
                     await carregarHistoricoAtendimentos(id);
+
+
+
                 } catch (e) {
+
+
+
                     document.getElementById('lista-historico').innerHTML = "<p style='color:red;'>Erro de permissão.</p>";
+
+
+
                 }
+
+
+
+
+
+
 
                 ui.modalDet.style.display = 'flex';
+
+
+
             };
+
+
+
+
+
+
 
             ui.tipoCestaDet.onchange = async () => {
+
+
+
                 ui.btnConfigCesta.style.display = ui.tipoCestaDet.value === 'Personalizada' ? 'flex' : 'none';
+
+
+
                 await updateDoc(doc(db, "familiasAssistidas", familiaSelecionadaId), { tipoCesta: ui.tipoCestaDet.value });
 
-                // LOG DIRETO: Sem funções externas e usando variáveis locais seguras
-                try {
-                    const quemFez = user.displayName ? user.displayName : user.email;
-                    const f = todasFamilias.find(x => x.id === familiaSelecionadaId);
-                    await addDoc(collection(db, "log_auditoria"), {
-                        timestamp: serverTimestamp(),
-                        autor: quemFez,
-                        acao: "REGISTRO_MANUAL",
-                        detalhes: { atividade: "Cáritas - Prontuário", operacao: "Mudança do Modelo de Cesta", responsavel: f.responsavel1.nome, novoModelo: ui.tipoCestaDet.value }
-                    });
-                } catch (errLog) { console.error(errLog); }
+
+
             };
+
+
+
+
+
+
 
             ui.btnConfigCesta.onclick = () => {
+
+
+
                 const f = todasFamilias.find(x => x.id === familiaSelecionadaId);
+
+
+
                 const receita = f.receitaPersonalizada || {};
+
+
+
                 ui.listaPersonalizada.innerHTML = itensEstoqueGlobal.map(i => `
+
+
+
                     <div class="item-personalizado">
+
+
+
                         <span>${i.nome}</span>
+
+
+
                         <input type="number" class="input-receita-f" data-id="${i.id}" value="${receita[i.id] || 0}" min="0">
+
+
+
                     </div>`).join('');
+
+
+
                 ui.modalCesta.style.display = 'flex';
+
+
+
             };
+
+
+
+
+
+
 
             document.getElementById('btn-salvar-receita-individual').onclick = async () => {
+
+
+
                 const novaRec = {};
-                let composicaoTexto = [];
+
+
+
                 document.querySelectorAll('.input-receita-f').forEach(inp => {
+
+
+
                     const q = parseInt(inp.value);
-                    if(q > 0) {
-                        novaRec[inp.dataset.id] = q;
-                        const nomeInsumo = itensEstoqueGlobal.find(i => i.id === inp.dataset.id)?.nome || inp.dataset.id;
-                        composicaoTexto.push(`${q}x ${nomeInsumo}`);
-                    }
+
+
+
+                    if(q > 0) novaRec[inp.dataset.id] = q;
+
+
+
                 });
+
+
+
                 try {
+
+
+
                     await updateDoc(doc(db, "familiasAssistidas", familiaSelecionadaId), { receitaPersonalizada: novaRec });
 
-                    // LOG DIRETO: Sem funções externas e usando variáveis locais seguras
-                    try {
-                        const quemFez = user.displayName ? user.displayName : user.email;
-                        const f = todasFamilias.find(x => x.id === familiaSelecionadaId);
-                        await addDoc(collection(db, "log_auditoria"), {
-                            timestamp: serverTimestamp(),
-                            autor: quemFez,
-                            acao: "REGISTRO_MANUAL",
-                            detalhes: { atividade: "Cáritas - Prontuário", operacao: "Personalização de Itens da Cesta", responsavel: f.responsavel1.nome, itensDefinidos: composicaoTexto }
-                        });
-                    } catch (errLog) { console.error(errLog); }
+
 
                     alert("Receita personalizada salva!");
+
+
+
                     ui.modalCesta.style.display = 'none';
+
+
+
                 } catch (e) { alert("Erro: " + e.message); }
+
+
+
             };
+
+
+
+
+
+
 
             ui.btnToggleStatus.onclick = async () => {
+
+
+
                 if(!familiaSelecionadaId) return;
+
+
+
                 const f = todasFamilias.find(x => x.id === familiaSelecionadaId);
+
+
+
                 const novoStatus = f.statusGeral === "Inativa" ? "Ativa" : "Inativa";
+
+
+
                 if(confirm(`Deseja alterar status para ${novoStatus.toUpperCase()}?`)) {
+
+
+
                     await updateDoc(doc(db, "familiasAssistidas", familiaSelecionadaId), {
+
+
+
                         statusGeral: novoStatus, ultimaAlteracaoEm: serverTimestamp()
+
+
+
                     });
 
-                    // LOG DIRETO: Sem funções externas e usando variáveis locais seguras
-                    try {
-                        const quemFez = user.displayName ? user.displayName : user.email;
-                        await addDoc(collection(db, "log_auditoria"), {
-                            timestamp: serverTimestamp(),
-                            autor: quemFez,
-                            acao: "REGISTRO_MANUAL",
-                            detalhes: { atividade: "Cáritas - Status", operacao: novoStatus === "Ativa" ? "Reativação de Família" : "Desativação de Família", responsavel: f.responsavel1.nome }
-                        });
-                    } catch (errLog) { console.error(errLog); }
+
 
                     ui.modalDet.style.display = 'none';
+
+
+
                 }
+
+
+
             };
+
+
+
+
+
+
 
             async function carregarHistoricoAtendimentos(id) {
+
+
+
                 const histSnap = await getDocs(query(collection(db, `familiasAssistidas/${id}/atendimentos`), orderBy("data", "desc")));
+
+
+
                 document.getElementById('lista-historico').innerHTML = histSnap.docs.map(d => {
+
+
+
                     const data = d.data();
+
+
+
                     const dStr = data.data?.toDate().toLocaleDateString('pt-BR') || "Data N/A";
+
+
+
                     return `<div class="atendimento-item" onclick="window.open('assistencia-prontuario.html?id=${id}', '_blank')">
+
+
+
                             <div style="display:flex; justify-content:space-between;">
+
+
+
                                 <strong>${dStr}</strong>
+
+
+
                                 <span>Voluntário: ${data.voluntario}</span>
+
+
+
                             </div>
+
+
+
                             <small>Situação: ${data.situacao?.join(', ') || ''} | Cesta: ${data.cesta}</small>
+
+
+
                         </div>`;
+
+
+
                 }).join('') || "<p style='color:#999; font-size:0.9em;'>Sem atendimentos registrados.</p>";
+
+
+
             }
+
+
+
+
+
+
 
             function renderizarListaFilhosEdicao(filhos) {
+
+
+
                 const container = document.getElementById('det-lista-filhos');
+
+
+
                 container.innerHTML = filhos.length > 0 ?
+
+
+
                     filhos.map((filho, idx) => `
+
+
+
                         <div class="edicao-medidas-grid" data-idx="${idx}">
+
+
+
                             <input type="text" class="input-medida input-nome-filho edit-nome" value="${filho.nome}" placeholder="Nome do Filho">
+
+
+
                             <input type="date" class="input-medida input-data-filho edit-nasc" value="${filho.nascimento}">
+
+
+
                             <div style="display:flex; flex-direction:column; gap:5px;">
+
+
+
                                 <input type="text" class="input-medida edit-roupa" value="${filho.tamanho || ''}" placeholder="Roupa">
+
+
+
                                 <input type="text" class="input-medida edit-calcado" value="${filho.calcado || ''}" placeholder="Calçado">
+
+
+
                                 <small style="color:#7f8c8d; font-size:0.8em; text-align:center;">${calcularIdade(filho.nascimento)} anos</small>
+
+
+
                             </div>
+
+
+
                             <button type="button" class="btn-del-child" onclick="removerDependenteLocal(this)"><i class="fas fa-trash-alt"></i></button>
+
+
+
                         </div>`).join('') : "Sem dependentes cadastrados.";
+
+
+
             }
 
+
+
+
+
+
+
             window.removerDependenteLocal = (btn) => {
+
+
+
                 if(!confirm("Deseja realmente remover este dependente?")) return;
+
+
+
                 const row = btn.closest('.edicao-medidas-grid');
+
+
+
                 row.style.display = 'none';
+
+
+
                 row.classList.add('deleted-flag');
+
+
+
             };
 
-            ui.btnNovoFilhoDet.onclick = () => {
-                const container = document.getElementById('det-lista-filhos');
-                if (container.innerText.includes("Sem dependentes")) container.innerHTML = "";
-                
-                const div = document.createElement('div');
-                div.className = 'edicao-medidas-grid';
-                div.innerHTML = `
-                    <input type="text" class="input-medida input-nome-filho edit-nome" value="" placeholder="Nome do Filho">
-                    <input type="date" class="input-medida input-data-filho edit-nasc" value="">
-                    <div style="display:flex; flex-direction:column; gap:5px;">
-                        <input type="text" class="input-medida edit-roupa" value="" placeholder="Roupa">
-                        <input type="text" class="input-medida edit-calcado" value="" placeholder="Calçado">
-                    </div>
-                    <button type="button" class="btn-del-child" onclick="this.closest('.edicao-medidas-grid').remove()"><i class="fas fa-trash-alt"></i></button>
-                `;
-                container.appendChild(div);
-            };
+
+
+
+
+
+
+            // SALVAMENTO COMPLETO (RESPONSÁVEIS + DEPENDENTES)
+
+
 
             ui.btnAtualizarMedidas.onclick = async () => {
+
+
+
                 if (!familiaSelecionadaId) return;
+
+
+
                
+
+
+
                 const f = todasFamilias.find(x => x.id === familiaSelecionadaId);
+
+
+
                 const novosFilhos = [];
+
+
+
                 document.querySelectorAll('.edicao-medidas-grid').forEach(row => {
+
+
+
                     if(!row.classList.contains('deleted-flag')) {
+
+
+
                         const nome = row.querySelector('.edit-nome').value;
+
+
+
                         const nasc = row.querySelector('.edit-nasc').value;
+
+
+
                         if(nome && nasc) {
+
+
+
                             novosFilhos.push({
+
+
+
                                 nome: formatarNome(nome),
+
+
+
                                 nascimento: nasc,
+
+
+
                                 tamanho: row.querySelector('.edit-roupa').value.toUpperCase(),
+
+
+
                                 calcado: row.querySelector('.edit-calcado').value
+
+
+
                             });
+
+
+
                         }
+
+
+
                     }
+
+
+
                 });
 
-                const nomePrincipal = formatarNome(document.getElementById('det-edit-resp1').value);
+
+
+
+
+
+
                 const dadosAtualizados = {
-                    responsavel1: { ...f.responsavel1, nome: nomePrincipal },
-                    responsavel2: { ...f.responsavel2, nome: formatarNome(document.getElementById('det-edit-resp2').value) },
-                    contato: {
-                        ...f.contato,
-                        telefone: document.getElementById('det-edit-tel').value,
-                        endereco: document.getElementById('det-edit-end').value
+
+
+
+                    responsavel1: {
+
+
+
+                        ...f.responsavel1,
+
+
+
+                        nome: formatarNome(document.getElementById('det-edit-resp1').value)
+
+
+
                     },
+
+
+
+                    responsavel2: {
+
+
+
+                        ...f.responsavel2,
+
+
+
+                        nome: formatarNome(document.getElementById('det-edit-resp2').value)
+
+
+
+                    },
+
+
+
+                    contato: {
+
+
+
+                        ...f.contato,
+
+
+
+                        telefone: document.getElementById('det-edit-tel').value,
+
+
+
+                        endereco: document.getElementById('det-edit-end').value
+
+
+
+                    },
+
+
+
                     filhos: novosFilhos,
+
+
+
                     ultimaAlteracaoEm: serverTimestamp()
+
+
+
                 };
 
+
+
+
+
+
+
                 try {
+
+
+
                     await updateDoc(doc(db, "familiasAssistidas", familiaSelecionadaId), dadosAtualizados);
 
-                    // LOG DIRETO: Sem funções externas e usando variáveis locais seguras
-                    try {
-                        const quemFez = user.displayName ? user.displayName : user.email;
-                        await addDoc(collection(db, "log_auditoria"), {
-                            timestamp: serverTimestamp(),
-                            autor: quemFez,
-                            acao: "REGISTRO_MANUAL",
-                            detalhes: { atividade: "Cáritas - Prontuário", operacao: "Atualização de Cadastro/Dependentes", responsavel: nomePrincipal, totalDependentesAjustado: novosFilhos.length }
-                        });
-                    } catch (errLog) { console.error(errLog); }
+
 
                     alert("Prontuário atualizado com sucesso!");
+
+
+
                     abrirDetalhes(familiaSelecionadaId);
+
+
+
                 } catch (e) { alert("Erro: " + e.message); }
+
+
+
             };
+
+
+
+
+
+
 
             ui.btnGravarAtendimento.onclick = async () => {
+
+
+
                 if(!confirm("Deseja gravar e arquivar esta ficha?")) return;
-               
+
+
+
                 const dadosFicha = {
+
+
+
                     data: serverTimestamp(),
+
+
+
                     situacao: Array.from(document.querySelectorAll('#ficha-situacao input:checked')).map(c => c.value),
+
+
+
                     necessidades: Array.from(document.querySelectorAll('#ficha-necessidades input:checked')).map(c => c.value),
+
+
+
                     estadoCivil: document.getElementById('ficha-estado-civil').value,
+
+
+
                     voluntario: document.getElementById('ficha-voluntario').value,
+
+
+
                     relato: document.getElementById('ficha-relato').value,
+
+
+
                     obs: document.getElementById('ficha-obs').value,
+
+
+
                     cesta: document.querySelector('input[name="ficha-cesta"]:checked')?.value || "Não informado"
+
+
+
                 };
+
+
+
                 try {
+
+
+
                     await addDoc(collection(db, `familiasAssistidas/${familiaSelecionadaId}/atendimentos`), dadosFicha);
 
-                    // LOG DIRETO: Sem funções externas e usando variáveis locais seguras
-                    try {
-                        const quemFez = user.displayName ? user.displayName : user.email;
-                        const f = todasFamilias.find(x => x.id === familiaSelecionadaId);
-                        await addDoc(collection(db, "log_auditoria"), {
-                            timestamp: serverTimestamp(),
-                            autor: quemFez,
-                            acao: "REGISTRO_MANUAL",
-                            detalhes: { atividade: "Cáritas - Ficha Atendimento", operacao: "Arquivamento de Atendimento Mensal", responsavel: f.responsavel1.nome, entrevistador: dadosFicha.voluntario, recebeuCesta: dadosFicha.cesta }
-                        });
-                    } catch (errLog) { console.error(errLog); }
+
 
                     alert("Ficha arquivada com sucesso!");
+
+
+
                     carregarHistoricoAtendimentos(familiaSelecionadaId);
+
+
+
                 } catch (e) { alert("Erro: " + e.message); }
+
+
+
             };
+
+
+
+
+
+
 
             ui.form.onsubmit = async (e) => {
+
+
+
                 e.preventDefault();
+
+
+
                 const dependentes = Array.from(document.querySelectorAll('#lista-filhos-inputs .filho-item')).map(item => ({
+
+
+
                     nome: formatarNome(item.querySelector('.f-nome').value),
+
+
+
                     nascimento: item.querySelector('.f-nasc').value,
+
+
+
                     tamanho: item.querySelector('.f-roupa').value.toUpperCase(),
+
+
+
                     calcado: item.querySelector('.f-calcado').value
+
+
+
                 }));
-                const nomePrincipal = formatarNome(document.getElementById('resp1-nome').value);
+
+
+
                 const novaFamilia = {
-                    responsavel1: { nome: nomePrincipal, nascimento: document.getElementById('resp1-nasc').value, tipo: document.getElementById('resp1-tipo').value },
+
+
+
+                    responsavel1: { nome: formatarNome(document.getElementById('resp1-nome').value), nascimento: document.getElementById('resp1-nasc').value, tipo: document.getElementById('resp1-tipo').value },
+
+
+
                     responsavel2: { nome: formatarNome(document.getElementById('resp2-nome').value), nascimento: document.getElementById('resp2-nasc').value, tipo: document.getElementById('resp2-tipo').value },
+
+
+
                     contato: { telefone: document.getElementById('familia-tel').value, endereco: ui.inputEndereco.value, emSituacaoDeRua: ui.checkRua.checked },
+
+
+
                     tipoCesta: document.getElementById('novo-tipo-cesta').value,
+
+
+
                     filhos: dependentes,
+
+
+
                     statusGeral: 'Ativa',
+
+
+
                     cadastradoEm: serverTimestamp()
+
+
+
                 };
+
+
+
                 try {
+
+
+
                     await addDoc(collection(db, "familiasAssistidas"), novaFamilia);
 
-                    // LOG DIRETO: Sem funções externas e usando variáveis locais seguras
-                    try {
-                        const quemFez = user.displayName ? user.displayName : user.email;
-                        await addDoc(collection(db, "log_auditoria"), {
-                            timestamp: serverTimestamp(),
-                            autor: quemFez,
-                            acao: "REGISTRO_MANUAL",
-                            detalhes: { atividade: "Cáritas - Cadastro", operacao: "Inclusão de Nova Família", responsavel: nomePrincipal, totalDependentes: dependentes.length }
-                        });
-                    } catch (errLog) { console.error(errLog); }
+
 
                     alert("Família cadastrada com sucesso!");
+
+
+
                     ui.modal.style.display = 'none';
+
+
+
                 } catch (err) { alert("Erro: " + err.message); }
+
+
+
             };
+
+
+
+
+
+
 
             ui.busca.oninput = () => {
+
+
+
                 const termo = ui.busca.value.toLowerCase();
+
+
+
                 renderizarLista(todasFamilias.filter(fam => fam.responsavel1.nome.toLowerCase().includes(termo)));
+
+
+
             };
+
+
+
+
+
+
 
             ui.btnExcel.onclick = () => {
+
+
+
                 const ws = XLSX.utils.json_to_sheet(todasFamilias.map(f => ({ Responsavel: f.responsavel1.nome, Contato: f.contato.telefone, Cesta: f.tipoCesta || 'Padrao', Status: f.statusGeral })));
+
+
+
                 const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, "Base Famílias");
+
+
+
                 XLSX.writeFile(wb, `Base_Caritas_${new Date().toLocaleDateString('pt-BR').replace(/\//g, '-')}.xlsx`);
+
+
+
             };
+
+
+
         }
 
+
+
+
+
+
+
         window.gerarReciboImpressao = () => {
+
+
+
             const f = todasFamilias.find(x => x.id === familiaSelecionadaId);
+
+
+
             const win = window.open('', '', 'height=600,width=800');
+
+
+
             win.document.write(`<html><head><title>Recibo CEPAT</title></head><body><h2>Casa Espírita Paulo de Tarso - Assistência Cáritas</h2><p><b>Responsável:</b> ${f.responsavel1.nome}</p><p><b>Data:</b> ${new Date().toLocaleDateString('pt-BR')}</p><p>Declaramos o recebimento do auxílio social conforme normas da casa.</p></body></html>`);
+
+
+
             win.document.close(); win.print();
+
+
+
         };
+
+
+
     </script>
+
+
+
 </body>
+
+
+
 </html>
