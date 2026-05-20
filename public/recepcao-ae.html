@@ -114,6 +114,7 @@
                     <button id="btn-marcar-presenca" class="btn btn-success">Marcar Presença</button>
                     <button id="btn-marcar-falta-rapido" class="btn btn-warning">Marcar Falta</button>
                     <button id="btn-liberar-alta-suspensa" class="btn btn-info hidden">Liberar Alta Definitiva</button>
+                    <button id="btn-desfazer-frequencia" class="btn btn-danger hidden" style="width: 100%;">🗑️ Desfazer Presença/Falta de Hoje</button>
                 </div>
             </div>
         </fieldset>
@@ -124,6 +125,7 @@
             <fieldset id="fs-dados-pessoais">
                 <legend style="display: flex; align-items: center;">
                     Dados Pessoais (Busca ou Novo Cadastro)
+                    <button id="btn-editar-cadastro" type="button" class="btn btn-warning hidden" style="margin-left: 15px; padding: 5px 10px; font-size: 0.8em;" title="Corrigir Nome, Telefone ou DN">✏️ Editar Cadastro</button>
                     <a id="btn-ver-historico" class="btn-historico hidden" title="Ver histórico completo do assistido">📜</a>
                 </legend>
                 <div class="form-grid">
@@ -132,7 +134,16 @@
                     <div class="form-item"><label for="dn">DN:</label><input type="date" id="dn" required></div>
                 </div>
             </fieldset>
-            <div id="novo-atendimento-section" class="hidden"><fieldset id="fs-acoes-iniciais"><legend>Novo Atendimento</legend><div class="actions-grid"><button id="btn-registrar-avulso" type="button" class="btn btn-info">Registrar Passe Avulso</button><button id="btn-iniciar-tratamento" type="button" class="btn btn-success">Iniciar Assistência</button></div></fieldset></div>
+            <div id="novo-atendimento-section" class="hidden">
+                <fieldset id="fs-acoes-iniciais">
+                    <legend>Novo Atendimento</legend>
+                    <div class="actions-grid">
+                        <button id="btn-registrar-avulso" type="button" class="btn btn-info">Registrar Passe Avulso</button>
+                        <button id="btn-iniciar-tratamento" type="button" class="btn btn-success">Iniciar Assistência</button>
+                        <button id="btn-desfazer-registro-busca" type="button" class="btn btn-danger hidden" style="grid-column: 1 / -1;">🗑️ Cancelar Registro de Hoje</button>
+                    </div>
+                </fieldset>
+            </div>
         </form>
         <button id="btn-limpar" class="btn btn-secondary" style="margin-top: 20px; width: 100%;">Limpar Busca</button>
     </div>
@@ -187,6 +198,7 @@
             let assistidoSelecionado = null;
             let tratamentoAtivoSelecionado = null;
             let metadadosTratamento = {};
+            let modoEdicaoCadastro = false; // Flag para o modo edição
 
             const ui = {
                 nomeInput: document.getElementById('nome'),
@@ -203,7 +215,10 @@
                 btnMarcarPresenca: document.getElementById('btn-marcar-presenca'),
                 btnMarcarFaltaRapido: document.getElementById('btn-marcar-falta-rapido'),
                 btnVerHistorico: document.getElementById('btn-ver-historico'),
-                btnLiberarAltaSuspensa: document.getElementById('btn-liberar-alta-suspensa')
+                btnLiberarAltaSuspensa: document.getElementById('btn-liberar-alta-suspensa'),
+                btnEditarCadastro: document.getElementById('btn-editar-cadastro'),
+                btnDesfazerRegistroBusca: document.getElementById('btn-desfazer-registro-busca'),
+                btnDesfazerFrequencia: document.getElementById('btn-desfazer-frequencia')
             };
 
             async function registrarLog(acao, detalhes) {
@@ -245,6 +260,65 @@
                 return atendimentosPassadosValidos + 1;
             }
 
+            // ===================================================================
+            // FUNÇÃO MESTRA: DESFAZER REGISTROS DO DIA (Evita retrocesso de 5ª semana)
+            // ===================================================================
+            async function desfazerAcoesDeHoje(assistido) {
+                const hojeInicio = new Date(); hojeInicio.setHours(0,0,0,0);
+                const batch = writeBatch(db);
+                let operacoes = 0;
+                let bloqueio5Semana = false;
+                
+                // 1. Vasculha Atendimentos de Hoje
+                const qAtend = query(atendimentosRef, where("assistidoId", "==", assistido.id), where("dataAtendimento", ">=", Timestamp.fromDate(hojeInicio)));
+                const atendSnap = await getDocs(qAtend);
+                let tratamentosAfetados = new Set();
+                let teveFalta = false;
+                
+                atendSnap.forEach(d => {
+                    const data = d.data();
+                    if (data.decisao_pre_registrada) {
+                        bloqueio5Semana = true; // Trava de segurança para não corromper decisão do Colegiado
+                    } else {
+                        batch.delete(doc(db, 'atendimentos_ae', d.id));
+                        operacoes++;
+                        if (data.tratamentoId) tratamentosAfetados.add(data.tratamentoId);
+                        if (data.tipo === 'falta') teveFalta = true;
+                    }
+                });
+
+                if (bloqueio5Semana) {
+                    alert("⚠️ Este registro envolve a ativação de uma decisão do Colegiado (5ª Semana). Por segurança, o desfazimento automático está desativado para este caso específico.");
+                    return false;
+                }
+
+                // 2. Vasculha Fila de Hoje
+                const qFila = query(filaRef, where("assistidoId", "==", assistido.id), where("chegadaEm", ">=", Timestamp.fromDate(hojeInicio)));
+                const filaSnap = await getDocs(qFila);
+                filaSnap.forEach(d => { batch.delete(doc(db, 'fila_atendimento_ae', d.id)); operacoes++; });
+                
+                // 3. Verifica Tratamentos Afetados (Apaga se foi criado hoje, ou devolve falta)
+                for (const tId of tratamentosAfetados) {
+                    const tDoc = await getDoc(doc(db, 'tratamentos_ae', tId));
+                    if (tDoc.exists()) {
+                        const tData = tDoc.data();
+                        if (tData.dataInicio && tData.dataInicio.toDate() >= hojeInicio) {
+                            batch.delete(doc(db, 'tratamentos_ae', tId)); // Apaga Início de Assistência feito hoje
+                            operacoes++;
+                        } else if (teveFalta) {
+                            batch.update(doc(db, 'tratamentos_ae', tId), { faltas_acumuladas: increment(-1), status: 'ativo' });
+                            operacoes++;
+                        }
+                    }
+                }
+                
+                if (operacoes > 0) {
+                    await batch.commit();
+                    return true;
+                }
+                return false;
+            }
+
             const resetarFormularioBusca = () => {
                 assistidoSelecionado = null;
                 tratamentoAtivoSelecionado = null;
@@ -254,6 +328,18 @@
                 ui.novoAtendimentoSection.classList.add('hidden');
                 ui.btnVerHistorico.classList.add('hidden');
                 ui.btnLiberarAltaSuspensa.classList.add('hidden');
+                
+                // Reset Edição
+                modoEdicaoCadastro = false;
+                ui.btnEditarCadastro.classList.add('hidden');
+                ui.btnEditarCadastro.textContent = '✏️ Editar Cadastro';
+                ui.btnEditarCadastro.classList.replace('btn-success', 'btn-warning');
+                
+                // Reset Desfazer
+                ui.btnDesfazerRegistroBusca.classList.add('hidden');
+                ui.btnRegistrarAvulso.classList.remove('hidden');
+                ui.btnIniciarTratamento.classList.remove('hidden');
+
                 ui.nomeInput.disabled = false;
                 ui.nomeInput.focus();
             };
@@ -377,6 +463,18 @@
                         ui.nomeFrequencia.textContent = item.assistido.nome; 
                         ui.painelAcoesFrequencia.classList.remove('hidden'); 
                         
+                        // Lógica Visual do Botão de Desfazer Registro Frequência
+                        if (item.statusHoje === 'presente' || item.statusHoje === 'alta-programada') {
+                            ui.btnMarcarPresenca.classList.add('hidden');
+                            ui.btnMarcarFaltaRapido.classList.add('hidden');
+                            ui.btnDesfazerFrequencia.classList.remove('hidden');
+                        } else {
+                            ui.btnMarcarPresenca.classList.remove('hidden');
+                            ui.btnMarcarFaltaRapido.classList.remove('hidden');
+                            ui.btnDesfazerFrequencia.classList.add('hidden');
+                        }
+
+                        // Lógica da Alta Suspensa
                         if (isSuspensa) {
                             ui.btnLiberarAltaSuspensa.classList.remove('hidden');
                             if (item.statusHoje === 'presente') {
@@ -405,6 +503,44 @@
                 if (input.length > 9) input = `${input.substring(0, 10)}-${input.substring(10)}`;
                 event.target.value = input;
             };
+
+            // ===================================================================
+            // EVENTO: BOTÃO EDITAR CADASTRO
+            // ===================================================================
+            ui.btnEditarCadastro.addEventListener('click', async () => {
+                if (!modoEdicaoCadastro) {
+                    modoEdicaoCadastro = true;
+                    ui.btnEditarCadastro.textContent = '💾 Salvar Edição';
+                    ui.btnEditarCadastro.classList.replace('btn-warning', 'btn-success');
+                    ui.nomeInput.focus();
+                } else {
+                    if (!validarDadosPessoais()) return;
+                    const novoNome = capitalizarNome(ui.nomeInput.value.trim());
+                    const novoTel = ui.telefoneInput.value;
+                    const novoDn = ui.dnInput.value;
+                    
+                    try {
+                        await updateDoc(doc(db, 'assistidos', assistidoSelecionado.id), {
+                            nome: novoNome,
+                            nome_lower: novoNome.toLowerCase(),
+                            telefone: novoTel,
+                            dn: novoDn
+                        });
+                        assistidoSelecionado.nome = novoNome;
+                        assistidoSelecionado.telefone = novoTel;
+                        assistidoSelecionado.dn = novoDn;
+                        
+                        modoEdicaoCadastro = false;
+                        ui.btnEditarCadastro.textContent = '✏️ Editar Cadastro';
+                        ui.btnEditarCadastro.classList.replace('btn-success', 'btn-warning');
+                        alert("Cadastro atualizado com sucesso!");
+                        await carregarTratamentosAtivos(); 
+                        await registrarLog('Edição de Cadastro (AE)', { assistidoId: assistidoSelecionado.id, novoNome: novoNome });
+                    } catch(e) {
+                        alert("Erro ao editar cadastro: " + e.message);
+                    }
+                }
+            });
 
              ui.btnMarcarPresenca.addEventListener('click', async (e) => {
                 e.target.disabled = true;
@@ -512,8 +648,24 @@
             });
 
             // ===================================================================
-            // EVENTO: BOTÃO LIBERAR ALTA SUSPENSA (Gatilho da Recepção)
+            // EVENTO: BOTÃO DESFAZER FREQUÊNCIA (No painel ativo)
             // ===================================================================
+            ui.btnDesfazerFrequencia.addEventListener('click', async (e) => {
+                e.target.disabled = true;
+                if(confirm(`⚠️ Desfazer o registro de HOJE feito para ${assistidoSelecionado.nome}?`)) {
+                    const sucesso = await desfazerAcoesDeHoje(assistidoSelecionado);
+                    if (sucesso) {
+                        alert("Registros de hoje cancelados com sucesso!");
+                        await registrarLog('Cancelamento de Registro (AE)', { assistidoId: assistidoSelecionado.id });
+                        ui.painelAcoesFrequencia.classList.add('hidden');
+                        await carregarTratamentosAtivos();
+                    } else {
+                        alert("Nenhum registro encontrado hoje, ou a operação foi bloqueada por segurança.");
+                    }
+                }
+                e.target.disabled = false;
+            });
+
             ui.btnLiberarAltaSuspensa.addEventListener('click', async (e) => {
                 e.target.disabled = true;
                 if(confirm(`Tem certeza que deseja EFETIVAR A ALTA para ${assistidoSelecionado.nome}?\n\nComo ele já registrou presença hoje, a partir da próxima terça-feira o sistema puxará automaticamente o fluxo de Encerramento (Alta Programada).`)) {
@@ -628,25 +780,64 @@
 
             ui.nomeInput.addEventListener('input', async (e) => {
                 const termo = e.target.value.trim();
+                // Bypassa o reset da busca se o voluntário estiver no meio de uma edição
+                if (modoEdicaoCadastro) return; 
+
                 if (assistidoSelecionado && termo.toLowerCase() !== assistidoSelecionado.nome.toLowerCase()) {
-                    assistidoSelecionado = null; ui.telefoneInput.value = ''; ui.dnInput.value = ''; ui.btnVerHistorico.classList.add('hidden');
+                    assistidoSelecionado = null; ui.telefoneInput.value = ''; ui.dnInput.value = ''; ui.btnVerHistorico.classList.add('hidden'); ui.btnEditarCadastro.classList.add('hidden');
                 }
                 if (termo.length > 0 && !assistidoSelecionado) { ui.novoAtendimentoSection.classList.remove('hidden'); } else if (termo.length === 0) { ui.novoAtendimentoSection.classList.add('hidden'); }
                 if (termo.length < 3) { ui.searchResults.innerHTML = ''; return; }
                 const q = query(assistidosRef, where('nome_lower', '>=', termo.toLowerCase()), where('nome_lower', '<=', termo.toLowerCase() + '\uf8ff'), limit(5));
                 const snapshot = await getDocs(q);
                 ui.searchResults.innerHTML = '';
-                snapshot.forEach(doc => {
-                    const assistido = { id: doc.id, ...doc.data() }; const li = document.createElement('li'); li.textContent = assistido.nome;
+                snapshot.forEach(docSnap => {
+                    const assistido = { id: docSnap.id, ...docSnap.data() }; const li = document.createElement('li'); li.textContent = assistido.nome;
                     li.addEventListener('click', async () => {
                         assistidoSelecionado = assistido; ui.nomeInput.value = assistido.nome; ui.telefoneInput.value = assistido.telefone || ''; ui.dnInput.value = assistido.dn || '';
                         ui.searchResults.innerHTML = ''; ui.novoAtendimentoSection.classList.remove('hidden'); await checarHistoricoEExibirBotao(assistido.id);
+                        ui.btnEditarCadastro.classList.remove('hidden');
+
+                        // LÓGICA DE CANCELAMENTO NA BUSCA (Ex: Fez passe avulso por engano)
+                        const hojeInicio = new Date(); hojeInicio.setHours(0,0,0,0);
+                        const qFilaCheck = query(filaRef, where("assistidoId", "==", assistido.id), where("chegadaEm", ">=", Timestamp.fromDate(hojeInicio)), limit(1));
+                        const qAtendCheck = query(atendimentosRef, where("assistidoId", "==", assistido.id), where("dataAtendimento", ">=", Timestamp.fromDate(hojeInicio)), limit(1));
+                        const [filaCheckSnap, atendCheckSnap] = await Promise.all([getDocs(qFilaCheck), getDocs(qAtendCheck)]);
+                        
+                        if (!filaCheckSnap.empty || !atendCheckSnap.empty) {
+                            ui.btnRegistrarAvulso.classList.add('hidden');
+                            ui.btnIniciarTratamento.classList.add('hidden');
+                            ui.btnDesfazerRegistroBusca.classList.remove('hidden');
+                        } else {
+                            ui.btnRegistrarAvulso.classList.remove('hidden');
+                            ui.btnIniciarTratamento.classList.remove('hidden');
+                            ui.btnDesfazerRegistroBusca.classList.add('hidden');
+                        }
                     });
                     ui.searchResults.appendChild(li);
                 });
             });
 
             ui.nomeInput.addEventListener('blur', () => { setTimeout(() => { ui.searchResults.innerHTML = ''; }, 200); });
+
+            // ===================================================================
+            // EVENTO: BOTÃO DESFAZER NA BUSCA (Ex: Cancelar Avulso)
+            // ===================================================================
+            ui.btnDesfazerRegistroBusca.addEventListener('click', async (e) => {
+                e.target.disabled = true;
+                if(confirm(`⚠️ Desfazer o registro de HOJE feito para ${assistidoSelecionado.nome}?`)) {
+                    const sucesso = await desfazerAcoesDeHoje(assistidoSelecionado);
+                    if (sucesso) {
+                        alert("Registros de hoje cancelados com sucesso!");
+                        await registrarLog('Cancelamento de Registro (AE)', { assistidoId: assistidoSelecionado.id });
+                        resetarFormularioBusca();
+                        await carregarTratamentosAtivos();
+                    } else {
+                        alert("Nenhum registro encontrado hoje, ou a operação foi bloqueada por segurança.");
+                    }
+                }
+                e.target.disabled = false;
+            });
 
             ui.btnRegistrarAvulso.addEventListener('click', async (e) => {
                 e.target.disabled = true; if (!validarDadosPessoais()) { e.target.disabled = false; return; }
@@ -659,7 +850,7 @@
                     batch.set(doc(atendimentosRef), { assistidoId: assistidoId, tratamentoId: null, tipo: 'avulso', dataAtendimento: dataAtual, passeRecomendado: passeAvulso });
                     await batch.commit(); alert('Passe avulso registrado e enviado para a fila!');
                     await registrarLog('Registro de Passe Avulso (AE)', { assistidoId: assistidoId, assistidoNome: nomeAssistido, passeRecomendado: passeAvulso });
-                    location.reload();
+                    resetarFormularioBusca();
                 } catch(error) { console.error("Erro ao registrar passe avulso:", error); e.target.disabled = false; }
             });
 
@@ -676,7 +867,8 @@
                     batch.set(doc(filaRef), { assistidoId: assistidoId, nomeAssistido: nomeAssistido, tratamentoId: novoTratamentoRef.id, atendimentoId: novoAtendimentoRef.id, status: 'aguardando_entrevista_ou_passe', passeRecomendado: passeInicial, semana_atual: 1, chegadaEm: dataAtual, recepcionista: { uid: user.uid, nome: user.displayName } });
                     await batch.commit(); alert('Assistência Espiritual iniciada com sucesso e enviada para a fila!');
                     await registrarLog('Início de Assistência Espiritual', { assistidoId: assistidoId, assistidoNome: nomeAssistido, passeInicial: passeInicial });
-                    location.reload();
+                    resetarFormularioBusca();
+                    await carregarTratamentosAtivos();
                 } catch(error) { console.error("Erro ao iniciar assistência:", error); alert(`Ocorreu um erro: ${error.message}`); e.target.disabled = false; }
             });
 
