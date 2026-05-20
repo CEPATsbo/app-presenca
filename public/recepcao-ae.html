@@ -67,9 +67,14 @@
             box-shadow: none;
             background-image: linear-gradient(rgba(255,255,255,0.4), rgba(255,255,255,0.4));
         }
+        #lista-ativos li.status-falta { 
+            opacity: 0.8;
+            border: 2px dashed #dc3545;
+            background-image: linear-gradient(rgba(220,53,69,0.1), rgba(220,53,69,0.1));
+        }
         #lista-ativos li.status-alta-programada { border: 3px solid var(--cor-alta); }
         #lista-ativos li.status-novo-ciclo { border: 3px solid var(--cor-migracao); }
-        #lista-ativos li.status-alta-suspensa { border: 3px solid #fd7e14; } /* Destaca a Alta Suspensa */
+        #lista-ativos li.status-alta-suspensa { border: 3px solid #fd7e14; }
 
         .actions-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-top: 20px; }
         .actions-grid-freq { display: flex; gap: 15px; margin-top: 10px; flex-wrap: wrap; }
@@ -198,7 +203,7 @@
             let assistidoSelecionado = null;
             let tratamentoAtivoSelecionado = null;
             let metadadosTratamento = {};
-            let modoEdicaoCadastro = false; // Flag para o modo edição
+            let modoEdicaoCadastro = false;
 
             const ui = {
                 nomeInput: document.getElementById('nome'),
@@ -260,16 +265,12 @@
                 return atendimentosPassadosValidos + 1;
             }
 
-            // ===================================================================
-            // FUNÇÃO MESTRA: DESFAZER REGISTROS DO DIA (Evita retrocesso de 5ª semana)
-            // ===================================================================
             async function desfazerAcoesDeHoje(assistido) {
                 const hojeInicio = new Date(); hojeInicio.setHours(0,0,0,0);
                 const batch = writeBatch(db);
                 let operacoes = 0;
                 let bloqueio5Semana = false;
                 
-                // 1. Vasculha Atendimentos de Hoje
                 const qAtend = query(atendimentosRef, where("assistidoId", "==", assistido.id), where("dataAtendimento", ">=", Timestamp.fromDate(hojeInicio)));
                 const atendSnap = await getDocs(qAtend);
                 let tratamentosAfetados = new Set();
@@ -277,8 +278,8 @@
                 
                 atendSnap.forEach(d => {
                     const data = d.data();
-                    if (data.decisao_pre_registrada) {
-                        bloqueio5Semana = true; // Trava de segurança para não corromper decisão do Colegiado
+                    if (data.decisao_pre_registrada && data.tipo !== 'falta') {
+                        bloqueio5Semana = true; 
                     } else {
                         batch.delete(doc(db, 'atendimentos_ae', d.id));
                         operacoes++;
@@ -292,18 +293,16 @@
                     return false;
                 }
 
-                // 2. Vasculha Fila de Hoje
                 const qFila = query(filaRef, where("assistidoId", "==", assistido.id), where("chegadaEm", ">=", Timestamp.fromDate(hojeInicio)));
                 const filaSnap = await getDocs(qFila);
                 filaSnap.forEach(d => { batch.delete(doc(db, 'fila_atendimento_ae', d.id)); operacoes++; });
                 
-                // 3. Verifica Tratamentos Afetados (Apaga se foi criado hoje, ou devolve falta)
                 for (const tId of tratamentosAfetados) {
                     const tDoc = await getDoc(doc(db, 'tratamentos_ae', tId));
                     if (tDoc.exists()) {
                         const tData = tDoc.data();
                         if (tData.dataInicio && tData.dataInicio.toDate() >= hojeInicio) {
-                            batch.delete(doc(db, 'tratamentos_ae', tId)); // Apaga Início de Assistência feito hoje
+                            batch.delete(doc(db, 'tratamentos_ae', tId)); 
                             operacoes++;
                         } else if (teveFalta) {
                             batch.update(doc(db, 'tratamentos_ae', tId), { faltas_acumuladas: increment(-1), status: 'ativo' });
@@ -329,13 +328,11 @@
                 ui.btnVerHistorico.classList.add('hidden');
                 ui.btnLiberarAltaSuspensa.classList.add('hidden');
                 
-                // Reset Edição
                 modoEdicaoCadastro = false;
                 ui.btnEditarCadastro.classList.add('hidden');
                 ui.btnEditarCadastro.textContent = '✏️ Editar Cadastro';
                 ui.btnEditarCadastro.classList.replace('btn-success', 'btn-warning');
                 
-                // Reset Desfazer
                 ui.btnDesfazerRegistroBusca.classList.add('hidden');
                 ui.btnRegistrarAvulso.classList.remove('hidden');
                 ui.btnIniciarTratamento.classList.remove('hidden');
@@ -398,12 +395,16 @@
                     const tratamento = { id: tratamentoDoc.id, ...tratamentoDoc.data()};
                     if (!tratamento.assistidoId) return null;
                     const assistidoDocRef = doc(db, 'assistidos', tratamento.assistidoId);
+                    
+                    // Adicionada consulta para ver se tomou falta hoje
                     const qFrequenciaHoje = query(filaRef, where("assistidoId", "==", tratamento.assistidoId), where("chegadaEm", ">=", Timestamp.fromDate(hojeInicio)), where("chegadaEm", "<=", Timestamp.fromDate(hojeFim)), limit(1));
-                    const [assistidoDoc, frequenciaSnapshot] = await Promise.all([ getDoc(assistidoDocRef), getDocs(qFrequenciaHoje) ]);
+                    const qFaltaHoje = query(atendimentosRef, where("tratamentoId", "==", tratamento.id), where("tipo", "==", "falta"), where("dataAtendimento", ">=", Timestamp.fromDate(hojeInicio)), where("dataAtendimento", "<=", Timestamp.fromDate(hojeFim)), limit(1));
+                    
+                    const [assistidoDoc, frequenciaSnapshot, faltaSnapshot] = await Promise.all([ getDoc(assistidoDocRef), getDocs(qFrequenciaHoje), getDocs(qFaltaHoje) ]);
+                    
                     let statusHoje = 'pendente';
                     let placeholderSnapshot = null;
                     const semanaAtualHoje = await calcularSemanaAtual(tratamento.id);
-
                     const isAltaSuspensa = tratamento.alta_suspensa === true;
 
                     if (semanaAtualHoje === 5 && !isAltaSuspensa) {
@@ -414,6 +415,9 @@
                     if (!frequenciaSnapshot.empty) {
                         statusHoje = 'presente';
                          metadadosTratamento[tratamento.id] = { semanaAtual: semanaAtualHoje, alta_suspensa: isAltaSuspensa };
+                    } else if (!faltaSnapshot.empty) {
+                        statusHoje = 'falta'; // Captura a falta dada hoje para ajustar os botões
+                        metadadosTratamento[tratamento.id] = { semanaAtual: semanaAtualHoje, alta_suspensa: isAltaSuspensa };
                     } else if (isAltaSuspensa) {
                          statusHoje = 'alta-suspensa';
                          metadadosTratamento[tratamento.id] = { semanaAtual: semanaAtualHoje, alta_suspensa: true };
@@ -442,6 +446,8 @@
                     if (item.statusHoje === 'presente') {
                         iconeStatus = ' ✅';
                         if (isSuspensa) { iconeStatus += ' ⚠️ (Prolongado)'; }
+                    } else if (item.statusHoje === 'falta') {
+                        iconeStatus = ' ❌ (Falta)'; // Mostra ícone de falta
                     } else if (item.statusHoje === 'alta-programada') {
                         iconeStatus = ' 🔴 (Alta)';
                         li.title = "Decisão: ALTA PROGRAMADA (Aguardando Entrevista)";
@@ -463,8 +469,8 @@
                         ui.nomeFrequencia.textContent = item.assistido.nome; 
                         ui.painelAcoesFrequencia.classList.remove('hidden'); 
                         
-                        // Lógica Visual do Botão de Desfazer Registro Frequência
-                        if (item.statusHoje === 'presente' || item.statusHoje === 'alta-programada') {
+                        // Agora ele inclui 'falta' na regra de esconder botões de presença
+                        if (item.statusHoje === 'presente' || item.statusHoje === 'alta-programada' || item.statusHoje === 'falta') {
                             ui.btnMarcarPresenca.classList.add('hidden');
                             ui.btnMarcarFaltaRapido.classList.add('hidden');
                             ui.btnDesfazerFrequencia.classList.remove('hidden');
@@ -474,7 +480,6 @@
                             ui.btnDesfazerFrequencia.classList.add('hidden');
                         }
 
-                        // Lógica da Alta Suspensa
                         if (isSuspensa) {
                             ui.btnLiberarAltaSuspensa.classList.remove('hidden');
                             if (item.statusHoje === 'presente') {
@@ -504,9 +509,6 @@
                 event.target.value = input;
             };
 
-            // ===================================================================
-            // EVENTO: BOTÃO EDITAR CADASTRO
-            // ===================================================================
             ui.btnEditarCadastro.addEventListener('click', async () => {
                 if (!modoEdicaoCadastro) {
                     modoEdicaoCadastro = true;
@@ -647,9 +649,6 @@
                 }
             });
 
-            // ===================================================================
-            // EVENTO: BOTÃO DESFAZER FREQUÊNCIA (No painel ativo)
-            // ===================================================================
             ui.btnDesfazerFrequencia.addEventListener('click', async (e) => {
                 e.target.disabled = true;
                 if(confirm(`⚠️ Desfazer o registro de HOJE feito para ${assistidoSelecionado.nome}?`)) {
@@ -780,7 +779,6 @@
 
             ui.nomeInput.addEventListener('input', async (e) => {
                 const termo = e.target.value.trim();
-                // Bypassa o reset da busca se o voluntário estiver no meio de uma edição
                 if (modoEdicaoCadastro) return; 
 
                 if (assistidoSelecionado && termo.toLowerCase() !== assistidoSelecionado.nome.toLowerCase()) {
@@ -798,7 +796,6 @@
                         ui.searchResults.innerHTML = ''; ui.novoAtendimentoSection.classList.remove('hidden'); await checarHistoricoEExibirBotao(assistido.id);
                         ui.btnEditarCadastro.classList.remove('hidden');
 
-                        // LÓGICA DE CANCELAMENTO NA BUSCA (Ex: Fez passe avulso por engano)
                         const hojeInicio = new Date(); hojeInicio.setHours(0,0,0,0);
                         const qFilaCheck = query(filaRef, where("assistidoId", "==", assistido.id), where("chegadaEm", ">=", Timestamp.fromDate(hojeInicio)), limit(1));
                         const qAtendCheck = query(atendimentosRef, where("assistidoId", "==", assistido.id), where("dataAtendimento", ">=", Timestamp.fromDate(hojeInicio)), limit(1));
@@ -820,9 +817,6 @@
 
             ui.nomeInput.addEventListener('blur', () => { setTimeout(() => { ui.searchResults.innerHTML = ''; }, 200); });
 
-            // ===================================================================
-            // EVENTO: BOTÃO DESFAZER NA BUSCA (Ex: Cancelar Avulso)
-            // ===================================================================
             ui.btnDesfazerRegistroBusca.addEventListener('click', async (e) => {
                 e.target.disabled = true;
                 if(confirm(`⚠️ Desfazer o registro de HOJE feito para ${assistidoSelecionado.nome}?`)) {
