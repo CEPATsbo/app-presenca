@@ -201,7 +201,7 @@
             const logAuditoriaRef = collection(db, 'log_auditoria');
 
             let assistidoSelecionado = null;
-            let tratamientoAtivoSelecionado = null;
+            let tratamentoAtivoSelecionado = null;
             let metadadosTratamento = {};
             let modoEdicaoCadastro = false;
 
@@ -434,7 +434,7 @@
                     } else {
                          metadadosTratamento[tratamento.id] = { semanaAtual: semanaAtualHoje };
                     }
-                    return assistidoDoc.exists() ? { assistido: {id: assistidoDoc.id, ...assistidoDoc.data()}, tratamiento, statusHoje } : null;
+                    return assistidoDoc.exists() ? { assistido: {id: assistidoDoc.id, ...assistidoDoc.data()}, tratamento, statusHoje } : null;
                 });
 
                 const itensLista = (await Promise.all(promessas)).filter(item => item !== null);
@@ -520,7 +520,6 @@
                     ui.btnEditarCadastro.classList.remove('btn-warning');
                     ui.btnEditarCadastro.classList.add('btn-success');
                     
-                    // TRANSFORMAÇÃO DO BOTÃO LIMPAR EM CANCELAR (Novo para as senhoras)
                     ui.btnLimpar.textContent = '❌ Cancelar Edição';
                     ui.btnLimpar.classList.remove('btn-secondary');
                     ui.btnLimpar.classList.add('btn-danger');
@@ -543,7 +542,6 @@
                         
                         alert("Cadastro atualizado com sucesso!");
                         
-                        // AUTO-RESET DA TELA APÓS SALVAR (Novo)
                         resetarFormularioBusca();
                         await carregarTratamentosAtivos(); 
                         await registrarLog('Edição de Cadastro (AE)', { assistidoId: idLog, novoNome: novoNome });
@@ -601,7 +599,7 @@
                                 semana_atual: 5, tipoAtendimento: 'alta_programada', chegadaEm: dataAtual, recepcionista: { uid: user.uid, nome: user.displayName }
                             });
                             await batch.commit();
-                            await registrarLog('Ativação de Entrevista de Alta (AE)', { assistidoId: assistidoSelecionado.id, assistidoNome: assistidoSelecionado.nome, tratamientoId: tratamentoAtivoSelecionado.id });
+                            await registrarLog('Ativação de Entrevista de Alta (AE)', { assistidoId: assistidoSelecionado.id, assistidoNome: assistidoSelecionado.nome, tratamentoId: tratamentoAtivoSelecionado.id });
                             alert(`Presença registrada para ${assistidoSelecionado.nome}. Assistido encaminhado para a ENTREVISTA DE ALTA.`);
 
                         } else if (atendimentoPreRegistrado.passePara) {
@@ -610,7 +608,7 @@
                             batch.update(tratamentoAtualDocRef, { status: 'concluido_por_reavaliacao', dataFim: dataAtual });
                             const novoTratamentoRef = doc(tratamentosRef);
                             batch.set(novoTratamentoRef, { assistidoId: assistidoSelecionado.id, dataInicio: dataAtual, status: 'ativo', faltas_acumuladas: 0, passe_ciclo_atual: novoPasse });
-                            batch.update(atendimentoDocRef, { dataAtendimento: dataAtual, tratamientoId: novoTratamentoRef.id, semana: 1, passeRecomendado: novoPasse, tipo: 'tratamento_semanal' });
+                            batch.update(atendimentoDocRef, { dataAtendimento: dataAtual, tratamentoId: novoTratamentoRef.id, semana: 1, passeRecomendado: novoPasse, tipo: 'tratamento_semanal' });
                             batch.set(doc(filaRef), {
                                 assistidoId: assistidoSelecionado.id, nomeAssistido: assistidoSelecionado.nome, tratamentoId: novoTratamentoRef.id,
                                 atendimentoId: atendimentoDocRef.id, status: 'aguardando_entrevista_ou_passe', passeRecomendado: novoPasse,
@@ -836,7 +834,7 @@
                         resetarFormularioBusca();
                         await carregarTratamentosAtivos();
                     } else {
-                        alert("Nenhum registro encontrado hoje, ou a operation foi bloqueada por segurança.");
+                        alert("Nenhum registro encontrado hoje, ou a operação foi bloqueada por segurança.");
                     }
                 }
                 e.target.disabled = false;
@@ -867,7 +865,7 @@
                     batch.set(novoTratamentoRef, { assistidoId: assistidoId, dataInicio: serverTimestamp(), status: 'ativo', faltas_acumuladas: 0, passe_ciclo_atual: passeInicial });
                     const dataAtual = serverTimestamp(); const novoAtendimentoRef = doc(collection(db, 'atendimentos_ae'));
                     batch.set(novoAtendimentoRef, { assistidoId: assistidoId, tratamentoId: novoTratamentoRef.id, tipo: 'tratamento_semanal', dataAtendimento: dataAtual, semana: 1, entrevistador: 'Aguardando Detalhes', passeRecomendado: passeInicial, notas: '', detalhes_preenchidos: false });
-                    batch.set(doc(filaRef), { assistidoId: assistidoId, nomeAssistido: nomeAssistido, tratamientoId: novoTratamentoRef.id, atendimentoId: novoAtendimentoRef.id, status: 'aguardando_entrevista_ou_passe', passeRecomendado: passeInicial, semana_atual: 1, chegadaEm: dataAtual, recepcionista: { uid: user.uid, nome: user.displayName } });
+                    batch.set(doc(filaRef), { assistidoId: assistidoId, nomeAssistido: nomeAssistido, tratamentoId: novoTratamentoRef.id, atendimentoId: novoAtendimentoRef.id, status: 'aguardando_entrevista_ou_passe', passeRecomendado: passeInicial, semana_atual: 1, chegadaEm: dataAtual, recepcionista: { uid: user.uid, nome: user.displayName } });
                     await batch.commit(); alert('Assistência Espiritual iniciada com sucesso e enviada para a fila!');
                     await registrarLog('Início de Assistência Espiritual', { assistidoId: assistidoId, assistidoNome: nomeAssistido, passeInicial: passeInicial });
                     resetarFormularioBusca();
