@@ -201,7 +201,7 @@
             const logAuditoriaRef = collection(db, 'log_auditoria');
 
             let assistidoSelecionado = null;
-            let tratamentoAtivoSelecionado = null;
+            let tratamientoAtivoSelecionado = null;
             let metadadosTratamento = {};
             let modoEdicaoCadastro = false;
 
@@ -331,11 +331,17 @@
                 modoEdicaoCadastro = false;
                 ui.btnEditarCadastro.classList.add('hidden');
                 ui.btnEditarCadastro.textContent = '✏️ Editar Cadastro';
-                ui.btnEditarCadastro.classList.replace('btn-success', 'btn-warning');
+                ui.btnEditarCadastro.classList.remove('btn-success');
+                ui.btnEditarCadastro.classList.add('btn-warning');
                 
                 ui.btnDesfazerRegistroBusca.classList.add('hidden');
                 ui.btnRegistrarAvulso.classList.remove('hidden');
                 ui.btnIniciarTratamento.classList.remove('hidden');
+
+                // Garante que o botão de limpar volte a ser a busca normal
+                ui.btnLimpar.textContent = 'Limpar Busca';
+                ui.btnLimpar.classList.remove('btn-danger');
+                ui.btnLimpar.classList.add('btn-secondary');
 
                 ui.nomeInput.disabled = false;
                 ui.nomeInput.focus();
@@ -396,7 +402,6 @@
                     if (!tratamento.assistidoId) return null;
                     const assistidoDocRef = doc(db, 'assistidos', tratamento.assistidoId);
                     
-                    // Adicionada consulta para ver se tomou falta hoje
                     const qFrequenciaHoje = query(filaRef, where("assistidoId", "==", tratamento.assistidoId), where("chegadaEm", ">=", Timestamp.fromDate(hojeInicio)), where("chegadaEm", "<=", Timestamp.fromDate(hojeFim)), limit(1));
                     const qFaltaHoje = query(atendimentosRef, where("tratamentoId", "==", tratamento.id), where("tipo", "==", "falta"), where("dataAtendimento", ">=", Timestamp.fromDate(hojeInicio)), where("dataAtendimento", "<=", Timestamp.fromDate(hojeFim)), limit(1));
                     
@@ -416,7 +421,7 @@
                         statusHoje = 'presente';
                          metadadosTratamento[tratamento.id] = { semanaAtual: semanaAtualHoje, alta_suspensa: isAltaSuspensa };
                     } else if (!faltaSnapshot.empty) {
-                        statusHoje = 'falta'; // Captura a falta dada hoje para ajustar os botões
+                        statusHoje = 'falta'; 
                         metadadosTratamento[tratamento.id] = { semanaAtual: semanaAtualHoje, alta_suspensa: isAltaSuspensa };
                     } else if (isAltaSuspensa) {
                          statusHoje = 'alta-suspensa';
@@ -429,7 +434,7 @@
                     } else {
                          metadadosTratamento[tratamento.id] = { semanaAtual: semanaAtualHoje };
                     }
-                    return assistidoDoc.exists() ? { assistido: {id: assistidoDoc.id, ...assistidoDoc.data()}, tratamento, statusHoje } : null;
+                    return assistidoDoc.exists() ? { assistido: {id: assistidoDoc.id, ...assistidoDoc.data()}, tratamiento, statusHoje } : null;
                 });
 
                 const itensLista = (await Promise.all(promessas)).filter(item => item !== null);
@@ -447,7 +452,7 @@
                         iconeStatus = ' ✅';
                         if (isSuspensa) { iconeStatus += ' ⚠️ (Prolongado)'; }
                     } else if (item.statusHoje === 'falta') {
-                        iconeStatus = ' ❌ (Falta)'; // Mostra ícone de falta
+                        iconeStatus = ' ❌ (Falta)'; 
                     } else if (item.statusHoje === 'alta-programada') {
                         iconeStatus = ' 🔴 (Alta)';
                         li.title = "Decisão: ALTA PROGRAMADA (Aguardando Entrevista)";
@@ -469,7 +474,6 @@
                         ui.nomeFrequencia.textContent = item.assistido.nome; 
                         ui.painelAcoesFrequencia.classList.remove('hidden'); 
                         
-                        // Agora ele inclui 'falta' na regra de esconder botões de presença
                         if (item.statusHoje === 'presente' || item.statusHoje === 'alta-programada' || item.statusHoje === 'falta') {
                             ui.btnMarcarPresenca.classList.add('hidden');
                             ui.btnMarcarFaltaRapido.classList.add('hidden');
@@ -513,10 +517,18 @@
                 if (!modoEdicaoCadastro) {
                     modoEdicaoCadastro = true;
                     ui.btnEditarCadastro.textContent = '💾 Salvar Edição';
-                    ui.btnEditarCadastro.classList.replace('btn-warning', 'btn-success');
+                    ui.btnEditarCadastro.classList.remove('btn-warning');
+                    ui.btnEditarCadastro.classList.add('btn-success');
+                    
+                    // TRANSFORMAÇÃO DO BOTÃO LIMPAR EM CANCELAR (Novo para as senhoras)
+                    ui.btnLimpar.textContent = '❌ Cancelar Edição';
+                    ui.btnLimpar.classList.remove('btn-secondary');
+                    ui.btnLimpar.classList.add('btn-danger');
+                    
                     ui.nomeInput.focus();
                 } else {
                     if (!validarDadosPessoais()) return;
+                    const idLog = assistidoSelecionado.id;
                     const novoNome = capitalizarNome(ui.nomeInput.value.trim());
                     const novoTel = ui.telefoneInput.value;
                     const novoDn = ui.dnInput.value;
@@ -528,16 +540,13 @@
                             telefone: novoTel,
                             dn: novoDn
                         });
-                        assistidoSelecionado.nome = novoNome;
-                        assistidoSelecionado.telefone = novoTel;
-                        assistidoSelecionado.dn = novoDn;
                         
-                        modoEdicaoCadastro = false;
-                        ui.btnEditarCadastro.textContent = '✏️ Editar Cadastro';
-                        ui.btnEditarCadastro.classList.replace('btn-success', 'btn-warning');
                         alert("Cadastro atualizado com sucesso!");
+                        
+                        // AUTO-RESET DA TELA APÓS SALVAR (Novo)
+                        resetarFormularioBusca();
                         await carregarTratamentosAtivos(); 
-                        await registrarLog('Edição de Cadastro (AE)', { assistidoId: assistidoSelecionado.id, novoNome: novoNome });
+                        await registrarLog('Edição de Cadastro (AE)', { assistidoId: idLog, novoNome: novoNome });
                     } catch(e) {
                         alert("Erro ao editar cadastro: " + e.message);
                     }
@@ -592,7 +601,7 @@
                                 semana_atual: 5, tipoAtendimento: 'alta_programada', chegadaEm: dataAtual, recepcionista: { uid: user.uid, nome: user.displayName }
                             });
                             await batch.commit();
-                            await registrarLog('Ativação de Entrevista de Alta (AE)', { assistidoId: assistidoSelecionado.id, assistidoNome: assistidoSelecionado.nome, tratamentoId: tratamentoAtivoSelecionado.id });
+                            await registrarLog('Ativação de Entrevista de Alta (AE)', { assistidoId: assistidoSelecionado.id, assistidoNome: assistidoSelecionado.nome, tratamientoId: tratamentoAtivoSelecionado.id });
                             alert(`Presença registrada para ${assistidoSelecionado.nome}. Assistido encaminhado para a ENTREVISTA DE ALTA.`);
 
                         } else if (atendimentoPreRegistrado.passePara) {
@@ -601,7 +610,7 @@
                             batch.update(tratamentoAtualDocRef, { status: 'concluido_por_reavaliacao', dataFim: dataAtual });
                             const novoTratamentoRef = doc(tratamentosRef);
                             batch.set(novoTratamentoRef, { assistidoId: assistidoSelecionado.id, dataInicio: dataAtual, status: 'ativo', faltas_acumuladas: 0, passe_ciclo_atual: novoPasse });
-                            batch.update(atendimentoDocRef, { dataAtendimento: dataAtual, tratamentoId: novoTratamentoRef.id, semana: 1, passeRecomendado: novoPasse, tipo: 'tratamento_semanal' });
+                            batch.update(atendimentoDocRef, { dataAtendimento: dataAtual, tratamientoId: novoTratamentoRef.id, semana: 1, passeRecomendado: novoPasse, tipo: 'tratamento_semanal' });
                             batch.set(doc(filaRef), {
                                 assistidoId: assistidoSelecionado.id, nomeAssistido: assistidoSelecionado.nome, tratamentoId: novoTratamentoRef.id,
                                 atendimentoId: atendimentoDocRef.id, status: 'aguardando_entrevista_ou_passe', passeRecomendado: novoPasse,
@@ -827,7 +836,7 @@
                         resetarFormularioBusca();
                         await carregarTratamentosAtivos();
                     } else {
-                        alert("Nenhum registro encontrado hoje, ou a operação foi bloqueada por segurança.");
+                        alert("Nenhum registro encontrado hoje, ou a operation foi bloqueada por segurança.");
                     }
                 }
                 e.target.disabled = false;
@@ -858,7 +867,7 @@
                     batch.set(novoTratamentoRef, { assistidoId: assistidoId, dataInicio: serverTimestamp(), status: 'ativo', faltas_acumuladas: 0, passe_ciclo_atual: passeInicial });
                     const dataAtual = serverTimestamp(); const novoAtendimentoRef = doc(collection(db, 'atendimentos_ae'));
                     batch.set(novoAtendimentoRef, { assistidoId: assistidoId, tratamentoId: novoTratamentoRef.id, tipo: 'tratamento_semanal', dataAtendimento: dataAtual, semana: 1, entrevistador: 'Aguardando Detalhes', passeRecomendado: passeInicial, notas: '', detalhes_preenchidos: false });
-                    batch.set(doc(filaRef), { assistidoId: assistidoId, nomeAssistido: nomeAssistido, tratamentoId: novoTratamentoRef.id, atendimentoId: novoAtendimentoRef.id, status: 'aguardando_entrevista_ou_passe', passeRecomendado: passeInicial, semana_atual: 1, chegadaEm: dataAtual, recepcionista: { uid: user.uid, nome: user.displayName } });
+                    batch.set(doc(filaRef), { assistidoId: assistidoId, nomeAssistido: nomeAssistido, tratamientoId: novoTratamentoRef.id, atendimentoId: novoAtendimentoRef.id, status: 'aguardando_entrevista_ou_passe', passeRecomendado: passeInicial, semana_atual: 1, chegadaEm: dataAtual, recepcionista: { uid: user.uid, nome: user.displayName } });
                     await batch.commit(); alert('Assistência Espiritual iniciada com sucesso e enviada para a fila!');
                     await registrarLog('Início de Assistência Espiritual', { assistidoId: assistidoId, assistidoNome: nomeAssistido, passeInicial: passeInicial });
                     resetarFormularioBusca();
