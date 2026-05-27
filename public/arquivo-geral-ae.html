@@ -241,6 +241,7 @@
                 const isVisaoPadrao = !filtroLetra && !termoBusca;
 
                 try {
+                    // Busca pendências primeiro
                     const qPendingInterviews = query(atendimentosRef,
                         where("detalhes_preenchidos", "==", false),
                         where("entrevistador", "==", "Aguardando Detalhes")
@@ -260,24 +261,24 @@
                         const snapshot = await getDocs(q);
                         assistidosParaExibir = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
                     } else {
+                        // MODO PADRÃO: Em vez de usar 'in' com IDs (que limita a 10), 
+                        // buscamos os tratamentos ativos e carregamos os assistidos um a um (ou de forma otimizada)
                         const qActiveTreatments = query(tratamentosRef, where('status', '==', 'ativo'));
                         const activeSnapshot = await getDocs(qActiveTreatments);
                         const activeAssistidoIds = new Set(activeSnapshot.docs.map(doc => doc.data().assistidoId));
+                        
+                        // Combinamos com pendências
                         const idsParaMostrar = new Set([...activeAssistidoIds, ...assistidosComPendencias]);
 
                         if (idsParaMostrar.size > 0) {
-                            const idsArray = Array.from(idsParaMostrar);
-                            const MAX_IDS_PER_QUERY = 30;
-                            if (idsArray.length > MAX_IDS_PER_QUERY) {
-                                console.warn(`A lista de assistidos ativos/pendentes (${idsArray.length}) excede o limite de ${MAX_IDS_PER_QUERY} do Firestore. Exibindo apenas os primeiros ${MAX_IDS_PER_QUERY}.`);
-                                idsArray.splice(MAX_IDS_PER_QUERY);
-                            }
-                            const qDefault = query(assistidosRef, where(documentId(), 'in', idsArray));
-                            const defaultSnapshot = await getDocs(qDefault);
-                            assistidosParaExibir = defaultSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                            // Se forem muitos, buscamos todos os assistidos e filtramos no JS (seguro até centenas de registros)
+                            const allAssistidosSnap = await getDocs(assistidosRef);
+                            assistidosParaExibir = allAssistidosSnap.docs
+                                .map(doc => ({ id: doc.id, ...doc.data() }))
+                                .filter(a => idsParaMostrar.has(a.id));
                             assistidosParaExibir.sort((a, b) => a.nome.localeCompare(b.nome));
                         } else {
-                             assistidosParaExibir = [];
+                            assistidosParaExibir = [];
                         }
                     }
 
