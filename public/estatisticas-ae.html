@@ -175,7 +175,6 @@
             const dashboardContent = document.getElementById('dashboard-content');
             let graficoPrincipal;
             
-            // Define o input de data para o dia de hoje
             const hojeLocal = new Date(new Date().getTime() - (new Date().getTimezoneOffset()*60*1000)).toISOString().split("T")[0];
             filtroDia.value = hojeLocal;
             
@@ -218,7 +217,6 @@
                     filtroAno.appendChild(option);
                 });
 
-                // Listeners para os filtros
                 modoFiltro.addEventListener('change', () => {
                     if (modoFiltro.value === 'ano') {
                         containerAno.style.display = 'flex';
@@ -243,7 +241,6 @@
                     todosTratamentosVL, todosAtendimentosVL
                 ));
 
-                // Carregamento Inicial (Modo Ano)
                 renderizarDados(
                     'ano', filtroAno.value, 
                     todosTratamentosAE, todosAtendimentosAE, 
@@ -264,7 +261,6 @@
                 let tratamentosVLDoPeriodo, atendimentosVLDoPeriodo;
                 let tratamentosAEErradosOuFinalizadosNoPeriodo = [];
 
-                // Lógica de Filtragem (Ano vs Dia Específico)
                 if (modo === 'ano') {
                     const ano = parseInt(valorSelecionado);
                     tratamentosAEDoPeriodo = todosTratamentosAE.filter(t => t.dataInicio && t.dataInicio.toDate().getFullYear() === ano);
@@ -273,7 +269,7 @@
                     atendimentosVLDoPeriodo = todosAtendimentosVL.filter(a => a.dataAtendimento && a.dataAtendimento.toDate().getFullYear() === ano);
                     tratamentosAEErradosOuFinalizadosNoPeriodo = tratamentosAEDoPeriodo;
                     
-                    document.getElementById('card-grafico').style.display = 'block'; // Mostra Gráfico
+                    document.getElementById('card-grafico').style.display = 'block';
                 } else {
                     const dIso = valorSelecionado;
                     const isMesmoDia = (ts) => {
@@ -288,13 +284,11 @@
                     tratamentosVLDoPeriodo = todosTratamentosVL.filter(t => isMesmoDia(t.dataInicio));
                     atendimentosVLDoPeriodo = todosAtendimentosVL.filter(a => isMesmoDia(a.dataAtendimento));
                     
-                    // No dia específico, Altas/Desistências são baseadas na dataFim do tratamento
                     tratamentosAEErradosOuFinalizadosNoPeriodo = todosTratamentosAE.filter(t => isMesmoDia(t.dataFim));
                     
-                    document.getElementById('card-grafico').style.display = 'none'; // Esconde Gráfico no modo Dia
+                    document.getElementById('card-grafico').style.display = 'none';
                 }
 
-                // Cálculo dos KPIs
                 const totalAtendimentosAE = atendimentosAEDoPeriodo.filter(a => a.tipo !== 'falta').length;
                 const faltasAE = atendimentosAEDoPeriodo.filter(a => a.tipo === 'falta').length;
                 const entrevistasAE = atendimentosAEDoPeriodo.filter(a => a.detalhes_preenchidos === true).length;
@@ -316,7 +310,6 @@
                 const totalAtendimentosVL = atendimentosVLDoPeriodo.filter(a => a.tipo !== 'falta').length;
                 const novosTratamentosVL = tratamentosVLDoPeriodo.length;
 
-                // Contagem de Passes
                 const contagemPasses = { P1: 0, P2: 0, P3A: 0, P3B: 0, P4A: 0, P4B: 0, CH: 0, Avulso: 0 };
                 atendimentosAEDoPeriodo.forEach(a => {
                     if (a.tipo === 'avulso') { contagemPasses['Avulso']++; }
@@ -326,7 +319,6 @@
                     }
                 });
 
-                // Injeção no HTML
                 document.getElementById('kpi-total-ae').textContent = totalAtendimentosAE;
                 document.getElementById('kpi-faltas-ae').textContent = faltasAE;
                 document.getElementById('kpi-entrevistas-ae').textContent = entrevistasAE;
@@ -347,7 +339,6 @@
                 document.getElementById('kpi-passe-ch').textContent = contagemPasses.CH;
                 document.getElementById('kpi-passe-avulso').textContent = contagemPasses.Avulso;
 
-                // Atualização do Gráfico (Apenas no Modo Anual)
                 if (modo === 'ano') {
                     const meses = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
                     const dadosGrafico = {
@@ -357,10 +348,11 @@
                         novosVL: Array(12).fill(0)
                     };
 
-                    atendimentosAEDoAno.forEach(a => { if(a.tipo !== 'falta') { dadosGrafico.atendimentosAE[a.dataAtendimento.toDate().getMonth()]++; } });
-                    tratamentosAEDoAno.forEach(t => { dadosGrafico.novosAE[t.dataInicio.toDate().getMonth()]++; });
-                    atendimentosVLDoAno.forEach(a => { if(a.tipo !== 'falta') { dadosGrafico.atendimentosVL[a.dataAtendimento.toDate().getMonth()]++; } });
-                    tratamentosVLDoAno.forEach(t => { dadosGrafico.novosVL[t.dataInicio.toDate().getMonth()]++; });
+                    // CORREÇÃO: Utilizando a variável certa (...DoPeriodo)
+                    atendimentosAEDoPeriodo.forEach(a => { if(a.tipo !== 'falta') { dadosGrafico.atendimentosAE[a.dataAtendimento.toDate().getMonth()]++; } });
+                    tratamentosAEDoPeriodo.forEach(t => { dadosGrafico.novosAE[t.dataInicio.toDate().getMonth()]++; });
+                    atendimentosVLDoPeriodo.forEach(a => { if(a.tipo !== 'falta') { dadosGrafico.atendimentosVL[a.dataAtendimento.toDate().getMonth()]++; } });
+                    tratamentosVLDoPeriodo.forEach(t => { dadosGrafico.novosVL[t.dataInicio.toDate().getMonth()]++; });
                     
                     const atendimentosTotais = dadosGrafico.atendimentosAE.map((val, i) => val + dadosGrafico.atendimentosVL[i]);
                     const novosTotais = dadosGrafico.novosAE.map((val, i) => val + dadosGrafico.novosVL[i]);
