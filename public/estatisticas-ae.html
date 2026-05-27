@@ -291,7 +291,13 @@
 
                 const totalAtendimentosAE = atendimentosAEDoPeriodo.filter(a => a.tipo !== 'falta').length;
                 const faltasAE = atendimentosAEDoPeriodo.filter(a => a.tipo === 'falta').length;
-                const entrevistasAE = atendimentosAEDoPeriodo.filter(a => a.detalhes_preenchidos === true).length;
+                
+                // CORREÇÃO: Não contar quem foi "Passe Direto" como entrevista!
+                const entrevistasAE = atendimentosAEDoPeriodo.filter(a => 
+                    a.detalhes_preenchidos === true && 
+                    a.entrevistador !== 'Passe Direto'
+                ).length;
+                
                 const novosTratamentosAE = tratamentosAEDoPeriodo.length;
                 
                 let altasAE = 0, desistenciasAE = 0, extensoesAE = 0;
@@ -348,7 +354,6 @@
                         novosVL: Array(12).fill(0)
                     };
 
-                    // CORREÇÃO: Utilizando a variável certa (...DoPeriodo)
                     atendimentosAEDoPeriodo.forEach(a => { if(a.tipo !== 'falta') { dadosGrafico.atendimentosAE[a.dataAtendimento.toDate().getMonth()]++; } });
                     tratamentosAEDoPeriodo.forEach(t => { dadosGrafico.novosAE[t.dataInicio.toDate().getMonth()]++; });
                     atendimentosVLDoPeriodo.forEach(a => { if(a.tipo !== 'falta') { dadosGrafico.atendimentosVL[a.dataAtendimento.toDate().getMonth()]++; } });
