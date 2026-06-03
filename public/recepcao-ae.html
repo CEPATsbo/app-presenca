@@ -11,8 +11,8 @@
             --fundo-desabilitado: #f9f9f9;
             --cor-presente: #28a745;
             --cor-pendente: #6c757d;
-            --cor-alta: #dc3545; /* Vermelho para alta programada */
-            --cor-migracao: #17a2b8; /* Azul info para novo ciclo */
+            --cor-alta: #dc3545;
+            --cor-migracao: #17a2b8;
         }
         body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background-color: #f4f6f9; margin: 0; padding: 20px; display: flex; flex-direction: column; align-items: center; }
         .container { width: 100%; max-width: 900px; background-color: white; padding: 30px; border-radius: 12px; box-shadow: 0 6px 24px rgba(0,0,0,0.1); margin-bottom: 20px; }
@@ -35,42 +35,34 @@
         
         #lista-ativos { list-style-type: none; padding: 0; display: flex; flex-wrap: wrap; gap: 12px; }
         
-        /* ==========================================
-           NOVA ESTÉTICA DOS BOTÕES (ALTO CONTRASTE) 
-           ========================================== */
         #lista-ativos li {
-            color: #000000; /* Preto absoluto para contraste máximo */
-            font-weight: bold; /* Fonte grossa para senhoras lerem com facilidade */
-            padding: 12px 18px; /* Botão um pouco maior para facilitar o clique */
+            color: #000000;
+            font-weight: bold;
+            padding: 12px 18px;
             border-radius: 20px;
             cursor: pointer;
             transition: all 0.2s;
-            font-size: 1.05em; /* Letra um pouco maior */
-            border: 2px solid #888; /* Borda escura para delimitar bem o botão no fundo branco */
-            box-shadow: 0 4px 6px rgba(0,0,0,0.15); /* Sombra para dar aspecto 3D/clicável */
+            font-size: 1.05em;
+            border: 2px solid #888;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.15);
+            display: flex;
+            align-items: center;
         }
         #lista-ativos li:hover { transform: translateY(-2px); box-shadow: 0 6px 8px rgba(0,0,0,0.2); }
 
-        /* CORES POR TIPO DE PASSE (Mantidas) */
-        .cor-passe-P4B { background-color: #ffffff; } /* BRANCO */
-        .cor-passe-P4A { background-color: #fff5e1; } /* CREME */
-        .cor-passe-P2  { background-color: #a7c7e7; } /* AZUL */
-        .cor-passe-CH  { background-color: #98ff98; } /* VERDE */
-        .cor-passe-P3B { background-color: #ffc067; } /* LARANJA */
-        .cor-passe-P1  { background-color: #ffee8c; } /* AMARELO */
-        .cor-passe-P3A { background-color: #ffb6c1; } /* ROSA */
+        .cor-passe-P4B { background-color: #ffffff; }
+        .cor-passe-P4A { background-color: #fff5e1; }
+        .cor-passe-P2  { background-color: #a7c7e7; }
+        .cor-passe-CH  { background-color: #98ff98; }
+        .cor-passe-P3B { background-color: #ffc067; }
+        .cor-passe-P1  { background-color: #ffee8c; }
+        .cor-passe-P3A { background-color: #ffb6c1; }
 
-        /* Indicadores de Status */
         #lista-ativos li.status-presente { 
-            opacity: 1;
-            border: 2px dashed #444;
-            box-shadow: none;
-            background-image: linear-gradient(rgba(255,255,255,0.4), rgba(255,255,255,0.4));
+            opacity: 1; border: 2px dashed #444; box-shadow: none; background-image: linear-gradient(rgba(255,255,255,0.4), rgba(255,255,255,0.4));
         }
         #lista-ativos li.status-falta { 
-            opacity: 0.8;
-            border: 2px dashed #dc3545;
-            background-image: linear-gradient(rgba(220,53,69,0.1), rgba(220,53,69,0.1));
+            opacity: 0.8; border: 2px dashed #dc3545; background-image: linear-gradient(rgba(220,53,69,0.1), rgba(220,53,69,0.1));
         }
         #lista-ativos li.status-alta-programada { border: 3px solid var(--cor-alta); }
         #lista-ativos li.status-novo-ciclo { border: 3px solid var(--cor-migracao); }
@@ -84,26 +76,35 @@
         #search-results li:hover { background-color: #f0f0f0; }
         .btn-historico { font-size: 1.5em; text-decoration: none; margin-left: 15px; cursor: pointer; }
 
-        /* Estilo da tela de bloqueio temporal */
-        #bloqueio-temporal { text-align: center; padding: 50px 20px; }
-        #bloqueio-temporal h1 { color: #dc3545; font-size: 2.5em; margin-bottom: 10px; }
-        #bloqueio-temporal p { font-size: 1.2em; color: #555; margin-bottom: 30px; }
-        .bypass-container { margin-top: 50px; opacity: 0.1; transition: opacity 0.3s; }
-        .bypass-container:hover { opacity: 1; }
-        .bypass-input { padding: 5px; border: 1px solid #ccc; border-radius: 4px; font-size: 0.8em; }
+        /* Estilo da nova tela de Abertura */
+        #tela-abertura { text-align: center; padding: 50px 20px; }
+        #tela-abertura h1 { color: #333; font-size: 2.2em; margin-bottom: 10px; }
     </style>
 </head>
 <body>
     <nav class="nav-voltar"><a href="/dashboard-ae.html" class="btn-voltar">⬅ Voltar para o Dashboard AE</a></nav>
     <div id="acesso-negado" class="container hidden"><h1>Acesso Negado</h1></div>
 
-    <div id="bloqueio-temporal" class="container hidden">
-        <h1>⛔ Acesso Bloqueado</h1>
-        <p>O Módulo de Recepção da Assistência Espiritual só funciona às <strong>Terças-feiras</strong>.</p>
-        <p>Para evitar lançamentos equivocados fora da data de trabalho, o sistema encontra-se temporariamente inativo.</p>
+    <!-- NOVA TELA DE ABERTURA MULTI-DIAS -->
+    <div id="tela-abertura" class="container hidden">
+        <h1>Bem-vindo à Recepção</h1>
+        <p style="font-size: 1.2em; color: #555;">Você está acessando o sistema em uma <strong><span id="nome-dia-semana"></span></strong>.</p>
+        <p>O sistema organizará automaticamente os assistidos pelo dia da semana.</p>
+        <button id="btn-iniciar-trabalho" class="btn btn-success" style="font-size: 1.3em; padding: 15px 30px; margin-top: 20px;">Abrir Trabalhos de Hoje</button>
         
-        <div class="bypass-container">
-            <input type="password" id="input-bypass" class="bypass-input" placeholder="Admin Override...">
+        <div style="margin-top: 40px; border-top: 1px solid #eee; padding-top: 20px;">
+            <p style="font-size: 0.9em; color: #888;">Opções Avançadas (Acesso Administrativo)</p>
+            <select id="select-forcar-dia" style="padding: 5px; border-radius: 4px;">
+                <option value="">-- Forçar operação em outro dia --</option>
+                <option value="1">Segunda-feira</option>
+                <option value="2">Terça-feira</option>
+                <option value="3">Quarta-feira</option>
+                <option value="4">Quinta-feira</option>
+                <option value="5">Sexta-feira</option>
+                <option value="6">Sábado</option>
+                <option value="0">Domingo</option>
+            </select>
+            <button id="btn-forcar-dia" class="btn btn-secondary" style="padding: 5px 10px; font-size: 0.9em;">Acessar</button>
         </div>
     </div>
 
@@ -155,7 +156,8 @@
 
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
-        import { getFirestore, collection, addDoc, doc, getDoc, serverTimestamp, query, where, limit, getDocs, Timestamp, orderBy, updateDoc, increment, writeBatch } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
+        // IMPORTANTE: Adicionado o onSnapshot aqui
+        import { getFirestore, collection, addDoc, doc, getDoc, serverTimestamp, query, where, limit, getDocs, Timestamp, orderBy, updateDoc, increment, writeBatch, onSnapshot } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
         import { protegerPagina } from '/auth.js';
 
         const firebaseConfig = {
@@ -168,28 +170,32 @@
         };
         initializeApp(firebaseConfig);
 
+        let diaTrabalhoAtual = new Date().getDay(); // Variável Global do Dia
+
         protegerPagina(['recepcionista', 'diretor', 'conselheiro', 'tesoureiro', 'entrevistador', 'super-admin']).then(user => {
-            const dataAtual = new Date();
-            const diaDaSemana = dataAtual.getDay();
+            const diasSemana = ['Domingo', 'Segunda-feira', 'Terça-feira', 'Quarta-feira', 'Quinta-feira', 'Sexta-feira', 'Sábado'];
+            document.getElementById('nome-dia-semana').textContent = diasSemana[diaTrabalhoAtual];
             
-            const inputBypass = document.getElementById('input-bypass');
-            inputBypass.addEventListener('keypress', function (e) {
-                if (e.key === 'Enter' && this.value === 'liberar-ae') {
-                    document.getElementById('bloqueio-temporal').classList.add('hidden');
+            document.getElementById('tela-abertura').classList.remove('hidden');
+
+            document.getElementById('btn-iniciar-trabalho').addEventListener('click', () => {
+                document.getElementById('tela-abertura').classList.add('hidden');
+                document.getElementById('main-content').classList.remove('hidden');
+                inicializarPagina(user);
+            });
+
+            document.getElementById('btn-forcar-dia').addEventListener('click', () => {
+                const val = document.getElementById('select-forcar-dia').value;
+                if(val !== "") {
+                    diaTrabalhoAtual = parseInt(val);
+                    document.getElementById('tela-abertura').classList.add('hidden');
                     document.getElementById('main-content').classList.remove('hidden');
                     inicializarPagina(user);
                 }
             });
 
-            if (diaDaSemana === 2) {
-                document.getElementById('main-content').classList.remove('hidden');
-                inicializarPagina(user);
-            } else {
-                document.getElementById('bloqueio-temporal').classList.remove('hidden');
-            }
         }).catch(err => {
             document.getElementById('acesso-negado').classList.remove('hidden');
-            document.getElementById('main-content').classList.add('hidden');
         });
 
         function inicializarPagina(user) {
@@ -204,6 +210,7 @@
             let tratamentoAtivoSelecionado = null;
             let metadadosTratamento = {};
             let modoEdicaoCadastro = false;
+            let filaStatusRealTime = {}; // Armazena os status em tempo real da fila
 
             const ui = {
                 nomeInput: document.getElementById('nome'),
@@ -225,6 +232,37 @@
                 btnDesfazerRegistroBusca: document.getElementById('btn-desfazer-registro-busca'),
                 btnDesfazerFrequencia: document.getElementById('btn-desfazer-frequencia')
             };
+
+            // ===================================================================
+            // FUNÇÃO MESTRA 1: Ouvinte Silencioso da Fila (Tempo Real)
+            // ===================================================================
+            function monitorarAndamentoFila() {
+                const hojeInicio = new Date(); hojeInicio.setHours(0,0,0,0);
+                const hojeFim = new Date(); hojeFim.setHours(23,59,59,999);
+                const qFilaRealTime = query(filaRef, where("chegadaEm", ">=", Timestamp.fromDate(hojeInicio)), where("chegadaEm", "<=", Timestamp.fromDate(hojeFim)));
+                
+                onSnapshot(qFilaRealTime, (snapshot) => {
+                    snapshot.docChanges().forEach((change) => {
+                        const data = change.doc.data();
+                        filaStatusRealTime[data.assistidoId] = data.status;
+                        
+                        const li = document.querySelector(`li[data-assistido-id="${data.assistidoId}"]`);
+                        if (li) {
+                            const rtSpan = li.querySelector('.realtime-status');
+                            if (rtSpan) {
+                                rtSpan.innerHTML = getRealtimeStatusHtml(data.status);
+                            }
+                        }
+                    });
+                });
+            }
+
+            function getRealtimeStatusHtml(status) {
+                if (status === 'chamado_entrevista') return '<span style="margin-left:10px; font-size:0.9em; font-weight:normal;">🗣️ <i style="color:#17a2b8;">Na Entrevista</i></span>';
+                if (status === 'entrevista_realizada') return '<span style="margin-left:10px; font-size:0.9em; font-weight:normal;">⏳ <i style="color:#ffc107;">Aguard. Passe</i></span>';
+                if (status === 'chamado_passe') return '<span style="margin-left:10px; font-size:0.9em; font-weight:normal;">👐 <i style="color:#28a745;">No Passe</i></span>';
+                return '';
+            }
 
             async function registrarLog(acao, detalhes) {
                  try {
@@ -338,7 +376,6 @@
                 ui.btnRegistrarAvulso.classList.remove('hidden');
                 ui.btnIniciarTratamento.classList.remove('hidden');
 
-                // Garante que o botão de limpar volte a ser a busca normal
                 ui.btnLimpar.textContent = 'Limpar Busca';
                 ui.btnLimpar.classList.remove('btn-danger');
                 ui.btnLimpar.classList.add('btn-secondary');
@@ -393,12 +430,21 @@
                 metadadosTratamento = {};
                 const q = query(tratamentosRef, where("status", "==", "ativo"));
                 const snapshot = await getDocs(q);
-                if (snapshot.empty) { ui.listaAtivos.innerHTML = '<li>Nenhum tratamento ativo.</li>'; return; }
+                
+                if (snapshot.empty) { ui.listaAtivos.innerHTML = '<li>Nenhum tratamento ativo para hoje.</li>'; return; }
                 const hojeInicio = new Date(); hojeInicio.setHours(0, 0, 0, 0);
                 const hojeFim = new Date(); hojeFim.setHours(23, 59, 59, 999);
 
                 const promessas = snapshot.docs.map(async (tratamentoDoc) => {
                     const tratamento = { id: tratamentoDoc.id, ...tratamentoDoc.data()};
+                    
+                    // ===================================================================
+                    // TRAVA DE DIA (Multi-Casa): Filtra pelo dia de trabalho atual
+                    // Se não tiver dia gravado, assume que é terça (2)
+                    // ===================================================================
+                    const diaTrabalhoTratamento = tratamento.dia_trabalho !== undefined ? tratamento.dia_trabalho : 2; 
+                    if (diaTrabalhoTratamento !== diaTrabalhoAtual) return null;
+
                     if (!tratamento.assistidoId) return null;
                     const assistidoDocRef = doc(db, 'assistidos', tratamento.assistidoId);
                     
@@ -438,11 +484,14 @@
                 });
 
                 const itensLista = (await Promise.all(promessas)).filter(item => item !== null);
+                if (itensLista.length === 0) { ui.listaAtivos.innerHTML = '<li>Nenhum tratamento ativo para o dia de hoje.</li>'; return; }
+
                 itensLista.sort((a, b) => a.assistido.nome.localeCompare(b.assistido.nome));
                 ui.listaAtivos.innerHTML = '';
                 
                 itensLista.forEach(item => {
                     const li = document.createElement('li');
+                    li.dataset.assistidoId = item.assistido.id; // Chave para o Realtime buscar o LI
                     
                     const passeAtual = item.tratamento.passe_ciclo_atual || 'P4B';
                     let iconeStatus = '';
@@ -465,7 +514,9 @@
                         li.title = `ALTA COM EFEITO SUSPENSIVO. Fluxo normal até liberação.`;
                     }
 
-                    li.textContent = `${item.assistido.nome} (${passeAtual})${iconeStatus}`;
+                    const rtHtml = getRealtimeStatusHtml(filaStatusRealTime[item.assistido.id]);
+
+                    li.innerHTML = `<span>${item.assistido.nome} (${passeAtual})${iconeStatus}</span><span class="realtime-status">${rtHtml}</span>`;
                     li.className = `status-${item.statusHoje} cor-passe-${passeAtual}`;
                     
                     li.addEventListener('click', () => { 
@@ -607,7 +658,7 @@
                             const tratamentoAtualDocRef = doc(db, 'tratamentos_ae', tratamentoAtivoSelecionado.id);
                             batch.update(tratamentoAtualDocRef, { status: 'concluido_por_reavaliacao', dataFim: dataAtual });
                             const novoTratamentoRef = doc(tratamentosRef);
-                            batch.set(novoTratamentoRef, { assistidoId: assistidoSelecionado.id, dataInicio: dataAtual, status: 'ativo', faltas_acumuladas: 0, passe_ciclo_atual: novoPasse });
+                            batch.set(novoTratamentoRef, { assistidoId: assistidoSelecionado.id, dataInicio: dataAtual, status: 'ativo', faltas_acumuladas: 0, passe_ciclo_atual: novoPasse, dia_trabalho: diaTrabalhoAtual });
                             batch.update(atendimentoDocRef, { dataAtendimento: dataAtual, tratamentoId: novoTratamentoRef.id, semana: 1, passeRecomendado: novoPasse, tipo: 'tratamento_semanal' });
                             batch.set(doc(filaRef), {
                                 assistidoId: assistidoSelecionado.id, nomeAssistido: assistidoSelecionado.nome, tratamentoId: novoTratamentoRef.id,
@@ -674,7 +725,7 @@
 
             ui.btnLiberarAltaSuspensa.addEventListener('click', async (e) => {
                 e.target.disabled = true;
-                if(confirm(`Tem certeza que deseja EFETIVAR A ALTA para ${assistidoSelecionado.nome}?\n\nComo ele já registrou presença hoje, a partir da próxima terça-feira o sistema puxará automaticamente o fluxo de Encerramento (Alta Programada).`)) {
+                if(confirm(`Tem certeza que deseja EFETIVAR A ALTA para ${assistidoSelecionado.nome}?\n\nComo ele já registrou presença hoje, a partir do próximo trabalho o sistema puxará automaticamente o fluxo de Encerramento (Alta Programada).`)) {
                     try {
                         const tratamentoAtualDocRef = doc(db, 'tratamentos_ae', tratamentoAtivoSelecionado.id);
                         const dadosMeta = metadadosTratamento[tratamentoAtivoSelecionado.id];
@@ -862,7 +913,8 @@
                     const idadeDate = new Date(ui.dnInput.value); const diffMs = Date.now() - idadeDate.getTime(); const idade = new Date(diffMs).getUTCFullYear() - 1970;
                     const passeInicial = idade >= 12 ? 'P2' : 'P4B';
                     const batch = writeBatch(db); const novoTratamentoRef = doc(tratamentosRef);
-                    batch.set(novoTratamentoRef, { assistidoId: assistidoId, dataInicio: serverTimestamp(), status: 'ativo', faltas_acumuladas: 0, passe_ciclo_atual: passeInicial });
+                    // GRAVA O DIA DO TRABALHO
+                    batch.set(novoTratamentoRef, { assistidoId: assistidoId, dataInicio: serverTimestamp(), status: 'ativo', faltas_acumuladas: 0, passe_ciclo_atual: passeInicial, dia_trabalho: diaTrabalhoAtual });
                     const dataAtual = serverTimestamp(); const novoAtendimentoRef = doc(collection(db, 'atendimentos_ae'));
                     batch.set(novoAtendimentoRef, { assistidoId: assistidoId, tratamentoId: novoTratamentoRef.id, tipo: 'tratamento_semanal', dataAtendimento: dataAtual, semana: 1, entrevistador: 'Aguardando Detalhes', passeRecomendado: passeInicial, notas: '', detalhes_preenchidos: false });
                     batch.set(doc(filaRef), { assistidoId: assistidoId, nomeAssistido: nomeAssistido, tratamentoId: novoTratamentoRef.id, atendimentoId: novoAtendimentoRef.id, status: 'aguardando_entrevista_ou_passe', passeRecomendado: passeInicial, semana_atual: 1, chegadaEm: dataAtual, recepcionista: { uid: user.uid, nome: user.displayName } });
@@ -878,6 +930,9 @@
 
             resetarFormularioBusca();
             carregarTratamentosAtivos();
+            
+            // INICIA O MONITORAMENTO DA FILA
+            monitorarAndamentoFila();
         }
     </script>
 </body>
