@@ -3,22 +3,60 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Encaminhamento - Vinha de Luz</title>
+    <title>Encaminhamento - Vinha de Luz (Modo Noturno)</title>
     <style>
-        :root { --cor-primaria: #8e44ad; --cor-borda: #ddd; } /* Cor VL */
-        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background-color: #f4f6f9; margin: 0; padding: 20px; }
+        :root { 
+            --cor-primaria: #bb86fc; /* Roxo claro luminoso para fundo escuro */
+            --cor-borda: #302b63; 
+            --bg-color: #0f0c29; /* Azul noturno profundo */
+            --card-bg: #1a1a2e; /* Azul espacial para os cards */
+            --item-bg: #16213e; /* Fundo da linha do assistido */
+            --text-color: #e0e0e0;
+        } 
+        
+        body { 
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; 
+            background-color: var(--bg-color); 
+            color: var(--text-color);
+            margin: 0; 
+            padding: 20px; 
+        }
         .container { width: 100%; max-width: 800px; margin: 0 auto; }
         .nav-voltar { margin-bottom: 20px; }
-        .btn, .btn-voltar, .btn-acao { background-color: var(--cor-primaria); color: white; border: none; padding: 12px 20px; border-radius: 8px; font-weight: bold; text-decoration: none; display: inline-block; cursor: pointer; transition: background-color 0.2s; }
-        .btn:disabled { background-color: #ccc; cursor: not-allowed; }
-        .btn-voltar { background-color: #6c757d; }
-        h1 { color: #333; text-align: center; margin-bottom: 30px; }
+        .btn, .btn-voltar, .btn-acao { 
+            color: white; border: none; padding: 12px 20px; border-radius: 8px; 
+            font-weight: bold; text-decoration: none; display: inline-block; cursor: pointer; transition: 0.2s; 
+        }
+        .btn:disabled { background-color: #555; color: #888; cursor: not-allowed; }
+        .btn-voltar { background-color: #4a4e69; }
+        .btn-voltar:hover { background-color: #3b3e54; }
+        
+        h1 { color: #fff; text-align: center; margin-bottom: 30px; letter-spacing: 1px;}
         .hidden { display: none !important; }
         
-        .coluna { background-color: #fff; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.08); padding: 30px; }
-        .coluna h2 { color: var(--cor-primaria); margin-top: 0; border-bottom: 2px solid var(--cor-borda); padding-bottom: 15px; margin-bottom: 20px; text-align: center;}
+        .coluna { 
+            background-color: var(--card-bg); 
+            border-radius: 12px; 
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5); 
+            padding: 30px; 
+            border: 1px solid var(--cor-borda);
+        }
+        .coluna h2 { 
+            color: var(--cor-primaria); 
+            margin-top: 0; 
+            border-bottom: 2px solid var(--cor-borda); 
+            padding-bottom: 15px; 
+            margin-bottom: 20px; 
+            text-align: center;
+        }
         
-        .lista-fila { list-style-type: none; padding: 0; margin: 0; max-height: 70vh; overflow-y: auto; }
+        .lista-fila { list-style-type: none; padding: 0; margin: 0; max-height: 70vh; overflow-y: auto; padding-right: 10px;}
+        
+        /* Scrollbar estilizado para o modo escuro */
+        .lista-fila::-webkit-scrollbar { width: 8px; }
+        .lista-fila::-webkit-scrollbar-track { background: var(--card-bg); }
+        .lista-fila::-webkit-scrollbar-thumb { background: #4a4e69; border-radius: 4px; }
+        
         .fila-item {
             display: flex;
             justify-content: space-between;
@@ -27,54 +65,55 @@
             border: 1px solid var(--cor-borda);
             border-radius: 8px;
             margin-bottom: 15px;
-            background-color: #fdfdfd;
-            box-shadow: 0 2px 5px rgba(0,0,0,0.02);
+            background-color: var(--item-bg);
+            box-shadow: 0 4px 6px rgba(0,0,0,0.2);
         }
         .fila-item-dados { display: flex; flex-direction: column; gap: 5px; }
-        .fila-item-nome { font-size: 1.4em; font-weight: bold; color: #333; }
-        .fila-item-idade { font-size: 1em; color: #666; }
+        .fila-item-nome { font-size: 1.4em; font-weight: bold; color: #fff; }
+        .fila-item-idade { font-size: 1em; color: #a5a5a5; }
         
-        .btn-chamar { background-color: #28a745; font-size: 1.1em; padding: 15px 30px; }
-        .btn-chamar:hover { background-color: #218838; }
+        .btn-chamar { background-color: #00b4d8; font-size: 1.1em; padding: 15px 30px; color: #000; box-shadow: 0 0 10px rgba(0, 180, 216, 0.4);}
+        .btn-chamar:hover { background-color: #0096c7; color: #fff; }
         
-        .lista-vazia { text-align: center; color: #777; padding: 30px; font-size: 1.2em; font-style: italic; }
+        .lista-vazia { text-align: center; color: #888; padding: 30px; font-size: 1.2em; font-style: italic; }
 
-        /* Estilos do Modal de Dupla Autenticação */
+        /* Estilos do Modal de Dupla Autenticação (Modo Noturno) */
         .modal-overlay {
             position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-            background-color: rgba(0,0,0,0.6);
+            background-color: rgba(0,0,0,0.8);
             display: flex; justify-content: center; align-items: center;
             z-index: 1000;
         }
         .modal-content {
-            background-color: white; padding: 30px; border-radius: 12px;
+            background-color: var(--card-bg); padding: 30px; border-radius: 12px;
             width: 90%; max-width: 450px; text-align: center;
-            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+            border: 1px solid var(--cor-borda);
+            box-shadow: 0 10px 40px rgba(0,0,0,0.8);
         }
         .modal-content h3 { color: var(--cor-primaria); margin-top: 0; font-size: 1.5em; }
-        .modal-content p { font-size: 1.1em; color: #444; margin: 20px 0; line-height: 1.5; }
-        .modal-nome-destaque { font-weight: bold; font-size: 1.3em; color: #333; display: block; margin-top: 10px; }
+        .modal-content p { font-size: 1.1em; color: #ccc; margin: 20px 0; line-height: 1.5; }
+        .modal-nome-destaque { font-weight: bold; font-size: 1.4em; color: #fff; display: block; margin-top: 10px; }
         .modal-actions { display: flex; justify-content: center; gap: 15px; margin-top: 30px; }
-        .btn-cancelar { background-color: #6c757d; }
+        .btn-cancelar { background-color: #4a4e69; }
+        .btn-cancelar:hover { background-color: #3b3e54; }
     </style>
 </head>
 <body>
     <div class="container">
-        <nav class="nav-voltar"><a href="/dashboard-vl.html" class="btn-voltar">⬅ Voltar para o Dashboard VL</a></nav>
+        <nav class="nav-voltar"><a href="/dashboard-vl.html" class="btn-voltar">⬅ Voltar para o Dashboard</a></nav>
         <div id="acesso-negado" class="container hidden"><h1>Acesso Negado</h1></div>
 
         <div id="main-content" class="hidden">
-            <h1 style="color: var(--cor-primaria);">Encaminhamento (Painel TV) - Vinha de Luz</h1>
+            <h1>Encaminhamento (Painel TV) - Vinha de Luz</h1>
             <div class="coluna">
                 <h2>Fila de Espera Ativa</h2>
                 <ul id="lista-aguardando" class="lista-fila">
-                    <p class="lista-vazia">Carregando fila...</p>
+                    <p class="lista-vazia">Carregando lista de tratamentos ativos...</p>
                 </ul>
             </div>
         </div>
     </div>
 
-    <!-- Modal de Dupla Autenticação -->
     <div id="modal-confirmacao" class="modal-overlay hidden">
         <div class="modal-content">
             <h3>Confirmar Chamada</h3>
@@ -89,7 +128,7 @@
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
         import { 
-            getFirestore, collection, doc, serverTimestamp, query, where, orderBy, 
+            getFirestore, collection, doc, serverTimestamp, query, where, orderBy, getDoc,
             onSnapshot, updateDoc, setDoc 
         } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
         import { protegerPagina } from '/auth.js';
@@ -114,6 +153,7 @@
 
         function inicializarPagina(user) {
             const db = getFirestore();
+            const tratamentosRef = collection(db, 'tratamentos_vl');
             const filaVlRef = collection(db, 'fila_atendimento_vl');
             const logAuditoriaRef = collection(db, 'log_auditoria');
             
@@ -125,7 +165,7 @@
                 btnConfirmarChamada: document.getElementById('btn-confirmar-chamada')
             };
 
-            let assistidoSelecionado = null; // Guarda os dados de quem vai ser chamado
+            let assistidoSelecionado = null; 
 
             async function registrarLog(acao, detalhes) {
                 try {
@@ -136,12 +176,22 @@
                         acao: acao,
                         detalhes: detalhes
                     });
-                } catch (error) { console.error("Erro ao registrar log:", error); }
+                } catch (error) { console.error("Erro ao log:", error); }
+            }
+
+            // Função para verificar se a data de "ultimoChamado" é o dia de hoje
+            function foiChamadoHoje(timestamp) {
+                if (!timestamp) return false;
+                const dataChamado = timestamp.toDate();
+                const hoje = new Date();
+                return dataChamado.getDate() === hoje.getDate() &&
+                       dataChamado.getMonth() === hoje.getMonth() &&
+                       dataChamado.getFullYear() === hoje.getFullYear();
             }
 
             // --- LÓGICA DO MODAL (DUPLA AUTENTICAÇÃO) ---
-            function abrirModal(id, nome) {
-                assistidoSelecionado = { id, nome };
+            function abrirModal(tratamentoId, assistidoId, nome) {
+                assistidoSelecionado = { tratamentoId, assistidoId, nome };
                 ui.modalNome.textContent = nome;
                 ui.modalConfirmacao.classList.remove('hidden');
             }
@@ -159,25 +209,31 @@
                 if (!assistidoSelecionado) return;
                 
                 ui.btnConfirmarChamada.disabled = true;
-                ui.btnConfirmarChamada.textContent = 'Enviando...';
+                ui.btnConfirmarChamada.textContent = 'Enviando para a TV...';
 
-                const { id, nome } = assistidoSelecionado;
+                const { tratamentoId, assistidoId, nome } = assistidoSelecionado;
 
                 try {
-                    const itemRef = doc(filaVlRef, id);
-                    
-                    // 1. Atualiza para 'Chamado' (Isso aciona a TV na recepção)
-                    await updateDoc(itemRef, {
+                    // 1. Marca no tratamento que ele já foi chamado hoje (para sumir da tela do dirigente)
+                    await updateDoc(doc(db, 'tratamentos_vl', tratamentoId), {
+                        ultimoChamado: serverTimestamp()
+                    });
+
+                    // 2. Injeta na fila do Painel da TV
+                    const novaChamadaRef = doc(filaVlRef);
+                    await setDoc(novaChamadaRef, {
+                        assistidoId: assistidoId,
+                        nomeAssistido: nome,
                         status: 'Chamado',
                         chamadoEm: serverTimestamp()
                     });
-                    registrarLog('Chamada Painel VL', { assistidoId: id, assistidoNome: nome });
 
-                    // 2. Automático: Após 12 segundos, dá a baixa para 'Atendido' 
-                    // Isso limpa a fila do backend sem precisar de um segundo clique manual
+                    registrarLog('Chamada Painel VL', { tratamentoId, assistidoId, assistidoNome: nome });
+
+                    // 3. Automático: Após 12 segundos, dá a baixa na TV
                     setTimeout(async () => {
                         try {
-                            await updateDoc(itemRef, { status: 'Atendido' });
+                            await updateDoc(novaChamadaRef, { status: 'Atendido' });
                         } catch (e) { console.error("Erro ao dar baixa automática:", e); }
                     }, 12000);
 
@@ -190,63 +246,93 @@
                 }
             });
 
-            // --- RENDERIZAÇÃO DA FILA ---
-            function renderizarFila(docs) {
+            // --- RENDERIZAÇÃO DA FILA (Dinâmica) ---
+            function renderizarFila(resultados) {
                 let htmlAguardando = '';
 
-                docs.forEach(doc => {
-                    const item = { id: doc.id, ...doc.data() };
-                    const idadeDisplay = item.idade || item.idadeAssistidoOnline || item.idadeAssistido || '--';
+                resultados.forEach(item => {
+                    const idadeDisplay = item.idade || '--';
                     
                     htmlAguardando += `
                         <li class="fila-item">
                             <div class="fila-item-dados">
-                                <span class="fila-item-nome">${item.nomeAssistido}</span>
+                                <span class="fila-item-nome">${item.nome}</span>
                                 <span class="fila-item-idade">${idadeDisplay} anos</span>
                             </div>
                             <div class="fila-item-acoes">
-                                <button class="btn btn-acao btn-chamar" data-id="${item.id}" data-nome="${item.nomeAssistido}">Chamar</button>
+                                <button class="btn btn-acao btn-chamar" 
+                                        data-tratamentoid="${item.id}" 
+                                        data-assistidoid="${item.assistidoId}" 
+                                        data-nome="${item.nome}">Chamar</button>
                             </div>
                         </li>`;
                 });
 
-                ui.listaAguardando.innerHTML = htmlAguardando || '<p class="lista-vazia">Nenhum assistido aguardando na fila no momento.</p>';
+                ui.listaAguardando.innerHTML = htmlAguardando || '<p class="lista-vazia">Nenhum assistido na lista para chamar no momento.</p>';
 
-                // Adiciona os eventos de clique aos novos botões gerados
+                // Eventos de clique
                 document.querySelectorAll('.btn-chamar').forEach(btn => {
                     btn.addEventListener('click', (e) => {
-                        const id = e.target.dataset.id;
+                        const tratamentoId = e.target.dataset.tratamentoid;
+                        const assistidoId = e.target.dataset.assistidoid;
                         const nome = e.target.dataset.nome;
-                        abrirModal(id, nome);
+                        abrirModal(tratamentoId, assistidoId, nome);
                     });
                 });
             }
 
-            // --- LISTENER PRINCIPAL (EM TEMPO REAL) ---
+            // --- LISTENER PRINCIPAL (Puxa os ativos que não foram chamados hoje) ---
             function escutarFila() {
-                // Monitora apenas quem está com status 'Aguardando', ordenado por chegada (timestamp)
                 const q = query(
-                    filaVlRef, 
-                    where('status', '==', 'Aguardando'), 
-                    orderBy('timestamp', 'asc')
+                    tratamentosRef, 
+                    where('status', 'in', ['ativo', 'estendido']), 
+                    orderBy('dataInicio', 'asc') // Ordem de chegada do ciclo
                 );
 
-                onSnapshot(q, (snapshot) => {
-                    renderizarListas(snapshot.docs);
+                onSnapshot(q, async (snapshot) => {
+                    // Prepara as promessas para buscar os nomes na base de assistidos
+                    const promises = snapshot.docs.map(async (docSnapshot) => {
+                        const trat = { id: docSnapshot.id, ...docSnapshot.data() };
+                        
+                        // Se já foi chamado hoje, não exibe na lista do dirigente
+                        if (foiChamadoHoje(trat.ultimoChamado)) return null;
+                        
+                        let nome = 'Nome em processamento...';
+                        let idade = trat.idadeAssistidoOnline || trat.idadeAssistido || '--';
+
+                        // Busca o nome real na coleção global de assistidos
+                        if (trat.assistidoId) {
+                            try {
+                                const assDoc = await getDoc(doc(db, 'assistidos', trat.assistidoId));
+                                if (assDoc.exists()) {
+                                    nome = assDoc.data().nome;
+                                    if (!idade || idade === '--') {
+                                       idade = assDoc.data().idade_atual || assDoc.data().idade || '--';
+                                    }
+                                }
+                            } catch(e) { console.error("Erro ao buscar nome", e); }
+                        }
+                        
+                        return {
+                            id: trat.id,
+                            assistidoId: trat.assistidoId,
+                            nome: nome,
+                            idade: idade
+                        };
+                    });
+
+                    // Executa todas as buscas e filtra os nulos (os que já foram chamados hoje)
+                    let resultados = await Promise.all(promises);
+                    resultados = resultados.filter(r => r !== null);
+                    
+                    renderizarFila(resultados);
+
                 }, (error) => {
-                    console.error("Erro ao escutar a fila:", error);
-                    ui.listaAguardando.innerHTML = '<p class="lista-vazia" style="color:red;">Erro ao carregar a fila de espera.</p>';
-                    if (error.code === 'failed-precondition') {
-                        console.error("Link para criar índice do Firestore:", error.message.match(/https?:\/\/[^\s]+/)?.[0]);
-                    }
+                    console.error("Erro ao escutar a lista de ativos:", error);
+                    ui.listaAguardando.innerHTML = '<p class="lista-vazia" style="color:#ff6b6b;">Erro ao carregar a lista de tratamentos.</p>';
                 });
             }
             
-            // Corrige o nome da função no onSnapshot
-            function renderizarListas(docs) {
-                renderizarFila(docs);
-            }
-
             escutarFila();
         }
     </script>
