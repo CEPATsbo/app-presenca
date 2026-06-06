@@ -152,6 +152,28 @@
         });
 
         function inicializarPagina(user) {
+            // --- NOVA LÓGICA DE BLOQUEIO POR HORÁRIO ---
+const SENHA_ADM = "123456"; // Você pode mudar para a senha que desejar
+const agora = new Date();
+const diaDaSemana = agora.getDay(); // 3 = Quarta
+const hora = agora.getHours();
+
+const estaNoHorario = (diaDaSemana === 3 && hora >= 18 && hora < 23);
+
+if (!estaNoHorario) {
+    const senha = prompt("Fora do horário de trabalho (Quarta, 18h-23h). Digite a senha administrativa para liberar:");
+    if (senha !== SENHA_ADM) {
+        document.getElementById('main-content').classList.add('hidden');
+        document.body.innerHTML = `
+            <div style="text-align:center; padding:50px; color:#fff;">
+                <h1>Acesso Bloqueado</h1>
+                <p>O trabalho do Vinha de Luz ocorre às quartas-feiras, das 18h às 23h.</p>
+                <a href="/dashboard-vl.html" class="btn btn-voltar">Voltar para o Dashboard</a>
+            </div>`;
+        return; // Interrompe a inicialização
+    }
+}
+// --- FIM DO BLOQUEIO ---
             const db = getFirestore();
             const tratamentosRef = collection(db, 'tratamentos_vl');
             const filaVlRef = collection(db, 'fila_atendimento_vl');
