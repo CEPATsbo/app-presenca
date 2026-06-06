@@ -5,7 +5,6 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Detalhes do Atendimento - Vinha de Luz</title>
     <style>
-        /* Estilos baseados no Entrevista-ae.html para consistência */
         :root { --cor-primaria: #8e44ad; --cor-borda: #ddd; --fundo-desabilitado: #e9ecef; } /* Cor VL */
         body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background-color: #f0f2f5; margin: 0; padding: 20px; }
         .container { width: 100%; max-width: 900px; background-color: white; padding: 30px; border-radius: 12px; box-shadow: 0 6px 24px rgba(0,0,0,0.1); margin: auto; }
@@ -26,14 +25,12 @@
         .erro { color: #dc3545; font-weight: bold; text-align: center; }
         .hidden { display: none; }
         
-        /* Estilos do cabeçalho do formulário */
         .info-header { background-color: #f8f9fa; padding: 15px; border-radius: 6px; margin-bottom: 20px; border: 1px solid var(--cor-borda); }
         .info-grid { display: flex; justify-content: space-around; align-items: center; flex-wrap: wrap; gap: 10px; }
         .info-item { text-align: center; }
         .info-item label { font-size: 0.9em; color: #555; margin-bottom: 4px; display: block; }
         .info-item span { font-weight: bold; font-size: 1.1em; color: #333; }
 
-        /* Estilo da caixa de pedido online */
         .pedido-online-box {
             background-color: #fcf8ff;
             padding: 15px 20px;
@@ -56,9 +53,7 @@
             color: #444;
             line-height: 1.4;
         }
-        .pedido-online-box p:last-child {
-            margin-bottom: 0;
-        }
+        .pedido-online-box p:last-child { margin-bottom: 0; }
         .pedido-online-box .destaque {
             background-color: white;
             padding: 10px;
@@ -85,7 +80,7 @@
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
         import { 
-            getFirestore, collection, doc, getDoc, updateDoc, query, where, Timestamp, 
+            getFirestore, collection, doc, getDoc, query, where, Timestamp, 
             getDocs, writeBatch, serverTimestamp, increment, setDoc 
         } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
         import { getAuth } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-auth.js";
@@ -140,7 +135,8 @@
                 const form = formularioContainer.querySelector('fieldset');
                 if (!form) return;
                 
-                form.querySelectorAll('#atendimento-notas, #atendimento-orientacoes, #btn-marcar-retorno, #definir-total-atendimentos').forEach(el => {
+                // Trava as notas e os botões de rádio do Colegiado
+                form.querySelectorAll('#atendimento-notas, #atendimento-orientacoes, #btn-marcar-retorno, input[name="decisao-extensao"]').forEach(el => {
                     if (el) el.disabled = travado;
                 });
 
@@ -180,7 +176,7 @@
                 
                 const formHtml = criarFormulario(atendimento, assistido, tratamento);
                 formularioContainer.innerHTML = formHtml;
-                preencherFormulario(atendimento, user, tratamento); 
+                preencherFormulario(atendimento, tratamento); 
                 
                 const travar = atendimento.detalhes_preenchidos === true;
                 manipularEstadoFormulario(travar);
@@ -197,7 +193,7 @@
                 const realizados = tratamento.atendimentos_realizados || 0;
 
                 if (realizados >= totalPermitido) {
-                    alert(`Este assistido já completou os ${totalPermitido} atendimentos solicitados.`);
+                    alert(`Este assistido já completou os ${totalPermitido} atendimentos autorizados.`);
                     btn.disabled = false;
                     return;
                 }
@@ -231,7 +227,7 @@
                         semana: realizados + 1,
                         notas: '',
                         orientacoes: '',
-                        atendente: user.displayName, // Registrado automaticamente no background
+                        atendente: user.displayName,
                         detalhes_preenchidos: false
                     });
                     
@@ -244,7 +240,7 @@
                     
                     alert(`Retorno ${realizados + 1} registrado com sucesso!`);
                     if ((realizados + 1) === totalPermitido) {
-                        alert('Este foi o último retorno. O tratamento foi marcado como "concluído".');
+                        alert('Este foi o último retorno agendado. O status mudou para "concluído".');
                     }
                     
                     await registrarLog('Registro Retorno (VL)', { assistidoId: tratamento.assistidoId, tratamentoId: tratamentoDocRef.id, atendimentoNum: realizados + 1 });
@@ -263,24 +259,26 @@
                 const atendimentoNotas = document.getElementById('atendimento-notas').value.trim();
                 const atendimentoOrientacoes = document.getElementById('atendimento-orientacoes').value.trim();
 
-                const selectTotalAtendimentos = document.getElementById('definir-total-atendimentos');
-                let retornosSolicitados = tratamento.retornos_solicitados; 
-                let totalAtendimentos = (retornosSolicitados || 0) + 1;
-                let logDetalhesRetornos = {};
-                let statusFinal = tratamento.status; 
+                let retornosSolicitados = tratamento.retornos_solicitados || 3; 
+                let statusFinal = tratamento.status || 'ativo'; 
 
-                if (selectTotalAtendimentos) {
-                    totalAtendimentos = parseInt(selectTotalAtendimentos.value, 10);
-                    retornosSolicitados = totalAtendimentos - 1; 
-                    
-                    if (totalAtendimentos < 1) {
-                        alert('Selecione uma duração de tratamento válida.');
-                        return;
-                    }
-                    if (totalAtendimentos === 1 && atendimento.semana === 1) {
+                // Lógica de Extensão Semana a Semana
+                const radioExtensao = document.querySelector('input[name="decisao-extensao"]:checked');
+                
+                if (radioExtensao) {
+                    if (radioExtensao.value === 'estender') {
+                        retornosSolicitados = atendimento.semana; // Ex: Se for semana 4, atualiza para ter 4 retornos (Total 5 sessões)
+                        statusFinal = 'estendido';
+                    } else if (radioExtensao.value === 'concluir') {
+                        retornosSolicitados = atendimento.semana - 1; // Ajusta caso recuem da decisão
                         statusFinal = 'concluido';
                     }
-                    logDetalhesRetornos = { totalDefinido: totalAtendimentos, retornos: retornosSolicitados, statusFinal: statusFinal };
+                } else {
+                    // Se não tiver radio (Semanas 1, 2 ou 3), verifica se calhou de ser a última
+                    const totalAtend = (tratamento.retornos_solicitados || 0) + 1;
+                    if (atendimento.semana === totalAtend && atendimento.semana < 4) {
+                        statusFinal = 'concluido';
+                    }
                 }
 
                 btn.disabled = true; btn.textContent = 'Salvando...';
@@ -289,19 +287,17 @@
                     const batch = writeBatch(db);
                     
                     const dadosAtendimento = {
-                        atendente: user.displayName || 'Usuário do Sistema', // Salvo automaticamente
+                        atendente: user.displayName || 'Usuário do Sistema',
                         notas: atendimentoNotas,
                         orientacoes: atendimentoOrientacoes,
                         detalhes_preenchidos: true
                     };
                     batch.update(atendimentoDocRef, dadosAtendimento);
 
-                    if (selectTotalAtendimentos) {
-                        batch.update(tratamentoDocRef, {
-                            retornos_solicitados: retornosSolicitados,
-                            status: statusFinal 
-                        });
-                    }
+                    batch.update(tratamentoDocRef, {
+                        retornos_solicitados: retornosSolicitados,
+                        status: statusFinal 
+                    });
 
                     await batch.commit();
                     
@@ -309,7 +305,7 @@
                         assistidoId: atendimento.assistidoId,
                         atendimentoId: atendimento.id,
                         semana: atendimento.semana,
-                        ...logDetalhesRetornos 
+                        statusTratamento: statusFinal
                     });
                     
                     alert('Atendimento salvo com sucesso!');
@@ -323,27 +319,19 @@
                 }
             }
 
-            function preencherFormulario(atendimento, user, tratamento) {
+            function preencherFormulario(atendimento, tratamento) {
                 const notasInput = document.getElementById('atendimento-notas');
                 const orientacoesInput = document.getElementById('atendimento-orientacoes');
                 
                 let notasText = atendimento.notas || '';
                 
-                // Limpeza inteligente: se for pedido online e ainda não foi preenchido, limpa a msg automática do backend
-                // pois a caixa verde já exibe essas informações perfeitamente.
+                // Limpeza inteligente para pedidos online recém-abertos
                 if (!atendimento.detalhes_preenchidos && tratamento.origem === 'online' && notasText.includes('Pedido Online Recebido')) {
                     notasText = '';
                 }
 
                 notasInput.value = notasText;
-                if (orientacoesInput) {
-                    orientacoesInput.value = atendimento.orientacoes || '';
-                }
-
-                const selectTotal = document.getElementById('definir-total-atendimentos');
-                if (selectTotal) {
-                    selectTotal.value = '4'; // Padrão de 4 atendimentos
-                }
+                if (orientacoesInput) orientacoesInput.value = atendimento.orientacoes || '';
             }
 
             function criarFormulario(atendimento, assistido, tratamento) {
@@ -356,10 +344,12 @@
                 const hoje = new Date().toLocaleDateString('pt-br');
                 const naoEhDeHoje = dataAtendimento !== hoje;
                 
-                if (statusTratamento === 'ativo' && atendimentoNum === tratamento.atendimentos_realizados && atendimentoNum < totalAtendimentos && naoEhDeHoje) {
-                    botaoRetornoHtml = `<button id="btn-marcar-retorno" type="button" class="btn btn-success" style="width: 100%; margin-top: 15px;">Registrar Próximo Retorno (Hoje)</button>`;
+                if (statusTratamento === 'ativo' || statusTratamento === 'estendido') {
+                    if (atendimentoNum === tratamento.atendimentos_realizados && atendimentoNum < totalAtendimentos && naoEhDeHoje) {
+                        botaoRetornoHtml = `<button id="btn-marcar-retorno" type="button" class="btn btn-success" style="width: 100%; margin-top: 15px;">Registrar Próximo Retorno (Hoje)</button>`;
+                    }
                 } else if (statusTratamento === 'concluido') {
-                    botaoRetornoHtml = `<p style="text-align:center; font-weight:bold; color:#28a745; margin-top:15px;">Tratamento concluído.</p>`;
+                    botaoRetornoHtml = `<p style="text-align:center; font-weight:bold; color:#28a745; margin-top:15px;">Tratamento concluído (Alta).</p>`;
                 }
 
                 // Caixa de Informações do Pedido Online
@@ -376,26 +366,24 @@
                     </div>`;
                 }
 
-                let definicaoTratamentoHtml = '';
-                const isPrimeiroAtendimento = (atendimento.semana === 1);
-                const isDuracaoNaoDefinida = (tratamento.retornos_solicitados === 0 || tratamento.retornos_solicitados === 3);
-
-                // Mostra o campo de definição no 1º atendimento
-                if (isPrimeiroAtendimento && isDuracaoNaoDefinida && !atendimento.detalhes_preenchidos) {
-                    definicaoTratamentoHtml = `
-                    <fieldset style="border-color: var(--cor-primaria); margin-top: 20px;">
-                        <legend>Definição do Colegiado</legend>
+                let extensaoTratamentoHtml = '';
+                
+                // Lógica do Check-point Semana a Semana (Aparece a partir da Semana 4 E se for o último atendimento programado)
+                if (atendimentoNum >= 4 && atendimentoNum === totalAtendimentos) {
+                    extensaoTratamentoHtml = `
+                    <fieldset style="border-color: #17a2b8; margin-top: 20px;">
+                        <legend>Definição do Colegiado (Semana ${atendimentoNum})</legend>
                         <div class="form-item">
-                            <label for="definir-total-atendimentos">Definir Duração Total do Tratamento:</label>
-                            <select id="definir-total-atendimentos">
-                                <option value="1">1 Atendimento (Apenas este)</option>
-                                <option value="2">2 Atendimentos (Este + 1 retorno)</option>
-                                <option value="3">3 Atendimentos (Este + 2 retornos)</option>
-                                <option value="4" selected>4 Atendimentos (Este + 3 retornos)</option>
-                                <option value="5">5 Atendimentos (Este + 4 retornos)</option>
-                                <option value="6">6 Atendimentos (Este + 5 retornos)</option>
-                            </select>
-                            <p style="font-size: 0.8em; margin: 5px 0 0 0; color: #555;">Esta definição só pode ser feita uma vez, ao salvar o 1º atendimento.</p>
+                            <label>O tratamento chegou à sua ${atendimentoNum}ª semana. Como a equipe deseja prosseguir?</label>
+                            <div style="display: flex; gap: 20px; margin-top: 10px;">
+                                <label style="display: flex; align-items: center; gap: 5px; cursor: pointer; color: #dc3545; font-weight: bold;">
+                                    <input type="radio" name="decisao-extensao" value="concluir" checked> Dar Alta (Concluir Tratamento)
+                                </label>
+                                <label style="display: flex; align-items: center; gap: 5px; cursor: pointer; color: #17a2b8; font-weight: bold;">
+                                    <input type="radio" name="decisao-extensao" value="estender"> Estender Tratamento (+1 Retorno)
+                                </label>
+                            </div>
+                            <p style="font-size: 0.85em; color: #666; margin-top: 10px;">Estender o tratamento criará automaticamente vaga para a semana ${atendimentoNum + 1}.</p>
                         </div>
                     </fieldset>`;
                 }
@@ -433,12 +421,11 @@
                                 <textarea id="atendimento-notas" rows="4" placeholder="Observações do atendente, evolução do assistido, etc..."></textarea>
                             </div>
                             
-                            ${definicaoTratamentoHtml}
+                            ${extensaoTratamentoHtml}
                             
                             <button id="btn-salvar-atendimento" type="button" class="btn btn-primary" style="width: 100%; margin-top: 20px;">Salvar Alterações</button>
                         </fieldset>`;
             }
-
         }
     </script>
 </body>
