@@ -20,19 +20,55 @@
         legend { font-weight: bold; font-size: 1.2em; color: var(--cor-primaria); padding: 0 10px; }
         .form-item { display: flex; flex-direction: column; }
         .form-item label { margin-bottom: 5px; font-weight: bold; color: #555; }
-        .form-item input, .form-item select, .form-item textarea, .form-item .readonly-input { padding: 10px; border-radius: 6px; border: 1px solid #ccc; font-size: 1em; width: 100%; box-sizing: border-box; }
+        .form-item input, .form-item select, .form-item textarea, .form-item .readonly-input { padding: 10px; border-radius: 6px; border: 1px solid #ccc; font-size: 1em; width: 100%; box-sizing: border-box; font-family: inherit; }
         .form-item .readonly-input { background-color: var(--fundo-desabilitado); }
         .form-item input:disabled, .form-item select:disabled, .form-item textarea:disabled { background-color: var(--fundo-desabilitado); cursor: not-allowed; }
-        .form-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; align-items: end; }
         .erro { color: #dc3545; font-weight: bold; text-align: center; }
         .hidden { display: none; }
-        .data-aviso { font-weight: bold; color: var(--cor-primaria); }
+        
         /* Estilos do cabeçalho do formulário */
-        .info-header { background-color: #f8f9fa; padding: 15px; border-radius: 6px; margin-bottom: 20px; }
+        .info-header { background-color: #f8f9fa; padding: 15px; border-radius: 6px; margin-bottom: 20px; border: 1px solid var(--cor-borda); }
         .info-grid { display: flex; justify-content: space-around; align-items: center; flex-wrap: wrap; gap: 10px; }
         .info-item { text-align: center; }
         .info-item label { font-size: 0.9em; color: #555; margin-bottom: 4px; display: block; }
         .info-item span { font-weight: bold; font-size: 1.1em; color: #333; }
+
+        /* Estilo da caixa de pedido online */
+        .pedido-online-box {
+            background-color: #fcf8ff;
+            padding: 15px 20px;
+            border-radius: 8px;
+            border-left: 5px solid var(--cor-primaria);
+            margin-bottom: 20px;
+            box-shadow: 0 2px 8px rgba(142, 68, 173, 0.05);
+        }
+        .pedido-online-box h4 {
+            margin-top: 0;
+            color: var(--cor-primaria);
+            margin-bottom: 12px;
+            font-size: 1.1em;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .pedido-online-box p {
+            margin: 0 0 8px 0;
+            color: #444;
+            line-height: 1.4;
+        }
+        .pedido-online-box p:last-child {
+            margin-bottom: 0;
+        }
+        .pedido-online-box .destaque {
+            background-color: white;
+            padding: 10px;
+            border-radius: 6px;
+            border: 1px solid #eee;
+            margin-top: 5px;
+            white-space: pre-wrap;
+            font-style: italic;
+            color: #555;
+        }
     </style>
 </head>
 <body>
@@ -48,16 +84,10 @@
 
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
-        // ===================================================================
-        // INÍCIO DA MODIFICAÇÃO JAVASCRIPT: 1. Importa setDoc
-        // ===================================================================
         import { 
             getFirestore, collection, doc, getDoc, updateDoc, query, where, Timestamp, 
-            getDocs, writeBatch, serverTimestamp, limit, addDoc, increment, setDoc 
+            getDocs, writeBatch, serverTimestamp, increment, setDoc 
         } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
-        // ===================================================================
-        // FIM DA MODIFICAÇÃO JAVASCRIPT
-        // ===================================================================
         import { getAuth } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-auth.js";
         import { protegerPagina } from '/auth.js';
 
@@ -69,17 +99,9 @@
             messagingSenderId: "66122858261",
             appId: "1:66122858261:web:7fa21f1805463b5c08331c"
         };
-        // initializeApp(firebaseConfig); // REMOVIDO (auth.js já inicializa)
         const auth = getAuth();
 
-        // ===================================================================
-        // INÍCIO DA MODIFICAÇÃO JAVASCRIPT: 2. Ajuste de Permissões
-        // ===================================================================
-        // Permissões de Atendente/Recepção/Gestão. Remove 'conselheiro' e 'irradiador'.
         protegerPagina(['entrevistador', 'tesoureiro', 'diretor', 'super-admin']).then(user => {
-        // ===================================================================
-        // FIM DA MODIFICAÇÃO JAVASCRIPT
-        // ===================================================================
             inicializarPagina(user);
         }).catch(err => {
             document.getElementById('acesso-negado').classList.remove('hidden');
@@ -102,35 +124,23 @@
                 formularioContainer.innerHTML = `<p class="erro">Nenhum atendimento selecionado.</p>`;
             }
 
-            // ===================================================================
-            // INÍCIO DA MODIFICAÇÃO JAVASCRIPT: 2. Função de Log Corrigida
-            // ===================================================================
             async function registrarLog(acao, detalhes) {
                 try {
-                    const newLogRef = doc(logAuditoriaRef); // Cria ref com ID auto
-                    await setDoc(newLogRef, { // Usa setDoc
+                    const newLogRef = doc(logAuditoriaRef); 
+                    await setDoc(newLogRef, { 
                         timestamp: serverTimestamp(),
                         autor: { uid: user.uid, nome: user.displayName || 'Usuário do Sistema' },
                         acao: acao,
                         detalhes: detalhes
                     });
-                } catch (error) { console.error("Erro ao registrar log (com setDoc):", error); }
+                } catch (error) { console.error("Erro ao registrar log:", error); }
             }
-            // ===================================================================
-            // FIM DA MODIFICAÇÃO JAVASCRIPT
-            // ===================================================================
 
             function manipularEstadoFormulario(travado) {
                 const form = formularioContainer.querySelector('fieldset');
                 if (!form) return;
                 
-                // ===================================================================
-                // INÍCIO DA MODIFICAÇÃO JAVASCRIPT: 5. Trava o novo campo
-                // ===================================================================
-                form.querySelectorAll('#atendente-nome, #atendimento-notas, #btn-marcar-retorno, #definir-total-atendimentos').forEach(el => {
-                // ===================================================================
-                // FIM DA MODIFICAÇÃO JAVASCRIPT
-                // ===================================================================
+                form.querySelectorAll('#atendimento-notas, #atendimento-orientacoes, #btn-marcar-retorno, #definir-total-atendimentos').forEach(el => {
                     if (el) el.disabled = travado;
                 });
 
@@ -147,7 +157,7 @@
                     btnHabilitar.style.marginTop = '10px';
                     btnHabilitar.innerHTML = '🔒 Habilitar Edição';
                     btnHabilitar.type = 'button';
-                    btnHabilitar.onclick = () => { if (confirm('Tem certeza?')) { manipularEstadoFormulario(false); } };
+                    btnHabilitar.onclick = () => { if (confirm('Tem certeza que deseja alterar este registro?')) { manipularEstadoFormulario(false); } };
                     form.appendChild(btnHabilitar);
                 }
             }
@@ -170,17 +180,16 @@
                 
                 const formHtml = criarFormulario(atendimento, assistido, tratamento);
                 formularioContainer.innerHTML = formHtml;
-                preencherFormulario(atendimento, user, tratamento); // Passa o 'tratamento'
+                preencherFormulario(atendimento, user, tratamento); 
                 
                 const travar = atendimento.detalhes_preenchidos === true;
                 manipularEstadoFormulario(travar);
 
-                document.getElementById('btn-salvar-atendimento')?.addEventListener('click', () => salvarAtendimentoVL(atendimento, atendimentoDocRef, tratamentoDoc.ref, tratamento));
+                document.getElementById('btn-salvar-atendimento')?.addEventListener('click', () => salvarAtendimentoVL(atendimento, atendimentoDocRef, tratamentoDoc.ref, tratamento, user));
                 document.getElementById('btn-marcar-retorno')?.addEventListener('click', () => marcarNovoRetorno(atendimento, tratamentoDoc.ref, tratamento));
             }
             
             async function marcarNovoRetorno(atendimentoAnterior, tratamentoDocRef, tratamento) {
-                // ... (Nenhuma mudança nesta função, ela está correta para retornos)
                 const btn = document.getElementById('btn-marcar-retorno');
                 btn.disabled = true;
 
@@ -220,8 +229,9 @@
                         tratamentoId: tratamentoDocRef.id,
                         dataAtendimento: dataAtual,
                         semana: realizados + 1,
-                        notas: 'Retorno registrado pela recepção/atendente.',
-                        atendente: user.displayName,
+                        notas: '',
+                        orientacoes: '',
+                        atendente: user.displayName, // Registrado automaticamente no background
                         detalhes_preenchidos: false
                     });
                     
@@ -248,41 +258,28 @@
                 }
             }
 
-            // ===================================================================
-            // INÍCIO DA MODIFICAÇÃO JAVASCRIPT: 6. Função de Salvar (com Batch)
-            // ===================================================================
-            async function salvarAtendimentoVL(atendimento, atendimentoDocRef, tratamentoDocRef, tratamento) {
+            async function salvarAtendimentoVL(atendimento, atendimentoDocRef, tratamentoDocRef, tratamento, user) {
                 const btn = document.getElementById('btn-salvar-atendimento');
-                const atendenteNome = document.getElementById('atendente-nome').value.trim();
                 const atendimentoNotas = document.getElementById('atendimento-notas').value.trim();
+                const atendimentoOrientacoes = document.getElementById('atendimento-orientacoes').value.trim();
 
-                if (!atendenteNome || !atendimentoNotas) {
-                    alert('Os campos "Atendente" e "Notas do Atendimento" são obrigatórios.');
-                    return;
-                }
-                
-                // Pega o valor do novo campo (se ele existir)
                 const selectTotalAtendimentos = document.getElementById('definir-total-atendimentos');
-                let retornosSolicitados = tratamento.retornos_solicitados; // Valor padrão
+                let retornosSolicitados = tratamento.retornos_solicitados; 
                 let totalAtendimentos = (retornosSolicitados || 0) + 1;
                 let logDetalhesRetornos = {};
-                let statusFinal = tratamento.status; // Valor padrão
+                let statusFinal = tratamento.status; 
 
-                // Se o campo de definição existir (1º atendimento)
                 if (selectTotalAtendimentos) {
                     totalAtendimentos = parseInt(selectTotalAtendimentos.value, 10);
-                    retornosSolicitados = totalAtendimentos - 1; // 4 Atendimentos = 3 retornos
+                    retornosSolicitados = totalAtendimentos - 1; 
                     
                     if (totalAtendimentos < 1) {
                         alert('Selecione uma duração de tratamento válida.');
                         return;
                     }
-                    
-                    // Se definiu como 1 atendimento, já conclui o tratamento
                     if (totalAtendimentos === 1 && atendimento.semana === 1) {
                         statusFinal = 'concluido';
                     }
-                    
                     logDetalhesRetornos = { totalDefinido: totalAtendimentos, retornos: retornosSolicitados, statusFinal: statusFinal };
                 }
 
@@ -291,16 +288,14 @@
                 try {
                     const batch = writeBatch(db);
                     
-                    // 1. Atualiza o Atendimento (Notas, Atendente, etc.)
                     const dadosAtendimento = {
-                        atendente: atendenteNome,
+                        atendente: user.displayName || 'Usuário do Sistema', // Salvo automaticamente
                         notas: atendimentoNotas,
+                        orientacoes: atendimentoOrientacoes,
                         detalhes_preenchidos: true
                     };
                     batch.update(atendimentoDocRef, dadosAtendimento);
 
-                    // 2. Atualiza o Tratamento (Retornos e Status)
-                    // (Só atualiza se o campo de definição estava presente)
                     if (selectTotalAtendimentos) {
                         batch.update(tratamentoDocRef, {
                             retornos_solicitados: retornosSolicitados,
@@ -308,23 +303,18 @@
                         });
                     }
 
-                    // Executa as duas atualizações
                     await batch.commit();
                     
                     await registrarLog('Preenchimento Atendimento (VL)', {
                         assistidoId: atendimento.assistidoId,
                         atendimentoId: atendimento.id,
                         semana: atendimento.semana,
-                        ...logDetalhesRetornos // Adiciona os detalhes dos retornos (se houver)
+                        ...logDetalhesRetornos 
                     });
                     
                     alert('Atendimento salvo com sucesso!');
-                    if (statusFinal === 'concluido') {
-                        alert('Tratamento de 1 sessão definido e concluído.');
-                    }
-                    
                     manipularEstadoFormulario(true);
-                    location.reload(); // Recarrega a página para exibir a contagem "X / Y" atualizada
+                    location.reload(); 
 
                 } catch (error) {
                     console.error("Erro ao salvar atendimento:", error);
@@ -332,39 +322,32 @@
                     btn.disabled = false; btn.textContent = 'Salvar Alterações';
                 }
             }
-            // ===================================================================
-            // FIM DA MODIFICAÇÃO JAVASCRIPT
-            // ===================================================================
 
             function preencherFormulario(atendimento, user, tratamento) {
-                const atendenteInput = document.getElementById('atendente-nome');
                 const notasInput = document.getElementById('atendimento-notas');
+                const orientacoesInput = document.getElementById('atendimento-orientacoes');
                 
-                if (atendimento.detalhes_preenchidos) {
-                    atendenteInput.value = atendimento.atendente || '';
-                    notasInput.value = atendimento.notas || '';
-                } else {
-                    atendenteInput.value = user.displayName || '';
-                    notasInput.value = atendimento.notas || '';
+                let notasText = atendimento.notas || '';
+                
+                // Limpeza inteligente: se for pedido online e ainda não foi preenchido, limpa a msg automática do backend
+                // pois a caixa verde já exibe essas informações perfeitamente.
+                if (!atendimento.detalhes_preenchidos && tratamento.origem === 'online' && notasText.includes('Pedido Online Recebido')) {
+                    notasText = '';
                 }
 
-                // Preenche o novo campo <select> se ele existir
+                notasInput.value = notasText;
+                if (orientacoesInput) {
+                    orientacoesInput.value = atendimento.orientacoes || '';
+                }
+
                 const selectTotal = document.getElementById('definir-total-atendimentos');
                 if (selectTotal) {
-                    // O valor do 'tratamento.retornos_solicitados' ainda é 0 aqui,
-                    // então definimos um padrão (ex: 4 atendimentos).
                     selectTotal.value = '4'; // Padrão de 4 atendimentos
                 }
             }
 
-            // ===================================================================
-            // INÍCIO DA MODIFICAÇÃO JAVASCRIPT: 3. e 4. Adiciona HTML
-            // ===================================================================
             function criarFormulario(atendimento, assistido, tratamento) {
-                const dataAtendimento = atendimento.dataAtendimento
-                    ? atendimento.dataAtendimento.toDate().toLocaleDateString('pt-br')
-                    : "Data Pendente";
-                
+                const dataAtendimento = atendimento.dataAtendimento ? atendimento.dataAtendimento.toDate().toLocaleDateString('pt-br') : "Data Pendente";
                 const atendimentoNum = atendimento.semana || '?';
                 const totalAtendimentos = (tratamento.retornos_solicitados || 0) + 1;
                 const statusTratamento = tratamento.status || 'N/A';
@@ -379,13 +362,26 @@
                     botaoRetornoHtml = `<p style="text-align:center; font-weight:bold; color:#28a745; margin-top:15px;">Tratamento concluído.</p>`;
                 }
 
-                // --- LÓGICA DO NOVO CAMPO (Ajuste 1) ---
+                // Caixa de Informações do Pedido Online
+                let infoSolicitanteHtml = '';
+                if (tratamento.origem === 'online') {
+                    const motivo = tratamento.informacoesIniciais || tratamento.pedidoInformacoes || 'Sem informações fornecidas.';
+                    infoSolicitanteHtml = `
+                    <div class="pedido-online-box">
+                        <h4>🌍 Informações do Pedido Online</h4>
+                        <p><strong>Solicitante:</strong> ${tratamento.nomeSolicitante || 'N/A'} ${tratamento.contatoSolicitante ? `(${tratamento.contatoSolicitante})` : ''}</p>
+                        <p><strong>Idade do Assistido:</strong> ${tratamento.idadeAssistidoOnline || 'N/A'} anos</p>
+                        <p style="margin-top: 10px;"><strong>Motivo / Pedido de Prece:</strong></p>
+                        <div class="destaque">${motivo}</div>
+                    </div>`;
+                }
+
                 let definicaoTratamentoHtml = '';
                 const isPrimeiroAtendimento = (atendimento.semana === 1);
-                const isDuracaoNaoDefinida = (tratamento.retornos_solicitados === 0);
+                const isDuracaoNaoDefinida = (tratamento.retornos_solicitados === 0 || tratamento.retornos_solicitados === 3);
 
-                // Só mostra o campo de definição se for o 1º atendimento E a duração ainda for 0
-                if (isPrimeiroAtendimento && isDuracaoNaoDefinida) {
+                // Mostra o campo de definição no 1º atendimento
+                if (isPrimeiroAtendimento && isDuracaoNaoDefinida && !atendimento.detalhes_preenchidos) {
                     definicaoTratamentoHtml = `
                     <fieldset style="border-color: var(--cor-primaria); margin-top: 20px;">
                         <legend>Definição do Colegiado</legend>
@@ -403,7 +399,6 @@
                         </div>
                     </fieldset>`;
                 }
-                // --- FIM DA LÓGICA DO NOVO CAMPO ---
 
                 return `<fieldset>
                             <legend>Detalhes do Atendimento (VL)</legend>
@@ -426,21 +421,25 @@
                                 ${botaoRetornoHtml}
                             </div>
                             
-                            <div class="form-grid">
-                                <div class="form-item"><label for="atendente-nome">Atendente:</label><input type="text" id="atendente-nome"></div>
+                            ${infoSolicitanteHtml}
+                            
+                            <div class="form-item" style="margin-top: 15px;">
+                                <label for="atendimento-orientacoes">Orientações dos Espíritos (Mensagens e Recomendações):</label>
+                                <textarea id="atendimento-orientacoes" rows="5" placeholder="Registre aqui as orientações passadas através da mediunidade..."></textarea>
                             </div>
-                            <div class="form-item" style="margin-top: 15px;"><label for="atendimento-notas">Notas do Atendimento:</label><textarea id="atendimento-notas" rows="8"></textarea></div>
+
+                            <div class="form-item" style="margin-top: 15px;">
+                                <label for="atendimento-notas">Observações Gerais (Triagem e Atendimento):</label>
+                                <textarea id="atendimento-notas" rows="4" placeholder="Observações do atendente, evolução do assistido, etc..."></textarea>
+                            </div>
                             
                             ${definicaoTratamentoHtml}
                             
                             <button id="btn-salvar-atendimento" type="button" class="btn btn-primary" style="width: 100%; margin-top: 20px;">Salvar Alterações</button>
                         </fieldset>`;
             }
-            // ===================================================================
-            // FIM DA MODIFICAÇÃO JAVASCRIPT
-            // ===================================================================
 
-        } // Fim da função inicializarPagina
+        }
     </script>
 </body>
 </html>
