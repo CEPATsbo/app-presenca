@@ -5,27 +5,37 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Recepção - Vinha de Luz</title>
     <style>
+        :root { --cor-primaria: #8e44ad; --cor-borda: #ddd; }
         body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background-color: #f4f6f9; margin: 0; padding: 20px; display: flex; flex-direction: column; align-items: center; }
-        .container { width: 100%; max-width: 700px; background-color: white; padding: 30px; border-radius: 12px; box-shadow: 0 6px 24px rgba(0,0,0,0.1); margin-bottom: 20px; }
-        .nav-voltar { width: 100%; max-width: 700px; margin-bottom: 20px; }
-        .btn, .btn-voltar { background-color: #007bff; color: white; border: none; padding: 12px 20px; border-radius: 8px; font-weight: bold; font-size: 1em; text-decoration: none; cursor: pointer; transition: background-color 0.3s; }
+        .container { width: 100%; max-width: 800px; background-color: white; padding: 30px; border-radius: 12px; box-shadow: 0 6px 24px rgba(0,0,0,0.1); margin-bottom: 20px; }
+        .nav-voltar { width: 100%; max-width: 800px; margin-bottom: 20px; }
+        .btn, .btn-voltar { background-color: var(--cor-primaria); color: white; border: none; padding: 12px 20px; border-radius: 8px; font-weight: bold; font-size: 1em; text-decoration: none; cursor: pointer; transition: background-color 0.3s; }
         .btn:disabled { background-color: #ccc; cursor: not-allowed; }
         .btn-voltar { background-color: #6c757d; }
-        .btn-success { background-color: #28a745; }
+        .btn-success { background-color: #28a745; width: 100%; padding: 15px; font-size: 1.1em;}
         .btn-secondary { background-color: #6c757d; }
-        h1 { color: #333; text-align: center; }
-        fieldset { border: 1px solid #ddd; border-radius: 8px; padding: 20px; margin-bottom: 20px; }
-        legend { font-weight: bold; font-size: 1.2em; color: #8e44ad; padding: 0 10px; }
-        .form-item { display: flex; flex-direction: column; }
-        .form-item label { margin-bottom: 5px; font-weight: bold; color: #555; }
-        .form-item input, .form-item select { padding: 10px; border-radius: 6px; border: 1px solid #ccc; font-size: 1em; width: 100%; box-sizing: border-box; }
-        .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; align-items: end; }
+        .btn-link { background: none; border: none; color: var(--cor-primaria); text-decoration: underline; cursor: pointer; font-size: 0.9em; padding: 0; text-align: left; margin-bottom: 10px; font-weight: bold;}
+        
+        h1 { color: #333; text-align: center; margin-bottom: 30px;}
+        fieldset { border: 1px solid var(--cor-borda); border-radius: 8px; padding: 20px; margin-bottom: 25px; background-color: #fdfdfd;}
+        legend { font-weight: bold; font-size: 1.2em; color: var(--cor-primaria); padding: 0 10px; }
+        
+        .form-item { display: flex; flex-direction: column; margin-bottom: 15px;}
+        .form-item label { margin-bottom: 5px; font-weight: bold; color: #555; font-size: 0.95em;}
+        .form-item input, .form-item textarea { padding: 10px; border-radius: 6px; border: 1px solid #ccc; font-size: 1em; width: 100%; box-sizing: border-box; font-family: inherit;}
+        .form-item input:focus, .form-item textarea:focus { border-color: var(--cor-primaria); outline: none; box-shadow: 0 0 5px rgba(142, 68, 173, 0.3);}
+        
+        .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; align-items: start; }
         .form-grid-full { grid-column: 1 / -1; }
         .hidden { display: none; }
+        
         #search-results-container { position: relative; }
-        #search-results { list-style-type: none; padding: 0; margin: 0; position: absolute; background: white; border: 1px solid #ddd; border-top: none; width: 100%; max-height: 200px; overflow-y: auto; z-index: 10; border-radius: 0 0 6px 6px; }
-        #search-results li { padding: 10px; cursor: pointer; }
-        #search-results li:hover { background-color: #f0f0f0; }
+        #search-results { list-style-type: none; padding: 0; margin: 0; position: absolute; background: white; border: 1px solid var(--cor-borda); border-top: none; width: 100%; max-height: 200px; overflow-y: auto; z-index: 10; border-radius: 0 0 6px 6px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);}
+        #search-results li { padding: 12px; cursor: pointer; border-bottom: 1px solid #eee;}
+        #search-results li:last-child { border-bottom: none; }
+        #search-results li:hover { background-color: #f0f2f5; color: var(--cor-primaria); font-weight: bold;}
+        
+        .aviso-pendente { background-color: #fff3cd; color: #856404; padding: 15px; border-radius: 8px; border: 1px solid #ffeeba; margin-top: 15px; display: none; font-weight: bold; text-align: center;}
     </style>
 </head>
 <body>
@@ -36,27 +46,55 @@
         <h1>Recepção - Vinha de Luz</h1>
 
         <form id="ficha-atendimento" onsubmit="return false;">
+            
             <fieldset id="fs-dados-pessoais">
-                <legend>Dados Pessoais (Busca ou Novo Cadastro)</legend>
+                <legend>Dados do Assistido (Busca ou Novo)</legend>
                 <div class="form-grid">
-                    <div class="form-item form-grid-full"><label for="nome">NOME:</label><div id="search-results-container"><input type="text" id="nome" autocomplete="off" required><ul id="search-results"></ul></div></div>
-                    <div class="form-item"><label for="telefone">TELEFONE:</label><input type="tel" id="telefone" required></div>
-                    <div class="form-item"><label for="dn">DN:</label><input type="date" id="dn" required></div>
+                    <div class="form-item form-grid-full">
+                        <label for="nome">NOME COMPLETO DO ASSISTIDO:</label>
+                        <div id="search-results-container">
+                            <input type="text" id="nome" autocomplete="off" placeholder="Digite para buscar ou cadastrar..." required>
+                            <ul id="search-results"></ul>
+                        </div>
+                    </div>
+                    <div class="form-item">
+                        <label for="telefone">TELEFONE (Opcional):</label>
+                        <input type="tel" id="telefone" placeholder="(00) 00000-0000">
+                    </div>
+                    <div class="form-item">
+                        <label for="dn">DATA DE NASCIMENTO:</label>
+                        <input type="date" id="dn" required>
+                    </div>
+                </div>
+            </fieldset>
+
+            <fieldset id="fs-dados-solicitante">
+                <legend>Informações do Pedido</legend>
+                <button type="button" id="btn-copiar-assistido" class="btn-link">O próprio assistido é o solicitante</button>
+                
+                <div class="form-grid">
+                    <div class="form-item">
+                        <label for="solicitante-nome">NOME DO SOLICITANTE:</label>
+                        <input type="text" id="solicitante-nome" required>
+                    </div>
+                    <div class="form-item">
+                        <label for="solicitante-telefone">CONTATO DO SOLICITANTE:</label>
+                        <input type="tel" id="solicitante-telefone" required>
+                    </div>
+                    <div class="form-item form-grid-full">
+                        <label for="motivo-pedido">MOTIVO / INFORMAÇÕES DO PEDIDO:</label>
+                        <textarea id="motivo-pedido" rows="3" required placeholder="Descreva brevemente o motivo do encaminhamento para o Vinha de Luz..."></textarea>
+                    </div>
                 </div>
             </fieldset>
             
-            <fieldset id="fs-novo-atendimento">
-                <legend>Novo Atendimento (VL)</legend>
-                <div class="form-grid">
-                    <div class="form-item form-grid-full">
-                        <label>Confirmar Primeiro Atendimento:</label>
-                        <p style="font-size: 0.9em; margin-top: 5px;">Ao clicar, o 1º atendimento será registrado e o assistido será encaminhado para a fila.</p>
-                    </div>
-                    <button id="btn-registrar-atendimento" type="button" class="btn btn-success form-grid-full">Registrar 1º Atendimento</button>
-                </div>
-            </fieldset>
+            <div id="alerta-horario" class="aviso-pendente">
+                ⚠️ Devido ao horário de corte (após 19:20), este tratamento será registrado para iniciar na PRÓXIMA SEMANA.
+            </div>
+
+            <button id="btn-registrar-atendimento" type="button" class="btn btn-success" style="margin-top: 20px;">Registrar Tratamento e Encaminhar</button>
         </form>
-        <button id="btn-limpar" class="btn btn-secondary" style="margin-top: 10px; width: 100%;">Limpar Busca</button>
+        <button id="btn-limpar" class="btn btn-secondary" style="margin-top: 15px; width: 100%;">Limpar Tudo</button>
     </div>
 
     <script type="module">
@@ -74,7 +112,7 @@
         };
         initializeApp(firebaseConfig);
         
-        protegerPagina(['recepcionista', 'diretor', 'tesoureiro', 'entrevistador', 'conselheiro', 'super-admin']).then(user => {
+        protegerPagina(['recepcionista', 'diretor', 'tesoureiro', 'entrevistador', 'super-admin']).then(user => {
             document.getElementById('main-content').classList.remove('hidden');
             inicializarPagina(user);
         }).catch(err => { 
@@ -88,14 +126,6 @@
             const tratamentosVlRef = collection(db, 'tratamentos_vl');
             const atendimentosVlRef = collection(db, 'atendimentos_vl');
             const logAuditoriaRef = collection(db, 'log_auditoria');
-            
-            // ===================================================================
-            // INÍCIO DA MODIFICAÇÃO JAVASCRIPT: 1. Adiciona ref da Fila
-            // ===================================================================
-            const filaVlRef = collection(db, 'fila_atendimento_vl');
-            // ===================================================================
-            // FIM DA MODIFICAÇÃO JAVASCRIPT
-            // ===================================================================
 
             let assistidoSelecionado = null;
 
@@ -103,12 +133,17 @@
                 nomeInput: document.getElementById('nome'),
                 telefoneInput: document.getElementById('telefone'),
                 dnInput: document.getElementById('dn'),
+                solicitanteNome: document.getElementById('solicitante-nome'),
+                solicitanteTelefone: document.getElementById('solicitante-telefone'),
+                motivoPedido: document.getElementById('motivo-pedido'),
                 searchResults: document.getElementById('search-results'),
                 btnRegistrar: document.getElementById('btn-registrar-atendimento'),
                 btnLimpar: document.getElementById('btn-limpar'),
+                btnCopiar: document.getElementById('btn-copiar-assistido'),
+                alertaHorario: document.getElementById('alerta-horario')
             };
 
-            // Função de Log Corrigida (com setDoc)
+            // --- FUNÇÕES UTILITÁRIAS ---
             async function registrarLog(acao, detalhes) {
                 try {
                     const newLogRef = doc(logAuditoriaRef); 
@@ -118,55 +153,74 @@
                         acao: acao,
                         detalhes: detalhes
                     });
-                } catch (error) { console.error("Erro ao registrar log (com setDoc):", error); }
+                } catch (error) { console.error("Erro ao registrar log:", error); }
             }
             
             const capitalizarNome = (nome) => {
                 if (!nome) return '';
                 return nome.toLowerCase().replace(/(^|\s)\S/g, L => L.toUpperCase());
             };
-            
-            const resetarFormularioBusca = () => {
-                assistidoSelecionado = null;
-                document.getElementById('ficha-atendimento').reset();
-                ui.searchResults.innerHTML = '';
-                ui.nomeInput.disabled = false;
-                ui.nomeInput.focus();
-            };
-            
-            const validarDadosPessoais = () => {
-                if (!ui.nomeInput.value || !ui.telefoneInput.value || !ui.dnInput.value) {
-                    alert("Por favor, preencha os campos Nome, Telefone e DN.");
-                    return false;
+
+            const calcularIdade = (dataNascimento) => {
+                if (!dataNascimento) return '--';
+                const hoje = new Date();
+                const nascimento = new Date(dataNascimento + 'T12:00:00');
+                let idade = hoje.getFullYear() - nascimento.getFullYear();
+                const m = hoje.getMonth() - nascimento.getMonth();
+                if (m < 0 || (m === 0 && hoje.getDate() < nascimento.getDate())) {
+                    idade--;
                 }
-                return true;
+                return idade;
             };
 
-            const criarNovoAssistidoSeNaoExistir = async () => {
-                if (assistidoSelecionado) return { id: assistidoSelecionado.id, nome: assistidoSelecionado.nome };
-                if (!validarDadosPessoais()) throw new Error("Dados pessoais incompletos");
+            // --- LÓGICA DE HORÁRIO DE CORTE (Idêntica à Cloud Function) ---
+            const verificarHorarioCorte = () => {
+                const agora = new Date();
+                const diaDaSemana = agora.getDay();
+                const horas = agora.getHours();
+                const minutos = agora.getMinutes();
                 
-                const nomeOriginal = ui.nomeInput.value.trim();
-                const nomeCapitalizado = capitalizarNome(nomeOriginal);
-
-                const novoAssistidoData = { 
-                    nome: nomeCapitalizado, 
-                    nome_lower: nomeCapitalizado.toLowerCase(), 
-                    telefone: ui.telefoneInput.value, 
-                    dn: ui.dnInput.value, 
-                    criadoEm: serverTimestamp(), 
-                    criadoPor: { uid: user.uid, nome: user.displayName } 
-                };
-                const docRef = await addDoc(assistidosRef, novoAssistidoData);
-                assistidoSelecionado = { id: docRef.id, ...novoAssistidoData };
+                let statusFinal = 'ativo';
                 
-                registrarLog('Criação de Novo Assistido (VL)', {
-                    assistidoId: docRef.id, assistidoNome: nomeCapitalizado
-                });
-                
-                return { id: docRef.id, nome: nomeCapitalizado };
+                // Se for quarta-feira (3) após 19:20, entra como PENDENTE
+                if (diaDaSemana === 3 && ((horas === 19 && minutos >= 21) || (horas > 19 && horas < 22) || (horas === 22 && minutos <= 30))) {
+                    statusFinal = 'pendente';
+                    ui.alertaHorario.style.display = 'block';
+                } else {
+                    ui.alertaHorario.style.display = 'none';
+                }
+                return statusFinal;
             };
-            
+
+            const calcularCicloVinhaDeLuz = () => {
+                const agora = new Date();
+                const proximaQuarta = new Date(agora);
+                
+                const diaDaSemana = proximaQuarta.getDay();
+                let diasAteProximaQuarta = (3 - diaDaSemana + 7) % 7;
+                if (diasAteProximaQuarta === 0 && agora.getTime() > proximaQuarta.setHours(19, 20, 0, 0)) {
+                    diasAteProximaQuarta = 7;
+                }
+                
+                proximaQuarta.setDate(proximaQuarta.getDate() + diasAteProximaQuarta);
+                proximaQuarta.setHours(19, 20, 0, 0);
+                
+                const dataArquivamento = new Date(proximaQuarta);
+                dataArquivamento.setDate(dataArquivamento.getDate() + 28); // 4 semanas
+                
+                return Timestamp.fromDate(dataArquivamento);
+            };
+
+            // Monitora o horário a cada minuto para exibir o aviso se der a hora
+            setInterval(verificarHorarioCorte, 60000);
+            verificarHorarioCorte();
+
+            // --- INTERAÇÕES DA TELA ---
+            ui.btnCopiar.addEventListener('click', () => {
+                ui.solicitanteNome.value = ui.nomeInput.value;
+                ui.solicitanteTelefone.value = ui.telefoneInput.value;
+            });
+
             const handlePhone = (event) => {
                 let input = event.target.value.replace(/\D/g, '');
                 input = input.substring(0, 11);
@@ -174,7 +228,20 @@
                 if (input.length > 9) input = `${input.substring(0, 10)}-${input.substring(10)}`;
                 event.target.value = input;
             };
+            ui.telefoneInput.addEventListener('input', handlePhone);
+            ui.solicitanteTelefone.addEventListener('input', handlePhone);
 
+            const resetarFormularioBusca = () => {
+                assistidoSelecionado = null;
+                document.getElementById('ficha-atendimento').reset();
+                ui.searchResults.innerHTML = '';
+                ui.nomeInput.disabled = false;
+                ui.nomeInput.focus();
+                verificarHorarioCorte();
+            };
+            ui.btnLimpar.addEventListener('click', resetarFormularioBusca);
+
+            // --- BUSCA DE ASSISTIDOS ---
             ui.nomeInput.addEventListener('input', async (e) => {
                 const termo = e.target.value.trim();
                 if (assistidoSelecionado && termo.toLowerCase() !== assistidoSelecionado.nome.toLowerCase()) {
@@ -189,7 +256,7 @@
                     const assistido = { id: doc.id, ...doc.data() };
                     const li = document.createElement('li');
                     li.textContent = assistido.nome;
-                    li.addEventListener('click', async () => {
+                    li.addEventListener('click', () => {
                         assistidoSelecionado = assistido;
                         ui.nomeInput.value = assistido.nome;
                         ui.telefoneInput.value = assistido.telefone || '';
@@ -199,82 +266,92 @@
                     ui.searchResults.appendChild(li);
                 });
             });
-
             ui.nomeInput.addEventListener('blur', () => { setTimeout(() => { ui.searchResults.innerHTML = ''; }, 200); });
-            ui.btnLimpar.addEventListener('click', resetarFormularioBusca);
-            ui.telefoneInput.addEventListener('input', handlePhone);
 
-            // Ação principal de registro
+            // --- REGISTRO PRINCIPAL ---
+            const criarNovoAssistidoSeNaoExistir = async () => {
+                if (assistidoSelecionado) return { id: assistidoSelecionado.id, nome: assistidoSelecionado.nome };
+                
+                const nomeOriginal = ui.nomeInput.value.trim();
+                const nomeCapitalizado = capitalizarNome(nomeOriginal);
+
+                const novoAssistidoData = { 
+                    nome: nomeCapitalizado, 
+                    nome_lower: nomeCapitalizado.toLowerCase(), 
+                    telefone: ui.telefoneInput.value, 
+                    dn: ui.dnInput.value, 
+                    idade_atual: calcularIdade(ui.dnInput.value),
+                    criadoEm: serverTimestamp(), 
+                    criadoPor: { uid: user.uid, nome: user.displayName } 
+                };
+                const docRef = await addDoc(assistidosRef, novoAssistidoData);
+                assistidoSelecionado = { id: docRef.id, ...novoAssistidoData };
+                
+                registrarLog('Criação de Novo Assistido (VL - Recepção)', { assistidoId: docRef.id, assistidoNome: nomeCapitalizado });
+                return { id: docRef.id, nome: nomeCapitalizado };
+            };
+
             ui.btnRegistrar.addEventListener('click', async (e) => {
-                e.target.disabled = true;
-                if (!validarDadosPessoais()) { 
-                    e.target.disabled = false; return; 
+                if (!ui.nomeInput.value || !ui.dnInput.value || !ui.solicitanteNome.value || !ui.motivoPedido.value) {
+                    alert("Por favor, preencha os campos obrigatórios (Nome e DN do assistido, Nome do Solicitante e Motivo).");
+                    return;
                 }
+                
+                e.target.disabled = true;
+                e.target.textContent = 'Registrando...';
                 
                 try {
                     const { id: assistidoId, nome: nomeAssistido } = await criarNovoAssistidoSeNaoExistir();
-                    const retornosSolicitados = 0; // Definido como 0. Será atualizado pelo colegiado.
+                    
+                    const statusTratamento = verificarHorarioCorte();
+                    const dataArquivamento = calcularCicloVinhaDeLuz();
                     const dataAtual = serverTimestamp();
+                    const idadeCalculada = calcularIdade(ui.dnInput.value);
                     
                     const batch = writeBatch(db);
 
-                    // 1. Cria o novo Tratamento (VL)
+                    // 1. Cria o Tratamento (Aparece na tela do Dirigente se for 'ativo')
                     const novoTratamentoRef = doc(tratamentosVlRef);
                     batch.set(novoTratamentoRef, {
                         assistidoId: assistidoId,
                         dataInicio: dataAtual,
-                        status: 'ativo',
-                        retornos_solicitados: retornosSolicitados, // Fica 0
-                        atendimentos_realizados: 1, // Este é o primeiro
+                        dataArquivamento: dataArquivamento,
+                        status: statusTratamento, 
+                        retornos_solicitados: 3, // Padrão: 4 sessões totais
+                        atendimentos_realizados: 1,
+                        origem: 'presencial',
+                        nomeSolicitante: ui.solicitanteNome.value.trim(),
+                        contatoSolicitante: ui.solicitanteTelefone.value.trim(),
+                        idadeAssistidoOnline: idadeCalculada, // Mesmo nome de campo para manter o padrão na TV
+                        informacoesIniciais: ui.motivoPedido.value.trim(),
                         criadoPor: { uid: user.uid, nome: user.displayName }
                     });
 
-                    // ===================================================================
-                    // INÍCIO DA MODIFICAÇÃO JAVASCRIPT: 2. Cria Ref do Atendimento
-                    // ===================================================================
-                    // 2. Cria o primeiro Atendimento (VL)
-                    const novoAtendimentoRef = doc(atendimentosVlRef); // Cria a Ref primeiro
-                    batch.set(novoAtendimentoRef, { // Usa a Ref
+                    // 2. Cria o Atendimento (Para registrar as notas depois)
+                    const novoAtendimentoRef = doc(atendimentosVlRef);
+                    batch.set(novoAtendimentoRef, {
                         assistidoId: assistidoId,
                         tratamentoId: novoTratamentoRef.id,
                         dataAtendimento: dataAtual,
                         semana: 1, 
-                        notas: 'Primeiro atendimento registrado pela recepção.',
+                        notas: `Registro Presencial (Recepção).\nMotivo: ${ui.motivoPedido.value.trim()}`,
                         atendente: user.displayName,
                         detalhes_preenchidos: false 
                     });
                     
-                    // 3. ADICIONA NA FILA (VL)
-                    const novoItemFilaRef = doc(filaVlRef);
-                    batch.set(novoItemFilaRef, {
-                        assistidoId: assistidoId,
-                        nomeAssistido: nomeAssistido,
-                        atendimentoId: novoAtendimentoRef.id, // Linka ao atendimento
-                        status: 'Aguardando',
-                        tipoTrabalho: 'Passes VL', // Trabalho padrão
-                        timestamp: dataAtual // Para ordenação
-                    });
-                    // ===================================================================
-                    // FIM DA MODIFICAÇÃO JAVASCRIPT
-                    // ===================================================================
-                    
                     await batch.commit();
                     
-                    // ===================================================================
-                    // INÍCIO DA MODIFICAÇÃO JAVASCRIPT: 4. Alerta e Log
-                    // ===================================================================
-                    alert(`Primeiro atendimento para ${nomeAssistido} registrado e encaminhado para a fila!`);
+                    if (statusTratamento === 'pendente') {
+                        alert(`Tratamento registrado para ${nomeAssistido}! Devido ao horário de corte, ele foi jogado automaticamente para iniciar na PRÓXIMA SEMANA.`);
+                    } else {
+                        alert(`Primeiro atendimento de ${nomeAssistido} registrado! Ele já foi encaminhado e está visível na lista de chamadas da sala.`);
+                    }
 
-                    registrarLog('Registro Atendimento (VL) e Fila', {
+                    registrarLog('Registro Atendimento (VL Recepção)', {
                         assistidoId: assistidoId,
-                        assistidoNome: nomeAssistido,
                         tratamentoId: novoTratamentoRef.id,
-                        atendimentoId: novoAtendimentoRef.id, // Adiciona o ID do atendimento
-                        retornos: "Aguardando definição do colegiado"
+                        status: statusTratamento
                     });
-                    // ===================================================================
-                    // FIM DA MODIFICAÇÃO JAVASCRIPT
-                    // ===================================================================
                     
                     resetarFormularioBusca();
 
@@ -283,10 +360,9 @@
                     alert("Falha ao registrar: " + error.message);
                 } finally {
                     e.target.disabled = false;
+                    e.target.textContent = 'Registrar Tratamento e Encaminhar';
                 }
             });
-
-            resetarFormularioBusca();
         }
     </script>
 </body>
