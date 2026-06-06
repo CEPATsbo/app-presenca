@@ -7,46 +7,55 @@
     <style>
         :root { --cor-primaria: #8e44ad; --cor-borda: #ddd; } /* Cor VL */
         body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background-color: #f4f6f9; margin: 0; padding: 20px; }
-        .container { width: 100%; max-width: 1200px; margin: 0 auto; }
+        .container { width: 100%; max-width: 800px; margin: 0 auto; }
         .nav-voltar { margin-bottom: 20px; }
-        .btn, .btn-voltar, .btn-acao { background-color: var(--cor-primaria); color: white; border: none; padding: 10px 16px; border-radius: 8px; font-weight: bold; text-decoration: none; display: inline-block; cursor: pointer; transition: background-color 0.2s; }
+        .btn, .btn-voltar, .btn-acao { background-color: var(--cor-primaria); color: white; border: none; padding: 12px 20px; border-radius: 8px; font-weight: bold; text-decoration: none; display: inline-block; cursor: pointer; transition: background-color 0.2s; }
         .btn:disabled { background-color: #ccc; cursor: not-allowed; }
         .btn-voltar { background-color: #6c757d; }
-        h1 { color: #333; text-align: center; }
-        .hidden { display: none; }
+        h1 { color: #333; text-align: center; margin-bottom: 30px; }
+        .hidden { display: none !important; }
         
-        .grid-container {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 20px;
-        }
-        .coluna { background-color: #fff; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.08); padding: 20px; }
-        .coluna h2 { color: var(--cor-primaria); margin-top: 0; border-bottom: 2px solid var(--cor-borda); padding-bottom: 10px; }
+        .coluna { background-color: #fff; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.08); padding: 30px; }
+        .coluna h2 { color: var(--cor-primaria); margin-top: 0; border-bottom: 2px solid var(--cor-borda); padding-bottom: 15px; margin-bottom: 20px; text-align: center;}
         
-        .lista-fila { list-style-type: none; padding: 0; margin: 0; max-height: 60vh; overflow-y: auto; }
+        .lista-fila { list-style-type: none; padding: 0; margin: 0; max-height: 70vh; overflow-y: auto; }
         .fila-item {
             display: flex;
             justify-content: space-between;
             align-items: center;
-            padding: 15px;
+            padding: 20px;
             border: 1px solid var(--cor-borda);
             border-radius: 8px;
-            margin-bottom: 10px;
+            margin-bottom: 15px;
             background-color: #fdfdfd;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.02);
         }
-        .fila-item-nome { font-size: 1.2em; font-weight: 500; }
-        .fila-item-acoes { display: flex; gap: 8px; }
+        .fila-item-dados { display: flex; flex-direction: column; gap: 5px; }
+        .fila-item-nome { font-size: 1.4em; font-weight: bold; color: #333; }
+        .fila-item-idade { font-size: 1em; color: #666; }
         
-        .btn-chamar { background-color: #28a745; }
-        .btn-confirmar { background-color: #007bff; }
-        .btn-remover { background-color: #dc3545; }
+        .btn-chamar { background-color: #28a745; font-size: 1.1em; padding: 15px 30px; }
+        .btn-chamar:hover { background-color: #218838; }
         
-        .lista-vazia { text-align: center; color: #777; padding: 20px; }
+        .lista-vazia { text-align: center; color: #777; padding: 30px; font-size: 1.2em; font-style: italic; }
 
-        @media (max-width: 768px) {
-            .grid-container { grid-template-columns: 1fr; }
-            .lista-fila { max-height: 40vh; }
+        /* Estilos do Modal de Dupla Autenticação */
+        .modal-overlay {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background-color: rgba(0,0,0,0.6);
+            display: flex; justify-content: center; align-items: center;
+            z-index: 1000;
         }
+        .modal-content {
+            background-color: white; padding: 30px; border-radius: 12px;
+            width: 90%; max-width: 450px; text-align: center;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+        }
+        .modal-content h3 { color: var(--cor-primaria); margin-top: 0; font-size: 1.5em; }
+        .modal-content p { font-size: 1.1em; color: #444; margin: 20px 0; line-height: 1.5; }
+        .modal-nome-destaque { font-weight: bold; font-size: 1.3em; color: #333; display: block; margin-top: 10px; }
+        .modal-actions { display: flex; justify-content: center; gap: 15px; margin-top: 30px; }
+        .btn-cancelar { background-color: #6c757d; }
     </style>
 </head>
 <body>
@@ -55,27 +64,30 @@
         <div id="acesso-negado" class="container hidden"><h1>Acesso Negado</h1></div>
 
         <div id="main-content" class="hidden">
-            <h1 style="color: var(--cor-primaria);">Encaminhamento - Vinha de Luz</h1>
-            <div id="main-grid" class="grid-container">
-                <div class="coluna">
-                    <h2>Fila de Espera</h2>
-                    <ul id="lista-aguardando" class="lista-fila">
-                        <p class="lista-vazia">Carregando...</p>
-                    </ul>
-                </div>
-                <div class="coluna">
-                    <h2>Chamados Recentemente</h2>
-                    <ul id="lista-chamados" class="lista-fila">
-                        <p class="lista-vazia">Ninguém foi chamado.</p>
-                    </ul>
-                </div>
+            <h1 style="color: var(--cor-primaria);">Encaminhamento (Painel TV) - Vinha de Luz</h1>
+            <div class="coluna">
+                <h2>Fila de Espera Ativa</h2>
+                <ul id="lista-aguardando" class="lista-fila">
+                    <p class="lista-vazia">Carregando fila...</p>
+                </ul>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal de Dupla Autenticação -->
+    <div id="modal-confirmacao" class="modal-overlay hidden">
+        <div class="modal-content">
+            <h3>Confirmar Chamada</h3>
+            <p>Você está enviando este assistido para a tela da TV. Deseja prosseguir? <span id="modal-nome" class="modal-nome-destaque"></span></p>
+            <div class="modal-actions">
+                <button id="btn-cancelar" class="btn btn-cancelar">Não, Cancelar</button>
+                <button id="btn-confirmar-chamada" class="btn btn-chamar">Sim, Chamar na TV</button>
             </div>
         </div>
     </div>
 
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
-        // Importa tudo que precisamos
         import { 
             getFirestore, collection, doc, serverTimestamp, query, where, orderBy, 
             onSnapshot, updateDoc, setDoc 
@@ -92,7 +104,6 @@
         };
         initializeApp(firebaseConfig);
         
-        // Permissões da Recepção VL
         protegerPagina(['recepcionista', 'diretor', 'tesoureiro', 'entrevistador', 'super-admin']).then(user => {
             document.getElementById('main-content').classList.remove('hidden');
             inicializarPagina(user);
@@ -108,11 +119,14 @@
             
             const ui = {
                 listaAguardando: document.getElementById('lista-aguardando'),
-                listaChamados: document.getElementById('lista-chamados'),
-                mainGrid: document.getElementById('main-grid')
+                modalConfirmacao: document.getElementById('modal-confirmacao'),
+                modalNome: document.getElementById('modal-nome'),
+                btnCancelar: document.getElementById('btn-cancelar'),
+                btnConfirmarChamada: document.getElementById('btn-confirmar-chamada')
             };
 
-            // Função de Log Corrigida
+            let assistidoSelecionado = null; // Guarda os dados de quem vai ser chamado
+
             async function registrarLog(acao, detalhes) {
                 try {
                     const newLogRef = doc(logAuditoriaRef); 
@@ -122,123 +136,117 @@
                         acao: acao,
                         detalhes: detalhes
                     });
-                } catch (error) { console.error("Erro ao registrar log (com setDoc):", error); }
+                } catch (error) { console.error("Erro ao registrar log:", error); }
             }
 
-            // --- AÇÕES ---
-            async function handleChamar(id, nome) {
+            // --- LÓGICA DO MODAL (DUPLA AUTENTICAÇÃO) ---
+            function abrirModal(id, nome) {
+                assistidoSelecionado = { id, nome };
+                ui.modalNome.textContent = nome;
+                ui.modalConfirmacao.classList.remove('hidden');
+            }
+
+            function fecharModal() {
+                assistidoSelecionado = null;
+                ui.modalConfirmacao.classList.add('hidden');
+                ui.btnConfirmarChamada.disabled = false;
+                ui.btnConfirmarChamada.textContent = 'Sim, Chamar na TV';
+            }
+
+            ui.btnCancelar.addEventListener('click', fecharModal);
+
+            ui.btnConfirmarChamada.addEventListener('click', async () => {
+                if (!assistidoSelecionado) return;
+                
+                ui.btnConfirmarChamada.disabled = true;
+                ui.btnConfirmarChamada.textContent = 'Enviando...';
+
+                const { id, nome } = assistidoSelecionado;
+
                 try {
                     const itemRef = doc(filaVlRef, id);
+                    
+                    // 1. Atualiza para 'Chamado' (Isso aciona a TV na recepção)
                     await updateDoc(itemRef, {
                         status: 'Chamado',
                         chamadoEm: serverTimestamp()
                     });
-                    registrarLog('Chamada Fila VL', { assistidoId: id, assistidoNome: nome });
+                    registrarLog('Chamada Painel VL', { assistidoId: id, assistidoNome: nome });
+
+                    // 2. Automático: Após 12 segundos, dá a baixa para 'Atendido' 
+                    // Isso limpa a fila do backend sem precisar de um segundo clique manual
+                    setTimeout(async () => {
+                        try {
+                            await updateDoc(itemRef, { status: 'Atendido' });
+                        } catch (e) { console.error("Erro ao dar baixa automática:", e); }
+                    }, 12000);
+
+                    fecharModal();
+
                 } catch (error) {
                     console.error("Erro ao chamar:", error);
-                    alert("Falha ao chamar assistido.");
+                    alert("Falha ao encaminhar assistido para a TV.");
+                    fecharModal();
                 }
-            }
+            });
 
-            async function handleConfirmar(id, nome) {
-                try {
-                    const itemRef = doc(filaVlRef, id);
-                    await updateDoc(itemRef, {
-                        status: 'Atendido' // Isso remove da fila
-                    });
-                    registrarLog('Confirmação Atendimento VL', { assistidoId: id, assistidoNome: nome });
-                } catch (error) {
-                    console.error("Erro ao confirmar:", error);
-                    alert("Falha ao confirmar atendimento.");
-                }
-            }
-
-            async function handleRemover(id, nome) {
-                if (!confirm(`Remover ${nome} da fila (marcar como ausente)?`)) return;
-                try {
-                    const itemRef = doc(filaVlRef, id);
-                    await updateDoc(itemRef, {
-                        status: 'Ausente' // Remove da fila, mas mantém registro
-                    });
-                    registrarLog('Remoção Fila VL (Ausente)', { assistidoId: id, assistidoNome: nome });
-                } catch (error) {
-                    console.error("Erro ao remover:", error);
-                    alert("Falha ao remover assistido.");
-                }
-            }
-
-            // --- RENDERIZAÇÃO ---
-            function renderizarListas(docs) {
+            // --- RENDERIZAÇÃO DA FILA ---
+            function renderizarFila(docs) {
                 let htmlAguardando = '';
-                let htmlChamados = '';
 
                 docs.forEach(doc => {
                     const item = { id: doc.id, ...doc.data() };
+                    const idadeDisplay = item.idade || item.idadeAssistidoOnline || item.idadeAssistido || '--';
                     
-                    if (item.status === 'Aguardando') {
-                        htmlAguardando += `
-                            <li class="fila-item">
+                    htmlAguardando += `
+                        <li class="fila-item">
+                            <div class="fila-item-dados">
                                 <span class="fila-item-nome">${item.nomeAssistido}</span>
-                                <div class="fila-item-acoes">
-                                    <button class="btn btn-acao btn-chamar" data-id="${item.id}" data-nome="${item.nomeAssistido}">Chamar</button>
-                                </div>
-                            </li>`;
-                    } 
-                    else if (item.status === 'Chamado') {
-                        htmlChamados += `
-                            <li class="fila-item">
-                                <span class="fila-item-nome">${item.nomeAssistido}</span>
-                                <div class="fila-item-acoes">
-                                    <button class="btn btn-acao btn-confirmar" data-id="${item.id}" data-nome="${item.nomeAssistido}">Confirmar</button>
-                                    <button class="btn btn-acao btn-remover" data-id="${item.id}" data-nome="${item.nomeAssistido}">Ausente</button>
-                                </div>
-                            </li>`;
-                    }
+                                <span class="fila-item-idade">${idadeDisplay} anos</span>
+                            </div>
+                            <div class="fila-item-acoes">
+                                <button class="btn btn-acao btn-chamar" data-id="${item.id}" data-nome="${item.nomeAssistido}">Chamar</button>
+                            </div>
+                        </li>`;
                 });
 
-                ui.listaAguardando.innerHTML = htmlAguardando || '<p class="lista-vazia">Ninguém na fila de espera.</p>';
-                ui.listaChamados.innerHTML = htmlChamados || '<p class="lista-vazia">Ninguém foi chamado.</p>';
+                ui.listaAguardando.innerHTML = htmlAguardando || '<p class="lista-vazia">Nenhum assistido aguardando na fila no momento.</p>';
+
+                // Adiciona os eventos de clique aos novos botões gerados
+                document.querySelectorAll('.btn-chamar').forEach(btn => {
+                    btn.addEventListener('click', (e) => {
+                        const id = e.target.dataset.id;
+                        const nome = e.target.dataset.nome;
+                        abrirModal(id, nome);
+                    });
+                });
             }
 
             // --- LISTENER PRINCIPAL (EM TEMPO REAL) ---
             function escutarFila() {
+                // Monitora apenas quem está com status 'Aguardando', ordenado por chegada (timestamp)
                 const q = query(
                     filaVlRef, 
-                    where('status', 'in', ['Aguardando', 'Chamado']), 
-                    orderBy('timestamp')
+                    where('status', '==', 'Aguardando'), 
+                    orderBy('timestamp', 'asc')
                 );
 
                 onSnapshot(q, (snapshot) => {
                     renderizarListas(snapshot.docs);
                 }, (error) => {
                     console.error("Erro ao escutar a fila:", error);
-                    ui.listaAguardando.innerHTML = '<p class="lista-vazia erro">Erro ao carregar a fila.</p>';
-                    // AVISO IMPORTANTE:
+                    ui.listaAguardando.innerHTML = '<p class="lista-vazia" style="color:red;">Erro ao carregar a fila de espera.</p>';
                     if (error.code === 'failed-precondition') {
-                        alert("ERRO: O Firestore precisa de um índice para esta consulta. Verifique o console (F12) para o link de criação do índice.");
-                        console.error("Link para criar índice (copie e cole no navegador):", error.message.match(/https?:\/\/[^\s]+/)?.[0]);
+                        console.error("Link para criar índice do Firestore:", error.message.match(/https?:\/\/[^\s]+/)?.[0]);
                     }
                 });
             }
+            
+            // Corrige o nome da função no onSnapshot
+            function renderizarListas(docs) {
+                renderizarFila(docs);
+            }
 
-            // --- INICIALIZAÇÃO DOS BOTÕES ---
-            ui.mainGrid.addEventListener('click', (e) => {
-                const target = e.target;
-                const id = target.dataset.id;
-                const nome = target.dataset.nome;
-
-                if (!id) return;
-
-                if (target.classList.contains('btn-chamar')) {
-                    handleChamar(id, nome);
-                } else if (target.classList.contains('btn-confirmar')) {
-                    handleConfirmar(id, nome);
-                } else if (target.classList.contains('btn-remover')) {
-                    handleRemover(id, nome);
-                }
-            });
-
-            // Inicia o listener
             escutarFila();
         }
     </script>
