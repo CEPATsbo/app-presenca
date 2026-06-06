@@ -158,6 +158,155 @@ const verificarAprovacaoFinal = onDocumentWritten({ ...OPCOES_FUNCAO, document: 
     }
 });
 
+// ==========================================
+// MÓDULO: VINHA DE LUZ (ADICIONAR AO SEU ARQUIVO MODULAR)
+// ==========================================
+
+// Função auxiliar baseada na sua calcularCicloVibracoes, mas adaptada para Quartas-feiras e ciclo de 28 dias (4 semanas)
+function calcularCicloVinhaDeLuz(dataBase) {
+    const agora = new Date(dataBase);
+    const proximaQuarta = new Date(agora);
+    
+    // Ajuste manual de fuso horário (-3h) idêntico ao que você utiliza no código original
+    proximaQuarta.setUTCHours(proximaQuarta.getUTCHours() - 3);
+    const diaDaSemana = proximaQuarta.getDay();
+    
+    // Quarta-feira é dia 3 no Javascript (0=Dom, 1=Seg, 2=Ter, 3=Qua)
+    let diasAteProximaQuarta = (3 - diaDaSemana + 7) % 7;
+    if (diasAteProximaQuarta === 0 && agora.getTime() > proximaQuarta.getTime()) {
+        diasAteProximaQuarta = 7;
+    }
+    
+    proximaQuarta.setDate(proximaQuarta.getDate() + diasAteProximaQuarta);
+    proximaQuarta.setHours(19, 20, 0, 0);
+    
+    const dataFimCiclo = new Date(proximaQuarta);
+    const dataArquivamento = new Date(dataFimCiclo);
+    
+    // Define o arquivamento para 28 dias (4 semanas) após a próxima quarta-feira de trabalho
+    dataArquivamento.setDate(dataArquivamento.getDate() + 28);
+    
+    return {
+        dataFimCiclo: admin.firestore.Timestamp.fromDate(dataFimCiclo),
+        dataArquivamento: admin.firestore.Timestamp.fromDate(dataArquivamento)
+    };
+}
+
+// 2. Envio do Pedido do Vinha de Luz (Entra direto criando/atualizando assistido e gerando ficha no arquivo geral)
+const enviarPedidoVinhaDeLuz = onCall({ region: REGIAO }, async (request) => {
+    const { nomeSolicitante, contatoSolicitante, nomeAssistido, contatoAssistido, idadeAssistido, informacoes } = request.data;
+    
+    if (!nomeSolicitante || !nomeAssistido || !informacoes || !idadeAssistido) { 
+        throw new HttpsError('invalid-argument', 'Dados incompletos.'); 
+    }
+
+    // Lógica de horário idêntica à sua, mas travando na QUARTA-FEIRA (dia 3)
+    const agoraSP = new Date(new Date().toLocaleString("en-US", { timeZone: "America/Sao_Paulo" }));
+    const diaDaSemana = agoraSP.getDay();
+    const horas = agoraSP.getHours();
+    const minutos = agoraSP.getMinutes();
+    
+    let statusFinal = 'ativo';
+    
+    // Se for quarta-feira (3) durante o horário de trabalho, entra como PENDENTE
+    if (diaDaSemana === 3 && ((horas === 19 && minutos >= 21) || (horas > 19 && horas < 22) || (horas === 22 && minutos <= 30))) {
+        statusFinal = 'pendente';
+    }
+
+    const { dataArquivamento } = calcularCicloVinhaDeLuz(agoraSP);
+    const nomeLower = nomeAssistido.trim().toLowerCase();
+
+    // PASSO A: Verificar se o assistido já existe na base global para não duplicar fichas no Arquivo Geral
+    const assistidoQuery = await db.collection('assistidos')
+        .where('nome_lower', '==', nomeLower)
+        .limit(1)
+        .get();
+        
+    let assistidoId;
+    if (!assistidoQuery.empty) {
+        assistidoId = assistidoQuery.docs[0].id;
+        // Atualiza o telefone de contato se veio uma informação nova
+        await db.collection('assistidos').doc(assistidoId).update({
+            telefone: contatoAssistido.trim() || 'Não informado'
+        });
+    } else {
+        // Se for novo, adiciona na coleção global 'assistidos'
+        const novoAssistidoRef = await db.collection('assistidos').add({
+            nome: nomeAssistido.trim(),
+            nome_lower: nomeLower,
+            telefone: contatoAssistido.trim() || 'Não informado',
+            dn: '' // Idade capturada vira campo secundário se necessário, mantém padrão compatível
+        });
+        assistidoId = novoAssistidoRef.id;
+    }
+
+    // PASSO B: Criar o documento na coleção 'tratamentos_vl' (Habilita aparição imediata no arquivo-geral-vl.html)
+    const novoTratamentoRef = await db.collection('tratamentos_vl').add({
+        assistidoId: assistidoId,
+        status: statusFinal, 
+        dataInicio: admin.firestore.FieldValue.serverTimestamp(),
+        dataArquivamento: dataArquivamento,
+        retornos_solicitados: 3, // Significa 4 atendimentos no total (1 inicial + 3 retornos)
+        atendimentos_realizados: 1, 
+        origem: 'online',
+        nomeSolicitante: nomeSolicitante.trim(),
+        contatoSolicitante: contatoSolicitante.trim(),
+        idadeAssistidoOnline: idadeAssistido,
+        informacoesIniciais: informacoes.trim()
+    });
+
+    // PASSO C: Criar o primeiro atendimento na coleção 'atendimentos_vl'
+    await db.collection('atendimentos_vl').add({
+        assistidoId: assistidoId,
+        tratamentoId: novoTratamentoRef.id,
+        dataAtendimento: admin.firestore.FieldValue.serverTimestamp(),
+        semana: 1,
+        notas: `Pedido Online Recebido.\nInformações do Solicitante: ${informacoes.trim()}`,
+        atendente: 'Portal Online',
+        detalhes_preenchidos: false // Fica "Aberto" para o atendente complementar internamente
+    });
+
+    return { success: true };
+});
+
+// 3. Arquivamento Automático do VL (Roda às quartas-feiras às 22:30)
+const arquivarVlConcluidos = onSchedule({ ...OPCOES_FUNCAO_SAOPAULO, schedule: '30 22 * * 3' }, async () => {
+    const agora = admin.firestore.Timestamp.now();
+    
+    const snap = await db.collection('tratamentos_vl').where('dataArquivamento', '<=', agora).get();
+    if (snap.empty) return;
+
+    const batch = db.batch(); 
+    snap.forEach(doc => { 
+        const dados = doc.data();
+        
+        // REGRA DE EXTENSÃO SOLICITADA: Se a mesa de trabalho interna marcou como 'estendido', o sistema ignora o arquivamento automático.
+        if (dados.status === 'estendido') {
+            return; 
+        }
+
+        const semanaDeReferencia = new Intl.DateTimeFormat('en-CA').format(dados.dataArquivamento.toDate());
+        
+        batch.set(db.collection('historico_vinha_de_luz').doc(), {
+            ...dados,
+            semanaDeReferencia, 
+            arquivadoEm: admin.firestore.FieldValue.serverTimestamp()
+        }); 
+        batch.delete(doc.ref); 
+    });
+    await batch.commit();
+});
+
+// 4. Ativação de Pendentes do VL (Roda às quartas-feiras às 22:31)
+const ativarNovosPedidosVl = onSchedule({ ...OPCOES_FUNCAO_SAOPAULO, schedule: '31 22 * * 3' }, async () => {
+    const snap = await db.collection('tratamentos_vl').where('status', '==', 'pendente').get();
+    if (snap.empty) return;
+    
+    const batch = db.batch(); 
+    snap.forEach(doc => batch.update(doc.ref, { status: 'ativo' }));
+    await batch.commit();
+});
+
 module.exports = {
     enviarPedidoVibracao,
     promoverParaCaritas,
@@ -168,5 +317,8 @@ module.exports = {
     arquivarVibracoesConcluidas,
     ativarNovosPedidos,
     registrarVotoConselho,
-    verificarAprovacaoFinal
+    verificarAprovacaoFinal,
+    enviarPedidoVinhaDeLuz,
+    arquivarVlConcluidos,
+    ativarNovosPedidosVl
 };
