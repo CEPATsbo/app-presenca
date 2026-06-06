@@ -14,25 +14,10 @@
             flex-direction: column;
             align-items: center;
         }
-        .header {
-            width: 100%;
-            max-width: 1000px;
-            text-align: center;
-            margin-bottom: 30px;
-        }
-        .header h1 {
-            color: #2c3e50;
-            margin: 0;
-        }
-        .header p {
-            color: #7f8c8d;
-            margin-top: 5px;
-        }
-        .nav-voltar {
-            width: 100%;
-            max-width: 1000px;
-            margin-bottom: 20px;
-        }
+        .header { width: 100%; max-width: 1000px; text-align: center; margin-bottom: 30px; }
+        .header h1 { color: #2c3e50; margin: 0; }
+        .header p { color: #7f8c8d; margin-top: 5px; }
+        .nav-voltar { width: 100%; max-width: 1000px; margin-bottom: 20px; }
         .btn-voltar {
             background-color: #6c757d;
             color: white;
@@ -68,17 +53,8 @@
             transform: translateY(-5px);
             box-shadow: 0 8px 25px rgba(0, 0, 0, 0.12);
         }
-        .card h2 {
-            margin-top: 0;
-            font-size: 1.4em;
-            color: #34495e;
-        }
-        .card p {
-            color: #576574;
-            font-size: 0.95em;
-            line-height: 1.5;
-            text-align: left;
-        }
+        .card h2 { margin-top: 0; font-size: 1.4em; color: #34495e; }
+        .card p { color: #576574; font-size: 0.95em; line-height: 1.5; text-align: left; }
     </style>
 </head>
 <body>
@@ -102,7 +78,10 @@
         </a>
         
         <a href="/arquivo-geral-ae.html" class="card" data-role="super-admin,diretor,conselheiro,tesoureiro,entrevistador" style="border-left-color: #2ecc71;">
-            <h2>Arquivo e Entrevistas</h2> <p>Consultar históricos e adicionar detalhes das entrevistas.</p> </a>
+            <h2>Arquivo e Entrevistas</h2> 
+            <p>Consultar históricos e adicionar detalhes das entrevistas.</p> 
+        </a>
+        
         <a href="/painel-ae.tv.html" target="_blank" class="card" data-role="super-admin,diretor,tesoureiro,conselheiro,recepcionista,entrevistador" style="border-left-color: #2ecc71;">
             <h2>Painel TV</h2>
             <p>Abrir o painel de chamadas para exibição no salão.</p>
@@ -111,12 +90,13 @@
         <a href="/dashboard-vl.html" class="card" data-role="super-admin,diretor,tesoureiro,conselheiro,entrevistador,recepcionista,irradiador" style="border-left-color: #8e44ad;">
             <h2 id="card-vl-titulo">Vinha de Luz</h2>
             <p id="card-vl-status">Gerenciar o fluxo de atendimento do trabalho de Cura.</p>
-            </a>
+        </a>
     </div>
 
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
         import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-auth.js";
+        import { getFirestore, collection, query, where, onSnapshot } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
 
         const firebaseConfig = {
             apiKey: "AIzaSyBV7RPjk3cFTqL-aIpflJcUojKg1ZXMLuU",
@@ -128,6 +108,7 @@
         };
         const app = initializeApp(firebaseConfig);
         const auth = getAuth(app);
+        const db = getFirestore(app);
 
         onAuthStateChanged(auth, (user) => {
             if (user) {
@@ -142,6 +123,29 @@
                             card.style.display = 'none';
                         }
                     });
+
+                    // --- ALERTA DE FICHAS PENDENTES VINHA DE LUZ ---
+                    const atendimentosRef = collection(db, 'atendimentos_vl');
+                    const qPendentes = query(atendimentosRef, where("detalhes_preenchidos", "==", false));
+
+                    onSnapshot(qPendentes, (snapshot) => {
+                        const totalPendentes = snapshot.size;
+                        const cardVl = document.querySelector('a[href="/dashboard-vl.html"]');
+                        let alerta = cardVl.querySelector('.alerta-pendencia');
+                        
+                        if (totalPendentes > 0) {
+                            if (!alerta) {
+                                alerta = document.createElement('div');
+                                alerta.className = 'alerta-pendencia';
+                                alerta.style.cssText = "background: #dc3545; color: white; padding: 6px 10px; border-radius: 6px; font-size: 0.8em; margin-top: 10px; font-weight: bold; text-align: center; box-shadow: 0 2px 4px rgba(0,0,0,0.1);";
+                                cardVl.appendChild(alerta);
+                            }
+                            alerta.textContent = `⚠️ ${totalPendentes} ficha(s) pendente(s)`;
+                        } else if (alerta) {
+                            alerta.remove();
+                        }
+                    });
+                    // ------------------------------------------------
 
                     document.getElementById('main-content').style.display = 'grid';
                 });
