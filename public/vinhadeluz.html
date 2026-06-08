@@ -176,7 +176,7 @@
         
         <div class="aviso-ciclo">
             <p>
-                <strong>Atenção:</strong> Cada pedido enviado inicia um ciclo de tratamento de 4 semanas. A equipe interna avaliará a necessidade de estender o atendimento diretamente pelo sistema.
+                <strong>Atenção:</strong> Cada pedido enviado inicia um ciclo de tratamento de 4 semanas. A equipe interna avaliará a necessidade de estender o atendimento diretamente pelo sistema, sem a necessidade de você fazer um novo envio online após o término.
             </p>
         </div>
 
@@ -191,16 +191,12 @@
                     <input type="text" id="solicitante-contato" required placeholder="(00) 00000-0000">
                 </div>
                 <div class="campo-item">
-                    <label for="assistido-nome">Nome do Assistido:</label>
+                    <label for="assistido-nome">Nome do Assistido (Quem receberá o tratamento):</label>
                     <input type="text" id="assistido-nome" required placeholder="Nome completo do assistido">
                 </div>
                 <div class="campo-item">
                     <label for="assistido-dn">Data de Nascimento:</label>
                     <input type="date" id="assistido-dn" required>
-                </div>
-                <div class="campo-item">
-                    <label for="assistido-idade">Idade do Assistido:</label>
-                    <input type="number" id="assistido-idade" required min="0" max="130" placeholder="Ex: 45">
                 </div>
                 <div class="campo-item">
                     <label for="assistido-contato">Contato do Assistido (Opcional):</label>
@@ -217,6 +213,7 @@
                     <input type="checkbox" id="politica-privacidade" name="privacidade" required>
                     <label for="politica-privacidade">
                         <strong>Política de Privacidade*</strong><br>
+                        Ao informar os dados, eu concordo com a Política de Privacidade da Casa Espírita.<br>
                         Leia nossa <a href="/politica-privacidade-vl.html" target="_blank">Política de Privacidade do Vinha de Luz</a>.<br>
                         <small>*Necessário para prosseguir.</small>
                     </label>
@@ -231,7 +228,7 @@
     <div id="modal-vl" class="modal-overlay">
         <div class="modal-content">
             <h2>O Trabalho do Vinha de Luz</h2>
-            <p>O Vinha de Luz é um trabalho focado no Equilíbrio Fluídico e na Cura Espiritual.</p>
+            <p>O Vinha de Luz é um trabalho focado no Equilíbrio Fluídico e na Cura Espiritual. Através de preces concentradas, sintonizações e assistência fluídica direcionada, a equipe de trabalhadores e os Benfeitores Espirituais atuam na harmonização dos corpos sutis daqueles que se encontram enfermos ou com sobrecargas emocionais e espirituais.</p>
             <div class="modal-actions">
                 <button id="btn-fechar-modal" class="btn-fechar-modal">Fechar</button>
             </div>
@@ -278,8 +275,7 @@
                 nomeSolicitante: document.getElementById('solicitante-nome').value,
                 contatoSolicitante: document.getElementById('solicitante-contato').value,
                 nomeAssistido: document.getElementById('assistido-nome').value,
-                dnAssistido: document.getElementById('assistido-dn').value, // <--- CAMPO DN
-                idadeAssistido: parseInt(document.getElementById('assistido-idade').value, 10),
+                dnAssistido: document.getElementById('assistido-dn').value,
                 contatoAssistido: document.getElementById('assistido-contato').value,
                 informacoes: document.getElementById('pedido-informacoes').value
             };
@@ -289,16 +285,22 @@
                 await enviarPedidoVinhaDeLuz(dadosParaEnviar);
                 
                 const feedbackDiv = document.getElementById('mensagem-feedback');
-                feedbackDiv.textContent = 'Pedido enviado com sucesso!';
+                feedbackDiv.textContent = 'Seu pedido de prece e tratamento para o Vinha de Luz foi enviado com sucesso!';
                 feedbackDiv.className = 'feedback-sucesso';
                 feedbackDiv.style.display = 'block';
+                
                 form.reset();
                 btnEnviar.disabled = true;
                 
-                setTimeout(() => { feedbackDiv.style.display = 'none'; btnEnviar.textContent = 'Enviar Pedido de Prece'; }, 6000);
+                setTimeout(() => {
+                    feedbackDiv.style.display = 'none';
+                    btnEnviar.textContent = 'Enviar Pedido de Prece';
+                }, 6000);
+
             } catch (error) {
+                console.error("Erro ao enviar pedido para o VL: ", error);
                 const feedbackDiv = document.getElementById('mensagem-feedback');
-                feedbackDiv.textContent = "Erro ao processar pedido.";
+                feedbackDiv.textContent = "Ocorreu um erro ao processar seu pedido. Por favor, tente novamente.";
                 feedbackDiv.className = 'feedback-erro';
                 feedbackDiv.style.display = 'block';
                 btnEnviar.disabled = false;
