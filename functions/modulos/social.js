@@ -192,83 +192,124 @@ function calcularCicloVinhaDeLuz(dataBase) {
     };
 }
 
-// 2. Envio do Pedido do Vinha de Luz (Entra direto criando/atualizando assistido e gerando ficha no arquivo geral)
+// Função auxiliar para calcular a idade a partir do DN (Evita fuso horário cortando um dia)
+function calcularIdade(dataNascimento) {
+    if (!dataNascimento) return null;
+    const hoje = new Date();
+    const nascimento = new Date(dataNascimento + 'T12:00:00'); 
+    let idade = hoje.getFullYear() - nascimento.getFullYear();
+    const m = hoje.getMonth() - nascimento.getMonth();
+    if (m < 0 || (m === 0 && hoje.getDate() < nascimento.getDate())) {
+        idade--;
+    }
+    return idade;
+}
+
+// 2. ENVIO DE PEDIDO COM BLOQUEIO INTELIGENTE E CÁLCULO DE IDADE
 const enviarPedidoVinhaDeLuz = onCall({ region: REGIAO }, async (request) => {
-    const { nomeSolicitante, contatoSolicitante, nomeAssistido, contatoAssistido, idadeAssistido, informacoes } = request.data;
+    const { nomeSolicitante, contatoSolicitante, nomeAssistido, dnAssistido, contatoAssistido, informacoes } = request.data;
     
-    if (!nomeSolicitante || !nomeAssistido || !informacoes || !idadeAssistido) { 
-        throw new HttpsError('invalid-argument', 'Dados incompletos.'); 
+    // Validação inicial
+    if (!nomeSolicitante || !nomeAssistido || !informacoes || !dnAssistido) { 
+        throw new HttpsError('invalid-argument', 'Dados incompletos. Nome, DN, Solicitante e Motivo são obrigatórios.'); 
     }
 
-    // Lógica de horário idêntica à sua, mas travando na QUARTA-FEIRA (dia 3)
+    const dnNormalizado = dnAssistido.trim();
+    const nomeLower = nomeAssistido.trim().toLowerCase();
+    const primeiroNomeRecebido = nomeLower.split(' ')[0];
+
+    // 1. BUSCA INTELIGENTE DE DUPLICIDADE
+    const assistidosMesmoDN = await db.collection('assistidos')
+        .where('dn', '==', dnNormalizado)
+        .get();
+
+    let assistidoId = null;
+
+    if (!assistidosMesmoDN.empty) {
+        for (const doc of assistidosMesmoDN.docs) {
+            const dbNome = doc.data().nome_lower || "";
+            const dbPrimeiroNome = dbNome.split(' ')[0];
+
+            if (dbPrimeiroNome === primeiroNomeRecebido) {
+                assistidoId = doc.id; 
+                break;
+            }
+        }
+    }
+
+    if (assistidoId) {
+        const tratamentoAtivo = await db.collection('tratamentos_vl')
+            .where('assistidoId', '==', assistidoId)
+            .where('status', 'in', ['ativo', 'estendido'])
+            .limit(1)
+            .get();
+
+        if (!tratamentoAtivo.empty) {
+            throw new HttpsError('already-exists', 
+                'Já existe um tratamento em andamento para este assistido. Não é possível abrir um novo pedido enquanto o anterior estiver ativo.');
+        }
+    }
+
+    // 2. LÓGICA DE HORÁRIO
     const agoraSP = new Date(new Date().toLocaleString("en-US", { timeZone: "America/Sao_Paulo" }));
-    const diaDaSemana = agoraSP.getDay();
+    const diaDaSemana = agoraSP.getDay(); 
     const horas = agoraSP.getHours();
     const minutos = agoraSP.getMinutes();
     
     let statusFinal = 'ativo';
-    
-    // Se for quarta-feira (3) durante o horário de trabalho, entra como PENDENTE
-    if (diaDaSemana === 3 && ((horas === 19 && minutos >= 21) || (horas > 19 && horas < 22) || (horas === 22 && minutos <= 30))) {
+    if (diaDaSemana === 3 && ((horas === 19 && minutos >= 21) || (horas > 19))) {
         statusFinal = 'pendente';
     }
 
     const { dataArquivamento } = calcularCicloVinhaDeLuz(agoraSP);
-    const nomeLower = nomeAssistido.trim().toLowerCase();
 
-    // PASSO A: Verificar se o assistido já existe na base global para não duplicar fichas no Arquivo Geral
-    const assistidoQuery = await db.collection('assistidos')
-        .where('nome_lower', '==', nomeLower)
-        .limit(1)
-        .get();
-        
-    let assistidoId;
-    if (!assistidoQuery.empty) {
-        assistidoId = assistidoQuery.docs[0].id;
-        // Atualiza o telefone de contato se veio uma informação nova
+    // CÁLCULO DA IDADE AQUI
+    const idadeCalculada = calcularIdade(dnNormalizado);
+
+    // 3. PERSISTÊNCIA DE DADOS
+    if (assistidoId) {
         await db.collection('assistidos').doc(assistidoId).update({
             telefone: contatoAssistido.trim() || 'Não informado'
         });
     } else {
-        // Se for novo, adiciona na coleção global 'assistidos'
         const novoAssistidoRef = await db.collection('assistidos').add({
             nome: nomeAssistido.trim(),
             nome_lower: nomeLower,
+            dn: dnNormalizado,
             telefone: contatoAssistido.trim() || 'Não informado',
-            dn: '' // Idade capturada vira campo secundário se necessário, mantém padrão compatível
+            criadoEm: admin.firestore.FieldValue.serverTimestamp()
         });
         assistidoId = novoAssistidoRef.id;
     }
 
-    // PASSO B: Criar o documento na coleção 'tratamentos_vl' (Habilita aparição imediata no arquivo-geral-vl.html)
+    // Cria o tratamento COM A IDADE CALCULADA
     const novoTratamentoRef = await db.collection('tratamentos_vl').add({
         assistidoId: assistidoId,
         status: statusFinal, 
         dataInicio: admin.firestore.FieldValue.serverTimestamp(),
         dataArquivamento: dataArquivamento,
-        retornos_solicitados: 3, // Significa 4 atendimentos no total (1 inicial + 3 retornos)
+        retornos_solicitados: 3, 
         atendimentos_realizados: 1, 
         origem: 'online',
         nomeSolicitante: nomeSolicitante.trim(),
         contatoSolicitante: contatoSolicitante.trim(),
-        idadeAssistidoOnline: idadeAssistido,
+        idadeAssistidoOnline: idadeCalculada, // <--- CORREÇÃO AQUI
         informacoesIniciais: informacoes.trim()
     });
 
-    // PASSO C: Criar o primeiro atendimento na coleção 'atendimentos_vl'
+    // Cria o atendimento vinculado
     await db.collection('atendimentos_vl').add({
         assistidoId: assistidoId,
         tratamentoId: novoTratamentoRef.id,
         dataAtendimento: admin.firestore.FieldValue.serverTimestamp(),
         semana: 1,
-        notas: `Pedido Online Recebido.\nInformações do Solicitante: ${informacoes.trim()}`,
+        notas: `Pedido Online Recebido.\nMotivo: ${informacoes.trim()}`,
         atendente: 'Portal Online',
-        detalhes_preenchidos: false // Fica "Aberto" para o atendente complementar internamente
+        detalhes_preenchidos: false 
     });
 
     return { success: true };
 });
-
 // 3. Arquivamento Automático do VL (Roda às quartas-feiras às 22:30)
 const arquivarVlConcluidos = onSchedule({ ...OPCOES_FUNCAO_SAOPAULO, schedule: '30 22 * * 3' }, async () => {
     const agora = admin.firestore.Timestamp.now();
