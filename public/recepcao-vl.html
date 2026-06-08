@@ -173,7 +173,7 @@
                 return idade;
             };
 
-            // --- LÓGICA DE HORÁRIO DE CORTE (Idêntica à Cloud Function) ---
+            // --- LÓGICA DE HORÁRIO DE CORTE ---
             const verificarHorarioCorte = () => {
                 const agora = new Date();
                 const diaDaSemana = agora.getDay();
@@ -182,7 +182,6 @@
                 
                 let statusFinal = 'ativo';
                 
-                // Se for quarta-feira (3) após 19:20, entra como PENDENTE
                 if (diaDaSemana === 3 && ((horas === 19 && minutos >= 21) || (horas > 19 && horas < 22) || (horas === 22 && minutos <= 30))) {
                     statusFinal = 'pendente';
                     ui.alertaHorario.style.display = 'block';
@@ -206,12 +205,11 @@
                 proximaQuarta.setHours(19, 20, 0, 0);
                 
                 const dataArquivamento = new Date(proximaQuarta);
-                dataArquivamento.setDate(dataArquivamento.getDate() + 28); // 4 semanas
+                dataArquivamento.setDate(dataArquivamento.getDate() + 28); 
                 
                 return Timestamp.fromDate(dataArquivamento);
             };
 
-            // Monitora o horário a cada minuto para exibir o aviso se der a hora
             setInterval(verificarHorarioCorte, 60000);
             verificarHorarioCorte();
 
@@ -303,6 +301,24 @@
                 try {
                     const { id: assistidoId, nome: nomeAssistido } = await criarNovoAssistidoSeNaoExistir();
                     
+                    // =====================================================================
+                    // TRAVA DE DUPLICIDADE (Idêntica à segurança da Nuvem)
+                    // =====================================================================
+                    const qTratamentoAtivo = query(
+                        tratamentosVlRef, 
+                        where('assistidoId', '==', assistidoId), 
+                        where('status', 'in', ['ativo', 'estendido'])
+                    );
+                    const snapshotAtivo = await getDocs(qTratamentoAtivo);
+
+                    if (!snapshotAtivo.empty) {
+                        alert(`BLOQUEIO DE SEGURANÇA: O assistido ${nomeAssistido} já possui um tratamento em andamento (Ativo ou Estendido). Não é possível abrir um novo ciclo simultaneamente.`);
+                        e.target.disabled = false;
+                        e.target.textContent = 'Registrar Tratamento e Encaminhar';
+                        return; // Para a execução do código aqui!
+                    }
+                    // =====================================================================
+                    
                     const statusTratamento = verificarHorarioCorte();
                     const dataArquivamento = calcularCicloVinhaDeLuz();
                     const dataAtual = serverTimestamp();
@@ -310,24 +326,24 @@
                     
                     const batch = writeBatch(db);
 
-                    // 1. Cria o Tratamento (Aparece na tela do Dirigente se for 'ativo')
+                    // 1. Cria o Tratamento
                     const novoTratamentoRef = doc(tratamentosVlRef);
                     batch.set(novoTratamentoRef, {
                         assistidoId: assistidoId,
                         dataInicio: dataAtual,
                         dataArquivamento: dataArquivamento,
                         status: statusTratamento, 
-                        retornos_solicitados: 3, // Padrão: 4 sessões totais
+                        retornos_solicitados: 3, 
                         atendimentos_realizados: 1,
                         origem: 'presencial',
                         nomeSolicitante: ui.solicitanteNome.value.trim(),
                         contatoSolicitante: ui.solicitanteTelefone.value.trim(),
-                        idadeAssistidoOnline: idadeCalculada, // Mesmo nome de campo para manter o padrão na TV
+                        idadeAssistidoOnline: idadeCalculada, 
                         informacoesIniciais: ui.motivoPedido.value.trim(),
                         criadoPor: { uid: user.uid, nome: user.displayName }
                     });
 
-                    // 2. Cria o Atendimento (Para registrar as notas depois)
+                    // 2. Cria o Atendimento
                     const novoAtendimentoRef = doc(atendimentosVlRef);
                     batch.set(novoAtendimentoRef, {
                         assistidoId: assistidoId,
