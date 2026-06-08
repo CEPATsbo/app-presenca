@@ -113,6 +113,18 @@ onAuthStateChanged(auth, async (user) => {
             await carregarMural();
             await carregarComunicacoesMediunicas(); // CHAMADA DO NOVO MÓDULO
 
+            // --- INSERÇÃO DA LÓGICA DO BOTÃO AQUI ---
+            try {
+                const configSnap = await getDoc(doc(db, "configuracoes", "geral"));
+                if (configSnap.exists() && configSnap.data().vinhaLuzOnlineAtivo === true) {
+                    const btnPortal = document.getElementById('btn-vinha-online-portal');
+                    if (btnPortal) btnPortal.style.display = 'block';
+                }
+            } catch (e) {
+                console.error("Erro ao verificar botão Vinha de Luz no portal:", e);
+            }
+            // --- FIM DA INSERÇÃO ---
+
             if (currentUserData.isMedium) {
                 moduleInformativo.classList.remove('hidden');
                 await carregarMinhaEscala(currentUserId);
