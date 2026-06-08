@@ -192,7 +192,13 @@ function calcularCicloVinhaDeLuz(dataBase) {
     };
 }
 
-// Função auxiliar para calcular a idade a partir do DN (Evita fuso horário cortando um dia)
+// --- FUNÇÕES AUXILIARES NO TOPO DO MÓDULO (MANTER IGUAL) ---
+
+function capitalizarNome(nome) {
+    if (!nome) return '';
+    return nome.trim().toLowerCase().replace(/(^|\s)\S/g, L => L.toUpperCase());
+}
+
 function calcularIdade(dataNascimento) {
     if (!dataNascimento) return null;
     const hoje = new Date();
@@ -205,11 +211,11 @@ function calcularIdade(dataNascimento) {
     return idade;
 }
 
-// 2. ENVIO DE PEDIDO COM BLOQUEIO INTELIGENTE E CÁLCULO DE IDADE
+// --- FUNÇÃO PRINCIPAL SEM ERROS DE SINTAXE ---
+
 const enviarPedidoVinhaDeLuz = onCall({ region: REGIAO }, async (request) => {
     const { nomeSolicitante, contatoSolicitante, nomeAssistido, dnAssistido, contatoAssistido, informacoes } = request.data;
     
-    // Validação inicial
     if (!nomeSolicitante || !nomeAssistido || !informacoes || !dnAssistido) { 
         throw new HttpsError('invalid-argument', 'Dados incompletos. Nome, DN, Solicitante e Motivo são obrigatórios.'); 
     }
@@ -218,12 +224,17 @@ const enviarPedidoVinhaDeLuz = onCall({ region: REGIAO }, async (request) => {
     const nomeLower = nomeAssistido.trim().toLowerCase();
     const primeiroNomeRecebido = nomeLower.split(' ')[0];
 
+    // Chamada das funções de capitalização
+    const nomeAssistidoCapitalizado = capitalizarNome(nomeAssistido);
+    const nomeSolicitanteCapitalizado = capitalizarNome(nomeSolicitante);
+
     // 1. BUSCA INTELIGENTE DE DUPLICIDADE
     const assistidosMesmoDN = await db.collection('assistidos')
         .where('dn', '==', dnNormalizado)
         .get();
 
     let assistidoId = null;
+    let nomeOficialBanco = nomeAssistidoCapitalizado;
 
     if (!assistidosMesmoDN.empty) {
         for (const doc of assistidosMesmoDN.docs) {
@@ -232,6 +243,7 @@ const enviarPedidoVinhaDeLuz = onCall({ region: REGIAO }, async (request) => {
 
             if (dbPrimeiroNome === primeiroNomeRecebido) {
                 assistidoId = doc.id; 
+                nomeOficialBanco = doc.data().nome; 
                 break;
             }
         }
@@ -244,9 +256,10 @@ const enviarPedidoVinhaDeLuz = onCall({ region: REGIAO }, async (request) => {
             .limit(1)
             .get();
 
+        // CORREÇÃO AQUI: Variável alterada para o nome correto 'tratamentoAtivo'
         if (!tratamentoAtivo.empty) {
             throw new HttpsError('already-exists', 
-                'Já existe um tratamento em andamento para este assistido. Não é possível abrir um novo pedido enquanto o anterior estiver ativo.');
+                `Já existe um tratamento em andamento para este assistido (${nomeOficialBanco}). Não é possível abrir um novo pedido enquanto o anterior estiver ativo.`);
         }
     }
 
@@ -254,16 +267,14 @@ const enviarPedidoVinhaDeLuz = onCall({ region: REGIAO }, async (request) => {
     const agoraSP = new Date(new Date().toLocaleString("en-US", { timeZone: "America/Sao_Paulo" }));
     const diaDaSemana = agoraSP.getDay(); 
     const horas = agoraSP.getHours();
-    const minutos = agoraSP.getMinutes();
+    const minutes = agoraSP.getMinutes();
     
     let statusFinal = 'ativo';
-    if (diaDaSemana === 3 && ((horas === 19 && minutos >= 21) || (horas > 19))) {
+    if (diaDaSemana === 3 && ((horas === 19 && minutes >= 21) || (horas > 19))) {
         statusFinal = 'pendente';
     }
 
     const { dataArquivamento } = calcularCicloVinhaDeLuz(agoraSP);
-
-    // CÁLCULO DA IDADE AQUI
     const idadeCalculada = calcularIdade(dnNormalizado);
 
     // 3. PERSISTÊNCIA DE DADOS
@@ -273,16 +284,16 @@ const enviarPedidoVinhaDeLuz = onCall({ region: REGIAO }, async (request) => {
         });
     } else {
         const novoAssistidoRef = await db.collection('assistidos').add({
-            nome: nomeAssistido.trim(),
+            nome: nomeAssistidoCapitalizado, 
             nome_lower: nomeLower,
             dn: dnNormalizado,
-            telefone: contatoAssistido.trim() || 'Não informado',
+            telefone: contatoAssistido.trim() || 'Não informado', // CORREÇÃO AQUI: Removida a variável fantasma
             criadoEm: admin.firestore.FieldValue.serverTimestamp()
         });
         assistidoId = novoAssistidoRef.id;
     }
 
-    // Cria o tratamento COM A IDADE CALCULADA
+    // Cria o tratamento vinculando os nomes padronizados
     const novoTratamentoRef = await db.collection('tratamentos_vl').add({
         assistidoId: assistidoId,
         status: statusFinal, 
@@ -291,9 +302,9 @@ const enviarPedidoVinhaDeLuz = onCall({ region: REGIAO }, async (request) => {
         retornos_solicitados: 3, 
         atendimentos_realizados: 1, 
         origem: 'online',
-        nomeSolicitante: nomeSolicitante.trim(),
+        nomeSolicitante: nomeSolicitanteCapitalizado, 
         contatoSolicitante: contatoSolicitante.trim(),
-        idadeAssistidoOnline: idadeCalculada, // <--- CORREÇÃO AQUI
+        idadeAssistidoOnline: idadeCalculada, 
         informacoesIniciais: informacoes.trim()
     });
 

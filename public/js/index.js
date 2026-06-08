@@ -187,6 +187,7 @@ async function habilitarNotificacoes() {
 
 
 carregarMural();
+carregarLinksDinamicos();
 
 (function carregarNomeSalvo() {
     if (nomeInput) {
@@ -355,4 +356,39 @@ if (btnAtivarNotificacoes) {
     } else {
         btnAtivarNotificacoes.style.display = 'block'; 
     }
+}
+// --- FUNÇÃO PARA CARREGAR BOTÕES DINÂMICOS ---
+async function carregarLinksDinamicos() {
+    const container = document.getElementById('links-adicionais-container');
+    if (!container) return; 
+
+    try {
+        const configRef = doc(db, "configuracoes", "geral");
+        const docSnap = await getDoc(configRef);
+
+        if (docSnap.exists()) {
+            const configData = docSnap.data();
+            container.innerHTML = ''; 
+
+            if (configData.portalTransparenciaAtivo === true) {
+                adicionarBotao(container, '/transparencia.html', 'btn-portal', 'Portal da Transparência');
+            }
+            if (configData.vibracoesAtivo === true) {
+                adicionarBotao(container, '/vibracoes.html', 'btn-portal', 'Pedidos de Vibração');
+            }
+            if (configData.vinhaLuzOnlineAtivo === true) {
+                adicionarBotao(container, '/vinhadeluz.html', 'btn-portal', 'Vinha de Luz Online');
+            }
+        }
+    } catch (error) {
+        console.error("Erro ao verificar configurações:", error);
+    }
+}
+
+function adicionarBotao(container, url, classe, texto) {
+    const link = document.createElement('a');
+    link.href = url;
+    link.className = classe;
+    link.textContent = texto;
+    container.appendChild(link);
 }
