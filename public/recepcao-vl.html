@@ -239,7 +239,7 @@
             };
             ui.btnLimpar.addEventListener('click', resetarFormularioBusca);
 
-            // --- BUSCA DE ASSISTIDOS ---
+            // --- BUSCA DE ASSISTIDOS (Dropdown) ---
             ui.nomeInput.addEventListener('input', async (e) => {
                 const termo = e.target.value.trim();
                 if (assistidoSelecionado && termo.toLowerCase() !== assistidoSelecionado.nome.toLowerCase()) {
@@ -267,28 +267,6 @@
             ui.nomeInput.addEventListener('blur', () => { setTimeout(() => { ui.searchResults.innerHTML = ''; }, 200); });
 
             // --- REGISTRO PRINCIPAL ---
-            const criarNovoAssistidoSeNaoExistir = async () => {
-                if (assistidoSelecionado) return { id: assistidoSelecionado.id, nome: assistidoSelecionado.nome };
-                
-                const nomeOriginal = ui.nomeInput.value.trim();
-                const nomeCapitalizado = capitalizarNome(nomeOriginal);
-
-                const novoAssistidoData = { 
-                    nome: nomeCapitalizado, 
-                    nome_lower: nomeCapitalizado.toLowerCase(), 
-                    telefone: ui.telefoneInput.value, 
-                    dn: ui.dnInput.value, 
-                    idade_atual: calcularIdade(ui.dnInput.value),
-                    criadoEm: serverTimestamp(), 
-                    criadoPor: { uid: user.uid, nome: user.displayName } 
-                };
-                const docRef = await addDoc(assistidosRef, novoAssistidoData);
-                assistidoSelecionado = { id: docRef.id, ...novoAssistidoData };
-                
-                registrarLog('Criação de Novo Assistido (VL - Recepção)', { assistidoId: docRef.id, assistidoNome: nomeCapitalizado });
-                return { id: docRef.id, nome: nomeCapitalizado };
-            };
-
             ui.btnRegistrar.addEventListener('click', async (e) => {
                 if (!ui.nomeInput.value || !ui.dnInput.value || !ui.solicitanteNome.value || !ui.motivoPedido.value) {
                     alert("Por favor, preencha os campos obrigatórios (Nome e DN do assistido, Nome do Solicitante e Motivo).");
@@ -296,40 +274,92 @@
                 }
                 
                 e.target.disabled = true;
-                e.target.textContent = 'Registrando...';
+                e.target.textContent = 'Verificando dados...';
                 
                 try {
-                    const { id: assistidoId, nome: nomeAssistido } = await criarNovoAssistidoSeNaoExistir();
-                    
-                    // =====================================================================
-                    // TRAVA DE DUPLICIDADE (Idêntica à segurança da Nuvem)
-                    // =====================================================================
-                    const qTratamentoAtivo = query(
-                        tratamentosVlRef, 
-                        where('assistidoId', '==', assistidoId), 
-                        where('status', 'in', ['ativo', 'estendido'])
-                    );
-                    const snapshotAtivo = await getDocs(qTratamentoAtivo);
+                    const dnDigitado = ui.dnInput.value.trim();
+                    const nomeOriginal = ui.nomeInput.value.trim();
+                    const nomeCapitalizado = capitalizarNome(nomeOriginal);
+                    const nomeLower = nomeOriginal.toLowerCase();
+                    const primeiroNomeDigitado = nomeLower.split(' ')[0];
 
-                    if (!snapshotAtivo.empty) {
-                        alert(`BLOQUEIO DE SEGURANÇA: O assistido ${nomeAssistido} já possui um tratamento em andamento (Ativo ou Estendido). Não é possível abrir um novo ciclo simultaneamente.`);
-                        e.target.disabled = false;
-                        e.target.textContent = 'Registrar Tratamento e Encaminhar';
-                        return; // Para a execução do código aqui!
-                    }
+                    let assistidoFinalId = null;
+                    let nomeFinalAssistido = nomeCapitalizado;
+
                     // =====================================================================
+                    // 1. BUSCA INTELIGENTE (Cruza DN + Primeiro Nome)
+                    // =====================================================================
+                    if (assistidoSelecionado) {
+                        assistidoFinalId = assistidoSelecionado.id;
+                        nomeFinalAssistido = assistidoSelecionado.nome;
+                    } else {
+                        // O usuário não clicou na lista suspensa, então buscamos no banco pelo DN
+                        const qMesmoDN = query(assistidosRef, where('dn', '==', dnDigitado));
+                        const snapshotDN = await getDocs(qMesmoDN);
+
+                        if (!snapshotDN.empty) {
+                            snapshotDN.forEach(docSnap => {
+                                const dbNome = docSnap.data().nome_lower || "";
+                                const dbPrimeiroNome = dbNome.split(' ')[0];
+
+                                if (dbPrimeiroNome === primeiroNomeDigitado) {
+                                    assistidoFinalId = docSnap.id;
+                                    nomeFinalAssistido = docSnap.data().nome; // Puxa o nome oficial do banco
+                                }
+                            });
+                        }
+                    }
+
+                    // =====================================================================
+                    // 2. TRAVA DE DUPLICIDADE DE TRATAMENTO ATIVO
+                    // =====================================================================
+                    if (assistidoFinalId) {
+                        const qTratamentoAtivo = query(
+                            tratamentosVlRef, 
+                            where('assistidoId', '==', assistidoFinalId), 
+                            where('status', 'in', ['ativo', 'estendido'])
+                        );
+                        const snapshotAtivo = await getDocs(qTratamentoAtivo);
+
+                        if (!snapshotAtivo.empty) {
+                            alert(`BLOQUEIO DE SEGURANÇA: O assistido ${nomeFinalAssistido} já possui um tratamento em andamento (Ativo ou Estendido). Não é possível abrir um novo ciclo simultaneamente.`);
+                            e.target.disabled = false;
+                            e.target.textContent = 'Registrar Tratamento e Encaminhar';
+                            return; // Interrompe tudo aqui!
+                        }
+                    } else {
+                        // =====================================================================
+                        // 3. CRIA O CADASTRO APENAS SE FOR REALMENTE INÉDITO
+                        // =====================================================================
+                        const novoAssistidoData = { 
+                            nome: nomeCapitalizado, 
+                            nome_lower: nomeLower, 
+                            telefone: ui.telefoneInput.value, 
+                            dn: dnDigitado, 
+                            idade_atual: calcularIdade(dnDigitado),
+                            criadoEm: serverTimestamp(), 
+                            criadoPor: { uid: user.uid, nome: user.displayName } 
+                        };
+                        const docRef = await addDoc(assistidosRef, novoAssistidoData);
+                        assistidoFinalId = docRef.id;
+                        
+                        registrarLog('Criação de Novo Assistido (VL - Recepção)', { assistidoId: assistidoFinalId, assistidoNome: nomeCapitalizado });
+                    }
                     
+                    e.target.textContent = 'Registrando...';
+
+                    // 4. PREPARA AS VARIÁVEIS DO TRATAMENTO
                     const statusTratamento = verificarHorarioCorte();
                     const dataArquivamento = calcularCicloVinhaDeLuz();
                     const dataAtual = serverTimestamp();
-                    const idadeCalculada = calcularIdade(ui.dnInput.value);
+                    const idadeCalculada = calcularIdade(dnDigitado);
                     
                     const batch = writeBatch(db);
 
-                    // 1. Cria o Tratamento
+                    // Cria o Tratamento
                     const novoTratamentoRef = doc(tratamentosVlRef);
                     batch.set(novoTratamentoRef, {
-                        assistidoId: assistidoId,
+                        assistidoId: assistidoFinalId,
                         dataInicio: dataAtual,
                         dataArquivamento: dataArquivamento,
                         status: statusTratamento, 
@@ -343,10 +373,10 @@
                         criadoPor: { uid: user.uid, nome: user.displayName }
                     });
 
-                    // 2. Cria o Atendimento
+                    // Cria o Atendimento vinculado
                     const novoAtendimentoRef = doc(atendimentosVlRef);
                     batch.set(novoAtendimentoRef, {
-                        assistidoId: assistidoId,
+                        assistidoId: assistidoFinalId,
                         tratamentoId: novoTratamentoRef.id,
                         dataAtendimento: dataAtual,
                         semana: 1, 
@@ -358,13 +388,13 @@
                     await batch.commit();
                     
                     if (statusTratamento === 'pendente') {
-                        alert(`Tratamento registrado para ${nomeAssistido}! Devido ao horário de corte, ele foi jogado automaticamente para iniciar na PRÓXIMA SEMANA.`);
+                        alert(`Tratamento registrado para ${nomeFinalAssistido}! Devido ao horário de corte, ele foi jogado automaticamente para iniciar na PRÓXIMA SEMANA.`);
                     } else {
-                        alert(`Primeiro atendimento de ${nomeAssistido} registrado! Ele já foi encaminhado e está visível na lista de chamadas da sala.`);
+                        alert(`Primeiro atendimento de ${nomeFinalAssistido} registrado! Ele já foi encaminhado e está visível na lista de chamadas da sala.`);
                     }
 
                     registrarLog('Registro Atendimento (VL Recepção)', {
-                        assistidoId: assistidoId,
+                        assistidoId: assistidoFinalId,
                         tratamentoId: novoTratamentoRef.id,
                         status: statusTratamento
                     });
