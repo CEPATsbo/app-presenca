@@ -232,7 +232,6 @@
         initializeApp(firebaseConfig);
         const db = getFirestore();
 
-        // Proteção de tela baseada nos roles permitidos do Vinha de Luz
         protegerPagina(['recepcionista', 'diretor', 'tesoureiro', 'entrevistador', 'super-admin', 'irradiador']).then(user => {
             document.getElementById('main-content').classList.remove('hidden');
             inicializarPainelMensagens();
@@ -243,31 +242,33 @@
         function inicializarPainelMensagens() {
             const atendimentosRef = collection(db, 'atendimentos_vl');
 
-            // 1. LISTENER PARA PENDENTES (Tem orientação e orientacao_enviada não é true)
-            const qPendentes = query(atendimentosRef, where("detalhes_preenchidos", "==", true), where("orientacao_enviada", "==", false));
+            // 1. LISTENER PARA PENDENTES (Busca todos preenchidos e filtramos no JS para não bugar com fichas antigas)
+            const qPendentes = query(atendimentosRef, where("detalhes_preenchidos", "==", true));
             
             onSnapshot(qPendentes, async (snapshot) => {
                 const containerPendentes = document.getElementById('lista-pendentes');
                 containerPendentes.innerHTML = '';
-
-                if (snapshot.empty) {
-                    containerPendentes.innerHTML = '<div class="lista-vazia">🎉 Todas as orientações da semana foram enviadas!</div>';
-                    return;
-                }
+                let encontrouPendente = false;
 
                 for (const documento of snapshot.docs) {
                     const atendimento = { id: documento.id, ...documento.data() };
                     
-                    if (!atendimento.orientacao) continue;
+                    // Se já foi enviada, ignora
+                    if (atendimento.orientacao_enviada === true) continue;
+                    
+                    // Se o campo de orientacoes estiver vazio, ignora (Correção para o plural)
+                    if (!atendimento.orientacoes || atendimento.orientacoes.trim() === '') continue;
 
-                    // Busca dados complementares do assistido e tratamento para conseguir o telefone correto
+                    encontrouPendente = true;
+
+                    // Busca dados complementares do assistido e tratamento para conseguir o telefone
                     const assistidoDoc = await getDoc(doc(db, 'assistidos', atendimento.assistidoId));
                     const tratamentoDoc = await getDoc(doc(db, 'tratamentos_vl', atendimento.tratamentoId));
                     
                     const dadosAssistido = assistidoDoc.exists() ? assistidoDoc.data() : { nome: "Não encontrado", telefone: "" };
                     const dadosTratamento = tratamentoDoc.exists() ? tratamentoDoc.data() : { nomeSolicitante: "", contatoSolicitante: "" };
 
-                    // Define qual telefone usar (Prioriza o do solicitante se houver, senão usa o do assistido)
+                    // Define qual telefone usar (Prioriza o do solicitante)
                     const nomeDestinatario = dadosTratamento.nomeSolicitante || dadosAssistido.nome;
                     const telefoneCru = dadosTratamento.contatoSolicitante || dadosAssistido.telefone || '';
                     const telefoneFormatado = limparEFormatarTelefone(telefoneCru);
@@ -279,7 +280,7 @@
                             <h3>${dadosAssistido.nome}</h3>
                             <span class="badge-semana">Semana ${atendimento.semana}</span>
                         </div>
-                        <div class="texto-orientacao">"${atendimento.orientacao}"</div>
+                        <div class="texto-orientacao">"${atendimento.orientacoes}"</div>
                         <div class="info-contato">
                             <strong>Enviar para:</strong> ${nomeDestinatario}<br>
                             <strong>Telefone:</strong> ${telefoneCru || 'Não cadastrado'}
@@ -300,7 +301,7 @@
                         }
 
                         // Montagem da mensagem carinhosa padrão
-                        const saudacao = `Olá, tudo bem? Mensagem da Casa Espírita Paulo de Tarso (CEPAT) referente ao atendimento do Vinha de Luz para *${dadosAssistido.nome}*.\n\nSegue a orientação dos Benfeitores para a *Semana ${atendimento.semana}*:\n\n_"${atendimento.orientacao.trim()}"_\n\nQue o Mestre Jesus abençoe a todos! ✨`;
+                        const saudacao = `Olá, tudo bem? Mensagem da Casa Espírita Paulo de Tarso (CEPAT) referente ao atendimento do Vinha de Luz para *${dadosAssistido.nome}*.\n\nSegue a orientação dos Benfeitores para a *Semana ${atendimento.semana}*:\n\n_"${atendimento.orientacoes.trim()}"_\n\nQue o Mestre Jesus abençoe a todos! ✨`;
                         
                         const urlWhatsapp = `https://api.whatsapp.com/send?phone=${telefoneFormatado}&text=${encodeURIComponent(saudacao)}`;
 
@@ -314,10 +315,14 @@
                         });
                     });
                 }
+
+                if (!encontrouPendente) {
+                    containerPendentes.innerHTML = '<div class="lista-vazia">🎉 Todas as orientações da semana foram enviadas!</div>';
+                }
             });
 
-            // 2. LISTENER PARA ENVIADOS (Para controle visual da equipe)
-            const qEnviados = query(atendimentosRef, where("detalhes_preenchidos", "==", true), where("orientacao_enviada", "==", true));
+            // 2. LISTENER PARA ENVIADOS
+            const qEnviados = query(atendimentosRef, where("orientacao_enviada", "==", true));
             
             onSnapshot(qEnviados, async (snapshot) => {
                 const containerEnviados = document.getElementById('lista-enviados');
@@ -328,7 +333,6 @@
                     return;
                 }
 
-                // Exibe as últimas 10 enviadas para não sobrecarregar a tela
                 const docsOrdenados = snapshot.docs.reverse().slice(0, 10);
 
                 for (const documento of docsOrdenados) {
@@ -344,13 +348,12 @@
                             <h3>${dadosAssistido.nome}</h3>
                             <span class="badge-enviado">Semana ${atendimento.semana} - Enviada</span>
                         </div>
-                        <div class="texto-orientacao">"${atendimento.orientacao}"</div>
+                        <div class="texto-orientacao">"${atendimento.orientacoes}"</div>
                         <button class="btn-recuperar" id="btn-recuperar-${atendimento.id}">🔄 Reenviar / Retornar para Pendentes</button>
                     `;
 
                     containerEnviados.appendChild(card);
 
-                    // Permite retornar a ficha para pendentes caso o usuário precise reenviar por erro
                     document.getElementById(`btn-recuperar-${atendimento.id}`).addEventListener('click', async () => {
                         await updateDoc(doc(db, 'atendimentos_vl', atendimento.id), {
                             orientacao_enviada: false
@@ -363,10 +366,9 @@
         // Função auxiliar para limpar caracteres e garantir o DDI 55 do Brasil
         function limparEFormatarTelefone(tel) {
             if (!tel) return '';
-            let limpo = tel.replace(/\D/g, ''); // Mantém só números
-            
+            let limpo = tel.replace(/\D/g, ''); 
             if (limpo.length === 11 || limpo.length === 10) {
-                limpo = '55' + limpo; // Adiciona o código do país caso falte
+                limpo = '55' + limpo; 
             }
             return limpo;
         }
