@@ -12,10 +12,11 @@
         .nav-voltar { width: 100%; max-width: 1000px; margin-bottom: 20px; }
         .btn-voltar { background-color: #6c757d; color: white; border: none; padding: 12px 20px; border-radius: 8px; font-weight: bold; text-decoration: none; display: inline-block; }
         .card-container { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 25px; width: 100%; max-width: 1000px; display: none; }
-        .card { background-color: white; border-radius: 12px; box-shadow: 0 4px 15px rgba(0, 0, 0, 0.08); padding: 25px; text-align: left; text-decoration: none; color: inherit; transition: transform 0.2s, box-shadow 0.2s; border-left: 5px solid transparent; display: none; }
+        .card { background-color: white; border-radius: 12px; box-shadow: 0 4px 15px rgba(0, 0, 0, 0.08); padding: 25px; text-align: left; text-decoration: none; color: inherit; transition: transform 0.2s, box-shadow 0.2s; border-left: 5px solid transparent; display: none; position: relative;}
         .card:hover { transform: translateY(-5px); box-shadow: 0 8px 25px rgba(0, 0, 0, 0.12); }
         .card h2 { margin-top: 0; font-size: 1.4em; color: #34495e; }
         .card p { color: #576574; font-size: 0.95em; line-height: 1.5; text-align: left; }
+        .alerta-pendencia { background: #dc3545; color: white; padding: 6px 10px; border-radius: 6px; font-size: 0.8em; margin-top: 10px; font-weight: bold; text-align: center; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
     </style>
 </head>
 <body>
@@ -50,10 +51,16 @@
             <p>Exibir a chamada de assistidos em uma TV ou monitor.</p>
         </a>
 
+        <a href="/orientacoes-vl.html" id="card-orientacoes" class="card" data-role="super-admin,diretor,tesoureiro,entrevistador,recepcionista" style="border-left-color: #25d366;">
+            <h2>WhatsApp (Orientações)</h2>
+            <p>Disparar mensagens com as orientações espirituais da semana.</p>
+        </a>
+
     </div>
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
         import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-auth.js";
+        import { getFirestore, collection, query, where, onSnapshot } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
 
         const firebaseConfig = {
             apiKey: "AIzaSyBV7RPjk3cFTqL-aIpflJcUojKg1ZXMLuU",
@@ -65,6 +72,7 @@
         };
         const app = initializeApp(firebaseConfig);
         const auth = getAuth(app);
+        const db = getFirestore(app);
 
         onAuthStateChanged(auth, (user) => {
             if (user) {
@@ -80,6 +88,30 @@
                         }
                     });
                     document.getElementById('main-content').style.display = 'grid';
+
+                    // ALERTA DE MENSAGENS PENDENTES (WHATSAPP)
+                    const atendimentosRef = collection(db, 'atendimentos_vl');
+                    const qPendentes = query(atendimentosRef, where("detalhes_preenchidos", "==", true), where("orientacao_enviada", "==", false));
+
+                    onSnapshot(qPendentes, (snapshot) => {
+                        // Filtra apenas os que realmente possuem texto no campo orientacao
+                        const totalPendentes = snapshot.docs.filter(doc => doc.data().orientacoes && doc.data().orientacoes.trim() !== '').length;
+                        
+                        const cardZap = document.getElementById('card-orientacoes');
+                        let alerta = cardZap.querySelector('.alerta-pendencia');
+                        
+                        if (totalPendentes > 0) {
+                            if (!alerta) {
+                                alerta = document.createElement('div');
+                                alerta.className = 'alerta-pendencia';
+                                cardZap.appendChild(alerta);
+                            }
+                            alerta.textContent = `⚠️ ${totalPendentes} orientação(ões) para enviar`;
+                        } else if (alerta) {
+                            alerta.remove();
+                        }
+                    });
+
                 });
             } else {
                 window.location.href = '/login.html';
