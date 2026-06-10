@@ -53,12 +53,15 @@
         }
         .prontuario-link { font-size: 0.8em; text-decoration: none; margin-left: 10px; color: #6c757d; font-weight: normal; display: inline-block; }
         .prontuario-link:hover { color: var(--cor-primaria); }
+        
+        /* NOVO: Estilo para a escrita em vermelho de pendência do Colegiado */
+        .aviso-colegiado { color: #dc3545; font-weight: bold; margin-left: 10px; font-size: 0.9em; }
     </style>
 </head>
 <body>
     <div class="container">
         <nav class="nav-voltar"><a href="/dashboard-ae.html" class="btn-voltar">⬅ Voltar para o Painel AE</a></nav>
-        <div id="acesso-negado" class="hidden"><h1>Acesso Negado</h1></div>
+        <div id="acesso-negado" class="hidden"><h1>Acesso Denegado</h1></div>
 
         <div id="main-content">
             <header>
@@ -100,7 +103,7 @@
         };
         initializeApp(firebaseConfig);
 
-        protegerPagina(['entrevistador', 'tesoureiro', 'diretor', 'super-admin']).then(user => {
+        protegerPagina(['entrevistador', 'tesoureiro', 'conselheiro', 'diretor', 'super-admin']).then(user => {
             document.getElementById('main-content').classList.remove('hidden');
             inicializarPagina(user);
         }).catch(err => {
@@ -117,6 +120,7 @@
             let assistidoAtualmenteSelecionado = null;
             let debounceTimer;
             let assistidosComPendencias = new Set();
+            let assistidosPendentesColegiado = new Set(); // NOVO: Guarda IDs pendentes de Colegiado
 
             const ui = {
                 alfabetoFiltro: document.getElementById('alfabeto-filtro'),
@@ -129,8 +133,6 @@
             async function registrarLog(acao, detalhes) {
                 try {
                     const newLogRef = doc(logAuditoriaRef); 
-                    
-                    // CORREÇÃO: Regra de ouro aplicada para evitar "Usuário do Sistema" fixo quando há e-mail
                     const identificadorAutor = user.displayName ? user.displayName : user.email;
 
                     await setDoc(newLogRef, { 
@@ -170,6 +172,12 @@
                     const docRef = await addDoc(atendimentosRef, novoAtendimento);
                     registrarLog('Preparação de Reavaliação (AE)', { assistidoId: ciclo.assistidoId, tratamentoId: ciclo.id, atendimentoId: docRef.id });
                     alert('Placeholder da 5ª Semana criado. Você já pode registrar a decisão do colegiado.');
+                    
+                    // Força a atualização da lista para a balança aparecer de imediato
+                    const filtroLetraAtivo = ui.alfabetoFiltro.querySelector('button.ativo')?.dataset.letra || '';
+                    const termoBuscaAtivo = ui.campoBusca.value;
+                    await carregarAssistidos(filtroLetraAtivo, termoBuscaAtivo);
+                    
                     mostrarDetalhes(assistidoAtualmenteSelecionado, user);
                 } catch (error) {
                     console.error("Erro ao preparar reavaliação:", error); alert("Falha ao criar o registro da 5ª semana.");
@@ -216,6 +224,8 @@
                 const dataAtendimento = a.dataAtendimento ? a.dataAtendimento.toDate().toLocaleDateString('pt-br') : "Aguardando Presença";
                 let tipoAtendimento = a.tipo?.replace(/_/g, ' ') || 'N/A';
                 let infoExtra = ''; let botaoEditarHtml = ''; let iconeHtml = ''; let precisaEntrevista = false;
+                let avisoColegiadoHtml = ''; // NOVO
+
                 if (a.tipo !== 'falta' && a.tipo !== 'avulso') {
                     const semanaNum = a.semana || 0;
                     if ([1, 4, 5].includes(semanaNum)) { precisaEntrevista = true; }
@@ -223,7 +233,15 @@
                 }
                 if (a.tipo === 'avulso') { tipoAtendimento = 'Passe Avulso'; infoExtra = `(${a.passeRecomendado})`; }
                 else if (a.tipo === 'falta') { tipoAtendimento = 'Falta'; infoExtra = ''; }
-                else { tipoAtendimento = `Semana ${a.semana || '?'}`; infoExtra = `(${a.passeRecomendado})`; }
+                else { 
+                    tipoAtendimento = `Semana ${a.semana || '?'}`; 
+                    infoExtra = `(${a.passeRecomendado})`; 
+                    
+                    // CORREÇÃO: Aplica a escrita em vermelho caso a 5ª semana não tenha a decisão salva
+                    if (a.semana === 5 && a.decisao_pre_registrada === false) {
+                        avisoColegiadoHtml = '<span class="aviso-colegiado">(Aguardando Colegiado)</span>';
+                    }
+                }
 
                 if (precisaEntrevista) {
                     if (a.semana === 5 && a.decisao_pre_registrada === true && a.dataAtendimento === null) { iconeHtml = '<span>🔵</span>'; tipoAtendimento = "Reavaliação (Decisão Pronta)"; }
@@ -232,7 +250,7 @@
                     botaoEditarHtml = `<a href="/entrevista-ae.html?atendimentoId=${a.id}" class="btn btn-editar">Ver / Editar</a>`;
                 }
                 let estiloItem = ''; if (a.dataAtendimento === null && a.semana === 5) { estiloItem = 'style="background-color: #fffbe6;"'; }
-                return `<li ${estiloItem}><div class="atendimento-info">${iconeHtml}<span><strong>${dataAtendimento}</strong> - ${tipoAtendimento} ${infoExtra}</span></div>${botaoEditarHtml}</li>`;
+                return `<li ${estiloItem}><div class="atendimento-info">${iconeHtml}<span><strong>${dataAtendimento}</strong> - ${tipoAtendimento} ${infoExtra}${avisoColegiadoHtml}</span></div>${botaoEditarHtml}</li>`;
             }
 
             async function carregarAssistidos(filtroLetra = '', termoBusca = '') {
@@ -241,13 +259,25 @@
                 const isVisaoPadrao = !filtroLetra && !termoBusca;
 
                 try {
-                    // Busca pendências primeiro
+                    // Busca pendências normais de Entrevista
                     const qPendingInterviews = query(atendimentosRef,
                         where("detalhes_preenchidos", "==", false),
                         where("entrevistador", "==", "Aguardando Detalhes")
                     );
-                    const pendingSnapshot = await getDocs(qPendingInterviews);
+                    
+                    // CORREÇÃO: Busca as pendências de Colegiado puramente por semana 5 e sem pré-registro (sem violar o campo entrevistador)
+                    const qPendingColegiado = query(atendimentosRef,
+                        where("semana", "==", 5),
+                        where("decisao_pre_registrada", "==", false)
+                    );
+
+                    const [pendingSnapshot, colegiadoSnapshot] = await Promise.all([
+                        getDocs(qPendingInterviews),
+                        getDocs(qPendingColegiado)
+                    ]);
+
                     assistidosComPendencias = new Set(pendingSnapshot.docs.map(doc => doc.data().assistidoId));
+                    assistidosPendentesColegiado = new Set(colegiadoSnapshot.docs.map(doc => doc.data().assistidoId));
 
                     if (!isVisaoPadrao) {
                         let q;
@@ -261,17 +291,14 @@
                         const snapshot = await getDocs(q);
                         assistidosParaExibir = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
                     } else {
-                        // MODO PADRÃO: Em vez de usar 'in' com IDs (que limita a 10), 
-                        // buscamos os tratamentos ativos e carregamos os assistidos um a um (ou de forma otimizada)
                         const qActiveTreatments = query(tratamentosRef, where('status', '==', 'ativo'));
                         const activeSnapshot = await getDocs(qActiveTreatments);
                         const activeAssistidoIds = new Set(activeSnapshot.docs.map(doc => doc.data().assistidoId));
                         
-                        // Combinamos com pendências
-                        const idsParaMostrar = new Set([...activeAssistidoIds, ...assistidosComPendencias]);
+                        // Combinamos todas as condições para a visão geral padrão
+                        const idsParaMostrar = new Set([...activeAssistidoIds, ...assistidosComPendencias, ...assistidosPendentesColegiado]);
 
                         if (idsParaMostrar.size > 0) {
-                            // Se forem muitos, buscamos todos os assistidos e filtramos no JS (seguro até centenas de registros)
                             const allAssistidosSnap = await getDocs(assistidosRef);
                             assistidosParaExibir = allAssistidosSnap.docs
                                 .map(doc => ({ id: doc.id, ...doc.data() }))
@@ -282,7 +309,7 @@
                         }
                     }
 
-                    renderizarListaAssistidos(assistidosParaExibir, assistidosComPendencias);
+                    renderizarListaAssistidos(assistidosParaExibir, assistidosComPendencias, assistidosPendentesColegiado);
 
                     const params = new URLSearchParams(window.location.search);
                     const assistidoIdUrl = params.get('assistidoId');
@@ -295,12 +322,11 @@
                                 mostrarDetalhes(assistidoParaMostrar, user);
                             }
                         } else if (!assistidoAtualmenteSelecionado || assistidoAtualmenteSelecionado.id !== assistidoIdUrl) {
-                            console.log(`Assistido da URL (${assistidoIdUrl}) não está na lista filtrada. Carregando individualmente...`);
                             const docRef = doc(db, 'assistidos', assistidoIdUrl);
                             const docSnap = await getDoc(docRef);
                             if (docSnap.exists()) {
                                 const tempAssistido = { id: docSnap.id, ...docSnap.data() };
-                                renderizarListaAssistidos([tempAssistido, ...assistidosParaExibir].sort((a,b)=>a.nome.localeCompare(b.nome)), assistidosComPendencias);
+                                renderizarListaAssistidos([tempAssistido, ...assistidosParaExibir].sort((a,b)=>a.nome.localeCompare(b.nome)), assistidosComPendencias, assistidosPendentesColegiado);
                                 const liCorrespondente = ui.listaAssistidos.querySelector(`[data-assistido-id="${assistidoIdUrl}"]`);
                                 if (liCorrespondente) liCorrespondente.classList.add('selecionado');
                                 mostrarDetalhes(tempAssistido, user);
@@ -315,15 +341,10 @@
                 } catch (error) {
                     console.error("Erro ao carregar assistidos:", error);
                     ui.listaAssistidos.innerHTML = '<p style="color: red;">Erro ao carregar lista.</p>';
-                    if (error.code === 'failed-precondition') {
-                         alert("Erro: O Firestore precisa de um índice para esta consulta. Verifique o console (F12) para o link de criação do índice ou detalhes.");
-                         const urlMatch = error.message.match(/https?:\/\/[^\s]+/);
-                         if(urlMatch && urlMatch[0]){ console.error("Link para criar índice (copie e cole no navegador):", urlMatch[0]); }
-                     }
                 }
             }
 
-            function renderizarListaAssistidos(assistidos, pendingAssistidoIds) {
+            function renderizarListaAssistidos(assistidos, pendingAssistidoIds, pendingColegiadoIds) {
                 ui.listaAssistidos.innerHTML = '';
                 if (assistidos.length === 0) {
                     ui.listaAssistidos.innerHTML = '<p>Nenhum assistido encontrado para os critérios antigos.</p>';
@@ -332,7 +353,14 @@
                 assistidos.forEach(assistido => {
                     const li = document.createElement('li');
                     let liContent = '';
-                    if (pendingAssistidoIds.has(assistido.id)) { liContent += '<span class="icone-pendente">📝</span>'; }
+                    
+                    // CORREÇÃO: Coloca a balança para pendência de Colegiado e o bloco para Entrevista comum
+                    if (pendingColegiadoIds && pendingColegiadoIds.has(assistido.id)) {
+                        liContent += '<span style="font-size: 1.1em; margin-right: 8px;" title="Aguardando Retorno do Colegiado">⚖️</span>';
+                    } else if (pendingAssistidoIds.has(assistido.id)) {
+                        liContent += '<span class="icone-pendente">📝</span>';
+                    }
+                    
                     liContent += assistido.nome;
                     li.innerHTML = liContent;
                     li.dataset.assistidoId = assistido.id;
@@ -376,7 +404,7 @@
                 debounceTimer = setTimeout(() => {
                     const termoBusca = e.target.value;
                     document.querySelectorAll('#alfabeto-filtro button').forEach(btn => btn.classList.remove('ativo'));
-                    if (!termoBusca) { const btnTodos = ui.alfabetoFiltro.querySelector('button[data-letra=""]'); if(btnTodos) btnTodos.classList.add('ativo'); }
+                    if (!termoBusca) { const btnTodos = ui.alfabetoFiltro.querySelector('button[data-letra=""]'); if(btnTodos) btnTodos.classList.add('active'); }
                     assistidoAtualmenteSelecionado = null;
                     ui.detalhesAssistido.innerHTML = `<p style="text-align: center; color: #666; margin-top: 50px;">Carregando lista...</p>`;
                     carregarAssistidos('', termoBusca);

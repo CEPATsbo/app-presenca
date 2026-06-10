@@ -152,7 +152,6 @@
                 const assistidoDoc = await getDoc(doc(db, 'assistidos', atendimento.assistidoId));
                 const nomeAssistido = assistidoDoc.exists() ? assistidoDoc.data().nome : "Assistido não encontrado";
                 
-                // Busca o tratamento para checar se já tem a tag de alta suspensa nele
                 let tratamentoSuspensa = false;
                 if (atendimento.tratamentoId) {
                     const tratamentoDoc = await getDoc(doc(db, 'tratamentos_ae', atendimento.tratamentoId));
@@ -209,27 +208,25 @@
                     
                     try {
                         if (isAltaSuspensa) {
-                            // Lógica de Alta com Efeito Suspensivo (Batch Update)
                             const dadosAtendimento = { 
-                                tipo: 'tratamento_semanal', // Mantém o fluxo rodando normalmente nas próximas semanas
+                                tipo: 'tratamento_semanal',
                                 colegiadoNotas: colegiadoNotas, 
                                 encaminhamentos: encaminhamentos, 
                                 decisao_pre_registrada: true, 
                                 decisaoColegiadoSalva: true, 
                                 detalhes_preenchidos: true,
-                                alta_suspensa: true // Flag do Atendimento
+                                alta_suspensa: true 
                             };
                             const tratamentoAtualDocRef = doc(db, 'tratamentos_ae', atendimento.tratamentoId);
                             
                             const batch = writeBatch(db);
                             batch.update(atendimentoDocRef, dadosAtendimento);
-                            batch.update(tratamentoAtualDocRef, { alta_suspensa: true }); // Flag Mestra no Tratamento
+                            batch.update(tratamentoAtualDocRef, { alta_suspensa: true });
                             await batch.commit();
 
                             registrarLog('Registro de Alta Suspensa (AE)', { assistidoId: atendimento.assistidoId, atendimentoId: atendimento.id, assistidoNome: document.getElementById('assistido-nome').textContent });
                             alert('Alta com Efeito Suspensivo registrada! O assistido continuará no fluxo normal do P3B até a liberação na Recepção.');
                         } else {
-                            // Lógica de Alta Normal Direta
                             const dadosParaAtualizar = { tipo: 'alta_programada', colegiadoNotas: colegiadoNotas, encaminhamentos: encaminhamentos, decisao_pre_registrada: true, decisaoColegiadoSalva: true, detalhes_preenchidos: true };
                             await updateDoc(atendimentoDocRef, dadosParaAtualizar);
                             registrarLog('Registro de Alta Programada (AE)', { assistidoId: atendimento.assistidoId, atendimentoId: atendimento.id, assistidoNome: document.getElementById('assistido-nome').textContent });
@@ -271,7 +268,40 @@
                     };
                     await updateDoc(atendimentoDocRef, dadosParaAtualizar);
                     registrarLog('Preenchimento de Entrevista (AE)', { assistidoId: atendimento.assistidoId, atendimentoId: atendimento.id, semana: atendimento.semana, assistidoNome: document.getElementById('assistido-nome').textContent });
-                    alert('Entrevista salva com sucesso!');
+                    
+                    // =======================================================================
+                    // NOVA AUTOMAÇÃO: Cria a 5ª Semana automaticamente se estiver na 4ª Semana
+                    // =======================================================================
+                    if (atendimento.semana === 4 && atendimento.tratamentoId) {
+                        const qCheckSemana5 = query(atendimentosRef, where("tratamentoId", "==", atendimento.tratamentoId), where("semana", "==", 5), limit(1));
+                        const checkSemana5Snap = await getDocs(qCheckSemana5);
+                        
+                        if (checkSemana5Snap.empty) {
+                            const novaReavaliacao = { 
+                                assistidoId: atendimento.assistidoId, 
+                                tratamentoId: atendimento.tratamentoId, 
+                                tipo: 'tratamento_semanal', 
+                                dataAtendimento: null, 
+                                semana: 5, 
+                                entrevistador: 'Aguardando Decisão', 
+                                passeRecomendado: atendimento.passeRecomendado, 
+                                notas: '', 
+                                detalhes_preenchidos: false, 
+                                decisao_pre_registrada: false, 
+                                criadoPor: { uid: user.uid, nome: user.displayName || user.email }, 
+                                criadoEm: serverTimestamp() 
+                            };
+                            await addDoc(atendimentosRef, novaReavaliacao);
+                            registrarLog('Preparação Automática de Reavaliação (AE)', { assistidoId: atendimento.assistidoId, tratamentoId: atendimento.tratamentoId });
+                            
+                            alert('Entrevista salva com sucesso!\n\n🤖 O sistema já preparou automaticamente a Reavaliação (5ª Semana) para o Colegiado avaliar.');
+                        } else {
+                            alert('Entrevista salva com sucesso!');
+                        }
+                    } else {
+                        alert('Entrevista salva com sucesso!');
+                    }
+
                     manipularEstadoFormulario(true);
                 } catch (error) {
                     console.error("Erro ao salvar entrevista completa:", error); alert("Falha ao salvar. Tente novamente.");
@@ -353,7 +383,6 @@
                 if (incluiSecaoColegiado) {
                     let botoesColegiadoHtml = ''; let statusColegiadoHtml = ''; let classeColegiado = 'colegiado-section';
                     
-                    // CHAVE DE EFEITO SUSPENSIVO EXCLUSIVA DO P3B
                     let toggleProlongarHtml = '';
                     if (isFaseDeDecisao5Semana && passeDe === 'P3B') {
                         toggleProlongarHtml = `
