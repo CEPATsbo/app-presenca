@@ -94,14 +94,10 @@ function calcularDuasUltimasOcorrenciasDoDia(indiceDiaDaSemanaAlvo, dataReferenc
 // ===================================================================
 
 async function iniciarAnaliseDeAcolhimento() {
-    console.log("1. Função iniciada! Calculando datas...");
-    
     const dataDeHojeParaCalculo = new Date();
     const dataSessentaDiasAtras = new Date();
     dataSessentaDiasAtras.setDate(dataDeHojeParaCalculo.getDate() - 60);
     const stringDataLimite = formatarDataParaStringFirebase(dataSessentaDiasAtras);
-    
-    console.log("2. Buscando presenças a partir de:", stringDataLimite);
 
     try {
         const consultaPresencasRecentes = query(
@@ -109,13 +105,7 @@ async function iniciarAnaliseDeAcolhimento() {
             where("data", ">=", stringDataLimite)
         );
 
-        console.log("3. Disparando requisição para o Firebase...");
-        
-        // É geralmente AQUI que o sistema trava se houver problema de rede ou Firebase
         const snapshotDasPresencas = await getDocs(consultaPresencasRecentes);
-        
-        console.log("4. Resposta recebida! Quantidade de registros encontrados:", snapshotDasPresencas.size);
-
         const historicoGeralPorVoluntario = {};
 
         snapshotDasPresencas.forEach((documento) => {
@@ -132,15 +122,24 @@ async function iniciarAnaliseDeAcolhimento() {
 
             historicoGeralPorVoluntario[chaveDoVoluntario].datasComPresencaConfirmada.push(dados.data);
             
+            // Tratamento robusto: verifica se a atividade é Texto ou Lista (Array)
             if (dados.atividade) {
-                const atividadesSeparadas = dados.atividade.split(",");
-                for (const atv of atividadesSeparadas) {
-                    historicoGeralPorVoluntario[chaveDoVoluntario].listaDeAtividades.add(atv.trim());
+                if (typeof dados.atividade === 'string') {
+                    // Se for um texto separado por vírgula
+                    const atividadesSeparadas = dados.atividade.split(",");
+                    for (const atv of atividadesSeparadas) {
+                        historicoGeralPorVoluntario[chaveDoVoluntario].listaDeAtividades.add(atv.trim());
+                    }
+                } else if (Array.isArray(dados.atividade)) {
+                    // Se já for uma lista/Array estruturada no banco
+                    for (const atv of dados.atividade) {
+                        if (typeof atv === 'string') {
+                            historicoGeralPorVoluntario[chaveDoVoluntario].listaDeAtividades.add(atv.trim());
+                        }
+                    }
                 }
             }
         });
-
-        console.log("5. Dados agrupados por voluntário. Analisando faltas...");
 
         const voluntariosQuePrecisamDeAcolhimento = [];
 
@@ -174,16 +173,16 @@ async function iniciarAnaliseDeAcolhimento() {
             }
         }
 
-        console.log("6. Análise concluída! Voluntários para acolher:", voluntariosQuePrecisamDeAcolhimento.length);
-        console.log("7. Renderizando tela...");
-
         renderizarCardsDeAcolhimento(voluntariosQuePrecisamDeAcolhimento);
 
     } catch (erro) {
-        console.error("ERRO GRAVE CAPTURADO:", erro);
-        estadoCarregamento.innerHTML = "<p style='color: red;'>Ocorreu um erro. Verifique o console.</p>";
+        console.error("Erro ao buscar dados do Firebase para o acolhimento:", erro);
+        if (estadoCarregamento) {
+            estadoCarregamento.innerHTML = "<p>Ocorreu um erro ao carregar os dados. Verifique sua conexão e recarregue a página.</p>";
+        }
     }
 }
+
 // ===================================================================
 // --- RENDERIZAÇÃO NA TELA E AÇÃO DO WHATSAPP ---
 // ===================================================================
