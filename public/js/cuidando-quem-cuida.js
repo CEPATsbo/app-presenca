@@ -21,8 +21,13 @@ const estadoCarregamento = document.getElementById('estado-carregamento');
 const estadoVazio = document.getElementById('estado-vazio');
 
 // ===================================================================
-// --- FUNÇÕES AUXILIARES DE DATA (FUSO HORÁRIO DE SP) ---
+// --- FUNÇÕES AUXILIARES E DE NORMALIZAÇÃO ---
 // ===================================================================
+
+function normalizarNomeParaAgrupamento(str) {
+    if (!str) return "desconhecido";
+    return str.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
+}
 
 function formatarDataParaStringFirebase(dataOriginal) {
     const formatadorDeData = new Intl.DateTimeFormat('en-CA', { 
@@ -35,7 +40,6 @@ function formatarDataParaStringFirebase(dataOriginal) {
 }
 
 function formatarDataParaExibicaoNoBrasil(dataStringFormatoFirebase) {
-    // Transforma "2026-06-15" em "15/06/2026"
     const partesDaData = dataStringFormatoFirebase.split("-");
     if (partesDaData.length === 3) {
         return `${partesDaData[2]}/${partesDaData[1]}/${partesDaData[0]}`;
@@ -110,31 +114,49 @@ async function iniciarAnaliseDeAcolhimento() {
 
         snapshotDasPresencas.forEach((documento) => {
             const dados = documento.data();
-            const chaveDoVoluntario = dados.voluntarioId || dados.nome; 
 
-            if (!historicoGeralPorVoluntario[chaveDoVoluntario]) {
-                historicoGeralPorVoluntario[chaveDoVoluntario] = {
-                    nomeCompleto: dados.nome,
+            // Camada de Segurança 1: Ignora o documento se o status for explicitamente diferente de "presente"
+            if (dados.status && dados.status.toLowerCase() !== 'presente') {
+                return;
+            }
+
+            // Camada de Segurança 2: Garante que a data lida seja uma String limpa no formato YYYY-MM-DD
+            let stringDataLimpa = dados.data;
+            if (stringDataLimpa && typeof stringDataLimpa !== 'string' && stringDataLimpa.toDate) {
+                stringDataLimpa = formatarDataParaStringFirebase(stringDataLimpa.toDate());
+            } else if (typeof stringDataLimpa === 'string') {
+                stringDataLimpa = stringDataLimpa.split("T")[0].split(" ")[0]; 
+            }
+
+            if (!stringDataLimpa) return; // Se não tem data legível, ignora o registro
+
+            // A MÁGICA ACONTECE AQUI: Agrupa pelo nome limpo, unificando os IDs duplicados
+            const chaveUnificada = normalizarNomeParaAgrupamento(dados.nome);
+
+            if (!historicoGeralPorVoluntario[chaveUnificada]) {
+                historicoGeralPorVoluntario[chaveUnificada] = {
+                    nomeCompleto: dados.nome, // Mantém o nome original apenas para exibição no card
                     listaDeAtividades: new Set(),
                     datasComPresencaConfirmada: []
                 };
             }
 
-            historicoGeralPorVoluntario[chaveDoVoluntario].datasComPresencaConfirmada.push(dados.data);
+            // Camada de Segurança 3: Evita colocar a mesma data duas vezes se houver check-in duplo no mesmo dia
+            if (!historicoGeralPorVoluntario[chaveUnificada].datasComPresencaConfirmada.includes(stringDataLimpa)) {
+                historicoGeralPorVoluntario[chaveUnificada].datasComPresencaConfirmada.push(stringDataLimpa);
+            }
             
-            // Tratamento robusto: verifica se a atividade é Texto ou Lista (Array)
+            // Tratamento das atividades (Texto separado por vírgula ou Array estruturado)
             if (dados.atividade) {
                 if (typeof dados.atividade === 'string') {
-                    // Se for um texto separado por vírgula
                     const atividadesSeparadas = dados.atividade.split(",");
                     for (const atv of atividadesSeparadas) {
-                        historicoGeralPorVoluntario[chaveDoVoluntario].listaDeAtividades.add(atv.trim());
+                        historicoGeralPorVoluntario[chaveUnificada].listaDeAtividades.add(atv.trim());
                     }
                 } else if (Array.isArray(dados.atividade)) {
-                    // Se já for uma lista/Array estruturada no banco
                     for (const atv of dados.atividade) {
                         if (typeof atv === 'string') {
-                            historicoGeralPorVoluntario[chaveDoVoluntario].listaDeAtividades.add(atv.trim());
+                            historicoGeralPorVoluntario[chaveUnificada].listaDeAtividades.add(atv.trim());
                         }
                     }
                 }
@@ -201,19 +223,16 @@ function renderizarCardsDeAcolhimento(listaDeVoluntarios) {
         const elementoCard = document.createElement('div');
         elementoCard.className = 'card-acolhimento';
 
-        // Constrói a lista HTML de dias faltosos
         let htmlDiasFaltosos = '<ul class="lista-dias-faltosos">';
         for (const falta of voluntario.detalhesDasFaltas) {
             htmlDiasFaltosos += `<li><strong>${falta.nomeDoDiaDaSemana}</strong> (dias ${falta.dataFaltaRetrasada} e ${falta.dataFaltaRecente})</li>`;
         }
         htmlDiasFaltosos += '</ul>';
 
-        // Prepara o texto e o link do WhatsApp
         const primeiroNome = voluntario.nome.split(" ")[0];
         const textoAcolhimento = `Olá, ${primeiroNome}! Tudo bem com você? Aqui é do Acolhimento da Casa Paulo de Tarso. Notamos que você não pôde estar conosco nos últimos dias de suas atividades e viemos apenas dar um oi para saber se está tudo bem com você e sua família, e se precisa de alguma coisa. Sinta-se abraçado por todos nós!`;
         const linkWhatsApp = `https://wa.me/?text=${encodeURIComponent(textoAcolhimento)}`;
 
-        // Estrutura interna do Card
         elementoCard.innerHTML = `
             <div class="cabecalho-card">
                 <h3 class="nome-voluntario">${voluntario.nome}</h3>
