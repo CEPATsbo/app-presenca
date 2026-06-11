@@ -1,5 +1,5 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
-import { getFirestore, collection, query, where, getDocs } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
+import { getFirestore, collection, query, where, getDocs, setDoc, doc } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
 
 // Configuração exata do seu projeto Firebase
 const firebaseConfig = {
@@ -107,6 +107,47 @@ function calcularDuasUltimasOcorrenciasDoDia(indiceDiaDaSemanaAlvo, dataReferenc
     ];
 }
 
+// Limpa o número de telefone e adiciona o código do Brasil (55)
+function formatarNumeroWhatsApp(numeroBruto) {
+    if (!numeroBruto) return "";
+    let numeroLimpo = numeroBruto.toString().replace(/\D/g, '');
+    
+    if (numeroLimpo.length === 10 || numeroLimpo.length === 11) {
+        numeroLimpo = "55" + numeroLimpo;
+    }
+    return numeroLimpo;
+}
+
+// ===================================================================
+// --- AÇÃO DE CLICK: REGISTRAR E ABRIR WHATSAPP ---
+// ===================================================================
+
+window.registrarAcolhimentoEabrirWhatsApp = async function(eventoDeClique, chaveUnificada, linkDoWhatsApp) {
+    eventoDeClique.preventDefault();
+
+    // Oculta o card da tela imediatamente após o clique
+    const elementoCard = eventoDeClique.target.closest('.card-acolhimento');
+    if (elementoCard) {
+        elementoCard.style.display = 'none';
+    }
+
+    // Abre a URL do WhatsApp Web/App na nova aba
+    window.open(linkDoWhatsApp, '_blank');
+
+    // Salva o log do acolhimento no Firebase
+    try {
+        const referenciaDocumento = doc(bancoDeDados, "acolhimentos_log", chaveUnificada);
+        const dataDeHojeEmIsoString = new Date().toISOString(); 
+        
+        await setDoc(referenciaDocumento, { 
+            dataUltimoAcolhimento: dataDeHojeEmIsoString 
+        }, { merge: true });
+
+    } catch (erroDeGravacao) {
+        console.error("Erro ao salvar o log de acolhimento:", erroDeGravacao);
+    }
+};
+
 // ===================================================================
 // --- LÓGICA PRINCIPAL DO ACOLHIMENTO ---
 // ===================================================================
@@ -118,6 +159,33 @@ async function iniciarAnaliseDeAcolhimento() {
     const stringDataLimite = formatarDataParaStringFirebase(dataSessentaDiasAtras);
 
     try {
+        // 1. Busca os contatos/telefones da coleção de Voluntários
+        const snapshotVoluntarios = await getDocs(collection(bancoDeDados, "voluntarios"));
+        const mapaDeTelefones = {};
+        
+        snapshotVoluntarios.forEach((documentoVoluntario) => {
+            const dadosVoluntario = documentoVoluntario.data();
+            const chaveNome = normalizarNomeParaAgrupamento(dadosVoluntario.nome);
+            const idDoVoluntario = documentoVoluntario.id;
+
+            // Busca pelo campo telefone, celular ou whatsapp
+            const numeroTelefone = dadosVoluntario.telefone || dadosVoluntario.celular || dadosVoluntario.whatsapp || "";
+            
+            if (numeroTelefone) {
+                const numeroLimpo = formatarNumeroWhatsApp(numeroTelefone);
+                mapaDeTelefones[chaveNome] = numeroLimpo; // Mapeia pelo Nome
+                mapaDeTelefones[idDoVoluntario] = numeroLimpo; // Mapeia pelo ID (Mais seguro)
+            }
+        });
+
+        // 2. Busca o histórico de contatos (Acolhimentos já realizados)
+        const snapshotAcolhimentos = await getDocs(collection(bancoDeDados, "acolhimentos_log"));
+        const historicoDeAcolhimentosRealizados = {};
+        snapshotAcolhimentos.forEach((documentoLog) => {
+            historicoDeAcolhimentosRealizados[documentoLog.id] = documentoLog.data().dataUltimoAcolhimento;
+        });
+
+        // 3. Busca as presenças dos últimos 60 dias
         const consultaPresencasRecentes = query(
             collection(bancoDeDados, "presencas"),
             where("data", ">=", stringDataLimite)
@@ -129,12 +197,8 @@ async function iniciarAnaliseDeAcolhimento() {
         snapshotDasPresencas.forEach((documento) => {
             const dados = documento.data();
 
-            // Camada de Segurança 1: Ignora o documento se o status for diferente de "presente"
-            if (dados.status && dados.status.toLowerCase() !== 'presente') {
-                return;
-            }
+            if (dados.status && dados.status.toLowerCase() !== 'presente') return;
 
-            // Camada de Segurança 2: Garante que a data lida seja uma String limpa no formato YYYY-MM-DD
             let stringDataLimpa = dados.data;
             if (stringDataLimpa && typeof stringDataLimpa !== 'string' && stringDataLimpa.toDate) {
                 stringDataLimpa = formatarDataParaStringFirebase(stringDataLimpa.toDate());
@@ -144,12 +208,21 @@ async function iniciarAnaliseDeAcolhimento() {
 
             if (!stringDataLimpa) return; 
 
-            // Agrupa pelo nome limpo, unificando os históricos
             const chaveUnificada = normalizarNomeParaAgrupamento(dados.nome);
+
+            // Tenta achar o telefone pelo ID primeiro; se não achar, tenta pelo nome normalizado
+            let telefoneEncontrado = "";
+            if (dados.voluntarioId && mapaDeTelefones[dados.voluntarioId]) {
+                telefoneEncontrado = mapaDeTelefones[dados.voluntarioId];
+            } else if (mapaDeTelefones[chaveUnificada]) {
+                telefoneEncontrado = mapaDeTelefones[chaveUnificada];
+            }
 
             if (!historicoGeralPorVoluntario[chaveUnificada]) {
                 historicoGeralPorVoluntario[chaveUnificada] = {
+                    chaveUnificada: chaveUnificada,
                     nomeCompleto: dados.nome, 
+                    telefoneSanitizado: telefoneEncontrado, // Associa o telefone limpo
                     listaDeAtividades: new Set(),
                     datasComPresencaConfirmada: [],
                     temAssistenciaEspiritual: false,
@@ -162,7 +235,6 @@ async function iniciarAnaliseDeAcolhimento() {
             const dataConvertidaAoObjeto = new Date(stringDataLimpa + "T12:00:00");
             const indiceDoDiaDaSemana = dataConvertidaAoObjeto.getDay();
 
-            // Analisa e filtra as atividades do documento
             let quantidadeDeAtividadesNoDocumento = 0;
             let quantidadeDeAtividadesExcluidas = 0;
             const atividadesValidasParaExibicao = [];
@@ -177,7 +249,6 @@ async function iniciarAnaliseDeAcolhimento() {
                         quantidadeDeAtividadesNoDocumento++;
                         const nomeNormalizadoAtividade = normalizarNomeParaAgrupamento(nomeTrimado);
 
-                        // Ativa a flag se o voluntário faz Assistência Espiritual
                         if (nomeNormalizadoAtividade === "*em assistencia espiritual") {
                             historicoGeralPorVoluntario[chaveUnificada].temAssistenciaEspiritual = true;
                         }
@@ -198,7 +269,7 @@ async function iniciarAnaliseDeAcolhimento() {
                             quantidadeDeAtividadesNoDocumento++;
                             const nomeNormalizadoAtividade = normalizarNomeParaAgrupamento(nomeTrimado);
 
-                        if (nomeNormalizadoAtividade === "*em assistencia espiritual") {
+                            if (nomeNormalizadoAtividade === "*em assistencia espiritual") {
                                 historicoGeralPorVoluntario[chaveUnificada].temAssistenciaEspiritual = true;
                             }
 
@@ -213,17 +284,14 @@ async function iniciarAnaliseDeAcolhimento() {
                 }
             }
 
-            // Se todas as atividades do dia forem esporádicas, não computa esse dia para criar rotina regular
             if (quantidadeDeAtividadesNoDocumento > 0 && quantidadeDeAtividadesNoDocumento === quantidadeDeAtividadesExcluidas) {
                 return;
             }
 
-            // Evita duplicar a data se houver check-in duplo no mesmo dia
             if (!historicoGeralPorVoluntario[chaveUnificada].datasComPresencaConfirmada.includes(stringDataLimpa)) {
                 historicoGeralPorVoluntario[chaveUnificada].datasComPresencaConfirmada.push(stringDataLimpa);
             }
             
-            // Adiciona as atividades permitidas ao conjunto geral
             for (const atividadeValida of atividadesValidasParaExibicao) {
                 historicoGeralPorVoluntario[chaveUnificada].listaDeAtividades.add(atividadeValida);
             }
@@ -236,10 +304,10 @@ async function iniciarAnaliseDeAcolhimento() {
             const diasOficiaisDeTrabalho = identificarDiasDeTrabalhoDoVoluntario(dadosDoVoluntario.datasComPresencaConfirmada);
 
             const relatorioDeFaltasPorDia = [];
+            let dataDaUltimaFaltaDesteVoluntario = "2000-01-01"; 
 
             for (const indiceDoDia of diasOficiaisDeTrabalho) {
                 
-                // BLINDAGEM DE ASSISTÊNCIA ESPIRITUAL: Abona Terça (2), Quarta (3) e Quinta (4)
                 if (dadosDoVoluntario.temAssistenciaEspiritual && (indiceDoDia === 2 || indiceDoDia === 3 || indiceDoDia === 4)) {
                     continue; 
                 }
@@ -250,8 +318,11 @@ async function iniciarAnaliseDeAcolhimento() {
                 const faltouNaVezRetrasada = !dadosDoVoluntario.datasComPresencaConfirmada.includes(datasEsperadas[1]);
 
                 if (faltouNaUltimaVez && faltouNaVezRetrasada) {
-                    // Agrupa as atividades específicas que o voluntário costuma realizar neste dia da semana
                     const atividadesDoDiaEspecifico = Array.from(dadosDoVoluntario.atividadesPorDiaDaSemana[indiceDoDia]).join(", ");
+                    
+                    if (datasEsperadas[0] > dataDaUltimaFaltaDesteVoluntario) {
+                        dataDaUltimaFaltaDesteVoluntario = datasEsperadas[0];
+                    }
 
                     relatorioDeFaltasPorDia.push({
                         nomeDoDiaDaSemana: obterNomeDoDiaDaSemana(indiceDoDia),
@@ -262,9 +333,19 @@ async function iniciarAnaliseDeAcolhimento() {
                 }
             }
 
-            if (relatorioDeFaltasPorDia.length > 0) {
+            let exibirCard = true;
+            if (historicoDeAcolhimentosRealizados[chave]) {
+                const dataDoUltimoContato = historicoDeAcolhimentosRealizados[chave].split("T")[0];
+                if (dataDoUltimoContato >= dataDaUltimaFaltaDesteVoluntario) {
+                    exibirCard = false; 
+                }
+            }
+
+            if (exibirCard && relatorioDeFaltasPorDia.length > 0) {
                 voluntariosQuePrecisamDeAcolhimento.push({
+                    chaveUnificada: dadosDoVoluntario.chaveUnificada,
                     nome: dadosDoVoluntario.nomeCompleto,
+                    telefone: dadosDoVoluntario.telefoneSanitizado, // Passa o telefone para a renderização
                     atividades: Array.from(dadosDoVoluntario.listaDeAtividades).join(" | "),
                     detalhesDasFaltas: relatorioDeFaltasPorDia
                 });
@@ -282,7 +363,7 @@ async function iniciarAnaliseDeAcolhimento() {
 }
 
 // ===================================================================
-// --- RENDERIZAÇÃO NA TELA E AÇÃO DO WHATSAPP ---
+// --- RENDERIZAÇÃO NA TELA ---
 // ===================================================================
 
 function renderizarCardsDeAcolhimento(listaDeVoluntarios) {
@@ -299,7 +380,6 @@ function renderizarCardsDeAcolhimento(listaDeVoluntarios) {
         const elementoCard = document.createElement('div');
         elementoCard.className = 'card-acolhimento';
 
-        // Renderiza o dia da semana com a respectiva atividade ausente ao lado entre parênteses
         let htmlDiasFaltosos = '<ul class="lista-dias-faltosos">';
         for (const falta of voluntario.detalhesDasFaltas) {
             htmlDiasFaltosos += `<li><strong>${falta.nomeDoDiaDaSemana} (${falta.atividadesDaFalta})</strong> (dias ${falta.dataFaltaRetrasada} e ${falta.dataFaltaRecente})</li>`;
@@ -308,7 +388,16 @@ function renderizarCardsDeAcolhimento(listaDeVoluntarios) {
 
         const primeiroNome = voluntario.nome.split(" ")[0];
         const textoAcolhimento = `Olá, ${primeiroNome}! Tudo bem com você? Aqui é do Acolhimento da Casa Paulo de Tarso. Notamos que você não pôde estar conosco nos últimos dias de suas atividades e viemos apenas dar um oi para saber se está tudo bem com você e sua família, e se precisa de alguma coisa. Sinta-se abraçado por todos nós!`;
-        const linkWhatsApp = `https://wa.me/?text=${encodeURIComponent(textoAcolhimento)}`;
+        
+        // Constrói o link oficial da API do WhatsApp. Se o telefone existir, a conversa abre direto.
+        let urlBase = "https://wa.me/";
+        if (voluntario.telefone) {
+            urlBase += voluntario.telefone; 
+        }
+        const linkWhatsApp = `${urlBase}?text=${encodeURIComponent(textoAcolhimento)}`;
+
+        // Adiciona um pequeno aviso visual se o telefone não tiver sido cadastrado no banco
+        const avisoSemTelefone = voluntario.telefone ? "" : `<p style="font-size: 11px; color: #d32f2f; margin-top: 5px; text-align: center;">Telefone não cadastrado. A busca no WhatsApp será manual.</p>`;
 
         elementoCard.innerHTML = `
             <div class="cabecalho-card">
@@ -332,9 +421,10 @@ function renderizarCardsDeAcolhimento(listaDeVoluntarios) {
             </div>
             
             <div class="rodape-card">
-                <a href="${linkWhatsApp}" target="_blank" class="botao-whatsapp">
+                <a href="#" onclick="registrarAcolhimentoEabrirWhatsApp(event, '${voluntario.chaveUnificada}', '${linkWhatsApp}')" class="botao-whatsapp">
                     Acolher pelo WhatsApp
                 </a>
+                ${avisoSemTelefone}
             </div>
         `;
 
