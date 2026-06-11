@@ -1,0 +1,301 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cuidando de Quem Cuida - Casa Paulo de Tarso</title>
+    
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap" rel="stylesheet">
+
+    <style>
+        /* Reset e configurações básicas */
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Roboto', sans-serif;
+            background-color: #f4f7f6;
+            color: #333333;
+            line-height: 1.6;
+        }
+
+        /* Cabeçalho da Página */
+        .cabecalho-pagina {
+            background-color: #2e7d32; /* Verde institucional escuro */
+            color: #ffffff;
+            padding: 30px 20px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+
+        .container-cabecalho {
+            max-width: 1200px;
+            margin: 0 auto;
+            display: flex;
+            flex-direction: column;
+            align-items: flex-start;
+        }
+
+        .container-cabecalho h1 {
+            font-size: 28px;
+            font-weight: 700;
+            margin-bottom: 5px;
+        }
+
+        .container-cabecalho p {
+            font-size: 16px;
+            font-weight: 300;
+            opacity: 0.9;
+            margin-bottom: 15px;
+        }
+
+        .botao-voltar {
+            display: inline-block;
+            background-color: rgba(255, 255, 255, 0.2);
+            color: #ffffff;
+            text-decoration: none;
+            padding: 8px 16px;
+            border-radius: 4px;
+            font-size: 14px;
+            transition: background-color 0.3s;
+        }
+
+        .botao-voltar:hover {
+            background-color: rgba(255, 255, 255, 0.3);
+        }
+
+        /* Conteúdo Principal */
+        .conteudo-principal {
+            max-width: 1200px;
+            margin: 40px auto;
+            padding: 0 20px;
+        }
+
+        .cabecalho-sessao {
+            margin-bottom: 30px;
+        }
+
+        .cabecalho-sessao h2 {
+            font-size: 22px;
+            color: #2e7d32;
+            margin-bottom: 5px;
+        }
+
+        .cabecalho-sessao p {
+            font-size: 15px;
+            color: #666666;
+        }
+
+        /* Estados da Tela (Carregamento e Vazio) */
+        .estado-carregamento, .estado-vazio {
+            text-align: center;
+            padding: 50px 20px;
+            background-color: #ffffff;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
+        }
+
+        .estado-carregamento p {
+            color: #555555;
+            margin-top: 15px;
+            font-weight: 500;
+        }
+
+        .estado-vazio p {
+            color: #2e7d32;
+            font-size: 18px;
+            font-weight: 500;
+        }
+
+        .escondido {
+            display: none !important;
+        }
+
+        /* Animação do Spinner de Carregamento */
+        .spinner {
+            width: 40px;
+            height: 40px;
+            margin: 0 auto;
+            border: 4px solid rgba(46, 125, 50, 0.2);
+            border-top: 4px solid #2e7d32;
+            border-radius: 50%;
+            animation: girar 1s linear infinite;
+        }
+
+        @keyframes girar {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        /* Grade de Cards */
+        .grade-cards {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+            gap: 20px;
+        }
+
+        /* Estrutura do Card */
+        .card-acolhimento {
+            background-color: #ffffff;
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            border-left: 5px solid #f57c00; /* Laranja indicando atenção */
+        }
+
+        .cabecalho-card {
+            padding: 20px;
+            border-bottom: 1px solid #eeeeee;
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+        }
+
+        .nome-voluntario {
+            font-size: 18px;
+            font-weight: 700;
+            color: #333333;
+            line-height: 1.3;
+            flex: 1;
+            padding-right: 10px;
+        }
+
+        .etiqueta-alerta {
+            background-color: #fff3e0;
+            color: #e65100;
+            font-size: 11px;
+            font-weight: 700;
+            padding: 4px 8px;
+            border-radius: 12px;
+            text-transform: uppercase;
+            white-space: nowrap;
+        }
+
+        .corpo-card {
+            padding: 20px;
+            flex: 1;
+        }
+
+        .informacao-linha {
+            margin-bottom: 15px;
+            font-size: 14px;
+            color: #555555;
+        }
+
+        .informacao-linha strong {
+            color: #333333;
+            display: block;
+            margin-bottom: 3px;
+        }
+
+        .alerta-faltas {
+            background-color: #fafafa;
+            border: 1px solid #eeeeee;
+            padding: 12px;
+            border-radius: 6px;
+            font-size: 14px;
+            color: #444444;
+        }
+
+        .titulo-falta {
+            display: flex;
+            align-items: center;
+            color: #d32f2f;
+            font-weight: 700;
+            margin-bottom: 8px;
+        }
+
+        .icone-alerta {
+            margin-right: 6px;
+            font-size: 16px;
+        }
+
+        .lista-dias-faltosos {
+            list-style-type: none;
+            padding-left: 0;
+        }
+
+        .lista-dias-faltosos li {
+            margin-bottom: 4px;
+            padding-left: 12px;
+            position: relative;
+        }
+
+        .lista-dias-faltosos li::before {
+            content: "•";
+            position: absolute;
+            left: 0;
+            color: #f57c00;
+        }
+
+        .rodape-card {
+            padding: 15px 20px;
+            background-color: #f9f9f9;
+            border-top: 1px solid #eeeeee;
+        }
+
+        .botao-whatsapp {
+            display: block;
+            width: 100%;
+            text-align: center;
+            background-color: #25d366; /* Cor oficial do WhatsApp */
+            color: #ffffff;
+            text-decoration: none;
+            padding: 10px;
+            border-radius: 4px;
+            font-weight: 500;
+            font-size: 15px;
+            transition: background-color 0.3s;
+        }
+
+        .botao-whatsapp:hover {
+            background-color: #1ebe57;
+        }
+
+        /* Responsividade */
+        @media (max-width: 768px) {
+            .grade-cards {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+
+    <header class="cabecalho-pagina">
+        <div class="container-cabecalho">
+            <h1>Cuidando de Quem Cuida</h1>
+            <p>Acompanhamento e zelo com nossos voluntários</p>
+            <a href="/meu-cepat.html" class="botao-voltar">Voltar ao Dashboard</a>
+        </div>
+    </header>
+
+    <main class="conteudo-principal">
+        <section class="sessao-acolhimento">
+            <div class="cabecalho-sessao">
+                <h2>Voluntários que necessitam de atenção</h2>
+                <p>O sistema identificou 2 faltas consecutivas nos dias habituais de trabalho das pessoas abaixo.</p>
+            </div>
+
+            <div id="estado-carregamento" class="estado-carregamento">
+                <div class="spinner"></div>
+                <p>Analisando o histórico de frequências dos últimos 60 dias...</p>
+            </div>
+
+            <div id="estado-vazio" class="estado-vazio escondido">
+                <p>Nenhum voluntário necessita de acolhimento no momento. Todos estão com a frequência em dia!</p>
+            </div>
+
+            <div id="container-acolhimento" class="grade-cards"></div>
+        </section>
+    </main>
+
+    <script type="module" src="cuidando-quem-cuida.js"></script>
+</body>
+</html>
