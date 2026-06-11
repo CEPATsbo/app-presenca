@@ -15,6 +15,9 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 const bancoDeDados = getFirestore(app);
 
+// Lista de atividades esporádicas ou mensais que devem ficar de fora do controle de faltas
+const ATIVIDADES_EXCLUIDAS_DO_CONTROLE = ["coral", "projeto musica viva", "musica viva", "caritas", "vivencia espirita", "bazar", "musica", "*em assistencia espiritual", "caravana \" implantacao do evangelho no lar\"", "caravana ' implantacao do evangelho no lar'"];
+
 // Referências dos elementos do DOM
 const containerAcolhimento = document.getElementById('container-acolhimento');
 const estadoCarregamento = document.getElementById('estado-carregamento');
@@ -115,7 +118,7 @@ async function iniciarAnaliseDeAcolhimento() {
         snapshotDasPresencas.forEach((documento) => {
             const dados = documento.data();
 
-            // Camada de Segurança 1: Ignora o documento se o status for explicitamente diferente de "presente"
+            // Camada de Segurança 1: Ignora o documento se o status for diferente de "presente"
             if (dados.status && dados.status.toLowerCase() !== 'presente') {
                 return;
             }
@@ -128,38 +131,73 @@ async function iniciarAnaliseDeAcolhimento() {
                 stringDataLimpa = stringDataLimpa.split("T")[0].split(" ")[0]; 
             }
 
-            if (!stringDataLimpa) return; // Se não tem data legível, ignora o registro
+            if (!stringDataLimpa) return; 
 
-            // A MÁGICA ACONTECE AQUI: Agrupa pelo nome limpo, unificando os IDs duplicados
+            // BLINDAGEM DAS ATIVIDADES: Analisa e filtra as atividades esporádicas
+            let quantidadeDeAtividadesNoDocumento = 0;
+            let quantidadeDeAtividadesExcluidas = 0;
+            const atividadesValidasParaExibicao = [];
+
+            if (dados.atividade) {
+                if (typeof dados.atividade === 'string') {
+                    const atividadesSeparadas = dados.atividade.split(",");
+                    for (const atividadeItem of atividadesSeparadas) {
+                        const nomeTrimado = atividadeItem.trim();
+                        if (!nomeTrimado) continue;
+
+                        quantidadeDeAtividadesNoDocumento++;
+                        const nomeNormalizadoAtividade = normalizarNomeParaAgrupamento(nomeTrimado);
+
+                        if (ATIVIDADES_EXCLUIDAS_DO_CONTROLE.includes(nomeNormalizadoAtividade)) {
+                            quantidadeDeAtividadesExcluidas++;
+                        } else {
+                            atividadesValidasParaExibicao.push(nomeTrimado);
+                        }
+                    }
+                } else if (Array.isArray(dados.atividade)) {
+                    for (const atividadeItem of dados.atividade) {
+                        if (typeof atividadeItem === 'string') {
+                            const nomeTrimado = atividadeItem.trim();
+                            if (!nomeTrimado) continue;
+
+                            quantidadeDeAtividadesNoDocumento++;
+                            const nomeNormalizadoAtividade = normalizarNomeParaAgrupamento(nomeTrimado);
+
+                            if (ATIVIDADES_EXCLUIDAS_DO_CONTROLE.includes(nomeNormalizadoAtividade)) {
+                                quantidadeDeAtividadesExcluidas++;
+                            } else {
+                                atividadesValidasParaExibicao.push(nomeTrimado);
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Se o documento tiver atividades e TODAS elas forem esporádicas (Coral, Música Viva, Cáritas), 
+            // ignoramos esse registro de presença completamente para não gerar rotina ou falso positivo de falta.
+            if (quantidadeDeAtividadesNoDocumento > 0 && quantidadeDeAtividadesNoDocumento === quantidadeDeAtividadesExcluidas) {
+                return;
+            }
+
+            // Agrupa pelo nome limpo, unificando os históricos
             const chaveUnificada = normalizarNomeParaAgrupamento(dados.nome);
 
             if (!historicoGeralPorVoluntario[chaveUnificada]) {
                 historicoGeralPorVoluntario[chaveUnificada] = {
-                    nomeCompleto: dados.nome, // Mantém o nome original apenas para exibição no card
+                    nomeCompleto: dados.nome, 
                     listaDeAtividades: new Set(),
                     datasComPresencaConfirmada: []
                 };
             }
 
-            // Camada de Segurança 3: Evita colocar a mesma data duas vezes se houver check-in duplo no mesmo dia
+            // Evita duplicar a data se houver check-in duplo no mesmo dia
             if (!historicoGeralPorVoluntario[chaveUnificada].datasComPresencaConfirmada.includes(stringDataLimpa)) {
                 historicoGeralPorVoluntario[chaveUnificada].datasComPresencaConfirmada.push(stringDataLimpa);
             }
             
-            // Tratamento das atividades (Texto separado por vírgula ou Array estruturado)
-            if (dados.atividade) {
-                if (typeof dados.atividade === 'string') {
-                    const atividadesSeparadas = dados.atividade.split(",");
-                    for (const atv of atividadesSeparadas) {
-                        historicoGeralPorVoluntario[chaveUnificada].listaDeAtividades.add(atv.trim());
-                    }
-                } else if (Array.isArray(dados.atividade)) {
-                    for (const atv of dados.atividade) {
-                        if (typeof atv === 'string') {
-                            historicoGeralPorVoluntario[chaveUnificada].listaDeAtividades.add(atv.trim());
-                        }
-                    }
-                }
+            // Adiciona apenas as atividades permitidas ao conjunto do voluntário
+            for (const atividadeValida of atividadesValidasParaExibicao) {
+                historicoGeralPorVoluntario[chaveUnificada].listaDeAtividades.add(atividadeValida);
             }
         });
 
