@@ -1,4 +1,5 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
+import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-auth.js";
 import { getFirestore, collection, query, where, getDocs, setDoc, doc } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
 
 // Configuração exata do seu projeto Firebase
@@ -13,6 +14,7 @@ const firebaseConfig = {
 
 // Inicialização dos serviços do Firebase
 const app = initializeApp(firebaseConfig);
+const auth = getAuth(app); // INICIALIZA A AUTENTICAÇÃO
 const bancoDeDados = getFirestore(app);
 
 // Lista de atividades esporádicas ou mensais que devem ficar de fora do controle de faltas
@@ -107,7 +109,6 @@ function calcularDuasUltimasOcorrenciasDoDia(indiceDiaDaSemanaAlvo, dataReferenc
     ];
 }
 
-// Limpa o número de telefone e adiciona o código do Brasil (55)
 function formatarNumeroWhatsApp(numeroBruto) {
     if (!numeroBruto) return "";
     let numeroLimpo = numeroBruto.toString().replace(/\D/g, '');
@@ -125,16 +126,13 @@ function formatarNumeroWhatsApp(numeroBruto) {
 window.registrarAcolhimentoEabrirWhatsApp = async function(eventoDeClique, chaveUnificada, linkDoWhatsApp) {
     eventoDeClique.preventDefault();
 
-    // Oculta o card da tela imediatamente após o clique
     const elementoCard = eventoDeClique.target.closest('.card-acolhimento');
     if (elementoCard) {
         elementoCard.style.display = 'none';
     }
 
-    // Abre a URL do WhatsApp Web/App na nova aba
     window.open(linkDoWhatsApp, '_blank');
 
-    // Salva o log do acolhimento no Firebase
     try {
         const referenciaDocumento = doc(bancoDeDados, "acolhimentos_log", chaveUnificada);
         const dataDeHojeEmIsoString = new Date().toISOString(); 
@@ -159,7 +157,6 @@ async function iniciarAnaliseDeAcolhimento() {
     const stringDataLimite = formatarDataParaStringFirebase(dataSessentaDiasAtras);
 
     try {
-        // 1. Busca os contatos/telefones da coleção de Voluntários
         const snapshotVoluntarios = await getDocs(collection(bancoDeDados, "voluntarios"));
         const mapaDeTelefones = {};
         
@@ -168,24 +165,21 @@ async function iniciarAnaliseDeAcolhimento() {
             const chaveNome = normalizarNomeParaAgrupamento(dadosVoluntario.nome);
             const idDoVoluntario = documentoVoluntario.id;
 
-            // Busca pelo campo telefone, celular ou whatsapp
             const numeroTelefone = dadosVoluntario.telefone || dadosVoluntario.celular || dadosVoluntario.whatsapp || "";
             
             if (numeroTelefone) {
                 const numeroLimpo = formatarNumeroWhatsApp(numeroTelefone);
-                mapaDeTelefones[chaveNome] = numeroLimpo; // Mapeia pelo Nome
-                mapaDeTelefones[idDoVoluntario] = numeroLimpo; // Mapeia pelo ID (Mais seguro)
+                mapaDeTelefones[chaveNome] = numeroLimpo; 
+                mapaDeTelefones[idDoVoluntario] = numeroLimpo; 
             }
         });
 
-        // 2. Busca o histórico de contatos (Acolhimentos já realizados)
         const snapshotAcolhimentos = await getDocs(collection(bancoDeDados, "acolhimentos_log"));
         const historicoDeAcolhimentosRealizados = {};
         snapshotAcolhimentos.forEach((documentoLog) => {
             historicoDeAcolhimentosRealizados[documentoLog.id] = documentoLog.data().dataUltimoAcolhimento;
         });
 
-        // 3. Busca as presenças dos últimos 60 dias
         const consultaPresencasRecentes = query(
             collection(bancoDeDados, "presencas"),
             where("data", ">=", stringDataLimite)
@@ -210,7 +204,6 @@ async function iniciarAnaliseDeAcolhimento() {
 
             const chaveUnificada = normalizarNomeParaAgrupamento(dados.nome);
 
-            // Tenta achar o telefone pelo ID primeiro; se não achar, tenta pelo nome normalizado
             let telefoneEncontrado = "";
             if (dados.voluntarioId && mapaDeTelefones[dados.voluntarioId]) {
                 telefoneEncontrado = mapaDeTelefones[dados.voluntarioId];
@@ -222,7 +215,7 @@ async function iniciarAnaliseDeAcolhimento() {
                 historicoGeralPorVoluntario[chaveUnificada] = {
                     chaveUnificada: chaveUnificada,
                     nomeCompleto: dados.nome, 
-                    telefoneSanitizado: telefoneEncontrado, // Associa o telefone limpo
+                    telefoneSanitizado: telefoneEncontrado, 
                     listaDeAtividades: new Set(),
                     datasComPresencaConfirmada: [],
                     temAssistenciaEspiritual: false,
@@ -345,7 +338,7 @@ async function iniciarAnaliseDeAcolhimento() {
                 voluntariosQuePrecisamDeAcolhimento.push({
                     chaveUnificada: dadosDoVoluntario.chaveUnificada,
                     nome: dadosDoVoluntario.nomeCompleto,
-                    telefone: dadosDoVoluntario.telefoneSanitizado, // Passa o telefone para a renderização
+                    telefone: dadosDoVoluntario.telefoneSanitizado, 
                     atividades: Array.from(dadosDoVoluntario.listaDeAtividades).join(" | "),
                     detalhesDasFaltas: relatorioDeFaltasPorDia
                 });
@@ -363,7 +356,7 @@ async function iniciarAnaliseDeAcolhimento() {
 }
 
 // ===================================================================
-// --- RENDERIZAÇÃO NA TELA ---
+// --- RENDERIZAÇÃO NA TELA E GERENCIAMENTO DE ESTADO (AUTH) ---
 // ===================================================================
 
 function renderizarCardsDeAcolhimento(listaDeVoluntarios) {
@@ -389,14 +382,12 @@ function renderizarCardsDeAcolhimento(listaDeVoluntarios) {
         const primeiroNome = voluntario.nome.split(" ")[0];
         const textoAcolhimento = `Olá, ${primeiroNome}! Tudo bem com você? Aqui é do Acolhimento da Casa Paulo de Tarso. Notamos que você não pôde estar conosco nos últimos dias de suas atividades e viemos apenas dar um oi para saber se está tudo bem com você e sua família, e se precisa de alguma coisa. Sinta-se abraçado por todos nós!`;
         
-        // Constrói o link oficial da API do WhatsApp. Se o telefone existir, a conversa abre direto.
         let urlBase = "https://wa.me/";
         if (voluntario.telefone) {
             urlBase += voluntario.telefone; 
         }
         const linkWhatsApp = `${urlBase}?text=${encodeURIComponent(textoAcolhimento)}`;
 
-        // Adiciona um pequeno aviso visual se o telefone não tiver sido cadastrado no banco
         const avisoSemTelefone = voluntario.telefone ? "" : `<p style="font-size: 11px; color: #d32f2f; margin-top: 5px; text-align: center;">Telefone não cadastrado. A busca no WhatsApp será manual.</p>`;
 
         elementoCard.innerHTML = `
@@ -432,5 +423,12 @@ function renderizarCardsDeAcolhimento(listaDeVoluntarios) {
     }
 }
 
-// Inicia o processo assim que o arquivo é carregado
-iniciarAnaliseDeAcolhimento();
+// INICIA O PROCESSO SOMENTE SE O DIRETOR ESTIVER LOGADO NO SISTEMA
+onAuthStateChanged(auth, (user) => {
+    if (user) {
+        iniciarAnaliseDeAcolhimento();
+    } else {
+        // Se não estiver logado, redireciona para a página de login
+        window.location.href = '/login.html';
+    }
+});
