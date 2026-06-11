@@ -16,7 +16,18 @@ const app = initializeApp(firebaseConfig);
 const bancoDeDados = getFirestore(app);
 
 // Lista de atividades esporádicas ou mensais que devem ficar de fora do controle de faltas
-const ATIVIDADES_EXCLUIDAS_DO_CONTROLE = ["coral", "projeto musica viva", "musica viva", "caritas", "vivencia espirita", "bazar", "musica", "*em assistencia espiritual", "caravana \" implantacao do evangelho no lar\"", "caravana ' implantacao do evangelho no lar'"];
+const ATIVIDADES_EXCLUIDAS_DO_CONTROLE = [
+    "coral", 
+    "projeto musica viva", 
+    "musica viva", 
+    "caritas", 
+    "vivencia espirita", 
+    "bazar", 
+    "musica", 
+    "*em assistencia espiritual", 
+    "caravana \" implantacao do evangelho no lar\"", 
+    "caravana ' implantacao do evangelho no lar'"
+];
 
 // Referências dos elementos do DOM
 const containerAcolhimento = document.getElementById('container-acolhimento');
@@ -133,7 +144,25 @@ async function iniciarAnaliseDeAcolhimento() {
 
             if (!stringDataLimpa) return; 
 
-            // BLINDAGEM DAS ATIVIDADES: Analisa e filtra as atividades esporádicas
+            // Agrupa pelo nome limpo, unificando os históricos
+            const chaveUnificada = normalizarNomeParaAgrupamento(dados.nome);
+
+            if (!historicoGeralPorVoluntario[chaveUnificada]) {
+                historicoGeralPorVoluntario[chaveUnificada] = {
+                    nomeCompleto: dados.nome, 
+                    listaDeAtividades: new Set(),
+                    datasComPresencaConfirmada: [],
+                    temAssistenciaEspiritual: false,
+                    atividadesPorDiaDaSemana: {
+                        0: new Set(), 1: new Set(), 2: new Set(), 3: new Set(), 4: new Set(), 5: new Set(), 6: new Set()
+                    }
+                };
+            }
+
+            const dataConvertidaAoObjeto = new Date(stringDataLimpa + "T12:00:00");
+            const indiceDoDiaDaSemana = dataConvertidaAoObjeto.getDay();
+
+            // Analisa e filtra as atividades do documento
             let quantidadeDeAtividadesNoDocumento = 0;
             let quantidadeDeAtividadesExcluidas = 0;
             const atividadesValidasParaExibicao = [];
@@ -148,10 +177,16 @@ async function iniciarAnaliseDeAcolhimento() {
                         quantidadeDeAtividadesNoDocumento++;
                         const nomeNormalizadoAtividade = normalizarNomeParaAgrupamento(nomeTrimado);
 
+                        // Ativa a flag se o voluntário faz Assistência Espiritual
+                        if (nomeNormalizadoAtividade === "*em assistencia espiritual") {
+                            historicoGeralPorVoluntario[chaveUnificada].temAssistenciaEspiritual = true;
+                        }
+
                         if (ATIVIDADES_EXCLUIDAS_DO_CONTROLE.includes(nomeNormalizadoAtividade)) {
                             quantidadeDeAtividadesExcluidas++;
                         } else {
                             atividadesValidasParaExibicao.push(nomeTrimado);
+                            historicoGeralPorVoluntario[chaveUnificada].atividadesPorDiaDaSemana[indiceDoDiaDaSemana].add(nomeTrimado);
                         }
                     }
                 } else if (Array.isArray(dados.atividade)) {
@@ -163,31 +198,24 @@ async function iniciarAnaliseDeAcolhimento() {
                             quantidadeDeAtividadesNoDocumento++;
                             const nomeNormalizadoAtividade = normalizarNomeParaAgrupamento(nomeTrimado);
 
+                        if (nomeNormalizadoAtividade === "*em assistencia espiritual") {
+                                historicoGeralPorVoluntario[chaveUnificada].temAssistenciaEspiritual = true;
+                            }
+
                             if (ATIVIDADES_EXCLUIDAS_DO_CONTROLE.includes(nomeNormalizadoAtividade)) {
                                 quantidadeDeAtividadesExcluidas++;
                             } else {
                                 atividadesValidasParaExibicao.push(nomeTrimado);
+                                historicoGeralPorVoluntario[chaveUnificada].atividadesPorDiaDaSemana[indiceDoDiaDaSemana].add(nomeTrimado);
                             }
                         }
                     }
                 }
             }
 
-            // Se o documento tiver atividades e TODAS elas forem esporádicas (Coral, Música Viva, Cáritas), 
-            // ignoramos esse registro de presença completamente para não gerar rotina ou falso positivo de falta.
+            // Se todas as atividades do dia forem esporádicas, não computa esse dia para criar rotina regular
             if (quantidadeDeAtividadesNoDocumento > 0 && quantidadeDeAtividadesNoDocumento === quantidadeDeAtividadesExcluidas) {
                 return;
-            }
-
-            // Agrupa pelo nome limpo, unificando os históricos
-            const chaveUnificada = normalizarNomeParaAgrupamento(dados.nome);
-
-            if (!historicoGeralPorVoluntario[chaveUnificada]) {
-                historicoGeralPorVoluntario[chaveUnificada] = {
-                    nomeCompleto: dados.nome, 
-                    listaDeAtividades: new Set(),
-                    datasComPresencaConfirmada: []
-                };
             }
 
             // Evita duplicar a data se houver check-in duplo no mesmo dia
@@ -195,7 +223,7 @@ async function iniciarAnaliseDeAcolhimento() {
                 historicoGeralPorVoluntario[chaveUnificada].datasComPresencaConfirmada.push(stringDataLimpa);
             }
             
-            // Adiciona apenas as atividades permitidas ao conjunto do voluntário
+            // Adiciona as atividades permitidas ao conjunto geral
             for (const atividadeValida of atividadesValidasParaExibicao) {
                 historicoGeralPorVoluntario[chaveUnificada].listaDeAtividades.add(atividadeValida);
             }
@@ -210,14 +238,24 @@ async function iniciarAnaliseDeAcolhimento() {
             const relatorioDeFaltasPorDia = [];
 
             for (const indiceDoDia of diasOficiaisDeTrabalho) {
+                
+                // BLINDAGEM DE ASSISTÊNCIA ESPIRITUAL: Abona Terça (2), Quarta (3) e Quinta (4)
+                if (dadosDoVoluntario.temAssistenciaEspiritual && (indiceDoDia === 2 || indiceDoDia === 3 || indiceDoDia === 4)) {
+                    continue; 
+                }
+
                 const datasEsperadas = calcularDuasUltimasOcorrenciasDoDia(indiceDoDia, dataDeHojeParaCalculo);
                 
                 const faltouNaUltimaVez = !dadosDoVoluntario.datasComPresencaConfirmada.includes(datasEsperadas[0]);
                 const faltouNaVezRetrasada = !dadosDoVoluntario.datasComPresencaConfirmada.includes(datasEsperadas[1]);
 
                 if (faltouNaUltimaVez && faltouNaVezRetrasada) {
+                    // Agrupa as atividades específicas que o voluntário costuma realizar neste dia da semana
+                    const atividadesDoDiaEspecifico = Array.from(dadosDoVoluntario.atividadesPorDiaDaSemana[indiceDoDia]).join(", ");
+
                     relatorioDeFaltasPorDia.push({
                         nomeDoDiaDaSemana: obterNomeDoDiaDaSemana(indiceDoDia),
+                        atividadesDaFalta: atividadesDoDiaEspecifico || "Atividade Regular",
                         dataFaltaRecente: formatarDataParaExibicaoNoBrasil(datasEsperadas[0]),
                         dataFaltaRetrasada: formatarDataParaExibicaoNoBrasil(datasEsperadas[1])
                     });
@@ -261,9 +299,10 @@ function renderizarCardsDeAcolhimento(listaDeVoluntarios) {
         const elementoCard = document.createElement('div');
         elementoCard.className = 'card-acolhimento';
 
+        // Renderiza o dia da semana com a respectiva atividade ausente ao lado entre parênteses
         let htmlDiasFaltosos = '<ul class="lista-dias-faltosos">';
         for (const falta of voluntario.detalhesDasFaltas) {
-            htmlDiasFaltosos += `<li><strong>${falta.nomeDoDiaDaSemana}</strong> (dias ${falta.dataFaltaRetrasada} e ${falta.dataFaltaRecente})</li>`;
+            htmlDiasFaltosos += `<li><strong>${falta.nomeDoDiaDaSemana} (${falta.atividadesDaFalta})</strong> (dias ${falta.dataFaltaRetrasada} e ${falta.dataFaltaRecente})</li>`;
         }
         htmlDiasFaltosos += '</ul>';
 
