@@ -146,23 +146,27 @@
                 }
                 const balanceteData = balanceteDoc.data();
 
-                // LÓGICA DE BUSCA CORRIGIDA para usar um campo principal
+               // LÓGICA DE BUSCA CORRIGIDA: usa o caminho correto para a Tesouraria
                 const logsQuery = query(
                     collection(db, "log_auditoria"),
-                    where("balanceteId", "==", balanceteId)
+                    where("detalhes.balanceteId", "==", balanceteId)
                 );
                 const logsSnapshot = await getDocs(logsQuery);
                 
                 let liberacaoLog = null;
-                const aprovacaoLogs = [];
                 logsSnapshot.forEach(logDoc => {
                     const logData = logDoc.data();
                     if (logData.acao === 'LIBEROU_BALANCETE') liberacaoLog = logData;
-                    else if (logData.acao === 'VOTOU_BALANCETE' && logData.detalhes?.voto === 'APROVADO') aprovacaoLogs.push(logData);
                 });
+
+                // LÓGICA DE BUSCA CORRIGIDA: busca os votos do Conselho diretamente do balancete
+                const aprovacoes = balanceteData.aprovacoes || {};
+                const aprovacaoLogs = Object.values(aprovacoes).map(aprov => ({
+                    autor: { nome: aprov.nome },
+                    timestamp: aprov.data
+                }));
                 
                 renderizarBalancete(balanceteId, balanceteData, liberacaoLog, aprovacaoLogs);
-
             } catch (error) {
                 console.error(`Erro ao carregar dados para ${balanceteId}:`, error);
                 balanceteDisplay.innerHTML = `<h2>Ocorreu um erro. Pode ser necessário criar um índice no Firebase.</h2>`;

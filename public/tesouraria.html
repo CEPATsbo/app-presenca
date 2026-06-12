@@ -407,12 +407,18 @@
                         const logsQuery = query(collection(db, "log_auditoria"), where("detalhes.balanceteId", "==", periodoId));
                         const logsSnapshot = await getDocs(logsQuery);
                         let liberacaoLog = null;
-                        const aprovacaoLogs = [];
                         logsSnapshot.forEach(logDoc => {
                             const logData = logDoc.data();
                             if (logData.acao === 'LIBEROU_BALANCETE') liberacaoLog = logData;
-                            else if (logData.acao === 'VOTOU_BALANCETE' && logData.detalhes?.voto === 'APROVADO') aprovacaoLogs.push(logData);
                         });
+                        
+                        // Resgata os votos do Conselho Fiscal da mesma forma
+                        const aprovacoes = balanceteAtual.aprovacoes || {};
+                        const aprovacaoLogs = Object.values(aprovacoes).map(aprov => ({
+                            autor: { nome: aprov.nome },
+                            timestamp: aprov.data
+                        }));
+
                         renderizarAssinaturas(true, liberacaoLog, aprovacaoLogs);
                     } else {
                         renderizarAssinaturas(false);
