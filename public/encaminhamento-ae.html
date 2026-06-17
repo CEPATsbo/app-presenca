@@ -51,6 +51,10 @@
         .toggle-inversao label { font-size: 0.9em; font-weight: bold; color: #856404; display: flex; align-items: center; cursor: pointer; }
         .toggle-inversao input { margin-right: 8px; width: 18px; height: 18px; }
 
+        /* Estilo das Seções (Novo Organizador) */
+        .section-header { grid-column: 1 / -1; margin-top: 15px; margin-bottom: 5px; border-bottom: 3px solid; padding-bottom: 5px; }
+        .section-header h2 { margin: 0; font-size: 1.4em; text-align: left; }
+
         /* Responsividade Celular/Tablet Padrão */
         @media (max-width: 768px) {
             body { padding: 10px; }
@@ -140,7 +144,6 @@
                 } catch (error) { console.error("Erro ao registrar log:", error); }
             }
 
-            // FUNÇÃO AUXILIAR: Verifica se o card cumpriu o ciclo para ir pro fim da fila
             function verificarSeFinalizado(atendimento) {
                 if (!atendimento) return false;
                 const statusFila = atendimento.status;
@@ -187,7 +190,7 @@
                 unsubscribeFila = onSnapshot(qFila, async (snapshot) => {
                     const promessas = snapshot.docs.map(docSnapshot => getContextoDoAtendimento(docSnapshot));
                     atendimentosDoDia = (await Promise.all(promessas)).filter(atendimento => atendimento !== null);
-                    renderizarCards();
+                    renderizarCardsOrganizados();
                 });
             }
 
@@ -217,31 +220,105 @@
                 };
             }
 
-            function renderizarCards() {
+            // FUNÇÃO AUXILIAR PARA INSERIR CABEÇALHOS NO GRID
+            function adicionarCabecalho(titulo, cor) {
+                const header = document.createElement('div');
+                header.className = 'section-header';
+                header.style.borderColor = cor;
+                header.innerHTML = `<h2 style="color:${cor};">${titulo}</h2>`;
+                cardsContainer.appendChild(header);
+            }
+
+            function renderizarCardsOrganizados() {
                 cardsContainer.innerHTML = '';
                 if (atendimentosDoDia.length === 0) {
                     cardsContainer.innerHTML = '<p>Nenhuma pessoa na fila de atendimento para este dia.</p>';
                     return;
                 }
-                
-                // ORDENAÇÃO ATUALIZADA: Joga os finalizados para o fim
-                atendimentosDoDia.sort((a, b) => {
-                    const aFinalizado = verificarSeFinalizado(a) ? 1 : 0;
-                    const bFinalizado = verificarSeFinalizado(b) ? 1 : 0;
-                    
-                    if (aFinalizado !== bFinalizado) {
-                        return aFinalizado - bFinalizado; // Move finalizados para baixo
+
+                const grupoEntrevistas = [];
+                const grupoSala1 = [];
+                const grupoSala2 = [];
+                const grupoFinalizados = [];
+
+                // Pesos de Ordenação das Salas
+                const ordemSala1 = { 'P1': 1, 'P3A': 2, 'P3B': 3 };
+                const ordemSala2 = { 'P4B': 1, 'P4A': 2, 'P2': 3, 'CH': 4 };
+
+                atendimentosDoDia.forEach(a => {
+                    if (!a) return;
+                    const cardElement = criarCard(a);
+
+                    if (verificarSeFinalizado(a)) {
+                        grupoFinalizados.push(cardElement);
+                        return;
                     }
 
-                    // Se empatar (ambos finalizados ou ambos abertos), mantem a prioridade de entrevista
-                    const prioridadeA = a.precisaEntrevista ? 1 : 0;
-                    const prioridadeB = b.precisaEntrevista ? 1 : 0;
-                    return prioridadeB - prioridadeA;
+                    // Define se o assistido está aguardando Entrevista ou Passe
+                    let isFilaEntrevista = false;
+                    
+                    if (a.tipoAtendimento === 'alta_programada') {
+                        isFilaEntrevista = true;
+                    } else if (a.precisaEntrevista) {
+                        if (a.ordem_invertida) {
+                            if (a.passe_chamado && !a.entrevista_concluida) { isFilaEntrevista = true; }
+                        } else {
+                            if (!a.entrevista_concluida) { isFilaEntrevista = true; }
+                        }
+                    }
+
+                    if (isFilaEntrevista) {
+                        grupoEntrevistas.push(cardElement);
+                    } else {
+                        // Está na Fila de Passe. Vamos mapear para a Sala correta
+                        const passe = a.passeParaMostrar || 'N/A';
+                        if (ordemSala1[passe] !== undefined) {
+                            grupoSala1.push({ el: cardElement, peso: ordemSala1[passe], dataObj: a });
+                        } else if (ordemSala2[passe] !== undefined) {
+                            grupoSala2.push({ el: cardElement, peso: ordemSala2[passe], dataObj: a });
+                        } else {
+                            // Fallback caso algum passe não mapeado apareça (ex: Avulsos sem tipo definido)
+                            grupoSala2.push({ el: cardElement, peso: 99, dataObj: a }); 
+                        }
+                    }
                 });
 
-                atendimentosDoDia.forEach(atendimento => {
-                    if(atendimento) cardsContainer.appendChild(criarCard(atendimento));
+                // ORDENAÇÃO SALA 1 (Prioridade de Passe > Ordem de Chegada)
+                grupoSala1.sort((a, b) => {
+                    if (a.peso !== b.peso) return a.peso - b.peso;
+                    const tempoA = a.dataObj.chegadaEm ? a.dataObj.chegadaEm.toMillis() : 0;
+                    const tempoB = b.dataObj.chegadaEm ? b.dataObj.chegadaEm.toMillis() : 0;
+                    return tempoA - tempoB;
                 });
+
+                // ORDENAÇÃO SALA 2 (Prioridade de Passe > Ordem de Chegada)
+                grupoSala2.sort((a, b) => {
+                    if (a.peso !== b.peso) return a.peso - b.peso;
+                    const tempoA = a.dataObj.chegadaEm ? a.dataObj.chegadaEm.toMillis() : 0;
+                    const tempoB = b.dataObj.chegadaEm ? b.dataObj.chegadaEm.toMillis() : 0;
+                    return tempoA - tempoB;
+                });
+
+                // RENDERIZANDO NO DOM
+                if (grupoEntrevistas.length > 0) {
+                    adicionarCabecalho('🗣️ Entrevistas (Ordem de Chegada)', '#17a2b8');
+                    grupoEntrevistas.forEach(card => cardsContainer.appendChild(card));
+                }
+
+                if (grupoSala1.length > 0) {
+                    adicionarCabecalho('🚪 SALA 1 (Ordem: P1 ➔ P3A ➔ P3B)', '#28a745');
+                    grupoSala1.forEach(item => cardsContainer.appendChild(item.el));
+                }
+
+                if (grupoSala2.length > 0) {
+                    adicionarCabecalho('🚪 SALA 2 (Ordem: P4B ➔ P4A ➔ P2 ➔ CH)', '#28a745');
+                    grupoSala2.forEach(item => cardsContainer.appendChild(item.el));
+                }
+
+                if (grupoFinalizados.length > 0) {
+                    adicionarCabecalho('✅ Finalizados', '#6c757d');
+                    grupoFinalizados.forEach(card => cardsContainer.appendChild(card));
+                }
             }
 
             function criarCard(atendimento) {
@@ -254,7 +331,6 @@
                 const entrevistaConcluida = atendimento.entrevista_concluida === true;
                 const passeChamado = atendimento.passe_chamado === true || statusFila === 'chamado_passe';
 
-                // Verifica encerramento usando a nova função centralizada
                 const cardDeveFechar = verificarSeFinalizado(atendimento);
 
                 if (cardDeveFechar) {
@@ -279,26 +355,22 @@
                 } else {
                     actionsClass = 'actions-3-buttons';
                     
-                    // Estados dos botões
                     const statusChamadoEntrevista = statusFila === 'chamado_entrevista';
                     const statusEntrevistaRealizada = statusFila === 'entrevista_realizada' || entrevistaConcluida;
 
-                    // Lógica de Habilitação INVERTIDA vs NORMAL
                     let entrevistaBtnDisabled = statusChamadoEntrevista || statusEntrevistaRealizada;
                     
                     let passeBtnDisabled = true;
                     if (ordemInvertida) {
-                         passeBtnDisabled = passeChamado; // Se invertido, só trava se já chamou
+                         passeBtnDisabled = passeChamado; 
                     } else {
-                         passeBtnDisabled = !statusEntrevistaRealizada || passeChamado; // Normal: trava se não fez entrevista
+                         passeBtnDisabled = !statusEntrevistaRealizada || passeChamado; 
                     }
                     
-                    // Alta programada libera passe? Não, bloqueia no click handler, mas visualmente pode confundir
                     if(atendimento.tipoAtendimento === 'alta_programada') passeBtnDisabled = true;
 
                     let entrevistaRealizadaBtnDisabled = !statusChamadoEntrevista || statusEntrevistaRealizada;
 
-                    // Checkbox HTML
                     const checkedHtml = ordemInvertida ? 'checked' : '';
                     avisoHtml = `
                         <div class="toggle-inversao">
@@ -318,7 +390,7 @@
 
                 if (statusFila === 'chamado_entrevista') card.classList.add('chamado-entrevista');
                 if (statusFila === 'entrevista_realizada' || entrevistaConcluida) card.classList.add('entrevista-realizada');
-                if (passeChamado && !cardDeveFechar) card.classList.add('chamado-passe'); // Visual de passe chamado mas ainda ativo
+                if (passeChamado && !cardDeveFechar) card.classList.add('chamado-passe'); 
 
                 let tipoLabel = '';
 
@@ -342,7 +414,6 @@
                     <div class="${actionsClass}">${buttonsHtml}</div>
                 `;
                 
-                // Event listener para o checkbox de inversão
                 const checkbox = card.querySelector('.chk-inversao');
                 if(checkbox) {
                     checkbox.addEventListener('change', async (e) => {
@@ -351,7 +422,7 @@
                             await updateDoc(doc(db, 'fila_atendimento_ae', atendimento.id), { ordem_invertida: novoEstado });
                         } catch(err) {
                             console.error("Erro ao inverter ordem", err);
-                            e.target.checked = !novoEstado; // Reverte visualmente em caso de erro
+                            e.target.checked = !novoEstado; 
                         }
                     });
                 }
@@ -380,7 +451,7 @@
             cardsContainer.addEventListener('click', async (e) => {
                 const target = e.target;
                 const id = target.dataset.id;
-                if (!id || target.disabled || target.type === 'checkbox') return; // Ignora checkbox aqui
+                if (!id || target.disabled || target.type === 'checkbox') return;
                 
                 const atendimentoChamado = atendimentosDoDia.find(a => a && a.id === id);
                 if (!atendimentoChamado) return;
@@ -407,7 +478,6 @@
                                 registrarLog('Tratamento Encerrado por Alta (AE)', { assistidoId: atendimentoChamado.assistidoId, assistidoNome: atendimentoChamado.nomeAssistido });
                             } else { target.disabled = false; }
                         } else {
-                            // MARCA COMO ENTREVISTA CONCLUÍDA
                             await updateDoc(doc(db, 'fila_atendimento_ae', id), { 
                                 status: 'entrevista_realizada',
                                 entrevista_concluida: true 
@@ -422,7 +492,6 @@
                          }
                          if (confirm(`Confirmar chamada de ${atendimentoChamado.nomeAssistido} para o PASSE no painel?`)) {
                              await atualizarPainelTV(atendimentoChamado, 'chamado_passe');
-                             // MARCA QUE PASSE FOI CHAMADO
                              await updateDoc(doc(db, 'fila_atendimento_ae', id), { 
                                  status: 'chamado_passe',
                                  passe_chamado: true
