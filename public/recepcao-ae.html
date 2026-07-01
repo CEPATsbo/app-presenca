@@ -379,7 +379,7 @@
                 });
 
                 if (bloqueio5Semana) {
-                    alert("⚠️ Este registro envolve a ativação de uma decisão do Colegiado (5ª Semana). Por segurança, o desfazimento automático está desativado para este caso específico.");
+                    alert("⚠️ Este registro envolve a ativação de uma decisão do Colegiado. Por segurança, o desfazimento automático está desativado para este caso específico.");
                     return false;
                 }
 
@@ -506,9 +506,10 @@
                     const semanaAtualHoje = await calcularSemanaAtual(tratamento.id);
                     const isAltaSuspensa = tratamento.alta_suspensa === true;
 
-                    if (semanaAtualHoje === 5 && !isAltaSuspensa) {
-                         const qPlaceholder5Semana = query(atendimentosRef, where("tratamentoId", "==", tratamento.id), where("semana", "==", 5), where("decisao_pre_registrada", "==", true), where("dataAtendimento", "==", null), limit(1));
-                         placeholderSnapshot = await getDocs(qPlaceholder5Semana);
+                    // CORREÇÃO: Busca inteligente do pré-registro sem travar na 5ª semana exata
+                    if (!isAltaSuspensa) {
+                         const qPlaceholder = query(atendimentosRef, where("tratamentoId", "==", tratamento.id), where("dataAtendimento", "==", null), limit(1));
+                         placeholderSnapshot = await getDocs(qPlaceholder);
                     }
 
                     if (!frequenciaSnapshot.empty) {
@@ -522,7 +523,7 @@
                          metadadosTratamento[tratamento.id] = { semanaAtual: semanaAtualHoje, alta_suspensa: true };
                     } else if (placeholderSnapshot && !placeholderSnapshot.empty) {
                         const placeholderData = { id: placeholderSnapshot.docs[0].id, ...placeholderSnapshot.docs[0].data() };
-                        metadadosTratamento[tratamento.id] = { atendimento5semana: placeholderData, semanaAtual: 5 };
+                        metadadosTratamento[tratamento.id] = { atendimentoPreRegistrado: placeholderData, semanaAtual: placeholderData.semana };
                         if (placeholderData.tipo === 'alta_programada') { statusHoje = 'alta-programada'; }
                         else if (placeholderData.passePara) { statusHoje = 'novo-ciclo'; }
                     } else {
@@ -554,7 +555,7 @@
                         iconeStatus = ' 🔴 (Alta)';
                         li.title = "Decisão: ALTA PROGRAMADA (Aguardando Entrevista)";
                     } else if (item.statusHoje === 'novo-ciclo') {
-                        const passeNovo = metadadosTratamento[item.tratamento.id]?.atendimento5semana?.passePara || 'N/I';
+                        const passeNovo = metadadosTratamento[item.tratamento.id]?.atendimentoPreRegistrado?.passePara || 'N/I';
                         iconeStatus = ' 🔄 (Migração)';
                         li.title = `Decisão: NOVO CICLO (Passe ${passeNovo})`;
                     } else if (item.statusHoje === 'alta-suspensa') {
@@ -668,34 +669,32 @@
 
                 try {
                     const dadosMeta = metadadosTratamento[tratamentoAtivoSelecionado.id];
-                    const semanaCalculada = dadosMeta?.semanaAtual || await calcularSemanaAtual(tratamentoAtivoSelecionado.id);
                     const isAltaSuspensa = dadosMeta?.alta_suspensa === true;
+                    const atendimentoPreRegistrado = dadosMeta?.atendimentoPreRegistrado;
+                    const semanaCalculada = dadosMeta?.semanaAtual || await calcularSemanaAtual(tratamentoAtivoSelecionado.id);
 
-                    if (semanaCalculada === 5 && !isAltaSuspensa) {
-                        const placeholder = dadosMeta?.atendimento5semana;
-                        const temDecisaoValida = placeholder && (placeholder.tipo === 'alta_programada' || placeholder.passePara);
+                    // VERIFICAÇÃO DINÂMICA (independe de ser semana 5)
+                    if (atendimentoPreRegistrado && !isAltaSuspensa) {
+                        const temDecisaoValida = atendimentoPreRegistrado.tipo === 'alta_programada' || atendimentoPreRegistrado.passePara;
 
                         if (!temDecisaoValida) {
-                            alert(`⚠️ BLOQUEIO DE SEGURANÇA!\n\n${assistidoSelecionado.nome} está na 5ª semana, mas a decisão do Colegiado NÃO foi registrada.\n\nVá ao Arquivo Geral e preencha a decisão antes de dar presença.`);
+                            alert(`⚠️ BLOQUEIO DE SEGURANÇA!\n\n${assistidoSelecionado.nome} tem uma reavaliação pendente (Semana ${atendimentoPreRegistrado.semana}), mas a decisão do Colegiado NÃO foi registrada.\n\nVá ao Arquivo Geral e preencha a decisão antes de dar presença.`);
                             e.target.disabled = false;
                             ui.painelAcoesFrequencia.classList.add('hidden');
                             return; 
                         }
-                    }
 
-                    const dataAtual = serverTimestamp();
-                    const batch = writeBatch(db);
-
-                    if (dadosMeta && dadosMeta.atendimento5semana && semanaCalculada === 5 && !isAltaSuspensa) {
-                        const atendimentoPreRegistrado = dadosMeta.atendimento5semana;
                         const atendimentoDocRef = doc(db, 'atendimentos_ae', atendimentoPreRegistrado.id);
+                        const dataAtual = serverTimestamp();
+                        const batch = writeBatch(db);
 
                         if (atendimentoPreRegistrado.tipo === 'alta_programada') {
                             batch.update(atendimentoDocRef, { dataAtendimento: dataAtual });
                             batch.set(doc(filaRef), {
                                 assistidoId: assistidoSelecionado.id, nomeAssistido: assistidoSelecionado.nome, tratamentoId: tratamentoAtivoSelecionado.id,
-                                atendimentoId: atendimentoDocRef.id, status: 'aguardando_entrevista_ou_passe', passeRecomendado: atendimentoPreRegistrado.passeRecomendado,
-                                semana_atual: 5, tipoAtendimento: 'alta_programada', chegadaEm: dataAtual, recepcionista: { uid: user.uid, nome: user.displayName }
+                                atendimentoId: atendimentoDocRef.id, status: 'aguardando_entrevista_ou_passe', 
+                                passeRecomendado: atendimentoPreRegistrado.passeRecomendado || tratamentoAtivoSelecionado.passe_ciclo_atual || 'N/A',
+                                semana_atual: atendimentoPreRegistrado.semana, tipoAtendimento: 'alta_programada', chegadaEm: dataAtual, recepcionista: { uid: user.uid, nome: user.displayName }
                             });
                             await batch.commit();
                             await registrarLog('Ativação de Entrevista de Alta (AE)', { assistidoId: assistidoSelecionado.id, assistidoNome: assistidoSelecionado.nome, tratamentoId: tratamentoAtivoSelecionado.id });
@@ -718,6 +717,7 @@
                             alert(`Presença registrada. ${assistidoSelecionado.nome} iniciou um NOVO CICLO (Semana 1, Passe ${novoPasse}) e foi enviado para a fila.`);
                         }
                     } else {
+                        // FLUXO NORMAL (Sem pendência de Colegiado)
                         const passeDoCiclo = tratamentoAtivoSelecionado.passe_ciclo_atual;
                         
                         let precisaEntrevista = false;
@@ -818,15 +818,17 @@
                 e.target.disabled = true;
                 if (confirm(`Confirmar uma falta para ${assistidoSelecionado.nome}?`)) {
                     
-                    const semanaAtual = metadadosTratamento[tratamentoAtivoSelecionado.id]?.semanaAtual || await calcularSemanaAtual(tratamentoAtivoSelecionado.id);
-                    const isAltaSuspensa = metadadosTratamento[tratamentoAtivoSelecionado.id]?.alta_suspensa === true;
+                    const dadosMeta = metadadosTratamento[tratamentoAtivoSelecionado.id];
+                    const isAltaSuspensa = dadosMeta?.alta_suspensa === true;
+                    const atendimentoPreRegistrado = dadosMeta?.atendimentoPreRegistrado;
+                    const semanaAtual = dadosMeta?.semanaAtual || await calcularSemanaAtual(tratamentoAtivoSelecionado.id);
 
-                    if (semanaAtual === 5 && !isAltaSuspensa) {
-                        const placeholder = metadadosTratamento[tratamentoAtivoSelecionado.id]?.atendimento5semana;
-                        const temDecisaoValida = placeholder && (placeholder.tipo === 'alta_programada' || placeholder.passePara);
+                    // VERIFICAÇÃO DINÂMICA
+                    if (atendimentoPreRegistrado && !isAltaSuspensa) {
+                        const temDecisaoValida = atendimentoPreRegistrado.tipo === 'alta_programada' || atendimentoPreRegistrado.passePara;
 
                         if (!temDecisaoValida) {
-                            alert(`⚠️ BLOQUEIO DE SEGURANÇA!\n\n${assistidoSelecionado.nome} está na 5ª semana.\nO sistema não pode registrar falta sem saber a decisão do Colegiado.\n\nVá ao Arquivo Geral e registre a decisão antes de marcar a falta.`);
+                            alert(`⚠️ BLOQUEIO DE SEGURANÇA!\n\n${assistidoSelecionado.nome} tem uma reavaliação agendada.\nO sistema não pode registrar falta sem saber a decisão do Colegiado.\n\nVá ao Arquivo Geral e registre a decisão antes de marcar a falta.`);
                             e.target.disabled = false;
                             ui.painelAcoesFrequencia.classList.add('hidden');
                             return; 
@@ -845,19 +847,17 @@
                     let motivo = '';
                     const logDetalhes = { assistidoId: assistidoSelecionado.id, assistidoNome: assistidoSelecionado.nome, tratamentoId: tratamentoAtivoSelecionado.id, totalFaltas: novoTotalFaltas, passe: passeDoCiclo, semana: semanaAtual };
 
-                    if (semanaAtual === 5 && !isAltaSuspensa) {
+                    if (atendimentoPreRegistrado && !isAltaSuspensa) {
                         if (passeDoCiclo === 'P3A' || passeDoCiclo === 'P3B') {
-                            const dadosMeta = metadadosTratamento[tratamentoAtivoSelecionado.id];
-                            const decisao5Semana = dadosMeta?.atendimento5semana;
-                            if (decisao5Semana && decisao5Semana.passePara) {
-                                const proximoPasse = decisao5Semana.passePara;
+                            if (atendimentoPreRegistrado.passePara) {
+                                const proximoPasse = atendimentoPreRegistrado.passePara;
                                 if (proximoPasse === 'P3A' || proximoPasse === 'P3B') {
                                     if (novoTotalFaltas >= 1) { encerrarTratamento = true; }
                                 }
                             }
                         }
-                        if (!encerrarTratamento) { motivo = `Falta registrada (Semana 5). Total de faltas: ${novoTotalFaltas}.`; }
-                        else { motivo = `Falta registrada (Semana 5). ATENÇÃO: Tratamento encerrado por falta (Tolerância Zero para P3A/P3B continuando P3).`; }
+                        if (!encerrarTratamento) { motivo = `Falta registrada (Reavaliação). Total de faltas: ${novoTotalFaltas}.`; }
+                        else { motivo = `Falta registrada (Reavaliação). ATENÇÃO: Tratamento encerrado por falta (Tolerância Zero para P3A/P3B continuando P3).`; }
                     } else {
                         if (passeDoCiclo === 'P3A' || passeDoCiclo === 'P3B') {
                             if (novoTotalFaltas >= 1) { encerrarTratamento = true; motivo = 'Tratamento encerrado automaticamente por falta (Tolerância Zero para P3A/P3B).'; }
