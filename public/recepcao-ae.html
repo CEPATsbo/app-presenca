@@ -11,8 +11,8 @@
             --fundo-desabilitado: #f9f9f9;
             --cor-presente: #28a745;
             --cor-pendente: #6c757d;
-            --cor-alta: #dc3545;
-            --cor-migracao: #17a2b8;
+            --cor-alta: #dc3545; /* Vermelho para alta programada */
+            --cor-migracao: #17a2b8; /* Azul info para novo ciclo */
         }
         body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background-color: #f4f6f9; margin: 0; padding: 20px; display: flex; flex-direction: column; align-items: center; }
         .container { width: 100%; max-width: 900px; background-color: white; padding: 30px; border-radius: 12px; box-shadow: 0 6px 24px rgba(0,0,0,0.1); margin-bottom: 20px; }
@@ -100,25 +100,6 @@
             <h1>⛔ Acesso Bloqueado</h1>
             <p>O Módulo de Recepção só funciona nos <strong>Dias Oficiais de Trabalho</strong> configurados para esta Casa.</p>
             <p>Para evitar lançamentos equivocados, o sistema encontra-se temporariamente inativo.</p>
-        </div>
-        
-        <div id="painel-admin-dia" class="painel-admin hidden">
-            <h3>🔓 Acesso Administrativo Liberado</h3>
-            <p style="margin-bottom: 20px;">Selecione o dia da semana que deseja operar no sistema:</p>
-            <select id="select-forcar-dia">
-                <option value="1">Segunda-feira</option>
-                <option value="2" selected>Terça-feira</option>
-                <option value="3">Quarta-feira</option>
-                <option value="4">Quinta-feira</option>
-                <option value="5">Sexta-feira</option>
-                <option value="6">Sábado</option>
-                <option value="0">Domingo</option>
-            </select>
-            <button id="btn-forcar-dia" class="btn btn-info" style="font-size: 1.1em;">Acessar Sistema</button>
-        </div>
-
-        <div class="bypass-container" id="container-senha">
-            <input type="password" id="input-bypass" class="bypass-input" placeholder="Admin Override...">
         </div>
     </div>
 
@@ -223,7 +204,7 @@
 
             document.getElementById('btn-forcar-dia').addEventListener('click', () => {
                 const val = document.getElementById('select-forcar-dia').value;
-                const senha = document.getElementById('senha-admin').value;
+                const senha = document.getElementById('senha-admin').value.trim().toLowerCase();
                 
                 if (senha !== 'liberar-ae') {
                     alert('Senha administrativa incorreta!');
@@ -243,13 +224,14 @@
             const inputBypass = document.getElementById('input-bypass');
             if(inputBypass){
                 inputBypass.addEventListener('keypress', function (e) {
-                    if (e.key === 'Enter' && this.value === 'liberar-ae') {
+                    if (e.key === 'Enter' && this.value.trim().toLowerCase() === 'liberar-ae') {
                         document.getElementById('bloqueio-temporal').classList.add('hidden');
                         document.getElementById('main-content').classList.remove('hidden');
                         inicializarPagina(user);
                     }
                 });
             }
+
         }).catch(err => {
             document.getElementById('acesso-negado').classList.remove('hidden');
         });
@@ -829,12 +811,8 @@
                     let motivo = '';
                     const logDetalhes = { assistidoId: assistidoSelecionado.id, assistidoNome: assistidoSelecionado.nome, tratamentoId: tratamentoAtivoSelecionado.id, totalFaltas: novoTotalFaltas, passe: passeDoCiclo, semana: semanaAtual };
 
-                    // =======================================================================
-                    // NOVA REGRA DE FALTAS - 5ª SEMANA & TRANSIÇÕES
-                    // =======================================================================
                     if (semanaAtual === 5 && !isAltaSuspensa) {
                         
-                        // Passo 1: Conta quantas faltas essa pessoa JÁ TEM NA 5ª SEMANA
                         const qFaltasW5 = query(atendimentosRef, where("tratamentoId", "==", tratamentoAtivoSelecionado.id), where("tipo", "==", "falta"), where("semana", "==", 5));
                         const snapFaltasW5 = await getDocs(qFaltasW5);
                         const faltasJaNaSemana5 = snapFaltasW5.size;
@@ -846,25 +824,20 @@
                         }
 
                         if (passeDoCiclo === 'P3A' || passeDoCiclo === 'P3B') {
-                            // Se já era P3 no ciclo atual, a tolerância zero se mantém até na 5ª semana
                             encerrarTratamento = true;
                             motivo = `Falta registrada na Reavaliação. ATENÇÃO: Tratamento encerrado por falta (Tolerância Zero para o ciclo atual de P3A/P3B).`;
                         } else if (isDestinoP3) {
-                            // Se vai MIGRAR para o P3, a tolerância zero já começa a valer
                             encerrarTratamento = true;
                             motivo = `Falta registrada na Reavaliação. ATENÇÃO: Tratamento encerrado por falta (Tolerância Zero para o destino P3A/P3B).`;
                         } else if (faltasJaNaSemana5 >= 1) {
-                            // Se já tem 1 falta na semana 5, e está faltando DE NOVO na semana 5
                             encerrarTratamento = true;
                             motivo = `Falta registrada. ATENÇÃO: Tratamento encerrado! O assistido já utilizou o bônus e não pode ter uma segunda falta na 5ª semana.`;
                         } else {
-                            // Passes normais sem falta prévia na semana 5 (mesmo que o Colegiado ainda não tenha avaliado)
                             encerrarTratamento = false; 
                             motivo = `Falta registrada na Reavaliação. Ganhos +1 falta bônus exclusiva desta semana. Tratamento mantido ativo para o destino agendado. Total de faltas no ciclo: ${novoTotalFaltas}.`;
                         }
 
                     } else {
-                        // FLUXO NORMAL DAS SEMANAS 1 A 4 (Ou em Alta Suspensa)
                         if (passeDoCiclo === 'P3A' || passeDoCiclo === 'P3B') {
                             if (novoTotalFaltas >= 1) { 
                                 encerrarTratamento = true; 
@@ -886,16 +859,21 @@
                     const dataAtualFalta = serverTimestamp();
                     
                     batch.set(doc(atendimentosRef), { assistidoId: assistidoSelecionado.id, tratamentoId: tratamentoAtivoSelecionado.id, tipo: 'falta', dataAtendimento: dataAtualFalta, semana: semanaAtual });
-                    batch.update(tratamentoDocRef, { faltas_acumuladas: increment(1) });
                     
                     if (encerrarTratamento) {
-                        batch.update(tratamentoDocRef, { status: 'encerrado_por_falta', dataFim: dataAtualFalta });
-                        await registrarLog('Encerramento por Falta (AE)', logDetalhes);
+                        batch.update(tratamentoDocRef, { faltas_acumuladas: increment(1), status: 'encerrado_por_falta', dataFim: dataAtualFalta });
                     } else {
-                         await registrarLog('Marcação de Falta (AE)', logDetalhes);
+                        batch.update(tratamentoDocRef, { faltas_acumuladas: increment(1) });
                     }
                     
                     await batch.commit();
+
+                    if (encerrarTratamento) {
+                        await registrarLog('Encerramento por Falta (AE)', logDetalhes);
+                    } else {
+                        await registrarLog('Marcação de Falta (AE)', logDetalhes);
+                    }
+                    
                     alert(motivo);
                     ui.painelAcoesFrequencia.classList.add('hidden');
                     ui.btnLiberarAltaSuspensa.classList.add('hidden');
