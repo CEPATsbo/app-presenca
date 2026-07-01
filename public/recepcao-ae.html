@@ -33,9 +33,12 @@
         .form-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; align-items: end; }
         .hidden { display: none !important; }
         
-        #lista-ativos { list-style-type: none; padding: 0; display: flex; flex-wrap: wrap; gap: 12px; }
+        #lista-ativos, #lista-avulsos { list-style-type: none; padding: 0; display: flex; flex-wrap: wrap; gap: 12px; }
         
-        #lista-ativos li {
+        /* ==========================================
+           ESTÉTICA DOS BOTÕES (ALTO CONTRASTE) 
+           ========================================== */
+        #lista-ativos li, #lista-avulsos li {
             color: #000000;
             font-weight: bold;
             padding: 12px 18px;
@@ -48,7 +51,7 @@
             display: flex;
             align-items: center;
         }
-        #lista-ativos li:hover { transform: translateY(-2px); box-shadow: 0 6px 8px rgba(0,0,0,0.2); }
+        #lista-ativos li:hover, #lista-avulsos li:hover { transform: translateY(-2px); box-shadow: 0 6px 8px rgba(0,0,0,0.2); }
 
         .cor-passe-P4B { background-color: #ffffff; }
         .cor-passe-P4A { background-color: #fff5e1; }
@@ -58,7 +61,7 @@
         .cor-passe-P1  { background-color: #ffee8c; }
         .cor-passe-P3A { background-color: #ffb6c1; }
 
-        #lista-ativos li.status-presente { 
+        #lista-ativos li.status-presente, #lista-avulsos li.status-presente { 
             opacity: 1; border: 2px dashed #444; box-shadow: none; background-image: linear-gradient(rgba(255,255,255,0.4), rgba(255,255,255,0.4));
         }
         #lista-ativos li.status-falta { 
@@ -131,18 +134,25 @@
         <h1>Recepção do Atendimento Espiritual</h1>
 
         <fieldset>
-            <legend>Tratamentos Ativos (Acesso Rápido)</legend>
+            <legend>Tratamentos Ativos (Acesso Rápido) - <span id="label-dia-trabalho" style="color:#007bff;">Hoje</span></legend>
             <ul id="lista-ativos"><li>Carregando...</li></ul>
-            <div id="painel-acoes-frequencia" class="hidden" style="margin-top: 20px; padding-top: 20px; border-top: 1px solid #eee;">
-                <h4>Registrar Ação para: <span id="nome-frequencia"></span></h4>
-                <div class="actions-grid-freq">
-                    <button id="btn-marcar-presenca" class="btn btn-success">Marcar Presença</button>
-                    <button id="btn-marcar-falta-rapido" class="btn btn-warning">Marcar Falta</button>
-                    <button id="btn-liberar-alta-suspensa" class="btn btn-info hidden">Liberar Alta Definitiva</button>
-                    <button id="btn-desfazer-frequencia" class="btn btn-danger hidden" style="width: 100%;">🗑️ Desfazer Presença/Falta de Hoje</button>
-                </div>
-            </div>
         </fieldset>
+
+        <!-- NOVA PRATELEIRA: PASSES AVULSOS -->
+        <fieldset style="margin-top: 20px;">
+            <legend>Passes Avulsos de Hoje</legend>
+            <ul id="lista-avulsos"><li>Carregando...</li></ul>
+        </fieldset>
+
+        <div id="painel-acoes-frequencia" class="hidden" style="margin-top: 20px; padding: 25px; border: 2px solid #007bff; border-radius: 8px; background-color: #f0f7ff;">
+            <h4 style="margin-top: 0;">Registrar Ação para: <span id="nome-frequencia" style="color: #007bff;"></span></h4>
+            <div class="actions-grid-freq">
+                <button id="btn-marcar-presenca" class="btn btn-success">Marcar Presença</button>
+                <button id="btn-marcar-falta-rapido" class="btn btn-warning">Marcar Falta</button>
+                <button id="btn-liberar-alta-suspensa" class="btn btn-info hidden">Liberar Alta Definitiva</button>
+                <button id="btn-desfazer-frequencia" class="btn btn-danger hidden" style="width: 100%;">🗑️ Desfazer Presença/Falta/Avulso</button>
+            </div>
+        </div>
 
         <hr style="width:100%; margin: 30px 0; border: 1px solid #eee;">
 
@@ -260,6 +270,7 @@
                 btnRegistrarAvulso: document.getElementById('btn-registrar-avulso'),
                 btnLimpar: document.getElementById('btn-limpar'),
                 listaAtivos: document.getElementById('lista-ativos'),
+                listaAvulsos: document.getElementById('lista-avulsos'),
                 painelAcoesFrequencia: document.getElementById('painel-acoes-frequencia'),
                 nomeFrequencia: document.getElementById('nome-frequencia'),
                 btnMarcarPresenca: document.getElementById('btn-marcar-presenca'),
@@ -314,6 +325,57 @@
                 if (!nome) return '';
                 return nome.toLowerCase().replace(/(^|\s)\S/g, L => L.toUpperCase());
             };
+
+            async function carregarAvulsosDeHoje() {
+                ui.listaAvulsos.innerHTML = '<li>Carregando...</li>';
+                const hojeInicio = new Date(); hojeInicio.setHours(0, 0, 0, 0);
+                const hojeFim = new Date(); hojeFim.setHours(23, 59, 59, 999);
+
+                const qAvulsos = query(atendimentosRef, 
+                    where("tipo", "==", "avulso"), 
+                    where("dataAtendimento", ">=", Timestamp.fromDate(hojeInicio)), 
+                    where("dataAtendimento", "<=", Timestamp.fromDate(hojeFim))
+                );
+
+                const snapshot = await getDocs(qAvulsos);
+                if (snapshot.empty) { ui.listaAvulsos.innerHTML = '<li>Nenhum passe avulso registrado hoje.</li>'; return; }
+
+                const promessas = snapshot.docs.map(async (docSnap) => {
+                    const data = docSnap.data();
+                    const assistidoDocRef = doc(db, 'assistidos', data.assistidoId);
+                    const assistidoDoc = await getDoc(assistidoDocRef);
+                    return assistidoDoc.exists() ? { id: docSnap.id, assistido: { id: assistidoDoc.id, ...assistidoDoc.data() }, passe: data.passeRecomendado } : null;
+                });
+
+                const itens = (await Promise.all(promessas)).filter(item => item !== null);
+                if (itens.length === 0) { ui.listaAvulsos.innerHTML = '<li>Nenhum passe avulso registrado hoje.</li>'; return; }
+
+                itens.sort((a, b) => a.assistido.nome.localeCompare(b.assistido.nome));
+                ui.listaAvulsos.innerHTML = '';
+
+                itens.forEach(item => {
+                    const li = document.createElement('li');
+                    li.dataset.assistidoId = item.assistido.id;
+                    li.className = `status-presente cor-passe-${item.passe || 'P4B'}`; 
+                    
+                    const rtHtml = getRealtimeStatusHtml(filaStatusRealTime[item.assistido.id]);
+                    li.innerHTML = `<span>${item.assistido.nome} (Avulso ${item.passe || 'P4B'}) ✅</span><span class="realtime-status">${rtHtml}</span>`;
+                    
+                    li.addEventListener('click', () => {
+                        assistidoSelecionado = item.assistido;
+                        tratamentoAtivoSelecionado = null; 
+                        ui.nomeFrequencia.textContent = item.assistido.nome + " (Avulso)";
+                        ui.painelAcoesFrequencia.classList.remove('hidden');
+                        
+                        // Esconde os botões de ação normais e deixa só a lixeira
+                        ui.btnMarcarPresenca.classList.add('hidden');
+                        ui.btnMarcarFaltaRapido.classList.add('hidden');
+                        ui.btnLiberarAltaSuspensa.classList.add('hidden');
+                        ui.btnDesfazerFrequencia.classList.remove('hidden');
+                    });
+                    ui.listaAvulsos.appendChild(li);
+                });
+            }
 
             async function calcularSemanaAtual(tratamentoId) {
                 if (!tratamentoId) return 1;
@@ -744,6 +806,7 @@
                         await registrarLog('Cancelamento de Registro (AE)', { assistidoId: assistidoSelecionado.id });
                         ui.painelAcoesFrequencia.classList.add('hidden');
                         await carregarTratamentosAtivos();
+                        await carregarAvulsosDeHoje(); // Atualiza a lista de avulsos também
                     } else {
                         alert("Nenhum registro encontrado hoje, ou a operação foi bloqueada por segurança.");
                     }
@@ -859,21 +922,16 @@
                     const dataAtualFalta = serverTimestamp();
                     
                     batch.set(doc(atendimentosRef), { assistidoId: assistidoSelecionado.id, tratamentoId: tratamentoAtivoSelecionado.id, tipo: 'falta', dataAtendimento: dataAtualFalta, semana: semanaAtual });
+                    batch.update(tratamentoDocRef, { faltas_acumuladas: increment(1) });
                     
                     if (encerrarTratamento) {
-                        batch.update(tratamentoDocRef, { faltas_acumuladas: increment(1), status: 'encerrado_por_falta', dataFim: dataAtualFalta });
-                    } else {
-                        batch.update(tratamentoDocRef, { faltas_acumuladas: increment(1) });
-                    }
-                    
-                    await batch.commit();
-
-                    if (encerrarTratamento) {
+                        batch.update(tratamentoDocRef, { status: 'encerrado_por_falta', dataFim: dataAtualFalta });
                         await registrarLog('Encerramento por Falta (AE)', logDetalhes);
                     } else {
                         await registrarLog('Marcação de Falta (AE)', logDetalhes);
                     }
                     
+                    await batch.commit();
                     alert(motivo);
                     ui.painelAcoesFrequencia.classList.add('hidden');
                     ui.btnLiberarAltaSuspensa.classList.add('hidden');
@@ -931,6 +989,7 @@
                         await registrarLog('Cancelamento de Registro (AE)', { assistidoId: assistidoSelecionado.id });
                         resetarFormularioBusca();
                         await carregarTratamentosAtivos();
+                        await carregarAvulsosDeHoje(); // Atualiza avulsos após busca
                     } else {
                         alert("Nenhum registro encontrado hoje, ou a operação foi bloqueada por segurança.");
                     }
@@ -950,6 +1009,7 @@
                     await batch.commit(); alert('Passe avulso registrado e enviado para a fila!');
                     await registrarLog('Registro de Passe Avulso (AE)', { assistidoId: assistidoId, assistidoNome: nomeAssistido, passeRecomendado: passeAvulso });
                     resetarFormularioBusca();
+                    await carregarAvulsosDeHoje(); // Chama função para atualizar lista na hora
                 } catch(error) { console.error("Erro ao registrar passe avulso:", error); e.target.disabled = false; }
             });
 
@@ -976,6 +1036,7 @@
 
             resetarFormularioBusca();
             carregarTratamentosAtivos();
+            carregarAvulsosDeHoje(); // Chama ao carregar a página
             
             monitorarAndamentoFila();
         }
