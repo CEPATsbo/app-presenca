@@ -187,7 +187,13 @@
                         }
                     }
 
-                    renderizarListaAssistidos(assistidosParaExibir);
+                    // --- BUSCA DE PENDÊNCIAS PARA EXIBIR O ÍCONE NA LISTA ---
+                    const qPendentes = query(atendimentosRef, where('detalhes_preenchidos', '==', false));
+                    const pendentesSnap = await getDocs(qPendentes);
+                    const assistidosComPendencia = new Set();
+                    pendentesSnap.forEach(doc => assistidosComPendencia.add(doc.data().assistidoId));
+
+                    renderizarListaAssistidos(assistidosParaExibir, assistidosComPendencia);
                     
                     const params = new URLSearchParams(window.location.search);
                     const assistidoIdUrl = params.get('assistidoId');
@@ -206,7 +212,7 @@
                 }
             }
 
-            function renderizarListaAssistidos(assistidos) {
+            function renderizarListaAssistidos(assistidos, assistidosComPendencia) {
                 ui.listaAssistidos.innerHTML = '';
                 if (assistidos.length === 0) {
                     ui.listaAssistidos.innerHTML = '<p>Nenhum assistido encontrado para os critérios atuais.</p>';
@@ -214,7 +220,9 @@
                 }
                 assistidos.forEach(assistido => {
                     const li = document.createElement('li');
-                    li.textContent = assistido.nome;
+                    const iconeStatus = assistidosComPendencia.has(assistido.id) ? '<span title="Ficha pendente de preenchimento">📝</span>' : '<span title="Fichas em dia">✅</span>';
+                    
+                    li.innerHTML = `<div style="display: flex; gap: 10px; align-items: center;">${iconeStatus} <span>${assistido.nome}</span></div>`;
                     li.dataset.assistidoId = assistido.id;
                     li.addEventListener('click', () => {
                         document.querySelectorAll('#lista-assistidos li').forEach(el => el.classList.remove('selecionado'));
@@ -300,7 +308,7 @@
                 const botaoEditarHtml = `<a href="/atendimento-samaritanos.html?atendimentoId=${a.id}" class="btn btn-editar">Ver / Editar</a>`;
                 
                 // Lógica dos ícones de status preenchido
-                let iconeHtml = a.detalhes_preenchidos ? '<span>✅</span>' : '<span>📝</span>';
+                let iconeHtml = a.detalhes_preenchidos ? '<span title="Ficha já preenchida">✅</span>' : '<span title="Ficha pendente">📝</span>';
                 
                 return `<li>
                             <div class="atendimento-info">
