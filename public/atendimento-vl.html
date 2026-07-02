@@ -171,7 +171,7 @@
                 
                 if (!assistidoDoc.exists() || !tratamentoDoc.exists()) { formularioContainer.innerHTML = `<p class="erro">Dados do assistido ou tratamento não encontrados.</p>`; return; }
                 
-                const assistido = assistidoDoc.data();
+                const assistido = { id: assistidoDoc.id, ...assistidoDoc.data() };
                 const tratamento = tratamentoDoc.data();
                 
                 const formHtml = criarFormulario(atendimento, assistido, tratamento);
@@ -262,19 +262,17 @@
                 let retornosSolicitados = tratamento.retornos_solicitados || 3; 
                 let statusFinal = tratamento.status || 'ativo'; 
 
-                // Lógica de Extensão Semana a Semana
                 const radioExtensao = document.querySelector('input[name="decisao-extensao"]:checked');
                 
                 if (radioExtensao) {
                     if (radioExtensao.value === 'estender') {
-                        retornosSolicitados = atendimento.semana; // Ex: Se for semana 4, atualiza para ter 4 retornos (Total 5 sessões)
+                        retornosSolicitados = atendimento.semana; 
                         statusFinal = 'estendido';
                     } else if (radioExtensao.value === 'concluir') {
-                        retornosSolicitados = atendimento.semana - 1; // Ajusta caso recuem da decisão
+                        retornosSolicitados = atendimento.semana - 1; 
                         statusFinal = 'concluido';
                     }
                 } else {
-                    // Se não tiver radio (Semanas 1, 2 ou 3), verifica se calhou de ser a última
                     const totalAtend = (tratamento.retornos_solicitados || 0) + 1;
                     if (atendimento.semana === totalAtend && atendimento.semana < 4) {
                         statusFinal = 'concluido';
@@ -325,7 +323,6 @@
                 
                 let notasText = atendimento.notas || '';
                 
-                // Limpeza inteligente para pedidos online recém-abertos
                 if (!atendimento.detalhes_preenchidos && tratamento.origem === 'online' && notasText.includes('Pedido Online Recebido')) {
                     notasText = '';
                 }
@@ -352,7 +349,6 @@
                     botaoRetornoHtml = `<p style="text-align:center; font-weight:bold; color:#28a745; margin-top:15px;">Tratamento concluído (Alta).</p>`;
                 }
 
-                // Caixa de Informações do Pedido Online
                 let infoSolicitanteHtml = '';
                 if (tratamento.origem === 'online') {
                     const motivo = tratamento.informacoesIniciais || tratamento.pedidoInformacoes || 'Sem informações fornecidas.';
@@ -368,7 +364,6 @@
 
                 let extensaoTratamentoHtml = '';
                 
-                // Lógica do Check-point Semana a Semana (Aparece a partir da Semana 4 E se for o último atendimento programado)
                 if (atendimentoNum >= 4 && atendimentoNum === totalAtendimentos) {
                     extensaoTratamentoHtml = `
                     <fieldset style="border-color: #17a2b8; margin-top: 20px;">
@@ -383,10 +378,17 @@
                                     <input type="radio" name="decisao-extensao" value="estender"> Estender Tratamento (+1 Retorno)
                                 </label>
                             </div>
-                            <p style="font-size: 0.85em; color: #666; margin-top: 10px;">Estender o tratamento criará automaticamente vaga para a semana ${atendimentoNum + 1}.</p>
                         </div>
                     </fieldset>`;
                 }
+
+                // INSERÇÃO DO BOTÃO SAMARITANOS AQUI
+                let linkEncaminhamentoSamaritanos = `
+                    <hr style="border: 0; height: 1px; background: #ddd; margin: 25px 0;">
+                    <a href="/recepcao-samaritanos.html?origem=vl_ficha&assistidoId=${assistido.id}&atendimentoId=${atendimento.id}" class="btn" style="background-color: #e67e22; width: 100%; text-align: center; display: block; box-sizing: border-box; text-decoration: none;">
+                        ➕ Encaminhar para Samaritanos (Espírito / Assistido)
+                    </a>
+                `;
 
                 return `<fieldset>
                             <legend>Detalhes do Atendimento (VL)</legend>
@@ -424,6 +426,8 @@
                             ${extensaoTratamentoHtml}
                             
                             <button id="btn-salvar-atendimento" type="button" class="btn btn-primary" style="width: 100%; margin-top: 20px;">Salvar Alterações</button>
+
+                            ${linkEncaminhamentoSamaritanos}
                         </fieldset>`;
             }
         }
