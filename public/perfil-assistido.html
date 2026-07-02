@@ -191,7 +191,6 @@
                         getDocs(query(atendimentosAeRef, where('assistidoId', '==', assistidoId), orderBy('dataAtendimento', 'desc'))),
                         getDocs(query(tratamentosVlRef, where('assistidoId', '==', assistidoId), orderBy('dataInicio', 'desc'))),
                         getDocs(query(atendimentosVlRef, where('assistidoId', '==', assistidoId), orderBy('dataAtendimento', 'desc'))),
-                        // Usa dataRegistroFila pois nem todos os do Samaritanos tem dataInicio
                         getDocs(query(tratamentosSamRef, where('assistidoId', '==', assistidoId), orderBy('dataRegistroFila', 'desc'))),
                         getDocs(query(atendimentosSamRef, where('assistidoId', '==', assistidoId), orderBy('dataAtendimento', 'desc')))
                     ]);
@@ -253,7 +252,6 @@
                 `;
             }
 
-            // [MÉTODOS AE E VL INTACTOS...]
             function renderizarHistoricoAE(ciclos, todosAtendimentos) {
                 let html = '';
                 if (ciclos.length > 0) {
@@ -300,7 +298,6 @@
                 ui.cardVL.innerHTML = html;
             }
 
-            // NOVO MÉTODO: SAMARITANOS
             function renderizarHistoricoSAM(ciclos, todosAtendimentos) {
                 let html = '';
                 if (ciclos.length > 0) {
@@ -365,10 +362,18 @@
                 const atendimentoNum = `Semana ${a.semana || '?'}`;
                 const botaoEditarHtml = `<a href="/atendimento-samaritanos.html?atendimentoId=${a.id}" class="btn btn-editar" style="background-color: #e67e22;">Ver / Editar</a>`;
                 
-                return `<li><div class="atendimento-info"><span><strong>${dataAtendimento}</strong> - ${atendimentoNum}</span></div>${botaoEditarHtml}</li>`;
+                // Lógica dos ícones de status preenchido
+                let iconeHtml = a.detalhes_preenchidos ? '<span>✅</span>' : '<span>📝</span>';
+                
+                return `<li>
+                            <div class="atendimento-info">
+                                ${iconeHtml}
+                                <span><strong>${dataAtendimento}</strong> - ${atendimentoNum}</span>
+                            </div>
+                            ${botaoEditarHtml}
+                        </li>`;
             }
 
-            // Inicia o carregamento
             carregarProntuario();
         }
     </script>
