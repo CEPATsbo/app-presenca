@@ -233,7 +233,6 @@
                     assistidoId: assistido.id, assistidoNome: assistido.nome
                 });
                 
-                // Ordena do tratamento mais recente para o mais velho
                 const qTratamentos = query(tratamentosRef, where('assistidoId', '==', assistido.id), orderBy('dataRegistroFila', 'desc'));
                 const tratamentosSnapshot = await getDocs(qTratamentos);
                 const ciclos = tratamentosSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
@@ -298,11 +297,14 @@
             function renderizarItemAtendimento(a) {
                 const dataAtendimento = a.dataAtendimento ? a.dataAtendimento.toDate().toLocaleDateString('pt-br') : "N/A";
                 const atendimentoNum = a.semana || '?';
-                
                 const botaoEditarHtml = `<a href="/atendimento-samaritanos.html?atendimentoId=${a.id}" class="btn btn-editar">Ver / Editar</a>`;
+                
+                // Lógica dos ícones de status preenchido
+                let iconeHtml = a.detalhes_preenchidos ? '<span>✅</span>' : '<span>📝</span>';
                 
                 return `<li>
                             <div class="atendimento-info">
+                                ${iconeHtml}
                                 <span><strong>${dataAtendimento}</strong> - Semana ${atendimentoNum}</span>
                             </div>
                             ${botaoEditarHtml}
