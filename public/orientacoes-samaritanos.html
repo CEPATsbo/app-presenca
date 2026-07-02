@@ -1,0 +1,271 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Samaritanos - Envio de Orientações</title>
+    <style>
+        :root {
+            --cor-primaria: #e67e22;
+            --cor-primaria-escura: #d35400;
+            --cor-fundo: #f4f6f9;
+            --cor-whatsapp: #25d366;
+            --cor-whatsapp-escura: #128c7e;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: var(--cor-fundo);
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        .container {
+            width: 100%;
+            max-width: 900px;
+            background-color: white;
+            padding: 30px;
+            border-radius: 12px;
+            box-shadow: 0 6px 24px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+            box-sizing: border-box;
+        }
+        .nav-voltar {
+            width: 100%;
+            max-width: 900px;
+            margin-bottom: 20px;
+        }
+        .btn-voltar {
+            background-color: #6c757d;
+            color: white;
+            border: none;
+            padding: 12px 20px;
+            border-radius: 8px;
+            font-weight: bold;
+            font-size: 1em;
+            text-decoration: none;
+            cursor: pointer;
+            transition: background-color 0.3s;
+            display: inline-block;
+        }
+        .btn-voltar:hover {
+            background-color: #5a6268;
+        }
+        h1 { color: #333; text-align: center; margin-top: 0; margin-bottom: 10px; }
+        p.subtitulo { text-align: center; color: #666; margin-bottom: 30px; }
+        h2 { color: var(--cor-primaria-escura); border-bottom: 2px solid #eee; padding-bottom: 10px; margin-top: 30px; font-size: 1.4em; }
+        
+        .grid-cards { display: grid; grid-template-columns: 1fr; gap: 20px; margin-top: 15px; }
+        @media(min-width: 768px) { .grid-cards { grid-template-columns: 1fr 1fr; } }
+        
+        .card-mensagem {
+            background: #fff; border: 1px solid #e0e0e0; border-radius: 8px; padding: 20px;
+            display: flex; flex-direction: column; justify-content: space-between;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.04); position: relative; border-left: 5px solid var(--cor-primaria);
+        }
+        .card-mensagem.enviado { border-left-color: var(--cor-whatsapp); background-color: #fcfdfc; }
+        
+        .card-header { margin-bottom: 15px; }
+        .card-header h3 { margin: 0 0 5px 0; color: #2c3e50; font-size: 1.2em; }
+        .badge-semana { background-color: #fdebd0; color: var(--cor-primaria-escura); padding: 3px 8px; border-radius: 4px; font-size: 0.8em; font-weight: bold; display: inline-block; }
+        .badge-enviado { background-color: #c8e6c9; color: #2e7d32; padding: 3px 8px; border-radius: 4px; font-size: 0.8em; font-weight: bold; display: inline-block; }
+        
+        .texto-orientacao {
+            background: #fdfaf6; border: 1px dashed #fad7a1; padding: 12px; border-radius: 6px;
+            font-style: italic; color: #4a4a4a; font-size: 0.95em; margin-bottom: 15px; white-space: pre-wrap;
+        }
+        .card-mensagem.enviado .texto-orientacao { background: #f4fbf7; border-color: #a5d6a7; }
+        
+        .info-contato { font-size: 0.85em; color: #7f8c8d; margin-bottom: 15px; }
+        .btn-whatsapp {
+            background-color: var(--cor-whatsapp); color: white; border: none; padding: 10px 15px;
+            border-radius: 6px; font-weight: bold; font-size: 0.95em; cursor: pointer;
+            display: flex; align-items: center; justify-content: center; gap: 8px; text-decoration: none; transition: background-color 0.2s;
+        }
+        .btn-whatsapp:hover { background-color: var(--cor-whatsapp-escura); }
+        .btn-recuperar {
+            background-color: #f8f9fa; color: #6c757d; border: 1px solid #ccc; padding: 8px 12px;
+            border-radius: 6px; font-size: 0.85em; cursor: pointer; font-weight: bold; transition: all 0.2s;
+        }
+        .btn-recuperar:hover { background-color: #e2e6ea; color: #343a40; }
+        .lista-vazia { color: #95a5a6; font-style: italic; text-align: center; padding: 20px; grid-column: 1 / -1; }
+        .hidden { display: none !important; }
+    </style>
+</head>
+<body>
+
+    <nav class="nav-voltar">
+        <a href="/dashboard-samaritanos.html" class="btn-voltar">⬅ Voltar para o Dashboard</a>
+    </nav>
+
+    <div id="acesso-negado" class="container hidden">
+        <h1>Acesso Negado</h1>
+        <p style="text-align: center; color: red;">Você não tem permissão para acessar esta página.</p>
+    </div>
+
+    <div id="main-content" class="container hidden">
+        <h1>Envio de Orientações - Samaritanos</h1>
+        <p class="subtitulo">Disparo automatizado de orientações espirituais via WhatsApp.</p>
+
+        <h2>📥 Orientações Pendentes de Envio</h2>
+        <div id="lista-pendentes" class="grid-cards">
+            <div class="lista-vazia">Carregando orientações pendentes...</div>
+        </div>
+
+        <h2>✅ Enviadas nesta Semana</h2>
+        <div id="lista-enviados" class="grid-cards">
+            <div class="lista-vazia">Nenhuma orientação enviada hoje.</div>
+        </div>
+    </div>
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
+        import { getFirestore, collection, query, where, onSnapshot, doc, getDoc, updateDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
+        import { protegerPagina } from '/auth.js';
+
+        const firebaseConfig = {
+            apiKey: "AIzaSyBV7RPjk3cFTqL-aIpflJcUojKg1ZXMLuU",
+            authDomain: "voluntarios-ativos---cepat.firebaseapp.com",
+            projectId: "voluntarios-ativos---cepat",
+            storageBucket: "voluntarios-ativos---cepat.firebasestorage.app",
+            messagingSenderId: "66122858261",
+            appId: "1:66122858261:web:7fa21f1805463b5c08331c"
+        };
+        
+        initializeApp(firebaseConfig);
+        const db = getFirestore();
+
+        protegerPagina(['super-admin', 'diretor', 'tesoureiro', 'conselheiro', 'entrevistador']).then(user => {
+            document.getElementById('main-content').classList.remove('hidden');
+            inicializarPainelMensagens();
+        }).catch(err => {
+            document.getElementById('acesso-negado').classList.remove('hidden');
+        });
+
+        function inicializarPainelMensagens() {
+            const atendimentosRef = collection(db, 'atendimentos_samaritanos');
+
+            const qPendentes = query(atendimentosRef, where("detalhes_preenchidos", "==", true));
+            
+            onSnapshot(qPendentes, async (snapshot) => {
+                const containerPendentes = document.getElementById('lista-pendentes');
+                containerPendentes.innerHTML = '';
+                let encontrouPendente = false;
+
+                for (const documento of snapshot.docs) {
+                    const atendimento = { id: documento.id, ...documento.data() };
+                    
+                    if (atendimento.orientacao_enviada === true) continue;
+                    
+                    // Se o dirigente NÃO preencheu orientações nesta semana, ignora e não suja a tela
+                    if (!atendimento.orientacoes || atendimento.orientacoes.trim() === '') continue;
+
+                    encontrouPendente = true;
+
+                    const assistidoDoc = await getDoc(doc(db, 'assistidos', atendimento.assistidoId));
+                    const tratamentoDoc = await getDoc(doc(db, 'tratamentos_samaritanos', atendimento.tratamentoId));
+                    
+                    const dadosAssistido = assistidoDoc.exists() ? assistidoDoc.data() : { nome: "Não encontrado", telefone: "" };
+                    const dadosTratamento = tratamentoDoc.exists() ? tratamentoDoc.data() : { nomeSolicitante: "", contatoSolicitante: "" };
+
+                    const nomeDestinatario = dadosTratamento.nomeSolicitante || dadosAssistido.nome;
+                    const telefoneCru = dadosTratamento.contatoSolicitante || dadosAssistido.telefone || '';
+                    const telefoneFormatado = limparEFormatarTelefone(telefoneCru);
+
+                    const card = document.createElement('div');
+                    card.className = 'card-mensagem';
+                    card.innerHTML = `
+                        <div class="card-header">
+                            <h3>${dadosAssistido.nome}</h3>
+                            <span class="badge-semana">Semana ${atendimento.semana}</span>
+                        </div>
+                        <div class="texto-orientacao">"${atendimento.orientacoes}"</div>
+                        <div class="info-contato">
+                            <strong>Enviar para:</strong> ${nomeDestinatario}<br>
+                            <strong>Telefone:</strong> ${telefoneCru || 'Não cadastrado'}
+                        </div>
+                        <button class="btn-whatsapp" id="btn-envio-${atendimento.id}">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M.057 24l1.687-6.163c-1.041-1.804-1.588-3.849-1.587-5.946C.06 5.348 5.397.01 12.008.01c3.202.001 6.212 1.246 8.477 3.514 2.266 2.268 3.507 5.28 3.505 8.484-.004 6.657-5.34 11.997-11.953 11.997-2.005-.001-3.973-.502-5.713-1.457L0 24zm6.59-4.846c1.6.95 3.188 1.449 4.625 1.451 5.403.002 9.803-4.392 9.806-9.799.002-2.618-1.016-5.083-2.868-6.937C16.304 2.016 13.84 1 11.217 1 5.81 1 1.41 5.395 1.406 10.801c-.001 1.541.413 3.042 1.2 4.366L1.648 20.23l5.002-1.313zM16.686 14c-.27-.135-1.593-.786-1.84-.875-.246-.09-.425-.135-.605.135-.18.27-.696.875-.853 1.056-.157.18-.315.203-.585.068-1.523-.76-2.529-1.28-3.542-3.023-.27-.463.27-.43.773-1.43.085-.17.043-.319-.022-.453-.064-.134-.605-1.458-.828-1.993-.219-.527-.441-.456-.605-.464-.156-.007-.336-.008-.517-.008s-.472.068-.72.338c-.246.27-.942.922-.942 2.25s.965 2.611 1.1 2.79c.134.18 1.901 2.903 4.606 4.07.643.277 1.146.443 1.537.567.646.206 1.233.176 1.697.107.518-.077 1.593-.652 1.818-1.252.225-.6 225-1.114.157-1.226-.067-.113-.247-.247-.517-.382z"/></svg>
+                            Enviar Orientação
+                        </button>
+                    `;
+
+                    containerPendentes.appendChild(card);
+
+                    document.getElementById(`btn-envio-${atendimento.id}`).addEventListener('click', async () => {
+                        if (!telefoneFormatado) {
+                            alert("Não foi possível realizar o disparo pois não há telefone cadastrado.");
+                            return;
+                        }
+
+                        const saudacao = `Olá, tudo bem? Mensagem da Casa Espírita Paulo de Tarso (CEPAT) referente ao tratamento à distância dos Samaritanos para *${dadosAssistido.nome}*.\n\nSegue a orientação dos Benfeitores para a *Semana ${atendimento.semana}*:\n\n_"${atendimento.orientacoes.trim()}"_\n\nQue o Mestre Jesus abençoe a todos! ✨`;
+                        
+                        const urlWhatsapp = `https://api.whatsapp.com/send?phone=${telefoneFormatado}&text=${encodeURIComponent(saudacao)}`;
+
+                        window.open(urlWhatsapp, '_blank');
+
+                        await updateDoc(doc(db, 'atendimentos_samaritanos', atendimento.id), {
+                            orientacao_enviada: true,
+                            dataEnvioOrientacao: serverTimestamp()
+                        });
+                    });
+                }
+
+                if (!encontrouPendente) {
+                    containerPendentes.innerHTML = '<div class="lista-vazia">🎉 Nenhuma orientação pendente de envio!</div>';
+                }
+            });
+
+            const qEnviados = query(atendimentosRef, where("orientacao_enviada", "==", true));
+            
+            onSnapshot(qEnviados, async (snapshot) => {
+                const containerEnviados = document.getElementById('lista-enviados');
+                containerEnviados.innerHTML = '';
+
+                if (snapshot.empty) {
+                    containerEnviados.innerHTML = '<div class="lista-vazia">Nenhuma orientação disparada ainda.</div>';
+                    return;
+                }
+
+                const docsOrdenados = snapshot.docs.reverse().slice(0, 10);
+
+                for (const documento of docsOrdenados) {
+                    const atendimento = { id: documento.id, ...documento.data() };
+                    
+                    const assistidoDoc = await getDoc(doc(db, 'assistidos', atendimento.assistidoId));
+                    const dadosAssistido = assistidoDoc.exists() ? assistidoDoc.data() : { nome: "Não encontrado" };
+
+                    const card = document.createElement('div');
+                    card.className = 'card-mensagem enviado';
+                    card.innerHTML = `
+                        <div class="card-header">
+                            <h3>${dadosAssistido.nome}</h3>
+                            <span class="badge-enviado">Semana ${atendimento.semana} - Enviada</span>
+                        </div>
+                        <div class="texto-orientacao">"${atendimento.orientacoes}"</div>
+                        <button class="btn-recuperar" id="btn-recuperar-${atendimento.id}">🔄 Reenviar / Retornar para Pendentes</button>
+                    `;
+
+                    containerEnviados.appendChild(card);
+
+                    document.getElementById(`btn-recuperar-${atendimento.id}`).addEventListener('click', async () => {
+                        await updateDoc(doc(db, 'atendimentos_samaritanos', atendimento.id), {
+                            orientacao_enviada: false
+                        });
+                    });
+                }
+            });
+        }
+
+        function limparEFormatarTelefone(tel) {
+            if (!tel) return '';
+            let limpo = tel.replace(/\D/g, ''); 
+            if (limpo.length === 11 || limpo.length === 10) {
+                limpo = '55' + limpo; 
+            }
+            return limpo;
+        }
+    </script>
+</body>
+</html>
