@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Painel de Chamadas - Samaritanos (Teleprompter)</title>
+    <style>
+        :root { 
+            --cor-primaria: #e67e22; /* Laranja Samaritanos */
+            --bg-color: #0a0602; /* Fundo super escuro quente para não ofuscar a sala */
+            --card-bg: #1a1005; /* Fundo do card */
+        } 
+        html, body { 
+            margin: 0; 
+            padding: 0; 
+            width: 100%; 
+            height: 100%; 
+            overflow: hidden; 
+            background-color: var(--bg-color); 
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            color: #fff;
+        }
+        .container {
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            height: 100%;
+            text-align: center;
+            padding: 40px;
+            box-sizing: border-box;
+        }
+        #chamada-wrapper {
+            background-color: var(--card-bg);
+            border-radius: 24px;
+            padding: 50px 60px;
+            width: 90%;
+            max-width: 1200px;
+            box-shadow: 0 10px 50px rgba(0,0,0,0.8);
+            border: 2px solid #b95d10;
+            transition: transform 0.5s ease, opacity 0.5s ease;
+            opacity: 0;
+            transform: scale(0.9);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        #chamada-wrapper.visivel {
+            opacity: 1;
+            transform: scale(1);
+        }
+        #nome-assistido {
+            font-size: 6vw; /* Gigante */
+            font-weight: bold;
+            color: var(--cor-primaria);
+            margin: 0;
+            line-height: 1.1;
+        }
+        #idade-assistido {
+            font-size: 2.5vw;
+            color: #a5a5a5;
+            margin: 15px 0 0 0;
+            font-weight: normal;
+        }
+        .divisor {
+            width: 60%;
+            height: 2px;
+            background-color: #b95d10;
+            margin: 30px 0;
+        }
+        #motivo-assistido {
+            font-size: 2.8vw;
+            color: #e0e0e0;
+            margin: 0;
+            line-height: 1.4;
+            font-style: italic;
+            text-align: center;
+            max-width: 90%;
+        }
+        #desencarnado-vinculado {
+            font-size: 2.2vw;
+            color: #e74c3c;
+            margin-top: 25px;
+            font-weight: bold;
+        }
+        #texto-guia {
+            font-size: 1.5vw;
+            color: #666;
+            margin-top: 40px;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+        }
+        #logo-placeholder {
+            font-size: 1.5vw;
+            color: #444;
+            position: absolute;
+            top: 20px;
+            left: 30px;
+        }
+        .hidden { display: none !important; }
+    </style>
+</head>
+<body>
+    <div id="acesso-negado" class="container hidden"><h1>Acesso Negado</h1></div>
+    <div id="main-content" class="container hidden">
+        <div id="logo-placeholder">Samaritanos - Irradiação</div>
+        
+        <div id="chamada-wrapper">
+            <h1 id="nome-assistido">Nome do Assistido</h1>
+            <h2 id="idade-assistido">Idade</h2>
+            <div class="divisor"></div>
+            <p id="motivo-assistido">Motivo / Informações do pedido aparecerão aqui...</p>
+            <div id="desencarnado-vinculado"></div>
+            
+            <div id="texto-guia">Em Vibração</div>
+        </div>
+    </div>
+    
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
+        import { 
+            getFirestore, collection, query, where, orderBy, limit, 
+            onSnapshot, doc, getDoc, getDocs
+        } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
+        import { protegerPagina } from '/auth.js';
+        
+        const firebaseConfig = {
+            apiKey: "AIzaSyBV7RPjk3cFTqL-aIpflJcUojKg1ZXMLuU",
+            authDomain: "voluntarios-ativos---cepat.firebaseapp.com",
+            projectId: "voluntarios-ativos---cepat",
+            storageBucket: "voluntarios-ativos---cepat.firebasestorage.app",
+            messagingSenderId: "66122858261",
+            appId: "1:66122858261:web:7fa21f1805463b5c08331c"
+        };
+        initializeApp(firebaseConfig);
+        
+        protegerPagina(['super-admin', 'diretor', 'tesoureiro', 'conselheiro', 'entrevistador', 'recepcionista']).then(user => {
+            document.getElementById('main-content').classList.remove('hidden');
+            inicializarPagina();
+        }).catch(err => { 
+            document.getElementById('acesso-negado').classList.remove('hidden');
+        });
+
+        function inicializarPagina() {
+            const db = getFirestore();
+            const filaSamRef = collection(db, 'fila_samaritanos');
+            
+            const ui = {
+                wrapper: document.getElementById('chamada-wrapper'),
+                nomeAssistido: document.getElementById('nome-assistido'),
+                idadeAssistido: document.getElementById('idade-assistido'),
+                motivoAssistido: document.getElementById('motivo-assistido'),
+                desencarnadoVinculado: document.getElementById('desencarnado-vinculado')
+            };
+
+            let ultimoChamadoId = null; 
+            let timerLimparTela;
+
+            const q = query(
+                filaSamRef, 
+                where('status', '==', 'Chamado'), 
+                orderBy('chamadoEm', 'desc'), 
+                limit(1)
+            );
+
+            onSnapshot(q, async (snapshot) => {
+                // Se a fila ficar vazia, ignora e mantém a tela congelada até o timer acabar.
+                if (snapshot.empty) return; 
+                
+                const docChamado = snapshot.docs[0];
+                const chamada = { id: docChamado.id, ...docChamado.data() };
+
+                if (chamada.id !== ultimoChamadoId) {
+                    ultimoChamadoId = chamada.id;
+                    clearTimeout(timerLimparTela); 
+                    
+                    // 1. Atualiza Nome Imediatamente
+                    ui.nomeAssistido.textContent = chamada.nomeAssistido;
+                    ui.idadeAssistido.textContent = 'Buscando ficha...';
+                    ui.motivoAssistido.textContent = '';
+                    ui.desencarnadoVinculado.textContent = '';
+                    ui.wrapper.classList.add('visivel');
+
+                    // 2. Busca Idade e Motivo no Banco de Dados
+                    let idade = '--';
+                    let motivo = 'Sem detalhes informados.';
+                    let desencarnado = '';
+
+                    try {
+                        const tratQuery = query(collection(db, 'tratamentos_samaritanos'), where('assistidoId', '==', chamada.assistidoId), where('status', 'in', ['ativo', 'estendido', 'fila']), limit(1));
+                        const tratSnap = await getDocs(tratQuery);
+                        
+                        if(!tratSnap.empty) {
+                            const tratData = tratSnap.docs[0].data();
+                            idade = tratData.idadeAssistidoOnline || tratData.idadeAssistido || '--';
+                            
+                            if (tratData.informacoesIniciais) {
+                                motivo = `"${tratData.informacoesIniciais}"`;
+                            }
+                            if (tratData.desencarnadoVinculado) {
+                                desencarnado = `Vínculo Espiritual: ${tratData.desencarnadoVinculado}`;
+                            }
+                        }
+
+                        if (idade === '--' || !idade) {
+                            const assDoc = await getDoc(doc(db, 'assistidos', chamada.assistidoId));
+                            if (assDoc.exists()) {
+                                idade = assDoc.data().idade_atual || assDoc.data().idade || '--';
+                            }
+                        }
+                    } catch (e) { console.error("Erro ao buscar detalhes da ficha:", e); }
+
+                    // 3. Atualiza os dados na tela
+                    ui.idadeAssistido.textContent = idade !== '--' ? `${idade} anos` : 'Idade não informada';
+                    ui.motivoAssistido.textContent = motivo;
+                    ui.desencarnadoVinculado.textContent = desencarnado;
+
+                    // 4. Inicia o cronômetro de 90 segundos (1 minuto e meio) para limpar a tela
+                    timerLimparTela = setTimeout(() => {
+                        ui.wrapper.classList.remove('visivel');
+                        ultimoChamadoId = null; // Reseta para o próximo
+                    }, 90000); 
+                }
+            }, (error) => {
+                console.error("Erro ao escutar a fila de chamados:", error);
+                ui.nomeAssistido.textContent = "Erro de Conexão";
+                ui.idadeAssistido.textContent = "Aguarde...";
+                ui.motivoAssistido.textContent = "Tentando reconectar com o sistema...";
+                ui.wrapper.classList.add('visivel');
+            });
+        }
+    </script>
+</body>
+</html>

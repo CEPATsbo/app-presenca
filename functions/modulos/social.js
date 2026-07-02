@@ -359,6 +359,43 @@ const ativarNovosPedidosVl = onSchedule({ ...OPCOES_FUNCAO_SAOPAULO, schedule: '
     await batch.commit();
 });
 
+// ==========================================
+// MÓDULO: SAMARITANOS (NOVO)
+// ==========================================
+
+// 1. Arquivamento Automático do Samaritanos (Roda às quintas-feiras às 23:30)
+const arquivarSamaritanosConcluidos = onSchedule({ ...OPCOES_FUNCAO_SAOPAULO, schedule: '30 23 * * 4' }, async () => {
+    const agora = admin.firestore.Timestamp.now();
+    
+    // Busca APENAS os tratamentos que receberam Alta do Dirigente (status = 'concluido')
+    const snapConcluidos = await db.collection('tratamentos_samaritanos').where('status', '==', 'concluido').get();
+    
+    if (snapConcluidos.empty) return;
+
+    const batch = db.batch(); 
+    
+    snapConcluidos.forEach((doc) => { 
+        const dados = doc.data();
+        
+        // Usa a data da Alta para gerar a semana de referência estatística
+        const dataParaReferencia = dados.dataAlta ? dados.dataAlta.toDate() : agora.toDate();
+        const semanaDeReferencia = new Intl.DateTimeFormat('en-CA').format(dataParaReferencia);
+        
+        // Transfere para a coleção de histórico
+        batch.set(db.collection('historico_samaritanos').doc(), {
+            ...dados,
+            semanaDeReferencia, 
+            arquivadoEm: admin.firestore.FieldValue.serverTimestamp()
+        }); 
+        
+        // Remove da coleção ativa para limpar a mesa
+        batch.delete(doc.ref); 
+    });
+    
+    await batch.commit();
+});
+
+
 module.exports = {
     enviarPedidoVibracao,
     promoverParaCaritas,
@@ -372,5 +409,6 @@ module.exports = {
     verificarAprovacaoFinal,
     enviarPedidoVinhaDeLuz,
     arquivarVlConcluidos,
-    ativarNovosPedidosVl
+    ativarNovosPedidosVl,
+    arquivarSamaritanosConcluidos // <-- Exportado
 };
