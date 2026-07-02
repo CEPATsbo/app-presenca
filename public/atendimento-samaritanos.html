@@ -23,7 +23,7 @@
         .form-item textarea { padding: 10px; border-radius: 6px; border: 1px solid #ccc; font-size: 1em; width: 100%; box-sizing: border-box; font-family: inherit; }
         .form-item textarea:disabled { background-color: var(--fundo-desabilitado); cursor: not-allowed; }
         .erro { color: #dc3545; font-weight: bold; text-align: center; }
-        .hidden { display: none !important; } /* <-- CORREÇÃO AQUI */
+        .hidden { display: none !important; }
         
         .info-header { background-color: #fcf6f0; padding: 15px; border-radius: 6px; margin-bottom: 20px; border: 1px solid var(--cor-borda); }
         .info-grid { display: flex; justify-content: space-around; align-items: center; flex-wrap: wrap; gap: 10px; }
@@ -61,7 +61,8 @@
 
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
-        import { getFirestore, collection, doc, getDoc, query, where, Timestamp, getDocs, writeBatch, serverTimestamp, increment, setDoc } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
+        // CORREÇÃO: updateDoc foi adicionado à lista de importações abaixo!
+        import { getFirestore, collection, doc, getDoc, query, where, Timestamp, getDocs, writeBatch, serverTimestamp, increment, setDoc, updateDoc } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
         import { protegerPagina } from '/auth.js';
 
         const firebaseConfig = {
@@ -163,7 +164,10 @@
                     await registrarLog('Alta Samaritanos', { assistidoId: globTrat.assistidoId, tratamentoId: globTratDocRef.id, semanaAlta: globAtend.semana });
                     alert('Alta concedida! Ciclo encerrado.');
                     location.reload();
-                } catch (error) { alert("Falha ao dar alta."); }
+                } catch (error) { 
+                    console.error("Erro ao conceder alta:", error);
+                    alert("Falha ao dar alta. Verifique o console."); 
+                }
             });
 
             async function marcarNovoRetorno(atendAnt, tDocRef) {
@@ -189,7 +193,11 @@
                     
                     alert(`Semana ${novaSemana} agendada com sucesso.`);
                     location.reload();
-                } catch (error) { alert("Erro ao marcar retorno."); btn.disabled = false; }
+                } catch (error) { 
+                    console.error("Erro ao marcar retorno:", error);
+                    alert("Erro ao marcar retorno. Verifique o console."); 
+                    btn.disabled = false; 
+                }
             }
 
             async function salvarAtendimento(atendimento, aDocRef, user) {
@@ -205,7 +213,11 @@
                     alert('Ficha salva!');
                     manipularEstadoFormulario(true);
                     location.reload(); 
-                } catch (error) { alert("Falha ao salvar."); btn.disabled = false; btn.textContent = 'Salvar Alterações'; }
+                } catch (error) { 
+                    console.error("Erro crítico ao salvar:", error);
+                    alert("Falha ao salvar. Verifique o console (F12) para detalhes do erro."); 
+                    btn.disabled = false; btn.textContent = 'Salvar Alterações'; 
+                }
             }
 
             function criarFormulario(atendimento, assistido, tratamento) {
