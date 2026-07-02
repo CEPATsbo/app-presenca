@@ -1,0 +1,351 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Arquivo Geral - Samaritanos</title>
+    <style>
+        :root { --cor-primaria: #e67e22; --cor-borda: #ddd; --fundo-selecionado: #fdf5e6; } 
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background-color: #f4f6f9; margin: 0; padding: 20px; }
+        .container { width: 100%; max-width: 1400px; margin: 0 auto; background-color: #fff; padding: 30px; border-radius: 12px; box-shadow: 0 6px 24px rgba(0,0,0,0.1); box-sizing: border-box; }
+        .nav-voltar { margin-bottom: 20px; }
+        .btn, .btn-voltar, .btn-editar, .btn-acao { background-color: var(--cor-primaria); color: white; border: none; padding: 12px 20px; border-radius: 8px; font-weight: bold; text-decoration: none; display: inline-block; cursor: pointer; }
+        .btn-voltar { background-color: #6c757d; }
+        .btn-acao { background-color: #27ae60; width: 100%; box-sizing: border-box; text-align: center; margin: 10px 15px; padding: 12px; width: calc(100% - 30px); }
+        .hidden { display: none !important; }
+        
+        .filtros-container { display: flex; flex-direction: column; gap: 15px; margin-bottom: 20px; }
+        .alfabeto-filtro { display: flex; flex-wrap: wrap; justify-content: center; gap: 5px; }
+        .alfabeto-filtro button { font-size: 0.9em; width: 35px; height: 35px; border: 1px solid #ccc; background-color: #fff; border-radius: 50%; cursor: pointer; transition: background-color 0.2s, color 0.2s; }
+        .alfabeto-filtro button.ativo { background-color: var(--cor-primaria); color: white; border-color: var(--cor-primaria); }
+        #campo-busca { width: 100%; padding: 12px; font-size: 1.1em; border: 1px solid #ccc; border-radius: 8px; box-sizing: border-box; }
+
+        .main-grid { display: grid; grid-template-columns: 350px 1fr; gap: 30px; min-height: 60vh; }
+        .lista-assistidos-col { border-right: 1px solid var(--cor-borda); padding-right: 20px; }
+        #lista-assistidos { list-style-type: none; padding: 0; margin: 0; max-height: 60vh; overflow-y: auto; }
+        #lista-assistidos li { padding: 15px; border-bottom: 1px solid #eee; cursor: pointer; font-weight: 500; display: flex; align-items: center; gap: 8px; }
+        #lista-assistidos li:hover { background-color: var(--fundo-selecionado); }
+        #lista-assistidos li.selecionado { background-color: var(--cor-primaria); color: white; font-weight: bold; }
+        
+        .detalhes-assistido-col h2 { text-align: center; margin-top: 0; }
+        #historico-container { max-height: 60vh; overflow-y: auto; padding-right: 10px;}
+        .ciclo-tratamento { border: 1px solid var(--cor-borda); border-radius: 8px; margin-bottom: 20px; }
+        .ciclo-header { background-color: #fcf6f0; padding: 15px; border-bottom: 1px solid var(--cor-borda); font-weight: bold; display: flex; justify-content: space-between; flex-wrap: wrap; gap: 15px;}
+        .ciclo-header .status-ativo { color: #27ae60; }
+        .ciclo-header .status-pendente { color: #f39c12; }
+        .ciclo-header .status-concluido { color: #6c757d; }
+        .atendimentos-lista { list-style-type: none; padding: 0; margin: 0; }
+        .atendimentos-lista li { display: flex; justify-content: space-between; align-items: center; padding: 12px 15px; border-bottom: 1px solid #eee; }
+        .atendimentos-lista li:last-child { border-bottom: none; }
+        .atendimento-info { display: flex; align-items: center; gap: 10px; }
+        .btn-editar { background-color: #2980b9; padding: 6px 12px; border-radius: 6px; font-size: 0.9em; }
+
+        @media (max-width: 768px) {
+            body { padding: 10px; }
+            .container { padding: 20px; }
+            .main-grid { grid-template-columns: 1fr; gap: 20px; }
+            .lista-assistidos-col { border-right: none; padding-right: 0; border-bottom: 1px solid var(--cor-borda); padding-bottom: 20px; }
+            #lista-assistidos { max-height: 40vh; }
+            #historico-container { max-height: 60vh; }
+        }
+
+        .prontuario-link { 
+            font-size: 0.8em; text-decoration: none; margin-left: 10px; color: #6c757d; font-weight: normal; display: inline-block;
+        }
+        .prontuario-link:hover { color: var(--cor-primaria); }
+        .fase-info { font-size: 0.85em; color: #7f8c8d; font-weight: normal; margin-left: 10px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <nav class="nav-voltar"><a href="/dashboard-samaritanos.html" class="btn-voltar">⬅ Voltar para o Dashboard</a></nav>
+        <div id="acesso-negado" class="hidden"><h1>Acesso Negado</h1></div>
+
+        <div id="main-content">
+            <header>
+                <h1 style="text-align: center;">Arquivo Geral - Samaritanos</h1>
+            </header>
+            <section class="filtros-container">
+                <div id="alfabeto-filtro" class="alfabeto-filtro"></div>
+                <input type="search" id="campo-busca" placeholder="🔎 Buscar assistido por nome...">
+            </section>
+            <main class="main-grid">
+                <div class="lista-assistidos-col">
+                    <h2 style="margin-top:0;">Assistidos (Samaritanos)</h2>
+                    <ul id="lista-assistidos"><p>Carregando assistidos...</p></ul>
+                </div>
+                <div class="detalhes-assistido-col">
+                    <div id="detalhes-assistido">
+                        <p style="text-align: center; color: #666; margin-top: 50px;">Selecione um assistido na lista à esquerda para ver seu histórico.</p>
+                    </div>
+                </div>
+            </main>
+        </div>
+    </div>
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
+        import { getFirestore, collection, doc, getDoc, query, where, getDocs, orderBy, Timestamp, addDoc, serverTimestamp, documentId, setDoc } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
+        import { protegerPagina } from '/auth.js';
+
+        const firebaseConfig = {
+            apiKey: "AIzaSyBV7RPjk3cFTqL-aIpflJcUojKg1ZXMLuU",
+            authDomain: "voluntarios-ativos---cepat.firebaseapp.com",
+            projectId: "voluntarios-ativos---cepat",
+            storageBucket: "voluntarios-ativos---cepat.firebasestorage.app",
+            messagingSenderId: "66122858261",
+            appId: "1:66122858261:web:7fa21f1805463b5c08331c"
+        };
+        initializeApp(firebaseConfig);
+
+        protegerPagina(['super-admin', 'diretor', 'tesoureiro', 'conselheiro', 'entrevistador']).then(user => {
+            document.getElementById('main-content').classList.remove('hidden');
+            inicializarPagina(user);
+        }).catch(err => {
+            document.getElementById('acesso-negado').classList.remove('hidden');
+        });
+
+        function inicializarPagina(user) {
+            const db = getFirestore();
+            const assistidosRef = collection(db, 'assistidos');
+            const tratamentosRef = collection(db, 'tratamentos_samaritanos'); 
+            const atendimentosRef = collection(db, 'atendimentos_samaritanos'); 
+            const logAuditoriaRef = collection(db, 'log_auditoria');
+
+            let assistidoAtualmenteSelecionado = null;
+            let debounceTimer;
+
+            const ui = {
+                alfabetoFiltro: document.getElementById('alfabeto-filtro'),
+                campoBusca: document.getElementById('campo-busca'),
+                listaAssistidos: document.getElementById('lista-assistidos'),
+                detalhesAssistido: document.getElementById('detalhes-assistido'),
+            };
+
+            async function registrarLog(acao, detalhes) {
+                try {
+                    const newLogRef = doc(logAuditoriaRef); 
+                    await setDoc(newLogRef, { 
+                        timestamp: serverTimestamp(),
+                        autor: { uid: user.uid, nome: user.displayName || 'Usuário do Sistema' },
+                        acao: acao,
+                        detalhes: detalhes
+                    });
+                } catch (error) { console.error("Erro ao registrar log:", error); }
+            }
+
+            function gerarBotoesAlfabeto() {
+                const alfabeto = "ABCDEFGHIJKLMNOPQRSTUVWXYZ".split('');
+                alfabeto.forEach(letra => {
+                    const btn = document.createElement('button');
+                    btn.textContent = letra;
+                    btn.dataset.letra = letra;
+                    ui.alfabetoFiltro.appendChild(btn);
+                });
+                const btnTodos = document.createElement('button');
+                btnTodos.textContent = 'Todos';
+                btnTodos.dataset.letra = '';
+                btnTodos.classList.add('ativo');
+                ui.alfabetoFiltro.appendChild(btnTodos);
+            }
+
+            async function carregarAssistidos(filtroLetra = '', termoBusca = '') {
+                ui.listaAssistidos.innerHTML = '<p>Buscando...</p>';
+                let assistidosParaExibir = [];
+                const isVisaoPadrao = !filtroLetra && !termoBusca; 
+
+                try {
+                    if (!isVisaoPadrao) {
+                        let q;
+                        if (termoBusca) {
+                            const termo = termoBusca.toLowerCase();
+                            q = query(assistidosRef, where('nome_lower', '>=', termo), where('nome_lower', '<=', termo + '\uf8ff'), orderBy('nome_lower'));
+                        } else {
+                            const proximaLetra = String.fromCharCode(filtroLetra.charCodeAt(0) + 1);
+                            q = query(assistidosRef, where('nome', '>=', filtroLetra), where('nome', '<', proximaLetra), orderBy('nome'));
+                        }
+                        const snapshot = await getDocs(q);
+                        assistidosParaExibir = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+
+                    } else {
+                        const qTratamentos = query(tratamentosRef);
+                        const tratamentosSnapshot = await getDocs(qTratamentos);
+                        const idsAssistidos = new Set(tratamentosSnapshot.docs.map(doc => doc.data().assistidoId));
+                        
+                        if (idsAssistidos.size > 0) {
+                            const idsArray = Array.from(idsAssistidos);
+                            const MAX_IDS_PER_QUERY = 30;
+                            if (idsArray.length > MAX_IDS_PER_QUERY) {
+                                idsArray.splice(MAX_IDS_PER_QUERY);
+                            }
+
+                            const qAssistidosFiltrados = query(assistidosRef, where(documentId(), 'in', idsArray));
+                            const assistidosSnapshot = await getDocs(qAssistidosFiltrados);
+                            assistidosParaExibir = assistidosSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                            assistidosParaExibir.sort((a, b) => a.nome.localeCompare(b.nome));
+                        } else {
+                            assistidosParaExibir = []; 
+                        }
+                    }
+
+                    renderizarListaAssistidos(assistidosParaExibir);
+                    
+                    const params = new URLSearchParams(window.location.search);
+                    const assistidoIdUrl = params.get('assistidoId');
+                    if (assistidoIdUrl) {
+                        const assistidoParaMostrar = assistidosParaExibir.find(a => a.id === assistidoIdUrl);
+                        if (assistidoParaMostrar) {
+                            const liCorrespondente = ui.listaAssistidos.querySelector(`[data-assistido-id="${assistidoIdUrl}"]`);
+                            if (liCorrespondente) liCorrespondente.classList.add('selecionado');
+                            mostrarDetalhes(assistidoParaMostrar, user);
+                        }
+                    }
+
+                } catch (error) {
+                     console.error("Erro ao carregar assistidos:", error);
+                     ui.listaAssistidos.innerHTML = '<p style="color:red;">Erro ao carregar lista.</p>';
+                }
+            }
+
+            function renderizarListaAssistidos(assistidos) {
+                ui.listaAssistidos.innerHTML = '';
+                if (assistidos.length === 0) {
+                    ui.listaAssistidos.innerHTML = '<p>Nenhum assistido encontrado para os critérios atuais.</p>';
+                    return;
+                }
+                assistidos.forEach(assistido => {
+                    const li = document.createElement('li');
+                    li.textContent = assistido.nome;
+                    li.dataset.assistidoId = assistido.id;
+                    li.addEventListener('click', () => {
+                        document.querySelectorAll('#lista-assistidos li').forEach(el => el.classList.remove('selecionado'));
+                        li.classList.add('selecionado');
+                        mostrarDetalhes(assistido, user);
+                    });
+                    ui.listaAssistidos.appendChild(li);
+                });
+            }
+
+            async function mostrarDetalhes(assistido, user) {
+                assistidoAtualmenteSelecionado = assistido;
+                ui.detalhesAssistido.innerHTML = `<h2>Histórico de ${assistido.nome}</h2><p>Carregando histórico...</p>`;
+                
+                await registrarLog('Visualização de Histórico (Samaritanos)', {
+                    assistidoId: assistido.id, assistidoNome: assistido.nome
+                });
+                
+                const qTratamentos = query(tratamentosRef, where('assistidoId', '==', assistido.id), orderBy('dataInicio', 'desc'));
+                const tratamentosSnapshot = await getDocs(qTratamentos);
+                const ciclos = tratamentosSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                
+                const qAtendimentos = query(atendimentosRef, where('assistidoId', '==', assistido.id), orderBy('dataAtendimento', 'desc'));
+                const atendimentosSnapshot = await getDocs(qAtendimentos);
+                const todosAtendimentos = atendimentosSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+
+                renderizarHistorico(assistido, ciclos, todosAtendimentos, user);
+            }
+            
+            function renderizarHistorico(assistido, ciclos, todosAtendimentos, user) {
+                const dnFormatado = assistido.dn ? new Date(assistido.dn + 'T12:00:00').toLocaleDateString('pt-br') : 'Não informado';
+                
+                let linkProntuario = `<a href="/perfil-assistido.html?id=${assistido.id}" class="prontuario-link" title="Ver Prontuário Unificado 📜">Ver Prontuário Completo</a>`;
+                let html = `<h2>Histórico de ${assistido.nome} ${linkProntuario}</h2>`;
+
+                html += `<p><strong>DN:</strong> ${dnFormatado} | <strong>Telefone:</strong> ${assistido.telefone || 'Não informado'}</p>`;
+                html += '<div id="historico-container">';
+
+                if (ciclos.length === 0) {
+                     html += '<p>Nenhum atendimento dos Samaritanos registrado para este assistido.</p>';
+                }
+
+                ciclos.forEach(ciclo => {
+                    const dataInicio = ciclo.dataInicio ? ciclo.dataInicio.toDate().toLocaleDateString('pt-br') : 'N/A';
+                    let statusClasse = 'status-concluido';
+                    if(ciclo.status === 'ativo') statusClasse = 'status-ativo';
+                    if(ciclo.status === 'pendente') statusClasse = 'status-pendente';
+
+                    const realizados = ciclo.atendimentos_realizados || 0;
+
+                    let desencarnadoInfo = '';
+                    if(ciclo.desencarnadoVinculado) {
+                        desencarnadoInfo = `<div style="width: 100%; font-size: 0.9em; margin-top: 8px; color: #555;">Desencarnado vinculado: <b>${ciclo.desencarnadoVinculado}</b></div>`;
+                    }
+
+                    html += `<div class="ciclo-tratamento">
+                                <div class="ciclo-header">
+                                    <span>Início: ${dataInicio} | Status: <span class="${statusClasse}">${ciclo.status.toUpperCase()}</span></span>
+                                    <span>Semanas Concluídas: ${realizados}</span>
+                                    ${desencarnadoInfo}
+                                </div>
+                                <ul class="atendimentos-lista">`;
+                    
+                    const atendimentosDoCiclo = todosAtendimentos.filter(a => a.tratamentoId === ciclo.id);
+                    
+                    if (atendimentosDoCiclo.length === 0) {
+                        html += '<li>Nenhum atendimento registrado para este ciclo.</li>';
+                    } else {
+                        atendimentosDoCiclo.sort((a, b) => a.dataAtendimento?.toMillis() - b.dataAtendimento?.toMillis()).forEach(a => {
+                            html += renderizarItemAtendimento(a);
+                        });
+                    }
+                    html += `</ul></div>`;
+                });
+
+                html += '</div>';
+                ui.detalhesAssistido.innerHTML = html;
+            }
+
+            function renderizarItemAtendimento(a) {
+                const dataAtendimento = a.dataAtendimento ? a.dataAtendimento.toDate().toLocaleDateString('pt-br') : "N/A";
+                const atendimentoNum = a.semana || '?';
+                
+                let faseTexto = atendimentoNum <= 3 ? "(Fase 1: Verificação)" : "(Fase 2: Orientação)";
+                
+                const botaoEditarHtml = `<a href="/atendimento-samaritanos.html?atendimentoId=${a.id}" class="btn btn-editar">Ver / Editar</a>`;
+                
+                return `<li>
+                            <div class="atendimento-info">
+                                <span><strong>${dataAtendimento}</strong> - Semana ${atendimentoNum} <span class="fase-info">${faseTexto}</span></span>
+                            </div>
+                            ${botaoEditarHtml}
+                        </li>`;
+            }
+
+            ui.alfabetoFiltro.addEventListener('click', (e) => {
+                if (e.target.tagName === 'BUTTON') {
+                    document.querySelectorAll('#alfabeto-filtro button').forEach(btn => btn.classList.remove('ativo'));
+                    e.target.classList.add('ativo');
+                    ui.campoBusca.value = '';
+                    assistidoAtualmenteSelecionado = null;
+                    ui.detalhesAssistido.innerHTML = `<p style="text-align: center; color: #666; margin-top: 50px;">Selecione um assistido...</p>`;
+                    carregarAssistidos(e.target.dataset.letra, '');
+                }
+            });
+
+            ui.campoBusca.addEventListener('input', (e) => {
+                clearTimeout(debounceTimer);
+                debounceTimer = setTimeout(() => {
+                    const termoBusca = e.target.value;
+                    document.querySelectorAll('#alfabeto-filtro button').forEach(btn => btn.classList.remove('ativo'));
+                    if (!termoBusca) {
+                        const btnTodos = ui.alfabetoFiltro.querySelector('button[data-letra=""]');
+                        if(btnTodos) btnTodos.classList.add('ativo');
+                    }
+                    assistidoAtualmenteSelecionado = null;
+                    ui.detalhesAssistido.innerHTML = `<p style="text-align: center; color: #666; margin-top: 50px;">Selecione um assistido...</p>`;
+                    carregarAssistidos('', termoBusca);
+                }, 500);
+            });
+
+            window.addEventListener('focus', () => {
+                if (assistidoAtualmenteSelecionado) {
+                    mostrarDetalhes(assistidoAtualmenteSelecionado, user);
+                }
+            });
+
+            gerarBotoesAlfabeto();
+            carregarAssistidos();
+        }
+    </script>
+</body>
+</html>

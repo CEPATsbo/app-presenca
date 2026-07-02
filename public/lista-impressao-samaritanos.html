@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Impressão - Samaritanos</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    <style>
+        :root { --cor-primaria: #e67e22; } /* Laranja Samaritanos */
+        body { 
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; 
+            background-color: #f4f6f9; 
+            color: #333;
+            margin: 0; 
+            padding: 20px; 
+        }
+
+        /* --- ESTILOS DE TELA (NÃO IMPRESSOS) --- */
+        .painel-controle {
+            text-align: center;
+            margin-bottom: 30px;
+            padding: 20px;
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+        }
+        .btn {
+            background-color: var(--cor-primaria);
+            color: white;
+            border: none;
+            padding: 12px 25px;
+            border-radius: 6px;
+            font-weight: bold;
+            font-size: 1.1em;
+            cursor: pointer;
+            margin: 0 10px;
+            text-decoration: none;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .btn-voltar { background-color: #6c757d; }
+        .loading { text-align: center; font-size: 1.2em; color: #666; margin-top: 50px; }
+
+        /* --- ESTILOS DO DOCUMENTO --- */
+        .documento-impressao {
+            background: white;
+            padding: 40px;
+            border-radius: 8px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.05);
+            max-width: 1000px;
+            margin: 0 auto;
+        }
+        .cabecalho-doc {
+            text-align: center;
+            border-bottom: 2px solid #222;
+            padding-bottom: 15px;
+            margin-bottom: 30px;
+        }
+        .cabecalho-doc h1 { margin: 0; font-size: 2em; color: #111; }
+        .cabecalho-doc h2 { margin: 5px 0 0 0; font-size: 1.3em; color: #444; font-weight: normal; }
+
+        .lista-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr; /* Duas colunas */
+            gap: 20px 40px;
+        }
+
+        .item-assistido {
+            border-bottom: 1px dashed #ccc;
+            padding-bottom: 12px;
+            break-inside: avoid; /* Evita que a impressora corte o bloco ao meio na troca de página */
+        }
+        .item-assistido h4 {
+            margin: 0 0 5px 0;
+            font-size: 1.1em;
+            color: #000;
+        }
+        .item-assistido p {
+            margin: 0;
+            font-size: 0.9em;
+            color: #444;
+            line-height: 1.4;
+        }
+        .idade-badge {
+            font-weight: normal;
+            font-size: 0.9em;
+            color: #555;
+        }
+
+        /* --- REGRAS EXCLUSIVAS PARA A IMPRESSORA --- */
+        @media print {
+            body { background-color: white; padding: 0; }
+            .painel-controle { display: none !important; } /* Esconde os botões */
+            .documento-impressao { 
+                box-shadow: none; 
+                padding: 0; 
+                max-width: 100%; 
+            }
+            @page { margin: 1.5cm; } /* Margem padrão de ofício */
+        }
+    </style>
+</head>
+<body>
+
+    <div class="painel-controle no-print">
+        <a href="/dashboard-samaritanos.html" class="btn btn-voltar"><i class="fas fa-arrow-left"></i> Voltar</a>
+        <button class="btn" onclick="window.print()"><i class="fas fa-print"></i> Imprimir Lista de Hoje</button>
+    </div>
+
+    <div class="documento-impressao" id="conteudo-principal" style="display: none;">
+        <div class="cabecalho-doc">
+            <h1>Lista de Assistidos - Samaritanos</h1>
+            <h2 id="data-cabecalho">Carregando data...</h2>
+        </div>
+
+        <div class="lista-grid" id="container-lista">
+            <!-- Os itens serão injetados aqui via JS -->
+        </div>
+    </div>
+
+    <div id="loading-msg" class="loading"><i class="fas fa-spinner fa-spin"></i> Preparando documento para impressão...</div>
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
+        import { getFirestore, collection, query, where, getDocs, doc, getDoc } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
+        import { protegerPagina } from '/auth.js';
+
+        const firebaseConfig = {
+            apiKey: "AIzaSyBV7RPjk3cFTqL-aIpflJcUojKg1ZXMLuU",
+            authDomain: "voluntarios-ativos---cepat.firebaseapp.com",
+            projectId: "voluntarios-ativos---cepat",
+            storageBucket: "voluntarios-ativos---cepat.firebasestorage.app",
+            messagingSenderId: "66122858261",
+            appId: "1:66122858261:web:7fa21f1805463b5c08331c"
+        };
+        const app = initializeApp(firebaseConfig);
+        const db = getFirestore(app);
+
+        // Funções Auxiliares
+        function calcularIdade(dataNascimento) {
+            if (!dataNascimento) return '--';
+            const hoje = new Date();
+            const nascimento = new Date(dataNascimento + 'T12:00:00');
+            let idade = hoje.getFullYear() - nascimento.getFullYear();
+            const m = hoje.getMonth() - nascimento.getMonth();
+            if (m < 0 || (m === 0 && hoje.getDate() < nascimento.getDate())) {
+                idade--;
+            }
+            return idade;
+        }
+
+        // Lógica de Quinta-feira para o Samaritanos
+        function getDataQuintaFeiraVigente() {
+            const agora = new Date();
+            const diaDaSemana = agora.getDay();
+            const horas = agora.getHours();
+            const minutos = agora.getMinutes();
+            
+            // Se hoje é quinta-feira (4) e já passou das 19h30, a "quinta vigente" passa a ser a próxima.
+            let diasAteQuinta = (4 - diaDaSemana + 7) % 7;
+            if (diasAteQuinta === 0 && (horas > 19 || (horas === 19 && minutos >= 30))) {
+                diasAteQuinta = 7;
+            }
+
+            const quinta = new Date(agora);
+            quinta.setDate(agora.getDate() + diasAteQuinta);
+            return quinta.toLocaleDateString('pt-BR');
+        }
+
+        async function carregarListaImpressao() {
+            try {
+                // 1. Define a data no cabeçalho
+                document.getElementById('data-cabecalho').textContent = `Sessão de Quinta-feira, ${getDataQuintaFeiraVigente()}`;
+
+                // 2. Busca todos os tratamentos ATIVOS dos Samaritanos
+                const qTratamentos = query(collection(db, 'tratamentos_samaritanos'), where('status', '==', 'ativo'));
+                const tratamentosSnap = await getDocs(qTratamentos);
+
+                if (tratamentosSnap.empty) {
+                    document.getElementById('container-lista').innerHTML = "<p>Nenhum assistido ativo no momento.</p>";
+                    mostrarConteudo();
+                    return;
+                }
+
+                // 3. Monta uma lista consolidada (mesclando tratamento com dados pessoais)
+                let listaAssistidos = [];
+
+                for (const docSnap of tratamentosSnap.docs) {
+                    const tratamento = docSnap.data();
+                    const assistidoId = tratamento.assistidoId;
+
+                    // Busca o nome e DN na coleção assistidos
+                    const assistidoDoc = await getDoc(doc(db, "assistidos", assistidoId));
+                    if (assistidoDoc.exists()) {
+                        const dadosPessoais = assistidoDoc.data();
+                        
+                        listaAssistidos.push({
+                            nome: dadosPessoais.nome,
+                            idade: calcularIdade(dadosPessoais.dn),
+                            motivo: tratamento.informacoesIniciais || 'Motivo não informado.',
+                            desencarnado: tratamento.desencarnadoVinculado || null
+                        });
+                    }
+                }
+
+                // 4. Ordena a lista em ordem alfabética para facilitar a leitura na prancheta
+                listaAssistidos.sort((a, b) => a.nome.localeCompare(b.nome));
+
+                // 5. Renderiza a lista na tela
+                const containerLista = document.getElementById('container-lista');
+                let htmlFinal = '';
+
+                listaAssistidos.forEach(item => {
+                    let infoDesencarnado = item.desencarnado ? `<br><small style="color: #c0392b;"><strong>Vinculado:</strong> ${item.desencarnado}</small>` : '';
+                    
+                    htmlFinal += `
+                        <div class="item-assistido">
+                            <h4>${item.nome} <span class="idade-badge">(${item.idade} anos)</span></h4>
+                            <p><strong>Motivo:</strong> ${item.motivo}${infoDesencarnado}</p>
+                        </div>
+                    `;
+                });
+
+                containerLista.innerHTML = htmlFinal;
+                mostrarConteudo();
+
+            } catch (error) {
+                console.error("Erro ao gerar lista:", error);
+                alert("Ocorreu um erro ao gerar a lista de impressão.");
+            }
+        }
+
+        function mostrarConteudo() {
+            document.getElementById('loading-msg').style.display = 'none';
+            document.getElementById('conteudo-principal').style.display = 'block';
+        }
+
+        // Protege a página e roda a função principal
+        protegerPagina(['super-admin', 'diretor', 'tesoureiro', 'conselheiro', 'entrevistador']).then(user => {
+            carregarListaImpressao();
+        }).catch(err => {
+            document.body.innerHTML = '<div style="text-align:center; padding: 50px;"><h1>Acesso Negado</h1><p>Você não tem permissão para visualizar esta lista.</p><a href="/dashboard-samaritanos.html" class="btn btn-voltar">Voltar</a></div>';
+        });
+
+    </script>
+</body>
+</html>
