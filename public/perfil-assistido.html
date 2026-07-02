@@ -6,9 +6,10 @@
     <title>Prontuário Unificado do Assistido</title>
     <style>
         :root {
-            --cor-primaria: #34495e; /* Um cinza-azulado neutro */
+            --cor-primaria: #34495e; 
             --cor-ae: #007bff;
             --cor-vl: #8e44ad;
+            --cor-sam: #e67e22; /* Laranja Samaritanos */
             --cor-borda: #ddd;
             --fundo-selecionado: #e9ecef;
         }
@@ -44,7 +45,6 @@
         .info-item label { font-size: 0.9em; color: #555; display: block; margin-bottom: 4px; }
         .info-item span { font-weight: bold; font-size: 1.1em; color: #333; }
 
-        /* Estilos de Histórico (Copiados dos arquivos 'arquivo-geral-') */
         .card h2 {
             margin-top: 0;
             padding-bottom: 10px;
@@ -52,12 +52,14 @@
         }
         #card-ae h2 { color: var(--cor-ae); }
         #card-vl h2 { color: var(--cor-vl); }
+        #card-sam h2 { color: var(--cor-sam); }
 
         .historico-container { max-height: 500px; overflow-y: auto; padding-right: 10px; }
         .ciclo-tratamento { border: 1px solid var(--cor-borda); border-radius: 8px; margin-bottom: 20px; }
         .ciclo-header { background-color: #f8f9fa; padding: 15px; border-bottom: 1px solid var(--cor-borda); font-weight: bold; display: flex; justify-content: space-between; flex-wrap: wrap; }
         .ciclo-header .status-ativo { color: #28a745; }
         .ciclo-header .status-concluido { color: #6c757d; }
+        .ciclo-header .status-fila { color: #f39c12; }
         .atendimentos-lista { list-style-type: none; padding: 0; margin: 0; }
         .atendimentos-lista li { display: flex; justify-content: space-between; align-items: center; padding: 12px 15px; border-bottom: 1px solid #eee; }
         .atendimentos-lista li:last-child { border-bottom: none; }
@@ -82,20 +84,25 @@
                 <p>Carregando prontuário completo...</p>
             </div>
             
-            <div id="prontuario-content" class="prontuario-grid hidden"> <div id="card-pessoal" class="card card-pessoal">
-                    </div>
+            <div id="prontuario-content" class="prontuario-grid hidden"> 
+                
+                <div id="card-pessoal" class="card card-pessoal"></div>
 
                 <div id="card-ae" class="card">
                     <h2>Histórico - Assistência Espiritual (AE)</h2>
-                    <div id="historico-container-ae" class="historico-container">
-                        </div>
+                    <div id="historico-container-ae" class="historico-container"></div>
                 </div>
 
                 <div id="card-vl" class="card">
                     <h2>Histórico - Vinha de Luz (VL)</h2>
-                    <div id="historico-container-vl" class="historico-container">
-                        </div>
+                    <div id="historico-container-vl" class="historico-container"></div>
                 </div>
+
+                <div id="card-sam" class="card">
+                    <h2>Histórico - Samaritanos (SAM)</h2>
+                    <div id="historico-container-sam" class="historico-container"></div>
+                </div>
+                
             </div>
         </div>
     </div>
@@ -105,18 +112,15 @@
         
         import { protegerPagina } from '/auth.js';
 
-        // Acesso restrito apenas aos 4 cargos definidos
         const rolesPermitidas = [
             'entrevistador', 'tesoureiro', 'diretor', 'super-admin'
         ];
         
         protegerPagina(rolesPermitidas).then(user => {
             const db = getFirestore(); 
-            document.getElementById('main-content').classList.remove('hidden'); // Mostra o conteúdo principal
+            document.getElementById('main-content').classList.remove('hidden'); 
             inicializarPagina(user, db);
         }).catch(err => {
-            // Se 'protegerPagina' falhar, ele já exibe "Acesso Negado".
-            // O 'main-content' continuará escondido.
             console.error(err);
         });
 
@@ -126,6 +130,8 @@
             const atendimentosAeRef = collection(db, 'atendimentos_ae');
             const tratamentosVlRef = collection(db, 'tratamentos_vl');
             const atendimentosVlRef = collection(db, 'atendimentos_vl');
+            const tratamentosSamRef = collection(db, 'tratamentos_samaritanos');
+            const atendimentosSamRef = collection(db, 'atendimentos_samaritanos');
             const logAuditoriaRef = collection(db, 'log_auditoria');
 
             const ui = {
@@ -134,7 +140,8 @@
                 headerNome: document.getElementById('header-nome'),
                 cardPessoal: document.getElementById('card-pessoal'),
                 cardAE: document.getElementById('historico-container-ae'),
-                cardVL: document.getElementById('historico-container-vl')
+                cardVL: document.getElementById('historico-container-vl'),
+                cardSAM: document.getElementById('historico-container-sam')
             };
 
             const params = new URLSearchParams(window.location.search);
@@ -145,7 +152,6 @@
                 return;
             }
 
-            // Função de Log Corrigida
             async function registrarLog(acao, detalhes) {
                 try {
                     const newLogRef = doc(logAuditoriaRef); 
@@ -171,27 +177,24 @@
                 try {
                     await registrarLog('Visualização Prontuário Unificado', { assistidoId });
 
-                    // ===================================================================
-                    // INÍCIO DA MODIFICAÇÃO JAVASCRIPT: Ajuste nas Consultas
-                    // ===================================================================
-                    // Adicionamos 'orderBy' nas consultas de atendimentos para
-                    // corresponder aos arquivos originais.
                     const [
                         assistidoSnap,
                         tratamentosAeSnap,
                         atendimentosAeSnap,
                         tratamentosVlSnap,
-                        atendimentosVlSnap
+                        atendimentosVlSnap,
+                        tratamentosSamSnap,
+                        atendimentosSamSnap
                     ] = await Promise.all([
                         getDoc(doc(assistidosRef, assistidoId)),
                         getDocs(query(tratamentosAeRef, where('assistidoId', '==', assistidoId), orderBy('dataInicio', 'desc'))),
                         getDocs(query(atendimentosAeRef, where('assistidoId', '==', assistidoId), orderBy('dataAtendimento', 'desc'))),
                         getDocs(query(tratamentosVlRef, where('assistidoId', '==', assistidoId), orderBy('dataInicio', 'desc'))),
-                        getDocs(query(atendimentosVlRef, where('assistidoId', '==', assistidoId), orderBy('dataAtendimento', 'desc')))
+                        getDocs(query(atendimentosVlRef, where('assistidoId', '==', assistidoId), orderBy('dataAtendimento', 'desc'))),
+                        // Usa dataRegistroFila pois nem todos os do Samaritanos tem dataInicio
+                        getDocs(query(tratamentosSamRef, where('assistidoId', '==', assistidoId), orderBy('dataRegistroFila', 'desc'))),
+                        getDocs(query(atendimentosSamRef, where('assistidoId', '==', assistidoId), orderBy('dataAtendimento', 'desc')))
                     ]);
-                    // ===================================================================
-                    // FIM DA MODIFICAÇÃO JAVASCRIPT
-                    // ===================================================================
 
                     if (!assistidoSnap.exists()) {
                         ui.loading.innerHTML = `<p class="erro">Assistido com ID ${assistidoId} não encontrado.</p>`;
@@ -199,24 +202,27 @@
                     }
 
                     const assistido = assistidoSnap.data();
+                    
                     const ciclosAE = tratamentosAeSnap.docs.map(d => ({ id: d.id, ...d.data() }));
                     const atendimentosAE = atendimentosAeSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+                    
                     const ciclosVL = tratamentosVlSnap.docs.map(d => ({ id: d.id, ...d.data() }));
                     const atendimentosVL = atendimentosVlSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+
+                    const ciclosSAM = tratamentosSamSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+                    const atendimentosSAM = atendimentosSamSnap.docs.map(d => ({ id: d.id, ...d.data() }));
 
                     renderizarDadosPessoais(assistido);
                     renderizarHistoricoAE(ciclosAE, atendimentosAE);
                     renderizarHistoricoVL(ciclosVL, atendimentosVL);
+                    renderizarHistoricoSAM(ciclosSAM, atendimentosSAM);
                     
-                    // Mostrar conteúdo
                     ui.loading.classList.add('hidden');
                     ui.prontuarioContent.classList.remove('hidden');
 
                 } catch (error) {
                     console.error("ERRO AO CARREGAR PRONTUÁRIO:", error);
                     ui.loading.innerHTML = `<p class="erro">Falha ao carregar dados. Verifique o console (F12) para mais detalhes.</p>`;
-                    
-                    // Se o erro for de índice, ele aparecerá no console com um link.
                     if (error.code === 'failed-precondition') {
                          ui.loading.innerHTML += `<br><strong style="font-size: 0.9em;">O Firestore precisa de um índice. Copie o link do console (F12) para criar.</strong>`;
                     }
@@ -247,6 +253,7 @@
                 `;
             }
 
+            // [MÉTODOS AE E VL INTACTOS...]
             function renderizarHistoricoAE(ciclos, todosAtendimentos) {
                 let html = '';
                 if (ciclos.length > 0) {
@@ -254,27 +261,19 @@
                         const dataInicio = formatarData(ciclo.dataInicio);
                         const statusClasse = ciclo.status === 'ativo' ? 'status-ativo' : 'status-concluido';
                         html += `<div class="ciclo-tratamento"><div class="ciclo-header"><span>Início: ${dataInicio} | Passe: ${ciclo.passe_ciclo_atual || 'N/A'}</span><span class="${statusClasse}">${ciclo.status.replace(/_/g, ' ')}</span></div><ul class="atendimentos-lista">`;
-                        
-                        // Não precisamos mais do .sort() aqui, pois o Firestore já está ordenando
-                        const atendimentosDoCiclo = todosAtendimentos
-                            .filter(a => a.tratamentoId === ciclo.id);
+                        const atendimentosDoCiclo = todosAtendimentos.filter(a => a.tratamentoId === ciclo.id);
 
                         if (atendimentosDoCiclo.length === 0) { html += '<li>Nenhum atendimento registrado.</li>'; }
                         else { atendimentosDoCiclo.forEach(a => { html += renderizarItemAtendimentoAE(a, ciclo.passe_ciclo_atual); }); }
-                        
                         html += `</ul></div>`;
                     });
                 }
-                
-                // Não precisamos mais do .sort() aqui
                 const passesAvulsos = todosAtendimentos.filter(a => a.tipo === 'avulso');
-                
                 if (passesAvulsos.length > 0) {
                     html += `<div class="ciclo-tratamento"><div class="ciclo-header"><span>Passes Avulsos</span></div><ul class="atendimentos-lista">`;
                     passesAvulsos.forEach(a => { html += renderizarItemAtendimentoAE(a, null); });
                     html += `</ul></div>`;
                 }
-                
                 if (html === '') { html = '<p>Nenhum histórico encontrado na Assistência Espiritual.</p>'; }
                 ui.cardAE.innerHTML = html;
             }
@@ -289,10 +288,7 @@
                         const realizados = ciclo.atendimentos_realizados || 0;
 
                         html += `<div class="ciclo-tratamento"><div class="ciclo-header"><span>Início: ${dataInicio} | Status: <span class="${statusClasse}">${ciclo.status.replace(/_/g, ' ')}</span></span><span>Retornos: ${realizados} / ${retornos + 1}</span></div><ul class="atendimentos-lista">`;
-
-                        // Não precisamos mais do .sort() aqui
-                        const atendimentosDoCiclo = todosAtendimentos
-                            .filter(a => a.tratamentoId === ciclo.id);
+                        const atendimentosDoCiclo = todosAtendimentos.filter(a => a.tratamentoId === ciclo.id);
 
                         if (atendimentosDoCiclo.length === 0) { html += '<li>Nenhum atendimento registrado.</li>'; }
                         else { atendimentosDoCiclo.forEach(a => { html += renderizarItemAtendimentoVL(a); }); }
@@ -300,9 +296,35 @@
                         html += `</ul></div>`;
                     });
                 }
-                
                 if (html === '') { html = '<p>Nenhum histórico encontrado no Vinha de Luz.</p>'; }
                 ui.cardVL.innerHTML = html;
+            }
+
+            // NOVO MÉTODO: SAMARITANOS
+            function renderizarHistoricoSAM(ciclos, todosAtendimentos) {
+                let html = '';
+                if (ciclos.length > 0) {
+                    ciclos.forEach(ciclo => {
+                        const dataInicio = formatarData(ciclo.dataRegistroFila);
+                        let statusClasse = 'status-concluido';
+                        if(ciclo.status === 'ativo') statusClasse = 'status-ativo';
+                        if(ciclo.status === 'fila') statusClasse = 'status-fila';
+                        
+                        const realizados = ciclo.atendimentos_realizados || 0;
+                        let desencarnadoInfo = ciclo.desencarnadoVinculado ? `<div style="width: 100%; font-size: 0.9em; margin-top: 8px; color: #555; font-weight: normal;">Desencarnado vinculado: <b>${ciclo.desencarnadoVinculado}</b></div>` : '';
+
+                        html += `<div class="ciclo-tratamento"><div class="ciclo-header"><span>Registro: ${dataInicio} | Status: <span class="${statusClasse}">${ciclo.status.toUpperCase()}</span></span><span>Semanas Concluídas: ${realizados}</span>${desencarnadoInfo}</div><ul class="atendimentos-lista">`;
+                        
+                        const atendimentosDoCiclo = todosAtendimentos.filter(a => a.tratamentoId === ciclo.id);
+
+                        if (atendimentosDoCiclo.length === 0) { html += '<li>Nenhum atendimento (Aguardando na Fila).</li>'; }
+                        else { atendimentosDoCiclo.forEach(a => { html += renderizarItemAtendimentoSAM(a); }); }
+
+                        html += `</ul></div>`;
+                    });
+                }
+                if (html === '') { html = '<p>Nenhum histórico encontrado nos Samaritanos.</p>'; }
+                ui.cardSAM.innerHTML = html;
             }
 
             function renderizarItemAtendimentoAE(a, passe_ciclo_atual) {
@@ -335,12 +357,15 @@
                 const atendimentoNum = `Atendimento ${a.semana || '?'}`;
                 const botaoEditarHtml = `<a href="/atendimento-vl.html?atendimentoId=${a.id}" class="btn btn-editar">Ver / Editar</a>`;
                 
-                return `<li>
-                            <div class="atendimento-info">
-                                <span><strong>${dataAtendimento}</strong> - ${atendimentoNum}</span>
-                            </div>
-                            ${botaoEditarHtml}
-                        </li>`;
+                return `<li><div class="atendimento-info"><span><strong>${dataAtendimento}</strong> - ${atendimentoNum}</span></div>${botaoEditarHtml}</li>`;
+            }
+
+            function renderizarItemAtendimentoSAM(a) {
+                const dataAtendimento = formatarData(a.dataAtendimento);
+                const atendimentoNum = `Semana ${a.semana || '?'}`;
+                const botaoEditarHtml = `<a href="/atendimento-samaritanos.html?atendimentoId=${a.id}" class="btn btn-editar" style="background-color: #e67e22;">Ver / Editar</a>`;
+                
+                return `<li><div class="atendimento-info"><span><strong>${dataAtendimento}</strong> - ${atendimentoNum}</span></div>${botaoEditarHtml}</li>`;
             }
 
             // Inicia o carregamento
