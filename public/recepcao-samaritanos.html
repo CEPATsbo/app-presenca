@@ -1,0 +1,316 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Recepção - Samaritanos</title>
+    <style>
+        :root { --cor-primaria: #e67e22; --cor-borda: #ddd; } 
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background-color: #f4f6f9; margin: 0; padding: 20px; display: flex; flex-direction: column; align-items: center; }
+        .container { width: 100%; max-width: 800px; background-color: white; padding: 30px; border-radius: 12px; box-shadow: 0 6px 24px rgba(0,0,0,0.1); margin-bottom: 20px; }
+        .nav-voltar { width: 100%; max-width: 800px; margin-bottom: 20px; }
+        .btn, .btn-voltar { background-color: var(--cor-primaria); color: white; border: none; padding: 12px 20px; border-radius: 8px; font-weight: bold; font-size: 1em; text-decoration: none; cursor: pointer; transition: background-color 0.3s; }
+        .btn:disabled { background-color: #ccc; cursor: not-allowed; }
+        .btn-voltar { background-color: #6c757d; }
+        .btn-success { background-color: #27ae60; width: 100%; padding: 15px; font-size: 1.1em;}
+        .btn-secondary { background-color: #6c757d; }
+        .btn-link { background: none; border: none; color: var(--cor-primaria); text-decoration: underline; cursor: pointer; font-size: 0.9em; padding: 0; text-align: left; margin-bottom: 10px; font-weight: bold;}
+        
+        h1 { color: #333; text-align: center; margin-bottom: 30px;}
+        fieldset { border: 1px solid var(--cor-borda); border-radius: 8px; padding: 20px; margin-bottom: 25px; background-color: #fdfdfd;}
+        legend { font-weight: bold; font-size: 1.2em; color: var(--cor-primaria); padding: 0 10px; }
+        
+        .form-item { display: flex; flex-direction: column; margin-bottom: 15px;}
+        .form-item label { margin-bottom: 5px; font-weight: bold; color: #555; font-size: 0.95em;}
+        .form-item input, .form-item textarea { padding: 10px; border-radius: 6px; border: 1px solid #ccc; font-size: 1em; width: 100%; box-sizing: border-box; font-family: inherit;}
+        .form-item input:focus, .form-item textarea:focus { border-color: var(--cor-primaria); outline: none; box-shadow: 0 0 5px rgba(230, 126, 34, 0.3);}
+        
+        .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; align-items: start; }
+        .form-grid-full { grid-column: 1 / -1; }
+        .hidden { display: none; }
+        
+        #search-results-container { position: relative; }
+        #search-results { list-style-type: none; padding: 0; margin: 0; position: absolute; background: white; border: 1px solid var(--cor-borda); border-top: none; width: 100%; max-height: 200px; overflow-y: auto; z-index: 10; border-radius: 0 0 6px 6px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);}
+        #search-results li { padding: 12px; cursor: pointer; border-bottom: 1px solid #eee;}
+        #search-results li:last-child { border-bottom: none; }
+        #search-results li:hover { background-color: #f0f2f5; color: var(--cor-primaria); font-weight: bold;}
+    </style>
+</head>
+<body>
+    <nav class="nav-voltar"><a href="/dashboard-samaritanos.html" class="btn-voltar">⬅ Voltar para o Dashboard</a></nav>
+    <div id="acesso-negado" class="container hidden"><h1>Acesso Negado</h1></div>
+
+    <div id="main-content" class="container">
+        <h1>Recepção Direta - Samaritanos</h1>
+
+        <form id="ficha-atendimento" onsubmit="return false;">
+            
+            <fieldset id="fs-dados-pessoais">
+                <legend>Dados do Assistido</legend>
+                <div class="form-grid">
+                    <div class="form-item form-grid-full">
+                        <label for="nome">NOME COMPLETO DO ASSISTIDO:</label>
+                        <div id="search-results-container">
+                            <input type="text" id="nome" autocomplete="off" placeholder="Digite para buscar ou cadastrar..." required>
+                            <ul id="search-results"></ul>
+                        </div>
+                    </div>
+                    <div class="form-item">
+                        <label for="telefone">TELEFONE (Opcional):</label>
+                        <input type="tel" id="telefone" placeholder="(00) 00000-0000">
+                    </div>
+                    <div class="form-item">
+                        <label for="dn">DATA DE NASCIMENTO:</label>
+                        <input type="date" id="dn" required>
+                    </div>
+                </div>
+            </fieldset>
+
+            <fieldset id="fs-vinculo-espiritual">
+                <legend>Vínculo Espiritual (Opcional)</legend>
+                <div class="form-grid">
+                    <div class="form-item form-grid-full">
+                        <label for="desencarnado-nome">NOME DO DESENCARNADO VINCULADO:</label>
+                        <input type="text" id="desencarnado-nome" placeholder="Preencha apenas se houver relação direta">
+                    </div>
+                    <div class="form-item">
+                        <label for="data-falecimento">DATA DE FALECIMENTO:</label>
+                        <input type="date" id="data-falecimento">
+                    </div>
+                </div>
+            </fieldset>
+
+            <fieldset id="fs-dados-solicitante">
+                <legend>Informações do Pedido</legend>
+                <button type="button" id="btn-copiar-assistido" class="btn-link">O próprio assistido é o solicitante</button>
+                
+                <div class="form-grid">
+                    <div class="form-item">
+                        <label for="solicitante-nome">NOME DO SOLICITANTE:</label>
+                        <input type="text" id="solicitante-nome" required>
+                    </div>
+                    <div class="form-item">
+                        <label for="solicitante-telefone">CONTATO DO SOLICITANTE:</label>
+                        <input type="tel" id="solicitante-telefone" required>
+                    </div>
+                    <div class="form-item form-grid-full">
+                        <label for="motivo-pedido">MOTIVO DO ENCAMINHAMENTO / COMPLEXIDADE:</label>
+                        <textarea id="motivo-pedido" rows="3" required placeholder="Descreva o motivo para avaliação do Dirigente ao puxar da fila..."></textarea>
+                    </div>
+                </div>
+            </fieldset>
+
+            <button id="btn-registrar-atendimento" type="button" class="btn btn-success" style="margin-top: 20px;">Registrar na Fila dos Samaritanos</button>
+        </form>
+        <button id="btn-limpar" class="btn btn-secondary" style="margin-top: 15px; width: 100%;">Limpar Tudo</button>
+    </div>
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
+        import { getFirestore, collection, addDoc, doc, serverTimestamp, query, where, limit, getDocs, writeBatch, setDoc } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
+        import { protegerPagina } from '/auth.js';
+        
+        const firebaseConfig = {
+            apiKey: "AIzaSyBV7RPjk3cFTqL-aIpflJcUojKg1ZXMLuU",
+            authDomain: "voluntarios-ativos---cepat.firebaseapp.com",
+            projectId: "voluntarios-ativos---cepat",
+            storageBucket: "voluntarios-ativos---cepat.firebasestorage.app",
+            messagingSenderId: "66122858261",
+            appId: "1:66122858261:web:7fa21f1805463b5c08331c"
+        };
+        initializeApp(firebaseConfig);
+        
+        protegerPagina(['super-admin', 'diretor', 'tesoureiro', 'conselheiro', 'entrevistador']).then(user => {
+            document.getElementById('main-content').classList.remove('hidden');
+            inicializarPagina(user);
+        }).catch(err => { 
+            document.getElementById('acesso-negado').classList.remove('hidden');
+            document.getElementById('main-content').classList.add('hidden');
+        });
+
+        function inicializarPagina(user) {
+            const db = getFirestore();
+            const assistidosRef = collection(db, 'assistidos');
+            const tratamentosSamRef = collection(db, 'tratamentos_samaritanos');
+            const logAuditoriaRef = collection(db, 'log_auditoria');
+
+            let assistidoSelecionado = null;
+
+            const ui = {
+                nomeInput: document.getElementById('nome'),
+                telefoneInput: document.getElementById('telefone'),
+                dnInput: document.getElementById('dn'),
+                desencarnadoNome: document.getElementById('desencarnado-nome'),
+                dataFalecimento: document.getElementById('data-falecimento'),
+                solicitanteNome: document.getElementById('solicitante-nome'),
+                solicitanteTelefone: document.getElementById('solicitante-telefone'),
+                motivoPedido: document.getElementById('motivo-pedido'),
+                searchResults: document.getElementById('search-results'),
+                btnRegistrar: document.getElementById('btn-registrar-atendimento'),
+                btnLimpar: document.getElementById('btn-limpar'),
+                btnCopiar: document.getElementById('btn-copiar-assistido')
+            };
+
+            async function registrarLog(acao, detalhes) {
+                try {
+                    const newLogRef = doc(logAuditoriaRef); 
+                    await setDoc(newLogRef, { 
+                        timestamp: serverTimestamp(),
+                        autor: { uid: user.uid, nome: user.displayName || 'Usuário do Sistema' },
+                        acao: acao,
+                        detalhes: detalhes
+                    });
+                } catch (error) { console.error("Erro ao registrar log:", error); }
+            }
+            
+            const capitalizarNome = (nome) => {
+                if (!nome) return '';
+                return nome.toLowerCase().replace(/(^|\s)\S/g, L => L.toUpperCase());
+            };
+
+            const calcularIdade = (dataNascimento) => {
+                if (!dataNascimento) return '--';
+                const hoje = new Date();
+                const nascimento = new Date(dataNascimento + 'T12:00:00');
+                let idade = hoje.getFullYear() - nascimento.getFullYear();
+                const m = hoje.getMonth() - nascimento.getMonth();
+                if (m < 0 || (m === 0 && hoje.getDate() < nascimento.getDate())) { idade--; }
+                return idade;
+            };
+
+            ui.btnCopiar.addEventListener('click', () => {
+                ui.solicitanteNome.value = ui.nomeInput.value;
+                ui.solicitanteTelefone.value = ui.telefoneInput.value;
+            });
+
+            const handlePhone = (event) => {
+                let input = event.target.value.replace(/\D/g, '');
+                input = input.substring(0, 11);
+                if (input.length > 2) input = `(${input.substring(0, 2)}) ${input.substring(2)}`;
+                if (input.length > 9) input = `${input.substring(0, 10)}-${input.substring(10)}`;
+                event.target.value = input;
+            };
+            ui.telefoneInput.addEventListener('input', handlePhone);
+            ui.solicitanteTelefone.addEventListener('input', handlePhone);
+
+            const resetarFormularioBusca = () => {
+                assistidoSelecionado = null;
+                document.getElementById('ficha-atendimento').reset();
+                ui.searchResults.innerHTML = '';
+                ui.nomeInput.disabled = false;
+                ui.nomeInput.focus();
+            };
+            ui.btnLimpar.addEventListener('click', resetarFormularioBusca);
+
+            ui.nomeInput.addEventListener('input', async (e) => {
+                const termo = e.target.value.trim();
+                if (assistidoSelecionado && termo.toLowerCase() !== assistidoSelecionado.nome.toLowerCase()) {
+                    assistidoSelecionado = null; ui.telefoneInput.value = ''; ui.dnInput.value = '';
+                }
+                if (termo.length < 3) { ui.searchResults.innerHTML = ''; return; }
+
+                const q = query(assistidosRef, where('nome_lower', '>=', termo.toLowerCase()), where('nome_lower', '<=', termo.toLowerCase() + '\uf8ff'), limit(5));
+                const snapshot = await getDocs(q);
+                ui.searchResults.innerHTML = '';
+                snapshot.forEach(doc => {
+                    const assistido = { id: doc.id, ...doc.data() };
+                    const li = document.createElement('li');
+                    li.textContent = assistido.nome;
+                    li.addEventListener('click', () => {
+                        assistidoSelecionado = assistido;
+                        ui.nomeInput.value = assistido.nome;
+                        ui.telefoneInput.value = assistido.telefone || '';
+                        ui.dnInput.value = assistido.dn || '';
+                        ui.searchResults.innerHTML = '';
+                    });
+                    ui.searchResults.appendChild(li);
+                });
+            });
+            ui.nomeInput.addEventListener('blur', () => { setTimeout(() => { ui.searchResults.innerHTML = ''; }, 200); });
+
+            ui.btnRegistrar.addEventListener('click', async (e) => {
+                if (!ui.nomeInput.value || !ui.dnInput.value || !ui.solicitanteNome.value || !ui.motivoPedido.value) {
+                    alert("Por favor, preencha os campos obrigatórios."); return;
+                }
+                
+                e.target.disabled = true;
+                e.target.textContent = 'Verificando e Salvando...';
+                
+                try {
+                    const dnDigitado = ui.dnInput.value.trim();
+                    const nomeOriginal = ui.nomeInput.value.trim();
+                    const nomeCapitalizado = capitalizarNome(nomeOriginal);
+                    const nomeLower = nomeOriginal.toLowerCase();
+
+                    let assistidoFinalId = null;
+                    let nomeFinalAssistido = nomeCapitalizado;
+
+                    if (assistidoSelecionado) {
+                        assistidoFinalId = assistidoSelecionado.id;
+                        nomeFinalAssistido = assistidoSelecionado.nome;
+                    } else {
+                        const qMesmoDN = query(assistidosRef, where('dn', '==', dnDigitado));
+                        const snapshotDN = await getDocs(qMesmoDN);
+                        if (!snapshotDN.empty) {
+                            snapshotDN.forEach(docSnap => {
+                                if (docSnap.data().nome_lower.split(' ')[0] === nomeLower.split(' ')[0]) {
+                                    assistidoFinalId = docSnap.id;
+                                    nomeFinalAssistido = docSnap.data().nome;
+                                }
+                            });
+                        }
+                    }
+
+                    // Trava de Duplicidade Fila/Ativo
+                    if (assistidoFinalId) {
+                        const qTratamentoAtivo = query(tratamentosSamRef, where('assistidoId', '==', assistidoFinalId), where('status', 'in', ['ativo', 'fila']));
+                        const snapshotAtivo = await getDocs(qTratamentoAtivo);
+
+                        if (!snapshotAtivo.empty) {
+                            alert(`BLOQUEIO: O assistido ${nomeFinalAssistido} já está na Fila ou Ativo nos Samaritanos.`);
+                            e.target.disabled = false; e.target.textContent = 'Registrar na Fila dos Samaritanos';
+                            return; 
+                        }
+                    } else {
+                        const novoAssistidoData = { 
+                            nome: nomeCapitalizado, nome_lower: nomeLower, telefone: ui.telefoneInput.value, 
+                            dn: dnDigitado, idade_atual: calcularIdade(dnDigitado),
+                            criadoEm: serverTimestamp(), criadoPor: { uid: user.uid, nome: user.displayName } 
+                        };
+                        const docRef = await addDoc(assistidosRef, novoAssistidoData);
+                        assistidoFinalId = docRef.id;
+                    }
+
+                    // Grava apenas o Tratamento com status 'fila'. O atendimento(semana 1) só nasce quando for chamado.
+                    const novoTratamentoRef = doc(tratamentosSamRef);
+                    await setDoc(novoTratamentoRef, {
+                        assistidoId: assistidoFinalId,
+                        status: 'fila', 
+                        dataRegistroFila: serverTimestamp(),
+                        origem: 'presencial',
+                        nomeSolicitante: capitalizarNome(ui.solicitanteNome.value),
+                        contatoSolicitante: ui.solicitanteTelefone.value.trim(),
+                        idadeAssistidoOnline: calcularIdade(dnDigitado), 
+                        informacoesIniciais: ui.motivoPedido.value.trim(),
+                        desencarnadoVinculado: capitalizarNome(ui.desencarnadoNome.value),
+                        dataFalecimentoVinculado: ui.dataFalecimento.value || null,
+                        criadoPor: { uid: user.uid, nome: user.displayName }
+                    });
+
+                    alert(`Sucesso! O assistido ${nomeFinalAssistido} entrou na Fila de Espera dos Samaritanos.`);
+                    registrarLog('Registro Fila (Samaritanos)', { assistidoId: assistidoFinalId, tratamentoId: novoTratamentoRef.id });
+                    
+                    resetarFormularioBusca();
+
+                } catch (error) {
+                    console.error("Erro ao registrar:", error);
+                    alert("Falha ao registrar: " + error.message);
+                } finally {
+                    e.target.disabled = false;
+                    e.target.textContent = 'Registrar na Fila dos Samaritanos';
+                }
+            });
+        }
+    </script>
+</body>
+</html>

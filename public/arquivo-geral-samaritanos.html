@@ -32,7 +32,7 @@
         .ciclo-tratamento { border: 1px solid var(--cor-borda); border-radius: 8px; margin-bottom: 20px; }
         .ciclo-header { background-color: #fcf6f0; padding: 15px; border-bottom: 1px solid var(--cor-borda); font-weight: bold; display: flex; justify-content: space-between; flex-wrap: wrap; gap: 15px;}
         .ciclo-header .status-ativo { color: #27ae60; }
-        .ciclo-header .status-pendente { color: #f39c12; }
+        .ciclo-header .status-fila { color: #f39c12; }
         .ciclo-header .status-concluido { color: #6c757d; }
         .atendimentos-lista { list-style-type: none; padding: 0; margin: 0; }
         .atendimentos-lista li { display: flex; justify-content: space-between; align-items: center; padding: 12px 15px; border-bottom: 1px solid #eee; }
@@ -53,7 +53,6 @@
             font-size: 0.8em; text-decoration: none; margin-left: 10px; color: #6c757d; font-weight: normal; display: inline-block;
         }
         .prontuario-link:hover { color: var(--cor-primaria); }
-        .fase-info { font-size: 0.85em; color: #7f8c8d; font-weight: normal; margin-left: 10px; }
     </style>
 </head>
 <body>
@@ -234,7 +233,8 @@
                     assistidoId: assistido.id, assistidoNome: assistido.nome
                 });
                 
-                const qTratamentos = query(tratamentosRef, where('assistidoId', '==', assistido.id), orderBy('dataInicio', 'desc'));
+                // Ordena do tratamento mais recente para o mais antigo.
+                const qTratamentos = query(tratamentosRef, where('assistidoId', '==', assistido.id), orderBy('dataRegistroFila', 'desc'));
                 const tratamentosSnapshot = await getDocs(qTratamentos);
                 const ciclos = tratamentosSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
                 
@@ -259,10 +259,10 @@
                 }
 
                 ciclos.forEach(ciclo => {
-                    const dataInicio = ciclo.dataInicio ? ciclo.dataInicio.toDate().toLocaleDateString('pt-br') : 'N/A';
+                    const dataInicio = ciclo.dataRegistroFila ? ciclo.dataRegistroFila.toDate().toLocaleDateString('pt-br') : 'N/A';
                     let statusClasse = 'status-concluido';
                     if(ciclo.status === 'ativo') statusClasse = 'status-ativo';
-                    if(ciclo.status === 'pendente') statusClasse = 'status-pendente';
+                    if(ciclo.status === 'fila') statusClasse = 'status-fila';
 
                     const realizados = ciclo.atendimentos_realizados || 0;
 
@@ -273,7 +273,7 @@
 
                     html += `<div class="ciclo-tratamento">
                                 <div class="ciclo-header">
-                                    <span>Início: ${dataInicio} | Status: <span class="${statusClasse}">${ciclo.status.toUpperCase()}</span></span>
+                                    <span>Registro: ${dataInicio} | Status: <span class="${statusClasse}">${ciclo.status.toUpperCase()}</span></span>
                                     <span>Semanas Concluídas: ${realizados}</span>
                                     ${desencarnadoInfo}
                                 </div>
@@ -282,7 +282,7 @@
                     const atendimentosDoCiclo = todosAtendimentos.filter(a => a.tratamentoId === ciclo.id);
                     
                     if (atendimentosDoCiclo.length === 0) {
-                        html += '<li>Nenhum atendimento registrado para este ciclo.</li>';
+                        html += '<li>Nenhum atendimento registrado para este ciclo (Aguardando na Fila).</li>';
                     } else {
                         atendimentosDoCiclo.sort((a, b) => a.dataAtendimento?.toMillis() - b.dataAtendimento?.toMillis()).forEach(a => {
                             html += renderizarItemAtendimento(a);
@@ -299,13 +299,11 @@
                 const dataAtendimento = a.dataAtendimento ? a.dataAtendimento.toDate().toLocaleDateString('pt-br') : "N/A";
                 const atendimentoNum = a.semana || '?';
                 
-                let faseTexto = atendimentoNum <= 3 ? "(Fase 1: Verificação)" : "(Fase 2: Orientação)";
-                
                 const botaoEditarHtml = `<a href="/atendimento-samaritanos.html?atendimentoId=${a.id}" class="btn btn-editar">Ver / Editar</a>`;
                 
                 return `<li>
                             <div class="atendimento-info">
-                                <span><strong>${dataAtendimento}</strong> - Semana ${atendimentoNum} <span class="fase-info">${faseTexto}</span></span>
+                                <span><strong>${dataAtendimento}</strong> - Semana ${atendimentoNum}</span>
                             </div>
                             ${botaoEditarHtml}
                         </li>`;

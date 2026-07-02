@@ -3,13 +3,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Detalhes do Atendimento - Samaritanos</title>
+    <title>Ficha de Atendimento - Samaritanos</title>
     <style>
         :root { --cor-primaria: #e67e22; --cor-borda: #ddd; --fundo-desabilitado: #e9ecef; }
         body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background-color: #f0f2f5; margin: 0; padding: 20px; }
         .container { width: 100%; max-width: 900px; background-color: white; padding: 30px; border-radius: 12px; box-shadow: 0 6px 24px rgba(0,0,0,0.1); margin: auto; }
         .nav-voltar { width: 100%; max-width: 900px; margin: auto; margin-bottom: 20px; }
-        .btn, .btn-voltar { background-color: var(--cor-primaria); color: white; border: none; padding: 12px 20px; border-radius: 8px; font-weight: bold; font-size: 1em; text-decoration: none; cursor: pointer; transition: background-color 0.3s; }
+        .btn, .btn-voltar { background-color: var(--cor-primaria); color: white; border: none; padding: 12px 20px; border-radius: 8px; font-weight: bold; font-size: 1em; cursor: pointer; transition: 0.3s; text-decoration: none;}
         .btn:disabled { background-color: #ccc; cursor: not-allowed; }
         .btn-voltar { background-color: #6c757d; }
         .btn-success { background-color: #27ae60; }
@@ -20,8 +20,7 @@
         legend { font-weight: bold; font-size: 1.2em; color: var(--cor-primaria); padding: 0 10px; }
         .form-item { display: flex; flex-direction: column; margin-bottom: 15px;}
         .form-item label { margin-bottom: 5px; font-weight: bold; color: #555; }
-        .form-item input, .form-item select, .form-item textarea, .form-item .readonly-input { padding: 10px; border-radius: 6px; border: 1px solid #ccc; font-size: 1em; width: 100%; box-sizing: border-box; font-family: inherit; }
-        .form-item .readonly-input { background-color: var(--fundo-desabilitado); }
+        .form-item textarea { padding: 10px; border-radius: 6px; border: 1px solid #ccc; font-size: 1em; width: 100%; box-sizing: border-box; font-family: inherit; }
         .form-item textarea:disabled { background-color: var(--fundo-desabilitado); cursor: not-allowed; }
         .erro { color: #dc3545; font-weight: bold; text-align: center; }
         .hidden { display: none; }
@@ -32,10 +31,6 @@
         .info-item label { font-size: 0.9em; color: #555; margin-bottom: 4px; display: block; }
         .info-item span { font-weight: bold; font-size: 1.1em; color: #333; }
 
-        .fase-badge {
-            background-color: #f39c12; color: white; padding: 5px 12px; border-radius: 20px; font-size: 0.9em; font-weight: bold; display: inline-block; margin-bottom: 15px;
-        }
-        
         .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); display: flex; align-items: center; justify-content: center; z-index: 1000; }
         .modal-content { background: white; padding: 30px; border-radius: 12px; width: 90%; max-width: 400px; text-align: center; }
         .modal-actions { display: flex; justify-content: space-between; margin-top: 20px; gap: 10px; }
@@ -55,8 +50,8 @@
     <!-- Modal Dupla Verificação de Alta -->
     <div id="modal-alta" class="modal-overlay hidden">
         <div class="modal-content">
-            <h3 style="color: #c0392b;">Confirmar Alta do Tratamento</h3>
-            <p>Tem certeza de que deseja dar alta para este assistido? Isso encerrará o ciclo no Samaritanos e arquivará a ficha.</p>
+            <h3 style="color: #c0392b;">Confirmar Alta</h3>
+            <p>Tem certeza de que deseja dar alta para este assistido? O ciclo será encerrado.</p>
             <div class="modal-actions">
                 <button type="button" class="btn btn-secondary" onclick="document.getElementById('modal-alta').classList.add('hidden')">Cancelar</button>
                 <button type="button" class="btn btn-danger" id="btn-confirmar-alta">Sim, Dar Alta</button>
@@ -66,11 +61,7 @@
 
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
-        import { 
-            getFirestore, collection, doc, getDoc, query, where, Timestamp, 
-            getDocs, writeBatch, serverTimestamp, increment, setDoc 
-        } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
-        import { getAuth } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-auth.js";
+        import { getFirestore, collection, doc, getDoc, query, where, Timestamp, getDocs, writeBatch, serverTimestamp, increment, setDoc } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
         import { protegerPagina } from '/auth.js';
 
         const firebaseConfig = {
@@ -81,7 +72,7 @@
             messagingSenderId: "66122858261",
             appId: "1:66122858261:web:7fa21f1805463b5c08331c"
         };
-        const auth = getAuth();
+        initializeApp(firebaseConfig);
 
         protegerPagina(['super-admin', 'diretor', 'tesoureiro', 'conselheiro', 'entrevistador']).then(user => {
             inicializarPagina(user);
@@ -98,26 +89,18 @@
 
             const formularioContainer = document.getElementById('formulario-container');
             const params = new URLSearchParams(window.location.search);
-            const atendimentoIdParaEditar = params.get('atendimentoId');
+            const atendimentoId = params.get('atendimentoId');
             
-            let globAtendimento, globTratamentoDocRef, globTratamento;
+            let globAtend, globTratDocRef, globTrat;
 
-            if (atendimentoIdParaEditar) {
-                carregarFormularioParaEdicao(atendimentoIdParaEditar);
-            } else {
-                formularioContainer.innerHTML = `<p class="erro">Nenhum atendimento selecionado.</p>`;
-            }
+            if (atendimentoId) { carregarFormularioParaEdicao(atendimentoId); } 
+            else { formularioContainer.innerHTML = `<p class="erro">Nenhum atendimento selecionado.</p>`; }
 
             async function registrarLog(acao, detalhes) {
                 try {
                     const newLogRef = doc(logAuditoriaRef); 
-                    await setDoc(newLogRef, { 
-                        timestamp: serverTimestamp(),
-                        autor: { uid: user.uid, nome: user.displayName || 'Usuário do Sistema' },
-                        acao: acao,
-                        detalhes: detalhes
-                    });
-                } catch (error) { console.error("Erro ao registrar log:", error); }
+                    await setDoc(newLogRef, { timestamp: serverTimestamp(), autor: { uid: user.uid, nome: user.displayName }, acao: acao, detalhes: detalhes });
+                } catch (error) {}
             }
 
             function manipularEstadoFormulario(travado) {
@@ -140,257 +123,134 @@
                     btnHabilitar.style.width = '100%';
                     btnHabilitar.style.marginTop = '10px';
                     btnHabilitar.innerHTML = '🔒 Habilitar Edição';
-                    btnHabilitar.type = 'button';
-                    btnHabilitar.onclick = () => { if (confirm('Tem certeza que deseja alterar este registro?')) { manipularEstadoFormulario(false); } };
+                    btnHabilitar.onclick = () => { if (confirm('Liberar para edição?')) { manipularEstadoFormulario(false); } };
                     form.appendChild(btnHabilitar);
                 }
             }
 
-            async function carregarFormularioParaEdicao(atendimentoId) {
-                const atendimentoDocRef = doc(db, 'atendimentos_samaritanos', atendimentoId);
-                const atendimentoDoc = await getDoc(atendimentoDocRef);
-                if (!atendimentoDoc.exists()) { formularioContainer.innerHTML = `<p class="erro">Atendimento não encontrado.</p>`; return; }
+            async function carregarFormularioParaEdicao(id) {
+                const aDocRef = doc(db, 'atendimentos_samaritanos', id);
+                const aDoc = await getDoc(aDocRef);
+                if (!aDoc.exists()) return;
                 
-                const atendimento = { id: atendimentoDoc.id, ...atendimentoDoc.data() };
-                if (!atendimento.tratamentoId) { formularioContainer.innerHTML = `<p class="erro">Atendimento sem tratamento vinculado.</p>`; return; }
-                
+                const atendimento = { id: aDoc.id, ...aDoc.data() };
                 const assistidoDoc = await getDoc(doc(db, 'assistidos', atendimento.assistidoId));
-                const tratamentoDocRef = doc(db, 'tratamentos_samaritanos', atendimento.tratamentoId);
-                const tratamentoDoc = await getDoc(tratamentoDocRef);
+                const tDocRef = doc(db, 'tratamentos_samaritanos', atendimento.tratamentoId);
+                const tDoc = await getDoc(tDocRef);
                 
-                if (!assistidoDoc.exists() || !tratamentoDoc.exists()) { formularioContainer.innerHTML = `<p class="erro">Dados do assistido ou tratamento não encontrados.</p>`; return; }
+                if (!assistidoDoc.exists() || !tDoc.exists()) return;
                 
-                const assistido = assistidoDoc.data();
-                const tratamento = tratamentoDoc.data();
-                
-                globAtendimento = atendimento; globTratamentoDocRef = tratamentoDocRef; globTratamento = tratamento;
+                globAtend = atendimento; globTratDocRef = tDocRef; globTrat = tDoc.data();
 
-                const formHtml = criarFormulario(atendimento, assistido, tratamento);
-                formularioContainer.innerHTML = formHtml;
-                preencherFormulario(atendimento, tratamento); 
+                formularioContainer.innerHTML = criarFormulario(atendimento, assistidoDoc.data(), globTrat);
+                document.getElementById('atendimento-verificacoes').value = atendimento.verificacoes || '';
+                document.getElementById('atendimento-orientacoes').value = atendimento.orientacoes || '';
                 
-                const travar = atendimento.detalhes_preenchidos === true;
-                manipularEstadoFormulario(travar);
+                manipularEstadoFormulario(atendimento.detalhes_preenchidos === true);
 
-                document.getElementById('btn-salvar-atendimento')?.addEventListener('click', () => salvarAtendimento(atendimento, atendimentoDocRef, tratamentoDocRef, tratamento, user));
-                document.getElementById('btn-marcar-retorno')?.addEventListener('click', () => marcarNovoRetorno(atendimento, tratamentoDocRef, tratamento));
-                
+                document.getElementById('btn-salvar-atendimento')?.addEventListener('click', () => salvarAtendimento(atendimento, aDocRef, user));
+                document.getElementById('btn-marcar-retorno')?.addEventListener('click', () => marcarNovoRetorno(atendimento, tDocRef));
                 const btnAlta = document.getElementById('btn-abrir-alta');
-                if(btnAlta) {
-                    btnAlta.addEventListener('click', () => document.getElementById('modal-alta').classList.remove('hidden'));
-                }
+                if(btnAlta) btnAlta.addEventListener('click', () => document.getElementById('modal-alta').classList.remove('hidden'));
             }
             
-            // Botão Confirmar Alta (Dentro do Modal)
             document.getElementById('btn-confirmar-alta').addEventListener('click', async () => {
                 document.getElementById('modal-alta').classList.add('hidden');
-                await finalizarTratamentoAlta();
+                try {
+                    const batch = writeBatch(db);
+                    batch.update(globTratDocRef, { status: 'concluido', dataAlta: serverTimestamp() });
+                    await batch.commit();
+                    await registrarLog('Alta Samaritanos', { assistidoId: globTrat.assistidoId, tratamentoId: globTratDocRef.id, semanaAlta: globAtend.semana });
+                    alert('Alta concedida! Ciclo encerrado.');
+                    location.reload();
+                } catch (error) { alert("Falha ao dar alta."); }
             });
 
-            async function marcarNovoRetorno(atendimentoAnterior, tratamentoDocRef, tratamento) {
+            async function marcarNovoRetorno(atendAnt, tDocRef) {
                 const btn = document.getElementById('btn-marcar-retorno');
                 btn.disabled = true;
 
-                const semanaAtual = atendimentoAnterior.semana;
-                const novaSemana = semanaAtual + 1;
-
-                const hojeInicio = new Date();
-                hojeInicio.setHours(0, 0, 0, 0);
-                const qCheckHoje = query(atendimentosRef, 
-                    where("tratamentoId", "==", atendimentoAnterior.tratamentoId),
-                    where("dataAtendimento", ">=", Timestamp.fromDate(hojeInicio))
-                );
-                const snapshotHoje = await getDocs(qCheckHoje);
-                if (!snapshotHoje.empty) {
-                    alert('Este assistido já registrou um retorno hoje.');
-                    btn.disabled = false;
-                    return;
-                }
-
-                if (!confirm(`Confirmar avanço para a Semana ${novaSemana}?`)) {
-                    btn.disabled = false;
-                    return;
-                }
+                const novaSemana = atendAnt.semana + 1;
+                const hojeInicio = new Date(); hojeInicio.setHours(0, 0, 0, 0);
+                const qCheck = query(atendimentosRef, where("tratamentoId", "==", atendAnt.tratamentoId), where("dataAtendimento", ">=", Timestamp.fromDate(hojeInicio)));
+                const snap = await getDocs(qCheck);
+                
+                if (!snap.empty) { alert('Retorno já registrado hoje.'); btn.disabled = false; return; }
+                if (!confirm(`Avançar para a Semana ${novaSemana}?`)) { btn.disabled = false; return; }
 
                 try {
                     const batch = writeBatch(db);
-                    const dataAtual = serverTimestamp();
-                    
                     batch.set(doc(atendimentosRef), {
-                        assistidoId: tratamento.assistidoId,
-                        tratamentoId: tratamentoDocRef.id,
-                        dataAtendimento: dataAtual,
-                        semana: novaSemana,
-                        notas: '',
-                        verificacoes: '',
-                        orientacoes: '',
-                        atendente: user.displayName,
-                        detalhes_preenchidos: false,
-                        orientacao_enviada: false
+                        assistidoId: globTrat.assistidoId, tratamentoId: tDocRef.id, dataAtendimento: serverTimestamp(),
+                        semana: novaSemana, notas: '', verificacoes: '', orientacoes: '', atendente: user.displayName, detalhes_preenchidos: false, orientacao_enviada: false
                     });
-                    
-                    batch.update(tratamentoDocRef, { 
-                        atendimentos_realizados: increment(1)
-                    });
-                    
+                    batch.update(tDocRef, { atendimentos_realizados: increment(1) });
                     await batch.commit();
                     
-                    alert(`Semana ${novaSemana} registrada com sucesso na fila.`);
-                    await registrarLog('Avanço Semana Samaritanos', { assistidoId: tratamento.assistidoId, tratamentoId: tratamentoDocRef.id, semanaNova: novaSemana });
-                    
+                    alert(`Semana ${novaSemana} agendada com sucesso.`);
                     location.reload();
-
-                } catch (error) {
-                    console.error("Erro ao avançar semana:", error);
-                    alert("Falha ao registrar: " + error.message);
-                    btn.disabled = false;
-                }
+                } catch (error) { alert("Erro ao marcar retorno."); btn.disabled = false; }
             }
 
-            async function finalizarTratamentoAlta() {
-                try {
-                    const batch = writeBatch(db);
-                    batch.update(globTratamentoDocRef, { status: 'concluido', dataAlta: serverTimestamp() });
-                    await batch.commit();
-                    
-                    await registrarLog('Alta Samaritanos', { assistidoId: globTratamento.assistidoId, tratamentoId: globTratamentoDocRef.id, semanaAlta: globAtendimento.semana });
-                    alert('Alta concedida com sucesso. Ciclo encerrado!');
-                    location.reload();
-                } catch (error) {
-                    alert("Falha ao dar alta: " + error.message);
-                }
-            }
-
-            async function salvarAtendimento(atendimento, atendimentoDocRef, tratamentoDocRef, tratamento, user) {
+            async function salvarAtendimento(atendimento, aDocRef, user) {
                 const btn = document.getElementById('btn-salvar-atendimento');
-                
-                const verificacoesEl = document.getElementById('atendimento-verificacoes');
-                const orientacoesEl = document.getElementById('atendimento-orientacoes');
-                
-                const textoVerificacoes = verificacoesEl ? verificacoesEl.value.trim() : '';
-                const textoOrientacoes = orientacoesEl ? orientacoesEl.value.trim() : '';
-
                 btn.disabled = true; btn.textContent = 'Salvando...';
                 
                 try {
-                    const batch = writeBatch(db);
-                    const dadosAtendimento = {
-                        atendente: user.displayName || 'Usuário do Sistema',
-                        detalhes_preenchidos: true
-                    };
-
-                    if(atendimento.semana <= 3) dadosAtendimento.verificacoes = textoVerificacoes;
-                    if(atendimento.semana >= 4) dadosAtendimento.orientacoes = textoOrientacoes;
-                    
-                    batch.update(atendimentoDocRef, dadosAtendimento);
-                    await batch.commit();
-                    
-                    await registrarLog('Preenchimento Ficha Samaritanos', {
-                        assistidoId: atendimento.assistidoId,
-                        atendimentoId: atendimento.id,
-                        semana: atendimento.semana
+                    await updateDoc(aDocRef, {
+                        atendente: user.displayName || 'Sistema', detalhes_preenchidos: true,
+                        verificacoes: document.getElementById('atendimento-verificacoes').value.trim(),
+                        orientacoes: document.getElementById('atendimento-orientacoes').value.trim()
                     });
-                    
-                    alert('Ficha salva com sucesso!');
+                    alert('Ficha salva!');
                     manipularEstadoFormulario(true);
                     location.reload(); 
-
-                } catch (error) {
-                    alert("Falha ao salvar. Tente novamente.");
-                    btn.disabled = false; btn.textContent = 'Salvar Alterações';
-                }
-            }
-
-            function preencherFormulario(atendimento, tratamento) {
-                const verificacoesInput = document.getElementById('atendimento-verificacoes');
-                const orientacoesInput = document.getElementById('atendimento-orientacoes');
-                
-                if(verificacoesInput) verificacoesInput.value = atendimento.verificacoes || '';
-                if(orientacoesInput) orientacoesInput.value = atendimento.orientacoes || '';
+                } catch (error) { alert("Falha ao salvar."); btn.disabled = false; btn.textContent = 'Salvar Alterações'; }
             }
 
             function criarFormulario(atendimento, assistido, tratamento) {
-                const dataAtendimento = atendimento.dataAtendimento ? atendimento.dataAtendimento.toDate().toLocaleDateString('pt-br') : "Data Pendente";
-                const atendimentoNum = atendimento.semana || 1;
-                const statusTratamento = tratamento.status || 'N/A';
+                const dataAtend = atendimento.dataAtendimento ? atendimento.dataAtendimento.toDate().toLocaleDateString('pt-br') : "Pendente";
+                const sem = atendimento.semana || 1;
+                const status = tratamento.status || 'N/A';
                 
-                let botoesAcaoHtml = '';
-                const hoje = new Date().toLocaleDateString('pt-br');
-                const naoEhDeHoje = dataAtendimento !== hoje;
-                
-                if (statusTratamento === 'ativo' || statusTratamento === 'pendente') {
-                    if (naoEhDeHoje) {
-                        botoesAcaoHtml += `<button id="btn-marcar-retorno" type="button" class="btn btn-success" style="width: 100%; margin-top: 10px;">Registrar Próximo Retorno / Semana</button>`;
+                let botoes = '';
+                if (status === 'ativo') {
+                    if (dataAtend !== new Date().toLocaleDateString('pt-br')) {
+                        botoes += `<button id="btn-marcar-retorno" type="button" class="btn btn-success" style="width: 100%; margin-top: 10px;">Gerar Próxima Semana</button>`;
                     }
-                    if (atendimentoNum >= 4) {
-                        botoesAcaoHtml += `<button id="btn-abrir-alta" type="button" class="btn btn-danger" style="width: 100%; margin-top: 10px;">Dar Alta (Encerrar Tratamento)</button>`;
+                    if (sem >= 4) { // Alta destrava a partir da semana 4
+                        botoes += `<button id="btn-abrir-alta" type="button" class="btn btn-danger" style="width: 100%; margin-top: 10px;">Dar Alta (Encerrar Tratamento)</button>`;
                     }
-                } else if (statusTratamento === 'concluido') {
-                    botoesAcaoHtml = `<p style="text-align:center; font-weight:bold; color:#c0392b; margin-top:15px;">Tratamento concluído (Alta concedida).</p>`;
+                } else if (status === 'concluido') {
+                    botoes = `<p style="text-align:center; font-weight:bold; color:#c0392b; margin-top:15px;">Alta Concedida.</p>`;
                 }
 
-                // Identifica Fase
-                let faseBadge = '';
-                let campoDinamico = '';
-
-                if (atendimentoNum <= 3) {
-                    faseBadge = `<span class="fase-badge" style="background-color: #3498db;">Fase 1: Verificação (Semana ${atendimentoNum})</span>`;
-                    campoDinamico = `
-                        <div class="form-item">
-                            <label for="atendimento-verificacoes">Registro de Verificações da Espiritualidade:</label>
-                            <textarea id="atendimento-verificacoes" rows="6" placeholder="Anote o que os tarefeiros perceberam/verificaram durante a vibração desta semana..."></textarea>
-                        </div>
-                    `;
-                } else {
-                    faseBadge = `<span class="fase-badge" style="background-color: #27ae60;">Fase 2: Orientações (Semana ${atendimentoNum})</span>`;
-                    campoDinamico = `
-                        <div class="form-item">
-                            <label for="atendimento-orientacoes">Orientações para o Assistido (WhatsApp):</label>
-                            <textarea id="atendimento-orientacoes" rows="6" placeholder="Mensagem direta de orientação espiritual que será encaminhada ao assistido..."></textarea>
-                        </div>
-                    `;
-                }
-
-                let desencarnadoHtml = '';
-                if (tratamento.desencarnadoVinculado) {
-                    const dataFalec = tratamento.dataFalecimentoVinculado ? new Date(tratamento.dataFalecimentoVinculado + 'T12:00:00').toLocaleDateString('pt-br') : 'N/A';
-                    desencarnadoHtml = `
-                        <div class="info-item" style="margin-top: 15px; grid-column: 1 / -1; border-top: 1px dashed #ccc; padding-top: 10px;">
-                            <label>Desencarnado Vinculado</label>
-                            <span>${tratamento.desencarnadoVinculado} (Falecimento: ${dataFalec})</span>
-                        </div>
-                    `;
-                }
+                let desInfo = tratamento.desencarnadoVinculado ? `<div class="info-item" style="grid-column: 1 / -1; border-top: 1px dashed #ccc; padding-top: 10px;"><label>Desencarnado Vinculado</label><span>${tratamento.desencarnadoVinculado}</span></div>` : '';
 
                 return `<fieldset>
-                            <legend>Ciclo Samaritanos</legend>
-                            <div style="text-align: center;">${faseBadge}</div>
-                            
+                            <legend>Anotações - Semana ${sem}</legend>
                             <div class="info-header">
                                 <div class="info-grid">
-                                    <div class="info-item">
-                                        <label>Assistido</label>
-                                        <span>${assistido.nome}</span>
-                                    </div>
-                                    <div class="info-item">
-                                        <label>Data</label>
-                                        <span>${dataAtendimento}</span>
-                                    </div>
-                                    <div class="info-item">
-                                        <label>Motivo Original</label>
-                                        <span style="font-size: 0.9em; font-weight: normal;">${tratamento.informacoesIniciais || 'Sem informações'}</span>
-                                    </div>
-                                    ${desencarnadoHtml}
+                                    <div class="info-item"><label>Assistido</label><span>${assistido.nome}</span></div>
+                                    <div class="info-item"><label>Data</label><span>${dataAtend}</span></div>
+                                    <div class="info-item"><label>Motivo</label><span style="font-size: 0.9em; font-weight: normal;">${tratamento.informacoesIniciais || 'Sem informações'}</span></div>
+                                    ${desInfo}
                                 </div>
                             </div>
                             
-                            ${campoDinamico}
+                            <!-- As duas textareas aparecem sempre -->
+                            <div class="form-item">
+                                <label for="atendimento-verificacoes">Registro de Verificações da Equipe:</label>
+                                <textarea id="atendimento-verificacoes" rows="5" placeholder="Anote o que os tarefeiros perceberam/verificaram durante a vibração desta semana..."></textarea>
+                            </div>
+                            <div class="form-item">
+                                <label for="atendimento-orientacoes">Orientações para o Assistido (WhatsApp):</label>
+                                <textarea id="atendimento-orientacoes" rows="5" placeholder="Mensagem direta de orientação espiritual que será encaminhada ao assistido..."></textarea>
+                            </div>
                             
-                            <button id="btn-salvar-atendimento" type="button" class="btn btn-primary" style="width: 100%; margin-top: 20px; background-color: var(--cor-primaria); color: white; border: none; padding: 12px; border-radius: 8px; font-weight: bold; cursor: pointer;">Salvar Ficha</button>
-
+                            <button id="btn-salvar-atendimento" type="button" class="btn btn-primary" style="width: 100%; margin-top: 20px; background-color: var(--cor-primaria); color: white; border: none; padding: 12px; border-radius: 8px;">Salvar Ficha</button>
                             <hr style="border: 0; height: 1px; background: #ddd; margin: 25px 0;">
-                            
-                            ${botoesAcaoHtml}
+                            ${botoes}
                         </fieldset>`;
             }
         }

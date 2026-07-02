@@ -11,6 +11,7 @@ const bibliotecaMod = require("./modulos/biblioteca");
 const socialMod = require("./modulos/social");
 const comunicacoesMod = require("./modulos/comunicacoes");
 const instagramMod = require("./modulos/instagram");
+const samaritanosMod = require("./modulos/samaritanos");
 
 // Exportação que o Firebase vai ler (Usando o seu padrão original)
 module.exports = {
@@ -19,5 +20,6 @@ module.exports = {
     ...bibliotecaMod,
     ...socialMod,
     ...comunicacoesMod,
-    ...instagramMod
+    ...instagramMod,
+    ...samaritanosMod
 };
