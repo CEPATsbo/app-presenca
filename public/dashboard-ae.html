@@ -91,6 +91,12 @@
             <h2 id="card-vl-titulo">Vinha de Luz</h2>
             <p id="card-vl-status">Gerenciar o fluxo de atendimento do trabalho de Cura.</p>
         </a>
+
+        <!-- NOVO CARD SAMARITANOS -->
+        <a href="/dashboard-samaritanos.html" class="card" data-role="super-admin,diretor,tesoureiro,conselheiro,entrevistador,recepcionista" style="border-left-color: #e67e22;">
+            <h2 id="card-sam-titulo">Samaritanos</h2>
+            <p id="card-sam-status">Gerenciar a fila e fichas de Assistência à Distância.</p>
+        </a>
     </div>
 
     <script type="module">
@@ -125,24 +131,47 @@
                     });
 
                     // --- ALERTA DE FICHAS PENDENTES VINHA DE LUZ ---
-                    const atendimentosRef = collection(db, 'atendimentos_vl');
-                    const qPendentes = query(atendimentosRef, where("detalhes_preenchidos", "==", false));
+                    const atendimentosVlRef = collection(db, 'atendimentos_vl');
+                    const qPendentesVl = query(atendimentosVlRef, where("detalhes_preenchidos", "==", false));
 
-                    onSnapshot(qPendentes, (snapshot) => {
-                        const totalPendentes = snapshot.size;
+                    onSnapshot(qPendentesVl, (snapshot) => {
+                        const totalPendentesVl = snapshot.size;
                         const cardVl = document.querySelector('a[href="/dashboard-vl.html"]');
-                        let alerta = cardVl.querySelector('.alerta-pendencia');
+                        let alertaVl = cardVl.querySelector('.alerta-pendencia');
                         
-                        if (totalPendentes > 0) {
-                            if (!alerta) {
-                                alerta = document.createElement('div');
-                                alerta.className = 'alerta-pendencia';
-                                alerta.style.cssText = "background: #dc3545; color: white; padding: 6px 10px; border-radius: 6px; font-size: 0.8em; margin-top: 10px; font-weight: bold; text-align: center; box-shadow: 0 2px 4px rgba(0,0,0,0.1);";
-                                cardVl.appendChild(alerta);
+                        if (totalPendentesVl > 0) {
+                            if (!alertaVl) {
+                                alertaVl = document.createElement('div');
+                                alertaVl.className = 'alerta-pendencia';
+                                alertaVl.style.cssText = "background: #dc3545; color: white; padding: 6px 10px; border-radius: 6px; font-size: 0.8em; margin-top: 10px; font-weight: bold; text-align: center; box-shadow: 0 2px 4px rgba(0,0,0,0.1);";
+                                cardVl.appendChild(alertaVl);
                             }
-                            alerta.textContent = `⚠️ ${totalPendentes} ficha(s) pendente(s)`;
-                        } else if (alerta) {
-                            alerta.remove();
+                            alertaVl.textContent = `⚠️ ${totalPendentesVl} ficha(s) pendente(s)`;
+                        } else if (alertaVl) {
+                            alertaVl.remove();
+                        }
+                    });
+                    // ------------------------------------------------
+
+                    // --- ALERTA DE FICHAS PENDENTES SAMARITANOS ---
+                    const atendimentosSamRef = collection(db, 'atendimentos_samaritanos');
+                    const qPendentesSam = query(atendimentosSamRef, where("detalhes_preenchidos", "==", false));
+
+                    onSnapshot(qPendentesSam, (snapshot) => {
+                        const totalPendentesSam = snapshot.size;
+                        const cardSam = document.querySelector('a[href="/dashboard-samaritanos.html"]');
+                        let alertaSam = cardSam.querySelector('.alerta-pendencia');
+                        
+                        if (totalPendentesSam > 0) {
+                            if (!alertaSam) {
+                                alertaSam = document.createElement('div');
+                                alertaSam.className = 'alerta-pendencia';
+                                alertaSam.style.cssText = "background: #dc3545; color: white; padding: 6px 10px; border-radius: 6px; font-size: 0.8em; margin-top: 10px; font-weight: bold; text-align: center; box-shadow: 0 2px 4px rgba(0,0,0,0.1);";
+                                cardSam.appendChild(alertaSam);
+                            }
+                            alertaSam.textContent = `⚠️ ${totalPendentesSam} ficha(s) pendente(s)`;
+                        } else if (alertaSam) {
+                            alertaSam.remove();
                         }
                     });
                     // ------------------------------------------------
