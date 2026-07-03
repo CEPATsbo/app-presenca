@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Painel da Assistência Espiritual</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: #f4f6f9;
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        .header { width: 100%; max-width: 1000px; text-align: center; margin-bottom: 30px; }
+        .header h1 { color: #2c3e50; margin: 0; }
+        .header p { color: #7f8c8d; margin-top: 5px; }
+        .nav-voltar { width: 100%; max-width: 1000px; margin-bottom: 20px; }
+        .btn-voltar {
+            background-color: #6c757d;
+            color: white;
+            border: none;
+            padding: 12px 20px;
+            border-radius: 8px;
+            font-weight: bold;
+            text-decoration: none;
+            display: inline-block;
+        }
+        .card-container {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+            gap: 25px;
+            width: 100%;
+            max-width: 1000px;
+            display: none; 
+        }
+        .card {
+            background-color: white;
+            border-radius: 12px;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.08);
+            padding: 25px;
+            text-align: left;
+            text-decoration: none;
+            color: inherit;
+            transition: transform 0.2s, box-shadow 0.2s;
+            position: relative;
+            border-left: 5px solid transparent;
+            display: none;
+        }
+        .card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 8px 25px rgba(0, 0, 0, 0.12);
+        }
+        .card h2 { margin-top: 0; font-size: 1.4em; color: #34495e; }
+        .card p { color: #576574; font-size: 0.95em; line-height: 1.5; text-align: left; }
+    </style>
+</head>
+<body>
+    <nav class="nav-voltar">
+        <a href="/dashboard-ae.html" class="btn-voltar">⬅ Voltar para o Menu Anterior</a>
+    </nav>
+
+    <div class="header">
+        <h1>Assistência Espiritual</h1>
+        <p>Selecione uma área do atendimento para continuar.</p>
+    </div>
+
+    <div id="main-content" class="card-container">
+        <a href="/recepcao-ae.html" class="card" data-role="super-admin,tesoureiro,conselheiro,diretor,entrevistador,recepcionista" style="border-left-color: #2ecc71;">
+            <h2>Recepção</h2>
+            <p>Iniciar atendimentos, registrar presenças e gerenciar a fila inicial.</p>
+        </a>
+        
+        <a href="/encaminhamento-ae.html" class="card" data-role="super-admin,diretor,tesoureiro,conselheiro,recepcionista,entrevistador" style="border-left-color: #2ecc71;">
+            <h2>Encaminhamento</h2>
+            <p>Controlar o fluxo de chamadas para entrevista e para as salas de passe.</p>
+        </a>
+        
+        <a href="/arquivo-geral-ae.html" class="card" data-role="super-admin,diretor,conselheiro,tesoureiro,entrevistador" style="border-left-color: #2ecc71;">
+            <h2>Arquivo e Entrevistas</h2> 
+            <p>Consultar históricos e adicionar detalhes das entrevistas.</p> 
+        </a>
+        
+        <a href="/painel-ae.tv.html" target="_blank" class="card" data-role="super-admin,diretor,tesoureiro,conselheiro,recepcionista,entrevistador" style="border-left-color: #2ecc71;">
+            <h2>Painel TV</h2>
+            <p>Abrir o painel de chamadas para exibição no salão.</p>
+        </a>
+    </div>
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
+        import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-auth.js";
+
+        const firebaseConfig = {
+            apiKey: "AIzaSyBV7RPjk3cFTqL-aIpflJcUojKg1ZXMLuU",
+            authDomain: "voluntarios-ativos---cepat.firebaseapp.com",
+            projectId: "voluntarios-ativos---cepat",
+            storageBucket: "voluntarios-ativos---cepat.firebasestorage.app",
+            messagingSenderId: "66122858261",
+            appId: "1:66122858261:web:7fa21f1805463b5c08331c"
+        };
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+
+        onAuthStateChanged(auth, (user) => {
+            if (user) {
+                user.getIdTokenResult(true).then((idTokenResult) => {
+                    const userRole = idTokenResult.claims.role || 'voluntario';
+                    
+                    document.querySelectorAll('.card').forEach(card => {
+                        const rolesPermitidas = card.dataset.role.split(',');
+                        if (rolesPermitidas.includes(userRole)) {
+                            card.style.display = 'block'; 
+                        } else {
+                            card.style.display = 'none';
+                        }
+                    });
+
+                    document.getElementById('main-content').style.display = 'grid';
+                });
+            } else {
+                window.location.href = '/login.html';
+            }
+        });
+    </script>
+</body>
+</html>
