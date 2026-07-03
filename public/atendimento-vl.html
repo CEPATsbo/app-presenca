@@ -5,12 +5,12 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Detalhes do Atendimento - Vinha de Luz</title>
     <style>
-        :root { --cor-primaria: #8e44ad; --cor-borda: #ddd; --fundo-desabilitado: #e9ecef; } /* Cor VL */
+        :root { --cor-primaria: #8e44ad; --cor-borda: #ddd; --fundo-desabilitado: #e9ecef; }
         body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background-color: #f0f2f5; margin: 0; padding: 20px; }
         .container { width: 100%; max-width: 900px; background-color: white; padding: 30px; border-radius: 12px; box-shadow: 0 6px 24px rgba(0,0,0,0.1); margin: auto; }
         .nav-voltar { width: 100%; max-width: 900px; margin: auto; margin-bottom: 20px; }
         .btn, .btn-voltar { background-color: var(--cor-primaria); color: white; border: none; padding: 12px 20px; border-radius: 8px; font-weight: bold; font-size: 1em; text-decoration: none; cursor: pointer; transition: background-color 0.3s; display: inline-block; text-align: center;}
-        .btn:disabled { background-color: #ccc; cursor: not-allowed; }
+        .btn:disabled { background-color: #ccc; cursor: not-allowed; opacity: 0.7; }
         .btn-voltar { background-color: #6c757d; }
         .btn-success { background-color: #28a745; }
         .btn-secondary { background-color: #6c757d; }
@@ -39,39 +39,11 @@
             margin-bottom: 20px;
             box-shadow: 0 2px 8px rgba(142, 68, 173, 0.05);
         }
-        .pedido-online-box h4 {
-            margin-top: 0;
-            color: var(--cor-primaria);
-            margin-bottom: 12px;
-            font-size: 1.1em;
-            display: flex;
-            align-items: center;
-            gap: 8px;
-        }
-        .pedido-online-box p {
-            margin: 0 0 8px 0;
-            color: #444;
-            line-height: 1.4;
-        }
+        .pedido-online-box h4 { margin-top: 0; color: var(--cor-primaria); margin-bottom: 12px; font-size: 1.1em; display: flex; align-items: center; gap: 8px; }
+        .pedido-online-box p { margin: 0 0 8px 0; color: #444; line-height: 1.4; }
         .pedido-online-box p:last-child { margin-bottom: 0; }
-        .pedido-online-box .destaque {
-            background-color: white;
-            padding: 10px;
-            border-radius: 6px;
-            border: 1px solid #eee;
-            margin-top: 5px;
-            white-space: pre-wrap;
-            font-style: italic;
-            color: #555;
-        }
-
-        .upload-box {
-            margin-top: 15px; 
-            padding: 15px; 
-            background-color: #fdfdfd; 
-            border: 1px dashed #bbb; 
-            border-radius: 8px;
-        }
+        .pedido-online-box .destaque { background-color: white; padding: 10px; border-radius: 6px; border: 1px solid #eee; margin-top: 5px; white-space: pre-wrap; font-style: italic; color: #555; }
+        .upload-box { margin-top: 15px; padding: 15px; background-color: #fdfdfd; border: 1px dashed #bbb; border-radius: 8px; }
     </style>
 </head>
 <body>
@@ -89,7 +61,7 @@
         import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
         import { 
             getFirestore, collection, doc, getDoc, query, where, Timestamp, 
-            getDocs, writeBatch, serverTimestamp, increment, setDoc 
+            getDocs, writeBatch, serverTimestamp, increment, setDoc, addDoc, onSnapshot
         } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
         import { getStorage, ref as storageRef, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-storage.js";
         import { getAuth } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-auth.js";
@@ -134,10 +106,7 @@
                 try {
                     const newLogRef = doc(logAuditoriaRef); 
                     await setDoc(newLogRef, { 
-                        timestamp: serverTimestamp(),
-                        autor: { uid: user.uid, nome: user.displayName || 'Usuário do Sistema' },
-                        acao: acao,
-                        detalhes: detalhes
+                        timestamp: serverTimestamp(), autor: { uid: user.uid, nome: user.displayName || 'Usuário do Sistema' }, acao: acao, detalhes: detalhes
                     });
                 } catch (error) { console.error("Erro ao registrar log:", error); }
             }
@@ -146,7 +115,7 @@
                 const form = formularioContainer.querySelector('fieldset');
                 if (!form) return;
                 
-                form.querySelectorAll('#atendimento-notas, #atendimento-orientacoes, #upload-carta, #btn-marcar-retorno, input[name="decisao-extensao"]').forEach(el => {
+                form.querySelectorAll('#atendimento-notas, #atendimento-orientacoes, #upload-carta, #upload-audio, #btn-transcrever-audio, #btn-marcar-retorno, input[name="decisao-extensao"]').forEach(el => {
                     if (el) el.disabled = travado;
                 });
 
@@ -193,8 +162,90 @@
 
                 document.getElementById('btn-salvar-atendimento')?.addEventListener('click', () => salvarAtendimentoVL(atendimento, atendimentoDocRef, tratamentoDoc.ref, tratamento, user));
                 document.getElementById('btn-marcar-retorno')?.addEventListener('click', () => marcarNovoRetorno(atendimento, tratamentoDoc.ref, tratamento));
+                
+                // MÁGICA DO ÁUDIO
+                configurarMotorDeAudio(atendimento);
             }
             
+            // --- INÍCIO DA FUNÇÃO DO MOTOR DE ÁUDIO ---
+            function configurarMotorDeAudio(atendimento) {
+                const btnTranscrever = document.getElementById('btn-transcrever-audio');
+                if(!btnTranscrever) return;
+
+                btnTranscrever.addEventListener('click', async () => {
+                    const inputAudio = document.getElementById('upload-audio');
+                    const checkManifestacao = document.getElementById('check-manifestacao');
+                    const statusAudio = document.getElementById('status-audio');
+                    
+                    if (!inputAudio.files || inputAudio.files.length === 0) {
+                        alert('Por favor, selecione pelo menos um arquivo de áudio.'); return;
+                    }
+
+                    const isManifestacao = checkManifestacao.checked;
+                    const arquivos = Array.from(inputAudio.files);
+                    btnTranscrever.disabled = true;
+
+                    for (let i = 0; i < arquivos.length; i++) {
+                        const file = arquivos[i];
+                        statusAudio.innerHTML = `<span style="color:#e67e22;">⏳ Enviando e transcrevendo áudio ${i+1} de ${arquivos.length}... Isso pode levar um minuto.</span>`;
+                        
+                        try {
+                            // 1. Sobe o áudio para o Storage
+                            const sRef = storageRef(storage, `audios_mediunicos/vl_${atendimento.id}_${Date.now()}_${i}_${file.name}`);
+                            const snapshot = await uploadBytes(sRef, file);
+                            const url = await getDownloadURL(snapshot.ref);
+                            
+                            // 2. Aciona o Robô criando o documento na comunicacoes_mediunicas
+                            const docRef = await addDoc(collection(db, 'comunicacoes_mediunicas'), {
+                                urlAudio: url,
+                                status: 'processando',
+                                nomeArquivo: file.name,
+                                assistidoId: atendimento.assistidoId,
+                                atendimentoId: atendimento.id,
+                                origem: 'vinha_de_luz',
+                                criadoEm: serverTimestamp()
+                            });
+
+                            // 3. Fica "escutando" a resposta do Robô em tempo real
+                            await new Promise((resolve, reject) => {
+                                const unsubscribe = onSnapshot(docRef, (docSnap) => {
+                                    const data = docSnap.data();
+                                    if (data && data.status === 'concluido') {
+                                        unsubscribe();
+                                        const transcricao = data.transcricao || 'Áudio não compreendido.';
+                                        const textoFormatado = `\n[Transcrição Automática - ${file.name}]:\n${transcricao}\n`;
+                                        
+                                        if (isManifestacao) {
+                                            const notas = document.getElementById('atendimento-notas');
+                                            notas.value += (notas.value ? '\n' : '') + textoFormatado;
+                                        } else {
+                                            const ori = document.getElementById('atendimento-orientacoes');
+                                            ori.value += (ori.value ? '\n' : '') + textoFormatado;
+                                        }
+                                        resolve();
+                                    } else if (data && data.status === 'erro') {
+                                        unsubscribe();
+                                        alert(`Erro ao transcrever o arquivo ${file.name}: ${data.erroDetalhe}`);
+                                        resolve(); // Segue pro próximo mesmo com erro
+                                    }
+                                }, (err) => {
+                                    unsubscribe();
+                                    reject(err);
+                                });
+                            });
+                        } catch (error) {
+                            console.error("Erro no processamento do áudio:", error);
+                            alert(`Falha no processamento do arquivo ${file.name}`);
+                        }
+                    }
+                    
+                    statusAudio.innerHTML = `<span style="color:#28a745;">✅ Transcrição concluída! O texto foi inserido nos campos abaixo. Você pode editá-lo antes de salvar a ficha.</span>`;
+                    inputAudio.value = ''; // Esvazia o input
+                    btnTranscrever.disabled = false;
+                });
+            }
+            // --- FIM DA FUNÇÃO DO MOTOR DE ÁUDIO ---
+
             async function marcarNovoRetorno(atendimentoAnterior, tratamentoDocRef, tratamento) {
                 const btn = document.getElementById('btn-marcar-retorno');
                 btn.disabled = true;
@@ -214,47 +265,26 @@
                     where("dataAtendimento", ">=", Timestamp.fromDate(hojeInicio))
                 );
                 const snapshotHoje = await getDocs(qCheckHoje);
-                if (!snapshotHoje.empty) {
-                    alert('Este assistido já registrou um retorno hoje.');
-                    btn.disabled = false; return;
-                }
+                if (!snapshotHoje.empty) { alert('Este assistido já registrou um retorno hoje.'); btn.disabled = false; return; }
 
-                if (!confirm(`Confirmar novo retorno (Atendimento ${realizados + 1} de ${totalPermitido})?`)) {
-                    btn.disabled = false; return;
-                }
+                if (!confirm(`Confirmar novo retorno (Atendimento ${realizados + 1} de ${totalPermitido})?`)) { btn.disabled = false; return; }
 
                 try {
                     const batch = writeBatch(db);
                     const dataAtual = serverTimestamp();
                     
                     batch.set(doc(atendimentosRef), {
-                        assistidoId: tratamento.assistidoId,
-                        tratamentoId: tratamentoDocRef.id,
-                        dataAtendimento: dataAtual,
-                        semana: realizados + 1,
-                        notas: '',
-                        orientacoes: '',
-                        atendente: user.displayName,
-                        detalhes_preenchidos: false
+                        assistidoId: tratamento.assistidoId, tratamentoId: tratamentoDocRef.id,
+                        dataAtendimento: dataAtual, semana: realizados + 1,
+                        notas: '', orientacoes: '', atendente: user.displayName, detalhes_preenchidos: false
                     });
-                    
-                    batch.update(tratamentoDocRef, { 
-                        atendimentos_realizados: increment(1),
-                        status: (realizados + 1) === totalPermitido ? 'concluido' : 'ativo'
-                    });
-                    
+                    batch.update(tratamentoDocRef, { atendimentos_realizados: increment(1), status: (realizados + 1) === totalPermitido ? 'concluido' : 'ativo' });
                     await batch.commit();
                     
                     alert(`Retorno ${realizados + 1} registrado com sucesso!`);
-                    if ((realizados + 1) === totalPermitido) {
-                        alert('Este foi o último retorno agendado. O status mudou para "concluído".');
-                    }
-                    
                     await registrarLog('Registro Retorno (VL)', { assistidoId: tratamento.assistidoId, tratamentoId: tratamentoDocRef.id, atendimentoNum: realizados + 1 });
                     location.reload();
-
                 } catch (error) {
-                    console.error("Erro ao marcar retorno:", error);
                     alert("Falha ao registrar retorno: " + error.message);
                     btn.disabled = false;
                 }
@@ -272,36 +302,26 @@
                 
                 if (radioExtensao) {
                     if (radioExtensao.value === 'estender') {
-                        retornosSolicitados = atendimento.semana; 
-                        statusFinal = 'estendido';
+                        retornosSolicitados = atendimento.semana; statusFinal = 'estendido';
                     } else if (radioExtensao.value === 'concluir') {
-                        retornosSolicitados = atendimento.semana - 1; 
-                        statusFinal = 'concluido';
+                        retornosSolicitados = atendimento.semana - 1; statusFinal = 'concluido';
                     }
                 } else {
                     const totalAtend = (tratamento.retornos_solicitados || 0) + 1;
-                    if (atendimento.semana === totalAtend && atendimento.semana < 4) {
-                        statusFinal = 'concluido';
-                    }
+                    if (atendimento.semana === totalAtend && atendimento.semana < 4) { statusFinal = 'concluido'; }
                 }
 
                 btn.disabled = true; btn.textContent = 'Salvando Atendimento e Anexos...';
                 
                 try {
-                    // MÚLTIPLAS CARTAS PSICOGRAFADAS
                     let cartasUrlsExistentes = atendimento.cartasUrls || [];
-                    
-                    // Migração de legado (caso algum atendimento já tenha a variável antiga 'cartaUrl')
-                    if (atendimento.cartaUrl && !cartasUrlsExistentes.includes(atendimento.cartaUrl)) {
-                        cartasUrlsExistentes.push(atendimento.cartaUrl);
-                    }
+                    if (atendimento.cartaUrl && !cartasUrlsExistentes.includes(atendimento.cartaUrl)) { cartasUrlsExistentes.push(atendimento.cartaUrl); }
 
                     const inputCarta = document.getElementById('upload-carta');
                     let novasUrls = [];
                     
                     if (inputCarta && inputCarta.files.length > 0) {
                         btn.textContent = `Enviando ${inputCarta.files.length} imagem(ns)... Aguarde.`;
-                        
                         for (let i = 0; i < inputCarta.files.length; i++) {
                             const file = inputCarta.files[i];
                             const sRef = storageRef(storage, `cartas_vl/${atendimento.id}_${Date.now()}_${i}_${file.name}`);
@@ -320,28 +340,15 @@
                         detalhes_preenchidos: true
                     };
                     
-                    // Somar as cartas antigas com as novas
                     if (novasUrls.length > 0 || cartasUrlsExistentes.length > 0) {
                         dadosAtendimento.cartasUrls = [...cartasUrlsExistentes, ...novasUrls];
                     }
 
                     batch.update(atendimentoDocRef, dadosAtendimento);
-
-                    batch.update(tratamentoDocRef, {
-                        retornos_solicitados: retornosSolicitados,
-                        status: statusFinal 
-                    });
-
+                    batch.update(tratamentoDocRef, { retornos_solicitados: retornosSolicitados, status: statusFinal });
                     await batch.commit();
                     
-                    await registrarLog('Preenchimento Atendimento (VL)', {
-                        assistidoId: atendimento.assistidoId,
-                        atendimentoId: atendimento.id,
-                        semana: atendimento.semana,
-                        statusTratamento: statusFinal,
-                        anexosNovos: novasUrls.length
-                    });
-                    
+                    await registrarLog('Preenchimento Atendimento (VL)', { assistidoId: atendimento.assistidoId, atendimentoId: atendimento.id, semana: atendimento.semana, statusTratamento: statusFinal, anexosNovos: novasUrls.length });
                     alert('Atendimento salvo com sucesso!');
                     manipularEstadoFormulario(true);
                     location.reload(); 
@@ -397,11 +404,29 @@
                     </div>`;
                 }
 
+                // 🎙️ CAIXA DO ASSISTENTE DE ÁUDIO
+                let assistenteAudioHtml = `
+                    <div class="pedido-online-box" style="background-color: #f0f7ff; border-left-color: #007bff;">
+                        <h4 style="color: #007bff;">🎙️ Assistente de Transcrição Mediúnica</h4>
+                        <p style="font-size: 0.9em; margin-bottom: 10px;">Selecione os áudios gravados pelos médiuns (pode ser mais de um). A Inteligência Artificial transcreverá as falas e preencherá os campos abaixo automaticamente para sua edição.</p>
+                        
+                        <div style="display: flex; gap: 15px; flex-wrap: wrap; align-items: center;">
+                            <input type="file" id="upload-audio" accept="audio/*" multiple style="flex: 1; min-width: 200px; padding: 8px; border: 1px solid #ccc; background: white; border-radius: 6px;">
+                            
+                            <label style="display: flex; align-items: center; gap: 5px; font-weight: bold; cursor: pointer; color: #d35400;">
+                                <input type="checkbox" id="check-manifestacao">
+                                É Manifestação? (Enviar p/ Observações)
+                            </label>
+                            
+                            <button type="button" id="btn-transcrever-audio" class="btn" style="background-color: #007bff; color: white;">Transcrever Áudios</button>
+                        </div>
+                        <div id="status-audio" style="margin-top: 10px; font-weight: bold; font-size: 0.9em;"></div>
+                    </div>
+                `;
+
                 // GERAÇÃO DOS BOTÕES MÚLTIPLOS DE CARTAS PSICOGRAFADAS
                 let cartasSalvas = atendimento.cartasUrls || [];
-                if (atendimento.cartaUrl && cartasSalvas.length === 0) {
-                     cartasSalvas = [atendimento.cartaUrl]; // Puxa legado
-                }
+                if (atendimento.cartaUrl && cartasSalvas.length === 0) { cartasSalvas = [atendimento.cartaUrl]; }
 
                 let linksCartasHtml = '';
                 if (cartasSalvas.length > 0) {
@@ -471,6 +496,8 @@
                             
                             ${infoSolicitanteHtml}
                             
+                            ${assistenteAudioHtml}
+                            
                             <div class="form-item" style="margin-top: 15px;">
                                 <label for="atendimento-orientacoes">Orientações dos Espíritos (Mensagens e Recomendações):</label>
                                 <textarea id="atendimento-orientacoes" rows="5" placeholder="Registre aqui as orientações passadas através da mediunidade..."></textarea>
@@ -485,7 +512,7 @@
                             
                             ${extensaoTratamentoHtml}
                             
-                            <button id="btn-salvar-atendimento" type="button" class="btn btn-primary" style="width: 100%; margin-top: 20px;">Salvar Alterações</button>
+                            <button id="btn-salvar-atendimento" type="button" class="btn btn-primary" style="width: 100%; margin-top: 20px;">Salvar Alterações (Ficha e Anexos)</button>
 
                             ${linkEncaminhamentoSamaritanos}
                         </fieldset>`;
