@@ -91,7 +91,6 @@
             getFirestore, collection, doc, getDoc, query, where, Timestamp, 
             getDocs, writeBatch, serverTimestamp, increment, setDoc 
         } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
-        // IMPORTAÇÕES DO STORAGE PARA UPLOAD DA CARTA
         import { getStorage, ref as storageRef, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-storage.js";
         import { getAuth } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-auth.js";
         import { protegerPagina } from '/auth.js';
@@ -105,8 +104,8 @@
             appId: "1:66122858261:web:7fa21f1805463b5c08331c"
         };
         const app = initializeApp(firebaseConfig);
-        const auth = getAuth(app);
-        const storage = getStorage(app); // Inicializa o Storage
+        const auth = getAuth();
+        const storage = getStorage(app); 
 
         protegerPagina(['entrevistador', 'tesoureiro', 'diretor', 'super-admin']).then(user => {
             inicializarPagina(user);
@@ -147,7 +146,6 @@
                 const form = formularioContainer.querySelector('fieldset');
                 if (!form) return;
                 
-                // Trava as notas, orientações, botões de rádio e o input de arquivo
                 form.querySelectorAll('#atendimento-notas, #atendimento-orientacoes, #upload-carta, #btn-marcar-retorno, input[name="decisao-extensao"]').forEach(el => {
                     if (el) el.disabled = travado;
                 });
@@ -206,8 +204,7 @@
 
                 if (realizados >= totalPermitido) {
                     alert(`Este assistido já completou os ${totalPermitido} atendimentos autorizados.`);
-                    btn.disabled = false;
-                    return;
+                    btn.disabled = false; return;
                 }
                 
                 const hojeInicio = new Date();
@@ -219,13 +216,11 @@
                 const snapshotHoje = await getDocs(qCheckHoje);
                 if (!snapshotHoje.empty) {
                     alert('Este assistido já registrou um retorno hoje.');
-                    btn.disabled = false;
-                    return;
+                    btn.disabled = false; return;
                 }
 
                 if (!confirm(`Confirmar novo retorno (Atendimento ${realizados + 1} de ${totalPermitido})?`)) {
-                    btn.disabled = false;
-                    return;
+                    btn.disabled = false; return;
                 }
 
                 try {
@@ -256,7 +251,6 @@
                     }
                     
                     await registrarLog('Registro Retorno (VL)', { assistidoId: tratamento.assistidoId, tratamentoId: tratamentoDocRef.id, atendimentoNum: realizados + 1 });
-                    
                     location.reload();
 
                 } catch (error) {
@@ -294,18 +288,27 @@
                 btn.disabled = true; btn.textContent = 'Salvando Atendimento e Anexos...';
                 
                 try {
-                    // LÓGICA DE UPLOAD DA CARTA PSICOGRAFADA
-                    let cartaUrlFinal = atendimento.cartaUrl || null;
+                    // MÚLTIPLAS CARTAS PSICOGRAFADAS
+                    let cartasUrlsExistentes = atendimento.cartasUrls || [];
+                    
+                    // Migração de legado (caso algum atendimento já tenha a variável antiga 'cartaUrl')
+                    if (atendimento.cartaUrl && !cartasUrlsExistentes.includes(atendimento.cartaUrl)) {
+                        cartasUrlsExistentes.push(atendimento.cartaUrl);
+                    }
+
                     const inputCarta = document.getElementById('upload-carta');
+                    let novasUrls = [];
                     
                     if (inputCarta && inputCarta.files.length > 0) {
-                        const file = inputCarta.files[0];
-                        // Cria uma referência única no Storage (ex: cartas_vl/IDatendimento_timestamp_nomearquivo)
-                        const sRef = storageRef(storage, `cartas_vl/${atendimento.id}_${Date.now()}_${file.name}`);
+                        btn.textContent = `Enviando ${inputCarta.files.length} imagem(ns)... Aguarde.`;
                         
-                        btn.textContent = 'Enviando imagem da carta... Aguarde.';
-                        const snapshot = await uploadBytes(sRef, file);
-                        cartaUrlFinal = await getDownloadURL(snapshot.ref);
+                        for (let i = 0; i < inputCarta.files.length; i++) {
+                            const file = inputCarta.files[i];
+                            const sRef = storageRef(storage, `cartas_vl/${atendimento.id}_${Date.now()}_${i}_${file.name}`);
+                            const snapshot = await uploadBytes(sRef, file);
+                            const url = await getDownloadURL(snapshot.ref);
+                            novasUrls.push(url);
+                        }
                     }
 
                     const batch = writeBatch(db);
@@ -317,9 +320,9 @@
                         detalhes_preenchidos: true
                     };
                     
-                    // Se houver uma URL (nova ou antiga), salva no documento
-                    if (cartaUrlFinal) {
-                        dadosAtendimento.cartaUrl = cartaUrlFinal;
+                    // Somar as cartas antigas com as novas
+                    if (novasUrls.length > 0 || cartasUrlsExistentes.length > 0) {
+                        dadosAtendimento.cartasUrls = [...cartasUrlsExistentes, ...novasUrls];
                     }
 
                     batch.update(atendimentoDocRef, dadosAtendimento);
@@ -336,7 +339,7 @@
                         atendimentoId: atendimento.id,
                         semana: atendimento.semana,
                         statusTratamento: statusFinal,
-                        anexouCarta: !!cartaUrlFinal
+                        anexosNovos: novasUrls.length
                     });
                     
                     alert('Atendimento salvo com sucesso!');
@@ -355,7 +358,6 @@
                 const orientacoesInput = document.getElementById('atendimento-orientacoes');
                 
                 let notasText = atendimento.notas || '';
-                
                 if (!atendimento.detalhes_preenchidos && tratamento.origem === 'online' && notasText.includes('Pedido Online Recebido')) {
                     notasText = '';
                 }
@@ -395,24 +397,32 @@
                     </div>`;
                 }
 
-                // BLOCO DA CARTA PSICOGRAFADA
+                // GERAÇÃO DOS BOTÕES MÚLTIPLOS DE CARTAS PSICOGRAFADAS
+                let cartasSalvas = atendimento.cartasUrls || [];
+                if (atendimento.cartaUrl && cartasSalvas.length === 0) {
+                     cartasSalvas = [atendimento.cartaUrl]; // Puxa legado
+                }
+
+                let linksCartasHtml = '';
+                if (cartasSalvas.length > 0) {
+                    linksCartasHtml = '<div style="margin: 10px 0; display: flex; gap: 10px; flex-wrap: wrap;">';
+                    cartasSalvas.forEach((url, index) => {
+                        linksCartasHtml += `<a href="${url}" target="_blank" class="btn" style="background-color: #8e44ad; font-size: 0.9em; display: inline-block;">👁️ Ver Pág. ${index + 1}</a>`;
+                    });
+                    linksCartasHtml += '</div><label style="font-size: 0.85em; color: #666;">Você pode anexar páginas adicionais selecionando as imagens abaixo:</label>';
+                } else {
+                    linksCartasHtml = '<p style="font-size: 0.85em; color: #666; margin-top: 0;">Se houver uma mensagem recebida para este assistido (mesmo com várias páginas), você pode selecionar todas as fotos dela aqui.</p>';
+                }
+
                 let cartaPsicografadaHtml = `
                     <div class="form-item upload-box">
                         <label>✉️ Carta Psicografada / Mensagem (Opcional):</label>
-                        ${atendimento.cartaUrl ? `
-                            <div style="margin: 10px 0;">
-                                <a href="${atendimento.cartaUrl}" target="_blank" class="btn" style="background-color: #8e44ad; font-size: 0.9em; display: inline-block;">👁️ Ver Carta Salva</a>
-                            </div>
-                            <label style="font-size: 0.85em; color: #666;">Deseja substituir a carta atual? Selecione ou tire uma nova foto abaixo:</label>
-                        ` : `
-                            <p style="font-size: 0.85em; color: #666; margin-top: 0;">Se houver uma mensagem recebida para este assistido, você pode anexar a foto dela aqui.</p>
-                        `}
-                        <input type="file" id="upload-carta" accept="image/*" capture="environment" style="background: white; margin-top: 5px;">
+                        ${linksCartasHtml}
+                        <input type="file" id="upload-carta" accept="image/*" multiple style="background: white; margin-top: 5px;">
                     </div>
                 `;
 
                 let extensaoTratamentoHtml = '';
-                
                 if (atendimentoNum >= 4 && atendimentoNum === totalAtendimentos) {
                     extensaoTratamentoHtml = `
                     <fieldset style="border-color: #17a2b8; margin-top: 20px;">
