@@ -9,7 +9,7 @@
         body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background-color: #f0f2f5; margin: 0; padding: 20px; }
         .container { width: 100%; max-width: 900px; background-color: white; padding: 30px; border-radius: 12px; box-shadow: 0 6px 24px rgba(0,0,0,0.1); margin: auto; }
         .nav-voltar { width: 100%; max-width: 900px; margin: auto; margin-bottom: 20px; }
-        .btn, .btn-voltar { background-color: var(--cor-primaria); color: white; border: none; padding: 12px 20px; border-radius: 8px; font-weight: bold; font-size: 1em; text-decoration: none; cursor: pointer; transition: background-color 0.3s; }
+        .btn, .btn-voltar { background-color: var(--cor-primaria); color: white; border: none; padding: 12px 20px; border-radius: 8px; font-weight: bold; font-size: 1em; text-decoration: none; cursor: pointer; transition: background-color 0.3s; display: inline-block; text-align: center;}
         .btn:disabled { background-color: #ccc; cursor: not-allowed; }
         .btn-voltar { background-color: #6c757d; }
         .btn-success { background-color: #28a745; }
@@ -64,6 +64,14 @@
             font-style: italic;
             color: #555;
         }
+
+        .upload-box {
+            margin-top: 15px; 
+            padding: 15px; 
+            background-color: #fdfdfd; 
+            border: 1px dashed #bbb; 
+            border-radius: 8px;
+        }
     </style>
 </head>
 <body>
@@ -83,6 +91,8 @@
             getFirestore, collection, doc, getDoc, query, where, Timestamp, 
             getDocs, writeBatch, serverTimestamp, increment, setDoc 
         } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
+        // IMPORTAÇÕES DO STORAGE PARA UPLOAD DA CARTA
+        import { getStorage, ref as storageRef, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-storage.js";
         import { getAuth } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-auth.js";
         import { protegerPagina } from '/auth.js';
 
@@ -94,7 +104,9 @@
             messagingSenderId: "66122858261",
             appId: "1:66122858261:web:7fa21f1805463b5c08331c"
         };
-        const auth = getAuth();
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+        const storage = getStorage(app); // Inicializa o Storage
 
         protegerPagina(['entrevistador', 'tesoureiro', 'diretor', 'super-admin']).then(user => {
             inicializarPagina(user);
@@ -135,8 +147,8 @@
                 const form = formularioContainer.querySelector('fieldset');
                 if (!form) return;
                 
-                // Trava as notas e os botões de rádio do Colegiado
-                form.querySelectorAll('#atendimento-notas, #atendimento-orientacoes, #btn-marcar-retorno, input[name="decisao-extensao"]').forEach(el => {
+                // Trava as notas, orientações, botões de rádio e o input de arquivo
+                form.querySelectorAll('#atendimento-notas, #atendimento-orientacoes, #upload-carta, #btn-marcar-retorno, input[name="decisao-extensao"]').forEach(el => {
                     if (el) el.disabled = travado;
                 });
 
@@ -153,7 +165,7 @@
                     btnHabilitar.style.marginTop = '10px';
                     btnHabilitar.innerHTML = '🔒 Habilitar Edição';
                     btnHabilitar.type = 'button';
-                    btnHabilitar.onclick = () => { if (confirm('Tem certeza que deseja alterar este registro?')) { manipularEstadoFormulario(false); } };
+                    btnHabilitar.onclick = () => { if (confirm('Tem certeza que deseja alterar este registro e liberar anexos?')) { manipularEstadoFormulario(false); } };
                     form.appendChild(btnHabilitar);
                 }
             }
@@ -279,9 +291,23 @@
                     }
                 }
 
-                btn.disabled = true; btn.textContent = 'Salvando...';
+                btn.disabled = true; btn.textContent = 'Salvando Atendimento e Anexos...';
                 
                 try {
+                    // LÓGICA DE UPLOAD DA CARTA PSICOGRAFADA
+                    let cartaUrlFinal = atendimento.cartaUrl || null;
+                    const inputCarta = document.getElementById('upload-carta');
+                    
+                    if (inputCarta && inputCarta.files.length > 0) {
+                        const file = inputCarta.files[0];
+                        // Cria uma referência única no Storage (ex: cartas_vl/IDatendimento_timestamp_nomearquivo)
+                        const sRef = storageRef(storage, `cartas_vl/${atendimento.id}_${Date.now()}_${file.name}`);
+                        
+                        btn.textContent = 'Enviando imagem da carta... Aguarde.';
+                        const snapshot = await uploadBytes(sRef, file);
+                        cartaUrlFinal = await getDownloadURL(snapshot.ref);
+                    }
+
                     const batch = writeBatch(db);
                     
                     const dadosAtendimento = {
@@ -290,6 +316,12 @@
                         orientacoes: atendimentoOrientacoes,
                         detalhes_preenchidos: true
                     };
+                    
+                    // Se houver uma URL (nova ou antiga), salva no documento
+                    if (cartaUrlFinal) {
+                        dadosAtendimento.cartaUrl = cartaUrlFinal;
+                    }
+
                     batch.update(atendimentoDocRef, dadosAtendimento);
 
                     batch.update(tratamentoDocRef, {
@@ -303,7 +335,8 @@
                         assistidoId: atendimento.assistidoId,
                         atendimentoId: atendimento.id,
                         semana: atendimento.semana,
-                        statusTratamento: statusFinal
+                        statusTratamento: statusFinal,
+                        anexouCarta: !!cartaUrlFinal
                     });
                     
                     alert('Atendimento salvo com sucesso!');
@@ -362,6 +395,22 @@
                     </div>`;
                 }
 
+                // BLOCO DA CARTA PSICOGRAFADA
+                let cartaPsicografadaHtml = `
+                    <div class="form-item upload-box">
+                        <label>✉️ Carta Psicografada / Mensagem (Opcional):</label>
+                        ${atendimento.cartaUrl ? `
+                            <div style="margin: 10px 0;">
+                                <a href="${atendimento.cartaUrl}" target="_blank" class="btn" style="background-color: #8e44ad; font-size: 0.9em; display: inline-block;">👁️ Ver Carta Salva</a>
+                            </div>
+                            <label style="font-size: 0.85em; color: #666;">Deseja substituir a carta atual? Selecione ou tire uma nova foto abaixo:</label>
+                        ` : `
+                            <p style="font-size: 0.85em; color: #666; margin-top: 0;">Se houver uma mensagem recebida para este assistido, você pode anexar a foto dela aqui.</p>
+                        `}
+                        <input type="file" id="upload-carta" accept="image/*" capture="environment" style="background: white; margin-top: 5px;">
+                    </div>
+                `;
+
                 let extensaoTratamentoHtml = '';
                 
                 if (atendimentoNum >= 4 && atendimentoNum === totalAtendimentos) {
@@ -382,7 +431,6 @@
                     </fieldset>`;
                 }
 
-                // INSERÇÃO DO BOTÃO SAMARITANOS AQUI
                 let linkEncaminhamentoSamaritanos = `
                     <hr style="border: 0; height: 1px; background: #ddd; margin: 25px 0;">
                     <a href="/recepcao-samaritanos.html?origem=vl_ficha&assistidoId=${assistido.id}&atendimentoId=${atendimento.id}" class="btn" style="background-color: #e67e22; width: 100%; text-align: center; display: block; box-sizing: border-box; text-decoration: none;">
@@ -422,6 +470,8 @@
                                 <label for="atendimento-notas">Observações Gerais (Triagem e Atendimento):</label>
                                 <textarea id="atendimento-notas" rows="4" placeholder="Observações do atendente, evolução do assistido, etc..."></textarea>
                             </div>
+
+                            ${cartaPsicografadaHtml}
                             
                             ${extensaoTratamentoHtml}
                             
