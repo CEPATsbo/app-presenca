@@ -24,6 +24,7 @@
         .form-item label { margin-bottom: 5px; font-weight: bold; color: #555; font-size: 0.95em;}
         .form-item input, .form-item textarea { padding: 10px; border-radius: 6px; border: 1px solid #ccc; font-size: 1em; width: 100%; box-sizing: border-box; font-family: inherit;}
         .form-item input:focus, .form-item textarea:focus { border-color: var(--cor-primaria); outline: none; box-shadow: 0 0 5px rgba(230, 126, 34, 0.3);}
+        .form-item input:disabled { background-color: #e9ecef; cursor: not-allowed; color: #555; font-weight: bold;}
         
         .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; align-items: start; }
         .form-grid-full { grid-column: 1 / -1; }
@@ -92,8 +93,8 @@
                         <input type="text" id="solicitante-nome" required>
                     </div>
                     <div class="form-item">
-                        <label for="solicitante-telefone">CONTATO DO SOLICITANTE:</label>
-                        <input type="tel" id="solicitante-telefone" required>
+                        <label for="solicitante-telefone">CONTATO DO SOLICITANTE (Opcional):</label>
+                        <input type="tel" id="solicitante-telefone">
                     </div>
                     <div class="form-item form-grid-full">
                         <label for="motivo-pedido">MOTIVO DO ENCAMINHAMENTO / COMPLEXIDADE (Opcional):</label>
@@ -112,23 +113,24 @@
         document.addEventListener("DOMContentLoaded", () => {
             const params = new URLSearchParams(window.location.search);
             const origem = params.get('origem');
+            const atendimentoId = params.get('atendimentoId');
             const btnVoltar = document.getElementById('btn-voltar-dinamico');
 
             if (origem === 'ae') {
                 btnVoltar.href = '/recepcao-ae.html';
                 btnVoltar.textContent = '⬅ Voltar para Recepção AE';
-                btnVoltar.style.backgroundColor = '#007bff'; // Cor azul da AE
-            } else if (origem === 'vl') {
-                btnVoltar.href = '/recepcao-vl.html';
-                btnVoltar.textContent = '⬅ Voltar para Recepção VL';
-                btnVoltar.style.backgroundColor = '#8e44ad'; // Cor roxa do VL
+                btnVoltar.style.backgroundColor = '#007bff';
+            } else if (origem === 'vl_ficha' && atendimentoId) {
+                btnVoltar.href = `/atendimento-vl.html?atendimentoId=${atendimentoId}`;
+                btnVoltar.textContent = '⬅ Voltar para a Ficha do Vinha de Luz';
+                btnVoltar.style.backgroundColor = '#8e44ad';
             }
         });
     </script>
 
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
-        import { getFirestore, collection, addDoc, doc, serverTimestamp, query, where, limit, getDocs, writeBatch, setDoc } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
+        import { getFirestore, collection, addDoc, doc, getDoc, serverTimestamp, query, where, limit, getDocs, writeBatch, setDoc } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
         import { protegerPagina } from '/auth.js';
         
         const firebaseConfig = {
@@ -172,6 +174,30 @@
                 btnCopiar: document.getElementById('btn-copiar-assistido')
             };
 
+            // LÓGICA DE AUTO-PREENCHIMENTO VIA URL (A Mágica!)
+            const params = new URLSearchParams(window.location.search);
+            const assistidoIdUrl = params.get('assistidoId');
+            const origemUrl = params.get('origem');
+
+            if (assistidoIdUrl && origemUrl === 'vl_ficha') {
+                getDoc(doc(db, 'assistidos', assistidoIdUrl)).then(docSnap => {
+                    if (docSnap.exists()) {
+                        const dados = docSnap.data();
+                        assistidoSelecionado = { id: docSnap.id, ...dados };
+                        
+                        ui.nomeInput.value = dados.nome;
+                        ui.nomeInput.disabled = true; // Trava para não quebrar o link do ID
+                        ui.telefoneInput.value = dados.telefone || '';
+                        ui.dnInput.value = dados.dn || '';
+                        
+                        ui.solicitanteNome.value = "Equipe Vinha de Luz";
+                        ui.motivoPedido.value = "Encaminhamento espiritual originado durante a reunião mediúnica do Vinha de Luz.";
+                        
+                        ui.desencarnadoNome.focus(); // Foco direto no que importa
+                    }
+                });
+            }
+
             async function registrarLog(acao, detalhes) {
                 try {
                     const newLogRef = doc(logAuditoriaRef); 
@@ -181,7 +207,7 @@
                         acao: acao,
                         detalhes: detalhes
                     });
-                } catch (error) { console.error("Erro ao registrar log:", error); }
+                } catch (error) {}
             }
             
             const capitalizarNome = (nome) => {
@@ -215,15 +241,24 @@
             ui.solicitanteTelefone.addEventListener('input', handlePhone);
 
             const resetarFormularioBusca = () => {
-                assistidoSelecionado = null;
-                document.getElementById('ficha-atendimento').reset();
-                ui.searchResults.innerHTML = '';
-                ui.nomeInput.disabled = false;
-                ui.nomeInput.focus();
+                if (assistidoIdUrl && origemUrl === 'vl_ficha') {
+                    // Se veio do VL, limpar só limpa a parte de baixo
+                    ui.desencarnadoNome.value = '';
+                    ui.dataFalecimento.value = '';
+                    ui.motivoPedido.value = "Encaminhamento espiritual originado durante a reunião mediúnica do Vinha de Luz.";
+                } else {
+                    assistidoSelecionado = null;
+                    document.getElementById('ficha-atendimento').reset();
+                    ui.searchResults.innerHTML = '';
+                    ui.nomeInput.disabled = false;
+                    ui.nomeInput.focus();
+                }
             };
             ui.btnLimpar.addEventListener('click', resetarFormularioBusca);
 
             ui.nomeInput.addEventListener('input', async (e) => {
+                if (ui.nomeInput.disabled) return; // Proteção
+                
                 const termo = e.target.value.trim();
                 if (assistidoSelecionado && termo.toLowerCase() !== assistidoSelecionado.nome.toLowerCase()) {
                     assistidoSelecionado = null; ui.telefoneInput.value = ''; ui.dnInput.value = '';
@@ -320,7 +355,12 @@
                     alert(`Sucesso! O assistido ${nomeFinalAssistido} entrou na Fila de Espera dos Samaritanos.`);
                     registrarLog('Registro Fila (Samaritanos)', { assistidoId: assistidoFinalId, tratamentoId: novoTratamentoRef.id });
                     
-                    resetarFormularioBusca();
+                    if (assistidoIdUrl && origemUrl === 'vl_ficha') {
+                        // Se veio da ficha, volta pra ficha sozinho após salvar
+                        window.location.href = `/atendimento-vl.html?atendimentoId=${params.get('atendimentoId')}`;
+                    } else {
+                        resetarFormularioBusca();
+                    }
 
                 } catch (error) {
                     console.error("Erro ao registrar:", error);
