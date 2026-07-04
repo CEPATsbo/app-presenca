@@ -192,6 +192,8 @@
             color: white;
             margin-right: 5px;
         }
+        .btn-info { background-color: #3498db; }
+        .btn-info:hover { background-color: #2980b9; }
         .btn-editar { background-color: #f39c12; }
         .btn-editar:hover { background-color: #d68910; }
         .btn-baixa { background-color: #e74c3c; }
@@ -223,6 +225,8 @@
             max-width: 500px;
             box-shadow: 0 5px 20px rgba(0,0,0,0.2);
             position: relative;
+            max-height: 80vh;
+            overflow-y: auto;
         }
         .btn-fechar-modal {
             position: absolute;
@@ -235,6 +239,21 @@
             color: #7f8c8d;
         }
 
+        /* Área de Pesquisa */
+        .search-container {
+            margin-bottom: 15px;
+            position: relative;
+        }
+        .search-container i {
+            position: absolute;
+            top: 12px;
+            left: 12px;
+            color: #7f8c8d;
+        }
+        .search-container input {
+            padding-left: 35px;
+        }
+
         /* =========================================
            ÁREA EXCLUSIVA DE IMPRESSÃO (ESCONDIDA NO APP)
            ========================================= */
@@ -242,7 +261,7 @@
 
         @media print {
             body { background-color: white; margin: 0; padding: 0; }
-            .header, #loading-message, .main-container { display: none !important; }
+            .header, #loading-message, .main-container, .modal-overlay { display: none !important; }
             
             #print-area { 
                 display: flex !important; 
@@ -307,7 +326,7 @@
                         <label for="inputNomeItem">Nome do Item</label>
                         <input type="text" id="inputNomeItem" class="form-control" placeholder="Ex: Cadeira de Escritório" required>
                     </div>
-                    <!-- NOVO: Campo de Quantidade para Lotes -->
+                    <!-- Campo de Quantidade para Lotes -->
                     <div class="form-group" style="flex: 1;">
                         <label for="inputQuantidade">Quantidade</label>
                         <input type="number" id="inputQuantidade" class="form-control" value="1" min="1" max="100" title="Máximo de 100 itens por vez" required>
@@ -342,8 +361,14 @@
                         <i class="fas fa-info-circle" style="color: #3498db;"></i> Selecione os itens abaixo na caixa de marcação para imprimir.
                     </p>
                     <button id="btnImprimirSelecionados" class="btn-acao btn-imprimir">
-                        <i class="fas fa-print"></i> Imprimir Etiquetas Selecionadas
+                        <i class="fas fa-print"></i> Imprimir Etiquetas
                     </button>
+                </div>
+
+                <!-- NOVO: Barra de Pesquisa -->
+                <div class="search-container">
+                    <i class="fas fa-search"></i>
+                    <input type="text" id="inputPesquisaPatrimonio" class="form-control" placeholder="Pesquisar por Código ou Nome do Item...">
                 </div>
 
                 <table>
@@ -409,6 +434,17 @@
         </div>
     </div>
 
+    <!-- NOVO: Modal para Histórico do Item -->
+    <div class="modal-overlay" id="modalHistoricoItem">
+        <div class="modal-content" style="max-width: 600px;">
+            <button class="btn-fechar-modal" id="btnFecharModalHistorico">&times;</button>
+            <h2 style="color: #2c3e50; margin-top: 0;"><i class="fas fa-clipboard-list"></i> Histórico do Patrimônio</h2>
+            <div id="conteudoHistorico" style="margin-top: 20px;">
+                <!-- Preenchido via JS -->
+            </div>
+        </div>
+    </div>
+
     <!-- Container invisível que receberá as etiquetas desenhadas para impressão -->
     <div id="print-area"></div>
 
@@ -431,6 +467,9 @@
         const db = getFirestore(app);
 
         const rolesPermitidas = ['super-admin', 'diretor', 'tesoureiro', 'conselheiro'];
+
+        // Dicionário global para armazenar os dados e facilitar a exibição no modal de histórico
+        window.dadosGeraisPatrimonio = {};
 
         onAuthStateChanged(auth, (user) => {
             if (user) {
@@ -476,7 +515,7 @@
         }
 
         // ==========================================
-        // LÓGICA DE INTERFACE: ABAS
+        // LÓGICA DE INTERFACE: ABAS E PESQUISA
         // ==========================================
         const btnTabAtivos = document.getElementById('btnTabAtivos');
         const btnTabBaixados = document.getElementById('btnTabBaixados');
@@ -495,6 +534,21 @@
             btnTabAtivos.classList.remove('active');
             containerBaixados.classList.remove('tabela-oculta');
             containerAtivos.classList.add('tabela-oculta');
+        });
+
+        // Barra de Pesquisa Dinâmica
+        document.getElementById('inputPesquisaPatrimonio').addEventListener('input', function(e) {
+            const termo = e.target.value.toLowerCase();
+            const linhas = document.querySelectorAll('#tabela-ativos tr');
+            
+            linhas.forEach(linha => {
+                const textoLinha = linha.textContent.toLowerCase();
+                if(textoLinha.includes(termo)) {
+                    linha.style.display = '';
+                } else {
+                    linha.style.display = 'none';
+                }
+            });
         });
 
         // ==========================================
@@ -533,12 +587,10 @@
                     const proximoNumeroInicial = numeroAtual + 1;
                     const novoNumeroFinal = numeroAtual + quantidade;
 
-                    // Atualiza o contador de uma vez somando a quantidade total
                     transacao.update(referenciaContador, { numero_atual: novoNumeroFinal });
 
                     const codigosDaTransacao = [];
 
-                    // Cria um documento para cada item do lote
                     for (let i = 0; i < quantidade; i++) {
                         const numeroItem = proximoNumeroInicial + i;
                         const numeroFormatado = numeroItem.toString().padStart(4, "0");
@@ -562,7 +614,6 @@
                     return codigosDaTransacao;
                 });
 
-                // Registra o LOG de forma inteligente baseada na quantidade
                 let logMensagem = quantidade === 1 ? "Cadastrou Novo Patrimônio" : `Cadastrou ${quantidade} Patrimônios em Lote`;
                 let logDetalhes = quantidade === 1 ? {
                     codigo: codigosGerados[0],
@@ -585,7 +636,7 @@
                 }
                 
                 document.getElementById('form-cadastro-patrimonio').reset();
-                document.getElementById('inputQuantidade').value = 1; // Reseta para 1 por segurança
+                document.getElementById('inputQuantidade').value = 1; 
 
             } catch (error) {
                 console.error("Erro na transação de patrimônio: ", error);
@@ -597,7 +648,7 @@
         });
 
         // ==========================================
-        // LÓGICA DE BANCO: LEITURA EM TEMPO REAL E EDIÇÃO
+        // LÓGICA DE BANCO: LEITURA EM TEMPO REAL
         // ==========================================
         function inicializarTabelas() {
             const patrimonioRef = collection(db, 'patrimonio');
@@ -617,6 +668,9 @@
                 snapshot.forEach(docSnap => {
                     const dados = docSnap.data();
                     
+                    // Alimenta o dicionário global para o modal de histórico
+                    window.dadosGeraisPatrimonio[docSnap.id] = dados;
+                    
                     const nomeSeguro = dados.nome_item.replace(/'/g, "\\'").replace(/"/g, '&quot;');
                     const descSegura = dados.descricao.replace(/'/g, "\\'").replace(/"/g, '&quot;');
 
@@ -629,6 +683,9 @@
                         <td><strong>${dados.nome_item}</strong><br><small style="color:#7f8c8d;">${dados.descricao}</small></td>
                         <td>${formatarTimestamp(dados.data_cadastro)}</td>
                         <td>
+                            <button class="btn-acao btn-info" onclick="abrirModalHistorico('${docSnap.id}')" title="Ver Histórico de Manutenções">
+                                <i class="fas fa-history"></i>
+                            </button>
                             <button class="btn-acao btn-editar" onclick="abrirModalEdicao('${docSnap.id}', '${dados.codigo_etiqueta}', '${nomeSeguro}', '${descSegura}')" title="Editar informações do item">
                                 <i class="fas fa-edit"></i>
                             </button>
@@ -653,12 +710,18 @@
 
                 snapshot.forEach(docSnap => {
                     const dados = docSnap.data();
+                    
+                    window.dadosGeraisPatrimonio[docSnap.id] = dados;
+
                     const tr = document.createElement('tr');
                     tr.innerHTML = `
                         <td><span class="etiqueta-badge">${dados.codigo_etiqueta}</span></td>
                         <td><strong>${dados.nome_item}</strong><br><small style="color:#7f8c8d;">${dados.descricao}</small></td>
                         <td>${formatarTimestamp(dados.data_baixa)}</td>
                         <td>
+                            <button class="btn-acao btn-info" onclick="abrirModalHistorico('${docSnap.id}')" title="Ver Histórico de Manutenções">
+                                <i class="fas fa-history"></i>
+                            </button>
                             <button class="btn-acao btn-reativar" onclick="reativarPatrimonio('${docSnap.id}', '${dados.codigo_etiqueta}')" title="Reativar para o acervo">
                                 <i class="fas fa-undo"></i> Reativar
                             </button>
@@ -668,6 +731,54 @@
                 });
             });
         }
+
+        // ==========================================
+        // HISTÓRICO DO ITEM (MODAL)
+        // ==========================================
+        window.abrirModalHistorico = function(docId) {
+            const dados = window.dadosGeraisPatrimonio[docId];
+            if (!dados) return;
+            
+            let html = `
+                <div style="background-color: #f8f9fa; padding: 15px; border-radius: 8px; margin-bottom: 20px;">
+                    <p style="margin: 0 0 5px 0;"><strong>Código:</strong> <span class="etiqueta-badge" style="font-size: 0.9em;">${dados.codigo_etiqueta}</span></p>
+                    <p style="margin: 0 0 5px 0;"><strong>Nome:</strong> ${dados.nome_item}</p>
+                    <p style="margin: 0 0 5px 0;"><strong>Status:</strong> ${dados.status === 'ativo' ? '<span style="color:#2ecc71; font-weight:bold;">Ativo</span>' : '<span style="color:#e74c3c; font-weight:bold;">Baixado</span>'}</p>
+                    <p style="margin: 0;"><strong>Cadastrado em:</strong> ${formatarTimestamp(dados.data_cadastro)}</p>
+                </div>
+                <h3 style="color: #34495e; font-size: 1.2em; border-bottom: 2px solid #ecf0f1; padding-bottom: 10px;">Reparos e Manutenções</h3>
+            `;
+            
+            if (dados.historico_manutencoes && dados.historico_manutencoes.length > 0) {
+                html += `<ul style="padding-left: 20px; color: #555;">`;
+                // Inverte a ordem para mostrar o mais recente no topo
+                const historicoOrdenado = [...dados.historico_manutencoes].reverse();
+                historicoOrdenado.forEach(manutencao => {
+                    const dataFormatada = manutencao.data.split('-').reverse().join('/');
+                    html += `<li style="margin-bottom: 15px;">
+                        <span style="background-color: #ecf0f1; padding: 3px 8px; border-radius: 4px; font-weight: bold; font-size: 0.85em; margin-right: 10px;">
+                            <i class="far fa-calendar-alt"></i> ${dataFormatada}
+                        </span>
+                        <span>${manutencao.descricao}</span>
+                    </li>`;
+                });
+                html += `</ul>`;
+            } else {
+                html += `
+                    <div style="text-align: center; padding: 20px; color: #7f8c8d;">
+                        <i class="fas fa-check-circle" style="font-size: 2em; color: #bdc3c7; margin-bottom: 10px;"></i>
+                        <p style="margin: 0;">Nenhum conserto ou manutenção registrada para este item até o momento.</p>
+                    </div>
+                `;
+            }
+            
+            document.getElementById('conteudoHistorico').innerHTML = html;
+            document.getElementById('modalHistoricoItem').style.display = 'flex';
+        };
+
+        document.getElementById('btnFecharModalHistorico').addEventListener('click', () => {
+            document.getElementById('modalHistoricoItem').style.display = 'none';
+        });
 
         // ==========================================
         // EDIÇÃO DE PATRIMÔNIO (MODAL E SALVAMENTO)
@@ -720,13 +831,13 @@
             }
         });
 
-
         // ==========================================
         // LÓGICA DE IMPRESSÃO EM LOTE E CÓDIGO DE BARRAS
         // ==========================================
         document.getElementById('chkSelectAll').addEventListener('change', (e) => {
-            const checkboxes = document.querySelectorAll('.chk-item');
-            checkboxes.forEach(chk => chk.checked = e.target.checked);
+            // Pega apenas as linhas que estão visíveis (respeitando a pesquisa)
+            const linhasVisiveis = document.querySelectorAll('#tabela-ativos tr:not([style*="display: none"]) .chk-item');
+            linhasVisiveis.forEach(chk => chk.checked = e.target.checked);
         });
 
         document.getElementById('btnImprimirSelecionados').addEventListener('click', () => {
