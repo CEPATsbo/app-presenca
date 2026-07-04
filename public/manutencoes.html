@@ -130,6 +130,12 @@
         .btn-salvar:hover {
             background-color: #27ae60;
         }
+        .btn-whatsapp {
+            background-color: #25D366;
+        }
+        .btn-whatsapp:hover {
+            background-color: #128C7E;
+        }
 
         .status-badge {
             padding: 5px 10px;
@@ -143,9 +149,14 @@
         .status-vencido { background-color: #e74c3c; }
         .status-pendente { background-color: #95a5a6; }
 
-        /* Formulário de Manutenção Pontual */
-        .form-group {
+        /* Formulários */
+        .form-row {
+            display: flex;
+            gap: 15px;
             margin-bottom: 15px;
+        }
+        .form-group {
+            flex: 1;
         }
         .form-group label {
             display: block;
@@ -216,6 +227,29 @@
     <div id="loading-message">Carregando dados e verificando permissões...</div>
 
     <div id="main-content" class="main-container">
+
+        <!-- NOVO: Seção do Relatório WhatsApp -->
+        <div class="section-card">
+            <h2 class="section-title">
+                <span><i class="fab fa-whatsapp" style="color: #25D366; margin-right: 10px;"></i> Relatório para Diretoria</span>
+            </h2>
+            <p style="color: #7f8c8d; font-size: 0.9em; margin-bottom: 15px;">
+                Selecione o período abaixo para gerar um resumo de todas as manutenções realizadas (periódicas e pontuais) e enviá-lo diretamente pelo WhatsApp.
+            </p>
+            <div class="form-row">
+                <div class="form-group">
+                    <label for="relatorioDataInicio">Data Início</label>
+                    <input type="date" id="relatorioDataInicio" class="form-control" required>
+                </div>
+                <div class="form-group">
+                    <label for="relatorioDataFim">Data Fim</label>
+                    <input type="date" id="relatorioDataFim" class="form-control" required>
+                </div>
+            </div>
+            <button class="btn-salvar btn-whatsapp" id="btnGerarRelatorioZap">
+                <i class="fab fa-whatsapp" style="margin-right: 5px;"></i> Gerar e Enviar para o WhatsApp
+            </button>
+        </div>
 
         <!-- Seção: Manutenções Periódicas -->
         <div class="section-card">
@@ -312,9 +346,9 @@
             </form>
         </div>
     </div>
-    <script type="module">
 
-    import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
         import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-auth.js";
         import { getFirestore, collection, doc, getDocs, setDoc, updateDoc, addDoc, onSnapshot, query, where, orderBy, limit, arrayUnion, serverTimestamp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
 
@@ -333,7 +367,6 @@
 
         const rolesPermitidas = ['super-admin', 'diretor', 'tesoureiro', 'conselheiro'];
 
-        // Lista estática das manutenções obrigatórias (com a alteração solicitada)
         const listaManutencoesPreDefinidas = [
             { id: "caixa_dagua", nome: "Limpeza de Caixa d'água" },
             { id: "calhas", nome: "Limpeza de Calhas" },
@@ -371,11 +404,132 @@
             }
         });
 
+        // ==========================================
+        // LOG DE AUDITORIA
+        // ==========================================
+        async function registrarLogAuditoria(acao, detalhesObj) {
+            try {
+                const user = auth.currentUser;
+                if (!user) return;
+                
+                await addDoc(collection(db, "log_auditoria"), {
+                    timestamp: serverTimestamp(),
+                    autor: user.uid, 
+                    acao: acao,
+                    detalhes: detalhesObj
+                });
+            } catch (error) {
+                console.error("Erro ao registrar no log de auditoria: ", error);
+            }
+        }
+
         function inicializarAplicacao() {
             carregarManutencoesPeriodicas();
             carregarItensPatrimonio();
             carregarManutencoesPontuais();
+            
+            // Define data atual padrão nos campos do relatório
+            const hoje = new Date().toISOString().split('T')[0];
+            document.getElementById('relatorioDataInicio').value = hoje;
+            document.getElementById('relatorioDataFim').value = hoje;
         }
+
+        // ==========================================
+        // LÓGICA: RELATÓRIO WHATSAPP
+        // ==========================================
+        document.getElementById('btnGerarRelatorioZap').addEventListener('click', async () => {
+            const dataInicio = document.getElementById('relatorioDataInicio').value;
+            const dataFim = document.getElementById('relatorioDataFim').value;
+
+            if (!dataInicio || !dataFim) {
+                alert("Por favor, selecione as datas de início e fim.");
+                return;
+            }
+
+            if (dataInicio > dataFim) {
+                alert("A data de início não pode ser maior que a data de fim.");
+                return;
+            }
+
+            const btnRelatorio = document.getElementById('btnGerarRelatorioZap');
+            btnRelatorio.disabled = true;
+            btnRelatorio.innerHTML = `<i class="fas fa-spinner fa-spin"></i> Gerando...`;
+
+            try {
+                // 1. Busca Manutenções Periódicas que caem no período
+                const periodicasSnap = await getDocs(collection(db, 'manutencoes_periodicas'));
+                const periodicasRealizadas = [];
+                
+                periodicasSnap.forEach(doc => {
+                    const dados = doc.data();
+                    if (dados.data_realizada && dados.data_realizada >= dataInicio && dados.data_realizada <= dataFim) {
+                        periodicasRealizadas.push(dados);
+                    }
+                });
+
+                // 2. Busca Manutenções Pontuais no período
+                const qPontuais = query(
+                    collection(db, "manutencoes_pontuais"),
+                    where("data_realizacao", ">=", dataInicio),
+                    where("data_realizacao", "<=", dataFim),
+                    orderBy("data_realizacao", "asc")
+                );
+                
+                const pontuaisSnap = await getDocs(qPontuais);
+                const pontuais = [];
+                pontuaisSnap.forEach(doc => pontuais.push(doc.data()));
+
+                if (periodicasRealizadas.length === 0 && pontuais.length === 0) {
+                    alert("Nenhum registro de manutenção encontrado no período selecionado.");
+                    btnRelatorio.disabled = false;
+                    btnRelatorio.innerHTML = `<i class="fab fa-whatsapp"></i> Gerar e Enviar para o WhatsApp`;
+                    return;
+                }
+
+                // 3. Monta o Texto Formatado para WhatsApp
+                let textoZap = `*Relatório de Manutenção e Patrimônio* 🛠️\n`;
+                textoZap += `🗓️ *Período:* ${formatarData(dataInicio)} a ${formatarData(dataFim)}\n\n`;
+
+                if (periodicasRealizadas.length > 0) {
+                    textoZap += `*🔹 MANUTENÇÕES OBRIGATÓRIAS:*\n`;
+                    periodicasRealizadas.forEach(p => {
+                        textoZap += `✅ ${p.nome} (Feita em: ${formatarData(p.data_realizada)})\n`;
+                    });
+                    textoZap += `\n`;
+                }
+
+                if (pontuais.length > 0) {
+                    textoZap += `*🔸 REPAROS PONTUAIS:*\n`;
+                    pontuais.forEach(p => {
+                        const nomeItem = p.nome_patrimonio_vinculado !== "Nenhum (Manutenção Geral)" ? p.nome_patrimonio_vinculado : "Estrutura Geral/Prédio";
+                        textoZap += `🔧 *Data:* ${formatarData(p.data_realizacao)}\n`;
+                        textoZap += `🏷️ *Item:* ${nomeItem}\n`;
+                        textoZap += `📝 *Ação:* ${p.descricao}\n\n`;
+                    });
+                }
+
+                textoZap += `_Gerado automaticamente pelo Sistema CEPAT_ ⚙️`;
+
+                // Registra no Log
+                await registrarLogAuditoria("Gerou Relatório de Manutenção", {
+                    periodo_inicio: dataInicio,
+                    periodo_fim: dataFim,
+                    total_obrigatorias: periodicasRealizadas.length,
+                    total_pontuais: pontuais.length
+                });
+
+                // 4. Abre o WhatsApp com a mensagem codificada
+                const urlWhatsapp = `https://wa.me/?text=${encodeURIComponent(textoZap)}`;
+                window.open(urlWhatsapp, '_blank');
+
+            } catch (error) {
+                console.error("Erro ao gerar relatório:", error);
+                alert("Ocorreu um erro ao gerar o relatório. Verifique sua conexão e tente novamente.");
+            } finally {
+                btnRelatorio.disabled = false;
+                btnRelatorio.innerHTML = `<i class="fab fa-whatsapp"></i> Gerar e Enviar para o WhatsApp`;
+            }
+        });
 
         // ==========================================
         // LÓGICA: MANUTENÇÕES PERIÓDICAS
@@ -419,7 +573,6 @@
                         }
                     }
 
-                    // CORREÇÃO APLICADA AQUI: Proteção contra aspas simples no nome
                     const nomeSeguro = item.nome.replace(/'/g, "\\'");
 
                     const tr = document.createElement('tr');
@@ -444,7 +597,6 @@
             document.getElementById('modalNomeManutencao').value = nome;
             document.getElementById('modalTitulo').innerText = `Registrar: ${nome}`;
             
-            // Limpa os campos de data
             document.getElementById('modalDataRealizada').value = '';
             document.getElementById('modalDataProxima').value = '';
 
@@ -475,6 +627,12 @@
                     data_proxima: dataProxima,
                     ultima_atualizacao: serverTimestamp()
                 }, { merge: true });
+
+                await registrarLogAuditoria("Registrou Manutenção Obrigatória", {
+                    tipo: nomeManutencao,
+                    data_realizada: dataRealizada,
+                    proximo_vencimento: dataProxima
+                });
 
                 document.getElementById('modalPeriodica').style.display = 'none';
                 alert('Manutenção periódica atualizada com sucesso!');
@@ -544,6 +702,12 @@
                         })
                     });
                 }
+
+                await registrarLogAuditoria("Registrou Manutenção Pontual", {
+                    item: nomeItemVinculado,
+                    descricao: descricao,
+                    data: dataRealizacao
+                });
 
                 document.getElementById('form-manutencao-pontual').reset();
                 alert("Manutenção pontual registrada com sucesso!");
