@@ -62,7 +62,7 @@
         .main-container {
             width: 100%;
             max-width: 1100px;
-            display: none; /* Exibido pelo JS após verificar login */
+            display: none;
             gap: 30px;
             flex-direction: column;
         }
@@ -184,92 +184,99 @@
 
         .btn-acao {
             border: none;
-            padding: 6px 12px;
+            padding: 6px 10px;
             border-radius: 6px;
             cursor: pointer;
             font-size: 0.9em;
             font-weight: bold;
             color: white;
+            margin-right: 5px;
         }
+        .btn-editar { background-color: #f39c12; }
+        .btn-editar:hover { background-color: #d68910; }
         .btn-baixa { background-color: #e74c3c; }
         .btn-baixa:hover { background-color: #c0392b; }
-        
         .btn-reativar { background-color: #2ecc71; }
         .btn-reativar:hover { background-color: #27ae60; }
         
         .btn-imprimir { background-color: #2c3e50; padding: 10px 15px; font-size: 1em; }
         .btn-imprimir:hover { background-color: #1a252f; }
 
-        .tabela-oculta {
-            display: none;
-        }
+        .tabela-oculta { display: none; }
+        .checkbox-custom { width: 18px; height: 18px; cursor: pointer; }
 
-        .checkbox-custom {
-            width: 18px;
-            height: 18px;
+        /* Modal Styles */
+        .modal-overlay {
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background-color: rgba(0,0,0,0.5);
+            display: none;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+        }
+        .modal-content {
+            background-color: white;
+            padding: 30px;
+            border-radius: 12px;
+            width: 100%;
+            max-width: 500px;
+            box-shadow: 0 5px 20px rgba(0,0,0,0.2);
+            position: relative;
+        }
+        .btn-fechar-modal {
+            position: absolute;
+            top: 15px;
+            right: 15px;
+            background: none;
+            border: none;
+            font-size: 1.5em;
             cursor: pointer;
+            color: #7f8c8d;
         }
 
         /* =========================================
            ÁREA EXCLUSIVA DE IMPRESSÃO (ESCONDIDA NO APP)
            ========================================= */
-        #print-area {
-            display: none;
-        }
+        #print-area { display: none; }
 
         @media print {
-            /* Esconde toda a interface do sistema */
             body { background-color: white; margin: 0; padding: 0; }
             .header, #loading-message, .main-container { display: none !important; }
             
-            /* Exibe o grid de etiquetas */
             #print-area { 
-                display: grid !important; 
-                grid-template-columns: repeat(2, 1fr); /* 2 Colunas de etiquetas */
+                display: flex !important; 
+                flex-wrap: wrap;
                 gap: 5mm; 
-                padding: 10mm; 
-                width: 100%;
-                box-sizing: border-box;
+                padding: 5mm; 
+                justify-content: flex-start;
             }
 
             .etiqueta-print-box {
                 border: 1px solid #bdc3c7;
                 border-radius: 6px;
-                padding: 10px;
-                display: flex;
-                align-items: center;
-                justify-content: space-between;
-                height: 35mm;
-                page-break-inside: avoid;
-            }
-
-            .etiqueta-logo {
-                font-size: 14px;
-                font-weight: bold;
-                text-align: center;
-                line-height: 1.2;
-                width: 40%;
-                color: #000;
-            }
-
-            .etiqueta-codigo {
+                padding: 5px;
                 display: flex;
                 flex-direction: column;
                 align-items: center;
-                width: 60%;
+                justify-content: center;
+                height: 25mm; 
+                width: 50mm;  /* Etiqueta menor e mais focada */
+                page-break-inside: avoid;
             }
 
             .etiqueta-titulo {
-                font-size: 11px;
+                font-size: 12px;
                 font-weight: bold;
-                margin-bottom: -5px;
                 color: #000;
+                margin-bottom: 2px;
+                letter-spacing: 1px;
             }
             
             svg.barcode-img {
                 width: 100%;
                 height: auto;
-                max-height: 25mm;
+                max-height: 18mm;
             }
         }
     </style>
@@ -325,7 +332,6 @@
             <!-- Tabela de Itens Ativos -->
             <div id="container-ativos">
                 
-                <!-- Barra de Ação de Impressão -->
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; background-color: #f8f9fa; padding: 15px; border-radius: 8px; border: 1px solid #e0e0e0;">
                     <p style="margin: 0; color: #34495e; font-size: 0.95em;">
                         <i class="fas fa-info-circle" style="color: #3498db;"></i> Selecione os itens abaixo na caixa de marcação para imprimir.
@@ -373,13 +379,38 @@
 
     </div>
 
+    <!-- Modal para Edição de Item -->
+    <div class="modal-overlay" id="modalEditarItem">
+        <div class="modal-content">
+            <button class="btn-fechar-modal" id="btnFecharModalEdicao">&times;</button>
+            <h2 style="color: #2c3e50; margin-top: 0;">Editar Item</h2>
+            
+            <form id="form-editar-patrimonio">
+                <input type="hidden" id="editDocId">
+                <input type="hidden" id="editCodigoItem">
+                
+                <div class="form-group">
+                    <label for="editNomeItem">Nome do Item</label>
+                    <input type="text" id="editNomeItem" class="form-control" required>
+                </div>
+
+                <div class="form-group" style="margin-top: 15px;">
+                    <label for="editDescricaoItem">Descrição / Observações</label>
+                    <textarea id="editDescricaoItem" class="form-control" rows="3" required></textarea>
+                </div>
+
+                <button type="submit" class="btn-salvar" id="btnSalvarEdicao">Salvar Alterações</button>
+            </form>
+        </div>
+    </div>
+
     <!-- Container invisível que receberá as etiquetas desenhadas para impressão -->
     <div id="print-area"></div>
 
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
         import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-auth.js";
-        import { getFirestore, doc, collection, runTransaction, serverTimestamp, onSnapshot, query, where, orderBy, updateDoc } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
+        import { getFirestore, doc, collection, runTransaction, serverTimestamp, onSnapshot, query, where, orderBy, updateDoc, addDoc } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
 
         const firebaseConfig = {
             apiKey: "AIzaSyBV7RPjk3cFTqL-aIpflJcUojKg1ZXMLuU",
@@ -419,6 +450,25 @@
                 window.location.href = '/login.html';
             }
         });
+
+        // ==========================================
+        // LÓGICA DE AUDITORIA (LOGS)
+        // ==========================================
+        async function registrarLogAuditoria(acao, detalhesObj) {
+            try {
+                const user = auth.currentUser;
+                if (!user) return;
+                
+                await addDoc(collection(db, "log_auditoria"), {
+                    timestamp: serverTimestamp(),
+                    autor: user.uid, // O painel de logs irá traduzir o UID para o nome do usuário
+                    acao: acao,
+                    detalhes: detalhesObj
+                });
+            } catch (error) {
+                console.error("Erro ao registrar no log de auditoria: ", error);
+            }
+        }
 
         // ==========================================
         // LÓGICA DE INTERFACE: ABAS
@@ -488,6 +538,13 @@
                     return codigoDaEtiquetaFinal;
                 });
 
+                // Registra o LOG da ação
+                await registrarLogAuditoria("Cadastrou Novo Patrimônio", {
+                    codigo: codigoGerado,
+                    nome_item: nome,
+                    descricao: descricao
+                });
+
                 alert(`Item cadastrado com sucesso! Código gerado: ${codigoGerado}`);
                 document.getElementById('form-cadastro-patrimonio').reset();
 
@@ -501,7 +558,7 @@
         });
 
         // ==========================================
-        // LÓGICA DE BANCO: LEITURA EM TEMPO REAL
+        // LÓGICA DE BANCO: LEITURA EM TEMPO REAL E EDIÇÃO
         // ==========================================
         function inicializarTabelas() {
             const patrimonioRef = collection(db, 'patrimonio');
@@ -512,7 +569,6 @@
                 const tabelaAtivos = document.getElementById('tabela-ativos');
                 tabelaAtivos.innerHTML = '';
                 
-                // Desmarca o "Selecionar Todos" a cada atualização
                 document.getElementById('chkSelectAll').checked = false;
 
                 if (snapshot.empty) {
@@ -521,6 +577,11 @@
 
                 snapshot.forEach(docSnap => {
                     const dados = docSnap.data();
+                    
+                    // Proteção de aspas para os botões do HTML
+                    const nomeSeguro = dados.nome_item.replace(/'/g, "\\'").replace(/"/g, '&quot;');
+                    const descSegura = dados.descricao.replace(/'/g, "\\'").replace(/"/g, '&quot;');
+
                     const tr = document.createElement('tr');
                     tr.innerHTML = `
                         <td style="text-align: center;">
@@ -530,8 +591,11 @@
                         <td><strong>${dados.nome_item}</strong><br><small style="color:#7f8c8d;">${dados.descricao}</small></td>
                         <td>${formatarTimestamp(dados.data_cadastro)}</td>
                         <td>
+                            <button class="btn-acao btn-editar" onclick="abrirModalEdicao('${docSnap.id}', '${dados.codigo_etiqueta}', '${nomeSeguro}', '${descSegura}')" title="Editar informações do item">
+                                <i class="fas fa-edit"></i>
+                            </button>
                             <button class="btn-acao btn-baixa" onclick="darBaixaPatrimonio('${docSnap.id}', '${dados.codigo_etiqueta}')" title="Dar Baixa neste item">
-                                <i class="fas fa-arrow-down"></i> Baixar
+                                <i class="fas fa-arrow-down"></i>
                             </button>
                         </td>
                     `;
@@ -568,16 +632,66 @@
         }
 
         // ==========================================
+        // EDIÇÃO DE PATRIMÔNIO (MODAL E SALVAMENTO)
+        // ==========================================
+        window.abrirModalEdicao = function(docId, codigo, nomeAtual, descAtual) {
+            document.getElementById('editDocId').value = docId;
+            document.getElementById('editCodigoItem').value = codigo;
+            document.getElementById('editNomeItem').value = nomeAtual;
+            document.getElementById('editDescricaoItem').value = descAtual;
+            document.getElementById('modalEditarItem').style.display = 'flex';
+        };
+
+        document.getElementById('btnFecharModalEdicao').addEventListener('click', () => {
+            document.getElementById('modalEditarItem').style.display = 'none';
+        });
+
+        document.getElementById('form-editar-patrimonio').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const btnSalvar = document.getElementById('btnSalvarEdicao');
+            btnSalvar.disabled = true;
+            btnSalvar.innerText = "Salvando...";
+
+            const docId = document.getElementById('editDocId').value;
+            const codigo = document.getElementById('editCodigoItem').value;
+            const novoNome = document.getElementById('editNomeItem').value;
+            const novaDescricao = document.getElementById('editDescricaoItem').value;
+
+            try {
+                const docRef = doc(db, 'patrimonio', docId);
+                await updateDoc(docRef, {
+                    nome_item: novoNome,
+                    descricao: novaDescricao,
+                    ultima_edicao: serverTimestamp()
+                });
+
+                // Registra o LOG da ação
+                await registrarLogAuditoria("Editou Item de Patrimônio", {
+                    codigo: codigo,
+                    novo_nome: novoNome,
+                    nova_descricao: novaDescricao
+                });
+
+                document.getElementById('modalEditarItem').style.display = 'none';
+                alert('Item atualizado com sucesso!');
+            } catch (error) {
+                console.error("Erro ao editar item: ", error);
+                alert("Erro ao editar. Tente novamente.");
+            } finally {
+                btnSalvar.disabled = false;
+                btnSalvar.innerText = "Salvar Alterações";
+            }
+        });
+
+
+        // ==========================================
         // LÓGICA DE IMPRESSÃO EM LOTE E CÓDIGO DE BARRAS
         // ==========================================
-
-        // Marcar/Desmarcar todos
         document.getElementById('chkSelectAll').addEventListener('change', (e) => {
             const checkboxes = document.querySelectorAll('.chk-item');
             checkboxes.forEach(chk => chk.checked = e.target.checked);
         });
 
-        // Botão Imprimir Selecionados
         document.getElementById('btnImprimirSelecionados').addEventListener('click', () => {
             const selecionados = document.querySelectorAll('.chk-item:checked');
             
@@ -587,42 +701,35 @@
             }
 
             const printArea = document.getElementById('print-area');
-            printArea.innerHTML = ''; // Limpa as etiquetas anteriores
+            printArea.innerHTML = ''; 
 
-            // Passo 1: Monta a estrutura HTML de cada etiqueta selecionada
             selecionados.forEach(chk => {
                 const codigoPatrimonio = chk.value;
-                const svgId = `barcode-${codigoPatrimonio}`; // ID único para a biblioteca desenhar o código
+                const svgId = `barcode-${codigoPatrimonio}`; 
                 
+                // Estrutura focada apenas no Código de Barras e no Título
                 const etiquetaHtml = `
                     <div class="etiqueta-print-box">
-                        <div class="etiqueta-logo">
-                            C.E. PAULO<br>DE TARSO<br><span style="font-size:0.8em; font-weight:normal;">SBO</span>
-                        </div>
-                        <div class="etiqueta-codigo">
-                            <span class="etiqueta-titulo">PATRIMÔNIO</span>
-                            <svg id="${svgId}" class="barcode-img"></svg>
-                        </div>
+                        <span class="etiqueta-titulo">PATRIMÔNIO</span>
+                        <svg id="${svgId}" class="barcode-img"></svg>
                     </div>
                 `;
                 printArea.insertAdjacentHTML('beforeend', etiquetaHtml);
             });
 
-            // Passo 2: Roda o script JsBarcode para desenhar o código em cada SVG gerado
             selecionados.forEach(chk => {
                 const codigoPatrimonio = chk.value;
                 JsBarcode(`#barcode-${codigoPatrimonio}`, codigoPatrimonio, {
-                    format: "CODE128", // Formato mundial de código de barras
-                    width: 1.5,        // Espessura da barra
-                    height: 40,        // Altura da barra
-                    displayValue: true, // Mostra o número embaixo
+                    format: "CODE128", 
+                    width: 1.5,        
+                    height: 35,        
+                    displayValue: true, 
                     fontSize: 14,
-                    margin: 0
+                    margin: 0,
+                    textMargin: 2
                 });
             });
 
-            // Passo 3: Abre a tela de impressão do Windows com um pequeno atraso 
-            // (Para garantir que o código de barras terminou de ser desenhado na tela)
             setTimeout(() => {
                 window.print();
             }, 500);
@@ -641,6 +748,12 @@
                     status: "baixado",
                     data_baixa: serverTimestamp()
                 });
+
+                // Registra o LOG da ação
+                await registrarLogAuditoria("Deu Baixa em Patrimônio", {
+                    codigo: codigoItem
+                });
+
             } catch (error) {
                 console.error("Erro ao dar baixa: ", error);
                 alert("Erro ao dar baixa no item.");
@@ -655,8 +768,14 @@
                 const docRef = doc(db, 'patrimonio', docId);
                 await updateDoc(docRef, {
                     status: "ativo",
-                    data_baixa: null // Limpa a data de baixa
+                    data_baixa: null 
                 });
+
+                // Registra o LOG da ação
+                await registrarLogAuditoria("Reativou Patrimônio Baixado", {
+                    codigo: codigoItem
+                });
+
             } catch (error) {
                 console.error("Erro ao reativar: ", error);
                 alert("Erro ao reativar o item.");
