@@ -5,6 +5,10 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Gestão de Patrimônio - C.E. Paulo de Tarso</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    
+    <!-- Biblioteca para gerar os Códigos de Barras -->
+    <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js"></script>
+    
     <style>
         body {
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
@@ -154,7 +158,7 @@
             margin-bottom: 20px;
         }
         table th, table td {
-            padding: 12px 15px;
+            padding: 12px 10px;
             text-align: left;
             border-bottom: 1px solid #e0e0e0;
         }
@@ -193,11 +197,80 @@
         .btn-reativar { background-color: #2ecc71; }
         .btn-reativar:hover { background-color: #27ae60; }
         
-        .btn-info { background-color: #3498db; }
-        .btn-info:hover { background-color: #2980b9; }
+        .btn-imprimir { background-color: #2c3e50; padding: 10px 15px; font-size: 1em; }
+        .btn-imprimir:hover { background-color: #1a252f; }
 
         .tabela-oculta {
             display: none;
+        }
+
+        .checkbox-custom {
+            width: 18px;
+            height: 18px;
+            cursor: pointer;
+        }
+
+        /* =========================================
+           ÁREA EXCLUSIVA DE IMPRESSÃO (ESCONDIDA NO APP)
+           ========================================= */
+        #print-area {
+            display: none;
+        }
+
+        @media print {
+            /* Esconde toda a interface do sistema */
+            body { background-color: white; margin: 0; padding: 0; }
+            .header, #loading-message, .main-container { display: none !important; }
+            
+            /* Exibe o grid de etiquetas */
+            #print-area { 
+                display: grid !important; 
+                grid-template-columns: repeat(2, 1fr); /* 2 Colunas de etiquetas */
+                gap: 5mm; 
+                padding: 10mm; 
+                width: 100%;
+                box-sizing: border-box;
+            }
+
+            .etiqueta-print-box {
+                border: 1px solid #bdc3c7;
+                border-radius: 6px;
+                padding: 10px;
+                display: flex;
+                align-items: center;
+                justify-content: space-between;
+                height: 35mm;
+                page-break-inside: avoid;
+            }
+
+            .etiqueta-logo {
+                font-size: 14px;
+                font-weight: bold;
+                text-align: center;
+                line-height: 1.2;
+                width: 40%;
+                color: #000;
+            }
+
+            .etiqueta-codigo {
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+                width: 60%;
+            }
+
+            .etiqueta-titulo {
+                font-size: 11px;
+                font-weight: bold;
+                margin-bottom: -5px;
+                color: #000;
+            }
+            
+            svg.barcode-img {
+                width: 100%;
+                height: auto;
+                max-height: 25mm;
+            }
         }
     </style>
 </head>
@@ -251,9 +324,23 @@
 
             <!-- Tabela de Itens Ativos -->
             <div id="container-ativos">
+                
+                <!-- Barra de Ação de Impressão -->
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; background-color: #f8f9fa; padding: 15px; border-radius: 8px; border: 1px solid #e0e0e0;">
+                    <p style="margin: 0; color: #34495e; font-size: 0.95em;">
+                        <i class="fas fa-info-circle" style="color: #3498db;"></i> Selecione os itens abaixo na caixa de marcação para imprimir.
+                    </p>
+                    <button id="btnImprimirSelecionados" class="btn-acao btn-imprimir">
+                        <i class="fas fa-print"></i> Imprimir Etiquetas Selecionadas
+                    </button>
+                </div>
+
                 <table>
                     <thead>
                         <tr>
+                            <th style="width: 40px; text-align: center;">
+                                <input type="checkbox" id="chkSelectAll" class="checkbox-custom" title="Selecionar Todos">
+                            </th>
                             <th>Código</th>
                             <th>Nome do Item</th>
                             <th>Data Cadastro</th>
@@ -285,6 +372,9 @@
         </div>
 
     </div>
+
+    <!-- Container invisível que receberá as etiquetas desenhadas para impressão -->
+    <div id="print-area"></div>
 
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
@@ -422,14 +512,20 @@
                 const tabelaAtivos = document.getElementById('tabela-ativos');
                 tabelaAtivos.innerHTML = '';
                 
+                // Desmarca o "Selecionar Todos" a cada atualização
+                document.getElementById('chkSelectAll').checked = false;
+
                 if (snapshot.empty) {
-                    tabelaAtivos.innerHTML = '<tr><td colspan="4" style="text-align: center; color: #7f8c8d;">Nenhum item ativo encontrado.</td></tr>';
+                    tabelaAtivos.innerHTML = '<tr><td colspan="5" style="text-align: center; color: #7f8c8d;">Nenhum item ativo encontrado.</td></tr>';
                 }
 
                 snapshot.forEach(docSnap => {
                     const dados = docSnap.data();
                     const tr = document.createElement('tr');
                     tr.innerHTML = `
+                        <td style="text-align: center;">
+                            <input type="checkbox" class="chk-item checkbox-custom" value="${dados.codigo_etiqueta}">
+                        </td>
                         <td><span class="etiqueta-badge">${dados.codigo_etiqueta}</span></td>
                         <td><strong>${dados.nome_item}</strong><br><small style="color:#7f8c8d;">${dados.descricao}</small></td>
                         <td>${formatarTimestamp(dados.data_cadastro)}</td>
@@ -472,6 +568,67 @@
         }
 
         // ==========================================
+        // LÓGICA DE IMPRESSÃO EM LOTE E CÓDIGO DE BARRAS
+        // ==========================================
+
+        // Marcar/Desmarcar todos
+        document.getElementById('chkSelectAll').addEventListener('change', (e) => {
+            const checkboxes = document.querySelectorAll('.chk-item');
+            checkboxes.forEach(chk => chk.checked = e.target.checked);
+        });
+
+        // Botão Imprimir Selecionados
+        document.getElementById('btnImprimirSelecionados').addEventListener('click', () => {
+            const selecionados = document.querySelectorAll('.chk-item:checked');
+            
+            if (selecionados.length === 0) {
+                alert("Por favor, selecione pelo menos um item na lista marcando a caixinha ao lado do código.");
+                return;
+            }
+
+            const printArea = document.getElementById('print-area');
+            printArea.innerHTML = ''; // Limpa as etiquetas anteriores
+
+            // Passo 1: Monta a estrutura HTML de cada etiqueta selecionada
+            selecionados.forEach(chk => {
+                const codigoPatrimonio = chk.value;
+                const svgId = `barcode-${codigoPatrimonio}`; // ID único para a biblioteca desenhar o código
+                
+                const etiquetaHtml = `
+                    <div class="etiqueta-print-box">
+                        <div class="etiqueta-logo">
+                            C.E. PAULO<br>DE TARSO<br><span style="font-size:0.8em; font-weight:normal;">SBO</span>
+                        </div>
+                        <div class="etiqueta-codigo">
+                            <span class="etiqueta-titulo">PATRIMÔNIO</span>
+                            <svg id="${svgId}" class="barcode-img"></svg>
+                        </div>
+                    </div>
+                `;
+                printArea.insertAdjacentHTML('beforeend', etiquetaHtml);
+            });
+
+            // Passo 2: Roda o script JsBarcode para desenhar o código em cada SVG gerado
+            selecionados.forEach(chk => {
+                const codigoPatrimonio = chk.value;
+                JsBarcode(`#barcode-${codigoPatrimonio}`, codigoPatrimonio, {
+                    format: "CODE128", // Formato mundial de código de barras
+                    width: 1.5,        // Espessura da barra
+                    height: 40,        // Altura da barra
+                    displayValue: true, // Mostra o número embaixo
+                    fontSize: 14,
+                    margin: 0
+                });
+            });
+
+            // Passo 3: Abre a tela de impressão do Windows com um pequeno atraso 
+            // (Para garantir que o código de barras terminou de ser desenhado na tela)
+            setTimeout(() => {
+                window.print();
+            }, 500);
+        });
+
+        // ==========================================
         // LÓGICA DE BANCO: ATUALIZAÇÕES (BAIXA E REATIVAÇÃO)
         // ==========================================
         window.darBaixaPatrimonio = async function(docId, codigoItem) {
@@ -506,7 +663,7 @@
             }
         };
 
-        // Função utilitária para formatar Timestamp do Firebase para data legível
+        // Função utilitária para formatar Timestamp
         function formatarTimestamp(timestamp) {
             if (!timestamp) return "N/A";
             const data = timestamp.toDate ? timestamp.toDate() : new Date(timestamp);
