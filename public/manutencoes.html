@@ -313,8 +313,7 @@
         </div>
     </div>
 
-    <script type="module">
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
         import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-auth.js";
         import { getFirestore, collection, doc, getDocs, setDoc, updateDoc, addDoc, onSnapshot, query, where, orderBy, limit, arrayUnion, serverTimestamp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
 
@@ -333,7 +332,7 @@
 
         const rolesPermitidas = ['super-admin', 'diretor', 'tesoureiro', 'conselheiro'];
 
-        // Lista estática das manutenções obrigatórias
+        // Lista estática das manutenções obrigatórias (com a alteração solicitada)
         const listaManutencoesPreDefinidas = [
             { id: "caixa_dagua", nome: "Limpeza de Caixa d'água" },
             { id: "calhas", nome: "Limpeza de Calhas" },
@@ -341,7 +340,7 @@
             { id: "caixa_gordura", nome: "Caixa de Gordura" },
             { id: "esgoto", nome: "Esgoto / Fossa" },
             { id: "extintores", nome: "Recarga de Extintores" },
-            { id: "dedetizacao", nome: "Dedetização" },
+            { id: "dedetizacao", nome: "Dedetização/Desratização" },
             { id: "avcb", nome: "Renovação AVCB (Bombeiros)" }
         ];
 
@@ -419,6 +418,9 @@
                         }
                     }
 
+                    // CORREÇÃO APLICADA AQUI: Proteção contra aspas simples no nome
+                    const nomeSeguro = item.nome.replace(/'/g, "\\'");
+
                     const tr = document.createElement('tr');
                     tr.innerHTML = `
                         <td><strong>${item.nome}</strong></td>
@@ -426,7 +428,7 @@
                         <td>${dataProximaFormatada}</td>
                         <td>${statusHtml}</td>
                         <td>
-                            <button class="btn-acao" onclick="abrirModalPeriodica('${item.id}', '${item.nome}')">
+                            <button class="btn-acao" onclick="abrirModalPeriodica('${item.id}', '${nomeSeguro}')">
                                 Registrar
                             </button>
                         </td>
@@ -466,7 +468,6 @@
             try {
                 const docRef = doc(db, 'manutencoes_periodicas', idDoc);
                 
-                // Usamos setDoc com { merge: true } para criar o documento caso não exista, ou atualizar se existir
                 await setDoc(docRef, {
                     nome: nomeManutencao,
                     data_realizada: dataRealizada,
@@ -485,7 +486,6 @@
             }
         });
 
-
         // ==========================================
         // LÓGICA: MANUTENÇÕES PONTUAIS E PATRIMÔNIO
         // ==========================================
@@ -498,9 +498,8 @@
                 querySnapshot.forEach((docSnap) => {
                     const dados = docSnap.data();
                     const option = document.createElement('option');
-                    option.value = docSnap.id; // Guardamos o ID do documento
+                    option.value = docSnap.id;
                     option.text = `${dados.codigo_etiqueta} - ${dados.nome_item}`;
-                    // Guardamos o nome completo em um dataset para facilitar na hora de salvar na tabela de manutenções
                     option.dataset.nomeCompleto = `${dados.codigo_etiqueta} - ${dados.nome_item}`; 
                     selectPatrimonio.appendChild(option);
                 });
@@ -520,7 +519,6 @@
             const idItemPatrimonio = document.getElementById('selectPatrimonio').value;
             const descricao = document.getElementById('descricaoManutencao').value;
 
-            // Pega o texto da option selecionada para salvar no log de manutenção
             let nomeItemVinculado = "Nenhum (Manutenção Geral)";
             if (idItemPatrimonio !== "") {
                 const selectElement = document.getElementById('selectPatrimonio');
@@ -528,7 +526,6 @@
             }
 
             try {
-                // 1. Salva o registro na coleção geral de manutenções pontuais
                 await addDoc(collection(db, "manutencoes_pontuais"), {
                     data_realizacao: dataRealizacao,
                     id_patrimonio_vinculado: idItemPatrimonio,
@@ -537,7 +534,6 @@
                     data_registro: serverTimestamp()
                 });
 
-                // 2. Se houver um item de patrimônio vinculado, insere no array de histórico do próprio item
                 if (idItemPatrimonio !== "") {
                     const patrimonioRef = doc(db, "patrimonio", idItemPatrimonio);
                     await updateDoc(patrimonioRef, {
@@ -588,7 +584,6 @@
             });
         }
 
-        // Função utilitária para formatar data (YYYY-MM-DD para DD/MM/YYYY)
         function formatarData(dataString) {
             if (!dataString) return "";
             const partes = dataString.split('-');
