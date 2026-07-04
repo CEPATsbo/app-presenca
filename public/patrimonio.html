@@ -261,7 +261,7 @@
                 align-items: center;
                 justify-content: center;
                 height: 25mm; 
-                width: 50mm;  /* Etiqueta menor e mais focada */
+                width: 50mm;  
                 page-break-inside: avoid;
             }
 
@@ -303,9 +303,14 @@
             
             <form id="form-cadastro-patrimonio">
                 <div class="form-row">
-                    <div class="form-group" style="flex: 1;">
+                    <div class="form-group" style="flex: 3;">
                         <label for="inputNomeItem">Nome do Item</label>
-                        <input type="text" id="inputNomeItem" class="form-control" placeholder="Ex: Cadeira de Escritório Giratória" required>
+                        <input type="text" id="inputNomeItem" class="form-control" placeholder="Ex: Cadeira de Escritório" required>
+                    </div>
+                    <!-- NOVO: Campo de Quantidade para Lotes -->
+                    <div class="form-group" style="flex: 1;">
+                        <label for="inputQuantidade">Quantidade</label>
+                        <input type="number" id="inputQuantidade" class="form-control" value="1" min="1" max="100" title="Máximo de 100 itens por vez" required>
                     </div>
                 </div>
                 
@@ -314,7 +319,7 @@
                     <textarea id="inputDescricaoItem" class="form-control" rows="2" placeholder="Ex: Cor preta, braços ajustáveis. Fica na sala da diretoria." required></textarea>
                 </div>
 
-                <button type="submit" class="btn-salvar" id="btnSalvarPatrimonio">Salvar e Gerar Etiqueta CEPAT</button>
+                <button type="submit" class="btn-salvar" id="btnSalvarPatrimonio">Salvar e Gerar Etiqueta(s) CEPAT</button>
             </form>
         </div>
 
@@ -461,7 +466,7 @@
                 
                 await addDoc(collection(db, "log_auditoria"), {
                     timestamp: serverTimestamp(),
-                    autor: user.uid, // O painel de logs irá traduzir o UID para o nome do usuário
+                    autor: user.uid, 
                     acao: acao,
                     detalhes: detalhesObj
                 });
@@ -493,67 +498,101 @@
         });
 
         // ==========================================
-        // LÓGICA DE BANCO: CADASTRO COM TRANSAÇÃO
+        // LÓGICA DE BANCO: CADASTRO COM TRANSAÇÃO (LOTE)
         // ==========================================
         document.getElementById('form-cadastro-patrimonio').addEventListener('submit', async (e) => {
             e.preventDefault();
             
+            const quantidade = parseInt(document.getElementById('inputQuantidade').value, 10);
+            
+            if (isNaN(quantidade) || quantidade < 1 || quantidade > 100) {
+                alert("Por favor, informe uma quantidade entre 1 e 100.");
+                return;
+            }
+
             const btnSalvar = document.getElementById('btnSalvarPatrimonio');
             btnSalvar.disabled = true;
-            btnSalvar.innerText = "Gerando Código CEPAT...";
+            btnSalvar.innerText = quantidade === 1 ? "Gerando Código CEPAT..." : `Gerando ${quantidade} Códigos...`;
 
             const nome = document.getElementById('inputNomeItem').value;
             const descricao = document.getElementById('inputDescricaoItem').value;
 
             try {
                 const referenciaContador = doc(db, "contadores", "patrimonio");
-                const referenciaNovoItem = doc(collection(db, "patrimonio"));
 
-                const codigoGerado = await runTransaction(db, async (transacao) => {
+                const codigosGerados = await runTransaction(db, async (transacao) => {
                     const documentoContador = await transacao.get(referenciaContador);
-                    let proximoNumero = 1;
+                    let numeroAtual = 0;
 
                     if (documentoContador.exists()) {
-                        const dadosDoContador = documentoContador.data();
-                        proximoNumero = (dadosDoContador.numero_atual || 0) + 1;
+                        numeroAtual = documentoContador.data().numero_atual || 0;
                     } else {
                         transacao.set(referenciaContador, { numero_atual: 0 });
                     }
 
-                    transacao.update(referenciaContador, { numero_atual: proximoNumero });
+                    const proximoNumeroInicial = numeroAtual + 1;
+                    const novoNumeroFinal = numeroAtual + quantidade;
 
-                    const numeroFormatado = proximoNumero.toString().padStart(4, "0");
-                    const codigoDaEtiquetaFinal = `CEPAT-${numeroFormatado}`;
+                    // Atualiza o contador de uma vez somando a quantidade total
+                    transacao.update(referenciaContador, { numero_atual: novoNumeroFinal });
 
-                    transacao.set(referenciaNovoItem, {
-                        codigo_etiqueta: codigoDaEtiquetaFinal,
-                        nome_item: nome,
-                        descricao: descricao,
-                        status: "ativo",
-                        data_cadastro: serverTimestamp(),
-                        data_baixa: null,
-                        historico_manutencoes: []
-                    });
+                    const codigosDaTransacao = [];
 
-                    return codigoDaEtiquetaFinal;
+                    // Cria um documento para cada item do lote
+                    for (let i = 0; i < quantidade; i++) {
+                        const numeroItem = proximoNumeroInicial + i;
+                        const numeroFormatado = numeroItem.toString().padStart(4, "0");
+                        const codigoDaEtiquetaFinal = `CEPAT-${numeroFormatado}`;
+
+                        const referenciaNovoItem = doc(collection(db, "patrimonio"));
+
+                        transacao.set(referenciaNovoItem, {
+                            codigo_etiqueta: codigoDaEtiquetaFinal,
+                            nome_item: nome,
+                            descricao: descricao,
+                            status: "ativo",
+                            data_cadastro: serverTimestamp(),
+                            data_baixa: null,
+                            historico_manutencoes: []
+                        });
+
+                        codigosDaTransacao.push(codigoDaEtiquetaFinal);
+                    }
+
+                    return codigosDaTransacao;
                 });
 
-                // Registra o LOG da ação
-                await registrarLogAuditoria("Cadastrou Novo Patrimônio", {
-                    codigo: codigoGerado,
+                // Registra o LOG de forma inteligente baseada na quantidade
+                let logMensagem = quantidade === 1 ? "Cadastrou Novo Patrimônio" : `Cadastrou ${quantidade} Patrimônios em Lote`;
+                let logDetalhes = quantidade === 1 ? {
+                    codigo: codigosGerados[0],
                     nome_item: nome,
                     descricao: descricao
-                });
+                } : {
+                    quantidade_cadastrada: quantidade,
+                    primeiro_codigo: codigosGerados[0],
+                    ultimo_codigo: codigosGerados[codigosGerados.length - 1],
+                    nome_item: nome,
+                    descricao: descricao
+                };
 
-                alert(`Item cadastrado com sucesso! Código gerado: ${codigoGerado}`);
+                await registrarLogAuditoria(logMensagem, logDetalhes);
+
+                if (quantidade === 1) {
+                    alert(`Item cadastrado com sucesso! Código gerado: ${codigosGerados[0]}`);
+                } else {
+                    alert(`Sucesso! ${quantidade} itens cadastrados (Do ${codigosGerados[0]} ao ${codigosGerados[codigosGerados.length - 1]}).`);
+                }
+                
                 document.getElementById('form-cadastro-patrimonio').reset();
+                document.getElementById('inputQuantidade').value = 1; // Reseta para 1 por segurança
 
             } catch (error) {
                 console.error("Erro na transação de patrimônio: ", error);
-                alert("Ocorreu um erro ao salvar o item. Tente novamente.");
+                alert("Ocorreu um erro ao salvar o(s) item(ns). Tente novamente.");
             } finally {
                 btnSalvar.disabled = false;
-                btnSalvar.innerText = "Salvar e Gerar Etiqueta CEPAT";
+                btnSalvar.innerText = "Salvar e Gerar Etiqueta(s) CEPAT";
             }
         });
 
@@ -578,7 +617,6 @@
                 snapshot.forEach(docSnap => {
                     const dados = docSnap.data();
                     
-                    // Proteção de aspas para os botões do HTML
                     const nomeSeguro = dados.nome_item.replace(/'/g, "\\'").replace(/"/g, '&quot;');
                     const descSegura = dados.descricao.replace(/'/g, "\\'").replace(/"/g, '&quot;');
 
@@ -665,7 +703,6 @@
                     ultima_edicao: serverTimestamp()
                 });
 
-                // Registra o LOG da ação
                 await registrarLogAuditoria("Editou Item de Patrimônio", {
                     codigo: codigo,
                     novo_nome: novoNome,
@@ -707,7 +744,6 @@
                 const codigoPatrimonio = chk.value;
                 const svgId = `barcode-${codigoPatrimonio}`; 
                 
-                // Estrutura focada apenas no Código de Barras e no Título
                 const etiquetaHtml = `
                     <div class="etiqueta-print-box">
                         <span class="etiqueta-titulo">PATRIMÔNIO</span>
@@ -749,7 +785,6 @@
                     data_baixa: serverTimestamp()
                 });
 
-                // Registra o LOG da ação
                 await registrarLogAuditoria("Deu Baixa em Patrimônio", {
                     codigo: codigoItem
                 });
@@ -771,7 +806,6 @@
                     data_baixa: null 
                 });
 
-                // Registra o LOG da ação
                 await registrarLogAuditoria("Reativou Patrimônio Baixado", {
                     codigo: codigoItem
                 });
@@ -782,7 +816,6 @@
             }
         };
 
-        // Função utilitária para formatar Timestamp
         function formatarTimestamp(timestamp) {
             if (!timestamp) return "N/A";
             const data = timestamp.toDate ? timestamp.toDate() : new Date(timestamp);
