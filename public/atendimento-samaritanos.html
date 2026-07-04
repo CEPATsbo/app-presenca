@@ -10,7 +10,7 @@
         .container { width: 100%; max-width: 900px; background-color: white; padding: 30px; border-radius: 12px; box-shadow: 0 6px 24px rgba(0,0,0,0.1); margin: auto; }
         .nav-voltar { width: 100%; max-width: 900px; margin: auto; margin-bottom: 20px; }
         .btn, .btn-voltar { background-color: var(--cor-primaria); color: white; border: none; padding: 12px 20px; border-radius: 8px; font-weight: bold; font-size: 1em; cursor: pointer; transition: 0.3s; text-decoration: none;}
-        .btn:disabled { background-color: #ccc; cursor: not-allowed; }
+        .btn:disabled { background-color: #ccc; cursor: not-allowed; opacity: 0.7;}
         .btn-voltar { background-color: #6c757d; }
         .btn-success { background-color: #27ae60; }
         .btn-danger { background-color: #c0392b; }
@@ -34,6 +34,11 @@
         .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); display: flex; align-items: center; justify-content: center; z-index: 1000; }
         .modal-content { background: white; padding: 30px; border-radius: 12px; width: 90%; max-width: 400px; text-align: center; }
         .modal-actions { display: flex; justify-content: space-between; margin-top: 20px; gap: 10px; }
+        
+        .assistente-box { background-color: #f0f7ff; padding: 15px 20px; border-radius: 8px; border-left: 5px solid #007bff; margin-bottom: 20px; }
+        .assistente-box h4 { margin-top: 0; color: #007bff; margin-bottom: 12px; font-size: 1.1em; }
+        .radio-group { display: flex; gap: 15px; flex-wrap: wrap; font-size: 0.9em; margin-bottom: 10px; font-weight: bold; color: #444; }
+        .radio-group label { cursor: pointer; display: flex; align-items: center; gap: 4px; }
     </style>
 </head>
 <body>
@@ -61,8 +66,10 @@
 
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
-        // CORREÇÃO: updateDoc foi adicionado à lista de importações abaixo!
-        import { getFirestore, collection, doc, getDoc, query, where, Timestamp, getDocs, writeBatch, serverTimestamp, increment, setDoc, updateDoc } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
+        import { getFirestore, collection, doc, getDoc, query, where, Timestamp, getDocs, writeBatch, serverTimestamp, increment, setDoc, updateDoc, addDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
+        // IMPORTAÇÕES DO STORAGE PARA O ÁUDIO
+        import { getStorage, ref as storageRef, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-storage.js";
+        import { getAuth } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-auth.js";
         import { protegerPagina } from '/auth.js';
 
         const firebaseConfig = {
@@ -73,7 +80,9 @@
             messagingSenderId: "66122858261",
             appId: "1:66122858261:web:7fa21f1805463b5c08331c"
         };
-        initializeApp(firebaseConfig);
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+        const storage = getStorage(app);
 
         protegerPagina(['super-admin', 'diretor', 'tesoureiro', 'conselheiro', 'entrevistador']).then(user => {
             inicializarPagina(user);
@@ -108,7 +117,8 @@
                 const form = formularioContainer.querySelector('fieldset');
                 if (!form) return;
                 
-                form.querySelectorAll('#atendimento-verificacoes, #atendimento-orientacoes, #btn-marcar-retorno, #btn-abrir-alta').forEach(el => {
+                // Trava os 3 textareas e as ferramentas de áudio
+                form.querySelectorAll('#atendimento-verificacoes, #atendimento-orientacoes, #atendimento-manifestacoes, #btn-marcar-retorno, #btn-abrir-alta, #upload-audio, input[name="destino-transcricao"], #btn-transcrever-audio').forEach(el => {
                     if (el) el.disabled = travado;
                 });
 
@@ -144,8 +154,11 @@
                 globAtend = atendimento; globTratDocRef = tDocRef; globTrat = tDoc.data();
 
                 formularioContainer.innerHTML = criarFormulario(atendimento, assistidoDoc.data(), globTrat);
+                
+                // Carrega os 3 campos
                 document.getElementById('atendimento-verificacoes').value = atendimento.verificacoes || '';
                 document.getElementById('atendimento-orientacoes').value = atendimento.orientacoes || '';
+                document.getElementById('atendimento-manifestacoes').value = atendimento.manifestacoes || '';
                 
                 manipularEstadoFormulario(atendimento.detalhes_preenchidos === true);
 
@@ -153,6 +166,85 @@
                 document.getElementById('btn-marcar-retorno')?.addEventListener('click', () => marcarNovoRetorno(atendimento, tDocRef));
                 const btnAlta = document.getElementById('btn-abrir-alta');
                 if(btnAlta) btnAlta.addEventListener('click', () => document.getElementById('modal-alta').classList.remove('hidden'));
+
+                // INICIA O MOTOR DE ÁUDIO
+                configurarMotorDeAudio(atendimento);
+            }
+
+            // --- MOTOR DE ÁUDIO (IDÊNTICO AO VL COM CHAVEAMENTO) ---
+            function configurarMotorDeAudio(atendimento) {
+                const btnTranscrever = document.getElementById('btn-transcrever-audio');
+                if(!btnTranscrever) return;
+
+                btnTranscrever.addEventListener('click', async () => {
+                    const inputAudio = document.getElementById('upload-audio');
+                    const statusAudio = document.getElementById('status-audio');
+                    const destino = document.querySelector('input[name="destino-transcricao"]:checked').value;
+                    
+                    if (!inputAudio.files || inputAudio.files.length === 0) {
+                        alert('Por favor, selecione pelo menos um arquivo de áudio.'); return;
+                    }
+
+                    const arquivos = Array.from(inputAudio.files);
+                    btnTranscrever.disabled = true;
+
+                    for (let i = 0; i < arquivos.length; i++) {
+                        const file = arquivos[i];
+                        statusAudio.innerHTML = `<span style="color:#e67e22;">⏳ Enviando e transcrevendo áudio ${i+1} de ${arquivos.length}... Isso pode levar um minuto.</span>`;
+                        
+                        try {
+                            const sRef = storageRef(storage, `audios_mediunicos/sam_${atendimento.id}_${Date.now()}_${i}_${file.name}`);
+                            const snapshot = await uploadBytes(sRef, file);
+                            const url = await getDownloadURL(snapshot.ref);
+                            
+                            const docRef = await addDoc(collection(db, 'comunicacoes_mediunicas'), {
+                                urlAudio: url,
+                                status: 'processando',
+                                nomeArquivo: file.name,
+                                assistidoId: atendimento.assistidoId,
+                                atendimentoId: atendimento.id,
+                                origem: 'samaritanos',
+                                criadoEm: serverTimestamp()
+                            });
+
+                            await new Promise((resolve, reject) => {
+                                const unsubscribe = onSnapshot(docRef, (docSnap) => {
+                                    const data = docSnap.data();
+                                    if (data && data.status === 'concluido') {
+                                        unsubscribe();
+                                        const transcricao = data.transcricao || 'Áudio não compreendido.';
+                                        const textoFormatado = `\n[Transcrição Automática - ${file.name}]:\n${transcricao}\n`;
+                                        
+                                        // CHAVEAMENTO DINÂMICO AQUI
+                                        let targetTextarea;
+                                        if (destino === 'verificacoes') targetTextarea = document.getElementById('atendimento-verificacoes');
+                                        else if (destino === 'orientacoes') targetTextarea = document.getElementById('atendimento-orientacoes');
+                                        else if (destino === 'manifestacoes') targetTextarea = document.getElementById('atendimento-manifestacoes');
+                                        
+                                        if (targetTextarea) {
+                                            targetTextarea.value += (targetTextarea.value ? '\n' : '') + textoFormatado;
+                                        }
+                                        resolve();
+                                    } else if (data && data.status === 'erro') {
+                                        unsubscribe();
+                                        alert(`Erro ao transcrever o arquivo ${file.name}: ${data.erroDetalhe}`);
+                                        resolve(); // Segue pro próximo
+                                    }
+                                }, (err) => {
+                                    unsubscribe();
+                                    reject(err);
+                                });
+                            });
+                        } catch (error) {
+                            console.error("Erro no processamento:", error);
+                            alert(`Falha no processamento do arquivo ${file.name}`);
+                        }
+                    }
+                    
+                    statusAudio.innerHTML = `<span style="color:#28a745;">✅ Transcrição concluída! O texto foi inserido no campo escolhido. Edite se necessário.</span>`;
+                    inputAudio.value = ''; 
+                    btnTranscrever.disabled = false;
+                });
             }
             
             document.getElementById('btn-confirmar-alta').addEventListener('click', async () => {
@@ -165,7 +257,6 @@
                     alert('Alta concedida! Ciclo encerrado.');
                     location.reload();
                 } catch (error) { 
-                    console.error("Erro ao conceder alta:", error);
                     alert("Falha ao dar alta. Verifique o console."); 
                 }
             });
@@ -186,7 +277,8 @@
                     const batch = writeBatch(db);
                     batch.set(doc(atendimentosRef), {
                         assistidoId: globTrat.assistidoId, tratamentoId: tDocRef.id, dataAtendimento: serverTimestamp(),
-                        semana: novaSemana, notas: '', verificacoes: '', orientacoes: '', atendente: user.displayName, detalhes_preenchidos: false, orientacao_enviada: false
+                        semana: novaSemana, notas: '', verificacoes: '', orientacoes: '', manifestacoes: '', // Incluído na limpeza
+                        atendente: user.displayName, detalhes_preenchidos: false, orientacao_enviada: false
                     });
                     batch.update(tDocRef, { atendimentos_realizados: increment(1) });
                     await batch.commit();
@@ -194,7 +286,6 @@
                     alert(`Semana ${novaSemana} agendada com sucesso.`);
                     location.reload();
                 } catch (error) { 
-                    console.error("Erro ao marcar retorno:", error);
                     alert("Erro ao marcar retorno. Verifique o console."); 
                     btn.disabled = false; 
                 }
@@ -208,13 +299,13 @@
                     await updateDoc(aDocRef, {
                         atendente: user.displayName || 'Sistema', detalhes_preenchidos: true,
                         verificacoes: document.getElementById('atendimento-verificacoes').value.trim(),
-                        orientacoes: document.getElementById('atendimento-orientacoes').value.trim()
+                        orientacoes: document.getElementById('atendimento-orientacoes').value.trim(),
+                        manifestacoes: document.getElementById('atendimento-manifestacoes').value.trim() // Salva o novo campo
                     });
                     alert('Ficha salva!');
                     manipularEstadoFormulario(true);
                     location.reload(); 
                 } catch (error) { 
-                    console.error("Erro crítico ao salvar:", error);
                     alert("Falha ao salvar. Verifique o console (F12) para detalhes do erro."); 
                     btn.disabled = false; btn.textContent = 'Salvar Alterações'; 
                 }
@@ -230,7 +321,7 @@
                     if (dataAtend !== new Date().toLocaleDateString('pt-br')) {
                         botoes += `<button id="btn-marcar-retorno" type="button" class="btn btn-success" style="width: 100%; margin-top: 10px;">Gerar Próxima Semana</button>`;
                     }
-                    if (sem >= 4) { // Alta destrava a partir da semana 4
+                    if (sem >= 4) {
                         botoes += `<button id="btn-abrir-alta" type="button" class="btn btn-danger" style="width: 100%; margin-top: 10px;">Dar Alta (Encerrar Tratamento)</button>`;
                     }
                 } else if (status === 'concluido') {
@@ -238,6 +329,28 @@
                 }
 
                 let desInfo = tratamento.desencarnadoVinculado ? `<div class="info-item" style="grid-column: 1 / -1; border-top: 1px dashed #ccc; padding-top: 10px;"><label>Desencarnado Vinculado</label><span>${tratamento.desencarnadoVinculado}</span></div>` : '';
+
+                // PAINEL DE ÁUDIO COM CHAVEAMENTO
+                let assistenteAudioHtml = `
+                    <div class="assistente-box">
+                        <h4>🎙️ Assistente de Transcrição Mediúnica</h4>
+                        <p style="font-size: 0.9em; margin-bottom: 15px; color: #555;">Selecione os áudios e escolha o destino. A I.A. transcreverá e colará o texto automaticamente.</p>
+                        
+                        <div style="margin-bottom: 15px;">
+                            <input type="file" id="upload-audio" accept="audio/*" multiple style="width: 100%; padding: 8px; border: 1px solid #ccc; background: white; border-radius: 6px;">
+                        </div>
+
+                        <div class="radio-group">
+                            <span>Destino:</span>
+                            <label><input type="radio" name="destino-transcricao" value="verificacoes" checked> Verificações</label>
+                            <label><input type="radio" name="destino-transcricao" value="orientacoes"> Orientações</label>
+                            <label><input type="radio" name="destino-transcricao" value="manifestacoes"> Manifestação</label>
+                        </div>
+                        
+                        <button type="button" id="btn-transcrever-audio" class="btn" style="background-color: #007bff; color: white; width: 100%; margin-top: 5px;">Transcrever Áudios</button>
+                        <div id="status-audio" style="margin-top: 10px; font-weight: bold; font-size: 0.9em;"></div>
+                    </div>
+                `;
 
                 return `<fieldset>
                             <legend>Anotações - Semana ${sem}</legend>
@@ -250,17 +363,25 @@
                                 </div>
                             </div>
                             
-                            <!-- As duas textareas aparecem sempre -->
+                            ${assistenteAudioHtml}
+                            
                             <div class="form-item">
                                 <label for="atendimento-verificacoes">Registro de Verificações da Equipe:</label>
-                                <textarea id="atendimento-verificacoes" rows="5" placeholder="Anote o que os tarefeiros perceberam/verificaram durante a vibração desta semana..."></textarea>
-                            </div>
-                            <div class="form-item">
-                                <label for="atendimento-orientacoes">Orientações para o Assistido (WhatsApp):</label>
-                                <textarea id="atendimento-orientacoes" rows="5" placeholder="Mensagem direta de orientação espiritual que será encaminhada ao assistido..."></textarea>
+                                <textarea id="atendimento-verificacoes" rows="4" placeholder="Anote o que os tarefeiros perceberam/verificaram durante a vibração desta semana..."></textarea>
                             </div>
                             
-                            <button id="btn-salvar-atendimento" type="button" class="btn btn-primary" style="width: 100%; margin-top: 20px; background-color: var(--cor-primaria); color: white; border: none; padding: 12px; border-radius: 8px;">Salvar Ficha</button>
+                            <div class="form-item">
+                                <label for="atendimento-orientacoes">Orientações para o Assistido (WhatsApp):</label>
+                                <textarea id="atendimento-orientacoes" rows="4" placeholder="Mensagem direta de orientação espiritual que será encaminhada ao assistido..."></textarea>
+                            </div>
+
+                            <!-- NOVO CAMPO: MANIFESTAÇÕES -->
+                            <div class="form-item">
+                                <label for="atendimento-manifestacoes">Manifestação do Espírito (Opcional):</label>
+                                <textarea id="atendimento-manifestacoes" rows="4" placeholder="Registro de diálogos, comportamentos ou ensinamentos do espírito manifestante..."></textarea>
+                            </div>
+                            
+                            <button id="btn-salvar-atendimento" type="button" class="btn" style="width: 100%; margin-top: 20px; background-color: var(--cor-primaria); color: white;">Salvar Ficha</button>
                             <hr style="border: 0; height: 1px; background: #ddd; margin: 25px 0;">
                             ${botoes}
                         </fieldset>`;
