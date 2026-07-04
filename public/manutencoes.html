@@ -1,0 +1,600 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Controle de Manutenções - C.E. Paulo de Tarso</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: #f4f6f9;
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        .header {
+            width: 100%;
+            max-width: 1100px;
+            margin-bottom: 30px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding-bottom: 15px;
+            border-bottom: 1px solid #e0e0e0;
+        }
+        .header-content {
+            text-align: left;
+        }
+        .header-content h1 {
+            color: #2c3e50;
+            margin: 0;
+        }
+        .header-content p {
+            color: #7f8c8d;
+            margin-top: 5px;
+            margin-bottom: 0;
+        }
+        .btn-voltar {
+            background-color: #7f8c8d;
+            color: white;
+            padding: 10px 18px;
+            border-radius: 8px;
+            text-decoration: none;
+            font-weight: bold;
+            font-size: 0.9em;
+            white-space: nowrap;
+        }
+
+        #loading-message {
+            color: #7f8c8d;
+            font-size: 1.2em;
+            margin-top: 50px;
+        }
+
+        .main-container {
+            width: 100%;
+            max-width: 1100px;
+            display: none; /* Exibido pelo JS após verificar login */
+            gap: 30px;
+            flex-direction: column;
+        }
+
+        .section-card {
+            background-color: white;
+            border-radius: 12px;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.08);
+            padding: 30px;
+            width: 100%;
+            box-sizing: border-box;
+        }
+        .section-title {
+            color: #34495e;
+            margin-top: 0;
+            margin-bottom: 20px;
+            font-size: 1.5em;
+            border-bottom: 2px solid #f4f6f9;
+            padding-bottom: 10px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 20px;
+        }
+        table th, table td {
+            padding: 12px 15px;
+            text-align: left;
+            border-bottom: 1px solid #e0e0e0;
+        }
+        table th {
+            background-color: #f8f9fa;
+            color: #2c3e50;
+            font-weight: bold;
+        }
+        table tbody tr:hover {
+            background-color: #f1f2f6;
+        }
+
+        .btn-acao {
+            background-color: #3498db;
+            color: white;
+            border: none;
+            padding: 8px 12px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 0.9em;
+            font-weight: bold;
+        }
+        .btn-acao:hover {
+            background-color: #2980b9;
+        }
+        .btn-salvar {
+            background-color: #2ecc71;
+            color: white;
+            border: none;
+            padding: 10px 18px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 1em;
+            font-weight: bold;
+            width: 100%;
+            margin-top: 15px;
+        }
+        .btn-salvar:hover {
+            background-color: #27ae60;
+        }
+
+        .status-badge {
+            padding: 5px 10px;
+            border-radius: 20px;
+            font-size: 0.85em;
+            font-weight: bold;
+            color: white;
+        }
+        .status-ok { background-color: #2ecc71; }
+        .status-alerta { background-color: #f39c12; }
+        .status-vencido { background-color: #e74c3c; }
+        .status-pendente { background-color: #95a5a6; }
+
+        /* Formulário de Manutenção Pontual */
+        .form-group {
+            margin-bottom: 15px;
+        }
+        .form-group label {
+            display: block;
+            margin-bottom: 5px;
+            color: #2c3e50;
+            font-weight: bold;
+        }
+        .form-control {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #bdc3c7;
+            border-radius: 6px;
+            font-size: 1em;
+            box-sizing: border-box;
+            font-family: inherit;
+        }
+        textarea.form-control {
+            resize: vertical;
+            min-height: 80px;
+        }
+
+        /* Modal Styles */
+        .modal-overlay {
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background-color: rgba(0,0,0,0.5);
+            display: none;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+        }
+        .modal-content {
+            background-color: white;
+            padding: 30px;
+            border-radius: 12px;
+            width: 100%;
+            max-width: 400px;
+            box-shadow: 0 5px 20px rgba(0,0,0,0.2);
+            position: relative;
+        }
+        .modal-title {
+            margin-top: 0;
+            color: #2c3e50;
+            margin-bottom: 20px;
+        }
+        .btn-fechar-modal {
+            position: absolute;
+            top: 15px;
+            right: 15px;
+            background: none;
+            border: none;
+            font-size: 1.5em;
+            cursor: pointer;
+            color: #7f8c8d;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="header">
+        <div class="header-content">
+            <h1>Controle de Manutenções</h1>
+            <p>Gerencie as manutenções obrigatórias e registre consertos pontuais.</p>
+        </div>
+        <a href="/manutencao-patrimonio.html" class="btn-voltar">&lt; Voltar</a>
+    </div>
+
+    <div id="loading-message">Carregando dados e verificando permissões...</div>
+
+    <div id="main-content" class="main-container">
+
+        <!-- Seção: Manutenções Periódicas -->
+        <div class="section-card">
+            <h2 class="section-title">
+                <span><i class="fas fa-calendar-check" style="color: #ff9800; margin-right: 10px;"></i> Manutenções Periódicas e Obrigatórias</span>
+            </h2>
+            <p style="color: #7f8c8d; margin-bottom: 20px; font-size: 0.9em;">
+                O sistema alertará o painel principal quando faltar 30 dias para o vencimento da "Próxima Manutenção".
+            </p>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Tipo de Manutenção</th>
+                        <th>Última Realização</th>
+                        <th>Próxima Manutenção</th>
+                        <th>Status</th>
+                        <th>Ação</th>
+                    </tr>
+                </thead>
+                <tbody id="tabela-periodicas">
+                    <!-- Preenchido pelo JavaScript -->
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Seção: Manutenções Pontuais -->
+        <div class="section-card">
+            <h2 class="section-title">
+                <span><i class="fas fa-tools" style="color: #3f51b5; margin-right: 10px;"></i> Registrar Manutenção Pontual</span>
+            </h2>
+            
+            <form id="form-manutencao-pontual">
+                <div class="form-group">
+                    <label for="dataRealizacaoPontual">Data da Realização</label>
+                    <input type="date" id="dataRealizacaoPontual" class="form-control" required>
+                </div>
+
+                <div class="form-group">
+                    <label for="selectPatrimonio">Vincular a um Item de Patrimônio (Opcional)</label>
+                    <select id="selectPatrimonio" class="form-control">
+                        <option value="">-- Não vincular / Manutenção geral na casa --</option>
+                        <!-- Preenchido pelo JS com os itens ativos -->
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label for="descricaoManutencao">Descrição do que foi feito</label>
+                    <textarea id="descricaoManutencao" class="form-control" placeholder="Ex: Conserto da perna da mesa, troca de resistência do chuveiro..." required></textarea>
+                </div>
+
+                <button type="submit" class="btn-salvar" id="btnSalvarPontual">Registrar Manutenção</button>
+            </form>
+            
+            <hr style="border: 0; border-top: 1px solid #e0e0e0; margin: 30px 0;">
+
+            <h3 style="color: #2c3e50; margin-bottom: 15px;">Últimos Registros Pontuais</h3>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Data</th>
+                        <th>Item Vinculado</th>
+                        <th>Descrição</th>
+                    </tr>
+                </thead>
+                <tbody id="tabela-pontuais">
+                    <!-- Preenchido pelo JS -->
+                </tbody>
+            </table>
+        </div>
+
+    </div>
+
+    <!-- Modal para Atualizar Manutenção Periódica -->
+    <div class="modal-overlay" id="modalPeriodica">
+        <div class="modal-content">
+            <button class="btn-fechar-modal" id="btnFecharModal">&times;</button>
+            <h2 class="modal-title" id="modalTitulo">Registrar Manutenção</h2>
+            
+            <form id="formAtualizarPeriodica">
+                <input type="hidden" id="modalIdManutencao">
+                <input type="hidden" id="modalNomeManutencao">
+                
+                <div class="form-group">
+                    <label for="modalDataRealizada">Data de Realização</label>
+                    <input type="date" id="modalDataRealizada" class="form-control" required>
+                </div>
+
+                <div class="form-group">
+                    <label for="modalDataProxima">Data da Próxima Manutenção</label>
+                    <input type="date" id="modalDataProxima" class="form-control" required>
+                </div>
+
+                <button type="submit" class="btn-salvar" id="btnSalvarPeriodica">Salvar Registros</button>
+            </form>
+        </div>
+    </div>
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
+        import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-auth.js";
+        import { getFirestore, collection, doc, getDocs, setDoc, updateDoc, addDoc, onSnapshot, query, where, orderBy, limit, arrayUnion, serverTimestamp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
+
+        const firebaseConfig = {
+            apiKey: "AIzaSyBV7RPjk3cFTqL-aIpflJcUojKg1ZXMLuU",
+            authDomain: "voluntarios-ativos---cepat.firebaseapp.com",
+            projectId: "voluntarios-ativos---cepat",
+            storageBucket: "voluntarios-ativos---cepat.firebasestorage.app",
+            messagingSenderId: "66122858261",
+            appId: "1:66122858261:web:7fa21f1805463b5c08331c"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+        const db = getFirestore(app);
+
+        const rolesPermitidas = ['super-admin', 'diretor', 'tesoureiro', 'conselheiro'];
+
+        // Lista estática das manutenções obrigatórias
+        const listaManutencoesPreDefinidas = [
+            { id: "caixa_dagua", nome: "Limpeza de Caixa d'água" },
+            { id: "calhas", nome: "Limpeza de Calhas" },
+            { id: "filtros", nome: "Troca de Filtros (Bebedouros)" },
+            { id: "caixa_gordura", nome: "Caixa de Gordura" },
+            { id: "esgoto", nome: "Esgoto / Fossa" },
+            { id: "extintores", nome: "Recarga de Extintores" },
+            { id: "dedetizacao", nome: "Dedetização" },
+            { id: "avcb", nome: "Renovação AVCB (Bombeiros)" }
+        ];
+
+        onAuthStateChanged(auth, (user) => {
+            if (user) {
+                user.getIdTokenResult(true).then((idTokenResult) => {
+                    const claims = idTokenResult.claims || {};
+                    const userRole = claims.role || 'voluntario';
+                    
+                    const temAcessoPeloRole = rolesPermitidas.includes(userRole);
+                    const temAcessoPeloClaim = rolesPermitidas.some(role => claims[role] === true);
+
+                    if (temAcessoPeloRole || temAcessoPeloClaim) {
+                        document.getElementById('loading-message').style.display = 'none';
+                        document.getElementById('main-content').style.display = 'flex';
+                        
+                        inicializarAplicacao();
+                    } else {
+                        alert("Acesso Negado.");
+                        window.location.href = '/manutencao-patrimonio.html';
+                    }
+                }).catch((error) => {
+                    console.error("Erro ao verificar permissões:", error);
+                });
+            } else {
+                window.location.href = '/login.html';
+            }
+        });
+
+        function inicializarAplicacao() {
+            carregarManutencoesPeriodicas();
+            carregarItensPatrimonio();
+            carregarManutencoesPontuais();
+        }
+
+        // ==========================================
+        // LÓGICA: MANUTENÇÕES PERIÓDICAS
+        // ==========================================
+        function carregarManutencoesPeriodicas() {
+            const manutencoesRef = collection(db, 'manutencoes_periodicas');
+
+            onSnapshot(manutencoesRef, (snapshot) => {
+                const dadosBanco = {};
+                snapshot.forEach(doc => {
+                    dadosBanco[doc.id] = doc.data();
+                });
+
+                const tabela = document.getElementById('tabela-periodicas');
+                tabela.innerHTML = '';
+
+                const hoje = new Date();
+                hoje.setHours(0, 0, 0, 0);
+
+                const dataLimiteAlerta = new Date(hoje);
+                dataLimiteAlerta.setDate(hoje.getDate() + 30);
+
+                listaManutencoesPreDefinidas.forEach(item => {
+                    const dados = dadosBanco[item.id];
+                    let dataRealizadaFormatada = "Não registrada";
+                    let dataProximaFormatada = "Não registrada";
+                    let statusHtml = `<span class="status-badge status-pendente">Pendente</span>`;
+
+                    if (dados) {
+                        dataRealizadaFormatada = formatarData(dados.data_realizada);
+                        dataProximaFormatada = formatarData(dados.data_proxima);
+
+                        const dataVencimento = new Date(dados.data_proxima + 'T00:00:00');
+                        
+                        if (dataVencimento < hoje) {
+                            statusHtml = `<span class="status-badge status-vencido">Vencido</span>`;
+                        } else if (dataVencimento <= dataLimiteAlerta) {
+                            statusHtml = `<span class="status-badge status-alerta">Vence em Breve</span>`;
+                        } else {
+                            statusHtml = `<span class="status-badge status-ok">Em dia</span>`;
+                        }
+                    }
+
+                    const tr = document.createElement('tr');
+                    tr.innerHTML = `
+                        <td><strong>${item.nome}</strong></td>
+                        <td>${dataRealizadaFormatada}</td>
+                        <td>${dataProximaFormatada}</td>
+                        <td>${statusHtml}</td>
+                        <td>
+                            <button class="btn-acao" onclick="abrirModalPeriodica('${item.id}', '${item.nome}')">
+                                Registrar
+                            </button>
+                        </td>
+                    `;
+                    tabela.appendChild(tr);
+                });
+            });
+        }
+
+        window.abrirModalPeriodica = function(id, nome) {
+            document.getElementById('modalIdManutencao').value = id;
+            document.getElementById('modalNomeManutencao').value = nome;
+            document.getElementById('modalTitulo').innerText = `Registrar: ${nome}`;
+            
+            // Limpa os campos de data
+            document.getElementById('modalDataRealizada').value = '';
+            document.getElementById('modalDataProxima').value = '';
+
+            document.getElementById('modalPeriodica').style.display = 'flex';
+        };
+
+        document.getElementById('btnFecharModal').addEventListener('click', () => {
+            document.getElementById('modalPeriodica').style.display = 'none';
+        });
+
+        document.getElementById('formAtualizarPeriodica').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const btnSalvar = document.getElementById('btnSalvarPeriodica');
+            btnSalvar.disabled = true;
+            btnSalvar.innerText = "Salvando...";
+
+            const idDoc = document.getElementById('modalIdManutencao').value;
+            const nomeManutencao = document.getElementById('modalNomeManutencao').value;
+            const dataRealizada = document.getElementById('modalDataRealizada').value;
+            const dataProxima = document.getElementById('modalDataProxima').value;
+
+            try {
+                const docRef = doc(db, 'manutencoes_periodicas', idDoc);
+                
+                // Usamos setDoc com { merge: true } para criar o documento caso não exista, ou atualizar se existir
+                await setDoc(docRef, {
+                    nome: nomeManutencao,
+                    data_realizada: dataRealizada,
+                    data_proxima: dataProxima,
+                    ultima_atualizacao: serverTimestamp()
+                }, { merge: true });
+
+                document.getElementById('modalPeriodica').style.display = 'none';
+                alert('Manutenção periódica atualizada com sucesso!');
+            } catch (error) {
+                console.error("Erro ao salvar manutenção periódica: ", error);
+                alert("Erro ao salvar. Tente novamente.");
+            } finally {
+                btnSalvar.disabled = false;
+                btnSalvar.innerText = "Salvar Registros";
+            }
+        });
+
+
+        // ==========================================
+        // LÓGICA: MANUTENÇÕES PONTUAIS E PATRIMÔNIO
+        // ==========================================
+        async function carregarItensPatrimonio() {
+            const selectPatrimonio = document.getElementById('selectPatrimonio');
+            try {
+                const q = query(collection(db, "patrimonio"), where("status", "==", "ativo"));
+                const querySnapshot = await getDocs(q);
+                
+                querySnapshot.forEach((docSnap) => {
+                    const dados = docSnap.data();
+                    const option = document.createElement('option');
+                    option.value = docSnap.id; // Guardamos o ID do documento
+                    option.text = `${dados.codigo_etiqueta} - ${dados.nome_item}`;
+                    // Guardamos o nome completo em um dataset para facilitar na hora de salvar na tabela de manutenções
+                    option.dataset.nomeCompleto = `${dados.codigo_etiqueta} - ${dados.nome_item}`; 
+                    selectPatrimonio.appendChild(option);
+                });
+            } catch (error) {
+                console.error("Erro ao carregar itens de patrimônio para o select:", error);
+            }
+        }
+
+        document.getElementById('form-manutencao-pontual').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const btnSalvar = document.getElementById('btnSalvarPontual');
+            btnSalvar.disabled = true;
+            btnSalvar.innerText = "Registrando...";
+
+            const dataRealizacao = document.getElementById('dataRealizacaoPontual').value;
+            const idItemPatrimonio = document.getElementById('selectPatrimonio').value;
+            const descricao = document.getElementById('descricaoManutencao').value;
+
+            // Pega o texto da option selecionada para salvar no log de manutenção
+            let nomeItemVinculado = "Nenhum (Manutenção Geral)";
+            if (idItemPatrimonio !== "") {
+                const selectElement = document.getElementById('selectPatrimonio');
+                nomeItemVinculado = selectElement.options[selectElement.selectedIndex].dataset.nomeCompleto;
+            }
+
+            try {
+                // 1. Salva o registro na coleção geral de manutenções pontuais
+                await addDoc(collection(db, "manutencoes_pontuais"), {
+                    data_realizacao: dataRealizacao,
+                    id_patrimonio_vinculado: idItemPatrimonio,
+                    nome_patrimonio_vinculado: nomeItemVinculado,
+                    descricao: descricao,
+                    data_registro: serverTimestamp()
+                });
+
+                // 2. Se houver um item de patrimônio vinculado, insere no array de histórico do próprio item
+                if (idItemPatrimonio !== "") {
+                    const patrimonioRef = doc(db, "patrimonio", idItemPatrimonio);
+                    await updateDoc(patrimonioRef, {
+                        historico_manutencoes: arrayUnion({
+                            data: dataRealizacao,
+                            descricao: descricao
+                        })
+                    });
+                }
+
+                document.getElementById('form-manutencao-pontual').reset();
+                alert("Manutenção pontual registrada com sucesso!");
+
+            } catch (error) {
+                console.error("Erro ao registrar manutenção pontual: ", error);
+                alert("Erro ao registrar. Verifique o console.");
+            } finally {
+                btnSalvar.disabled = false;
+                btnSalvar.innerText = "Registrar Manutenção";
+            }
+        });
+
+        function carregarManutencoesPontuais() {
+            const pontuaisRef = collection(db, 'manutencoes_pontuais');
+            const q = query(pontuaisRef, orderBy('data_realizacao', 'desc'), limit(10));
+
+            onSnapshot(q, (snapshot) => {
+                const tabela = document.getElementById('tabela-pontuais');
+                tabela.innerHTML = '';
+
+                if (snapshot.empty) {
+                    tabela.innerHTML = '<tr><td colspan="3" style="text-align: center; color: #7f8c8d;">Nenhum registro encontrado.</td></tr>';
+                    return;
+                }
+
+                snapshot.forEach((docSnap) => {
+                    const dados = docSnap.data();
+                    const tr = document.createElement('tr');
+                    tr.innerHTML = `
+                        <td>${formatarData(dados.data_realizacao)}</td>
+                        <td>${dados.nome_patrimonio_vinculado}</td>
+                        <td>${dados.descricao}</td>
+                    `;
+                    tabela.appendChild(tr);
+                });
+            }, (error) => {
+                console.error("Erro ao buscar histórico de pontuais:", error);
+            });
+        }
+
+        // Função utilitária para formatar data (YYYY-MM-DD para DD/MM/YYYY)
+        function formatarData(dataString) {
+            if (!dataString) return "";
+            const partes = dataString.split('-');
+            if (partes.length !== 3) return dataString;
+            return `${partes[2]}/${partes[1]}/${partes[0]}`;
+        }
+    </script>
+</body>
+</html>

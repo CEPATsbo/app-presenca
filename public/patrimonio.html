@@ -1,0 +1,520 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gestão de Patrimônio - C.E. Paulo de Tarso</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: #f4f6f9;
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        .header {
+            width: 100%;
+            max-width: 1100px;
+            margin-bottom: 30px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding-bottom: 15px;
+            border-bottom: 1px solid #e0e0e0;
+        }
+        .header-content {
+            text-align: left;
+        }
+        .header-content h1 {
+            color: #2c3e50;
+            margin: 0;
+        }
+        .header-content p {
+            color: #7f8c8d;
+            margin-top: 5px;
+            margin-bottom: 0;
+        }
+        .btn-voltar {
+            background-color: #7f8c8d;
+            color: white;
+            padding: 10px 18px;
+            border-radius: 8px;
+            text-decoration: none;
+            font-weight: bold;
+            font-size: 0.9em;
+            white-space: nowrap;
+        }
+
+        #loading-message {
+            color: #7f8c8d;
+            font-size: 1.2em;
+            margin-top: 50px;
+        }
+
+        .main-container {
+            width: 100%;
+            max-width: 1100px;
+            display: none; /* Exibido pelo JS após verificar login */
+            gap: 30px;
+            flex-direction: column;
+        }
+
+        .section-card {
+            background-color: white;
+            border-radius: 12px;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.08);
+            padding: 30px;
+            width: 100%;
+            box-sizing: border-box;
+        }
+        .section-title {
+            color: #34495e;
+            margin-top: 0;
+            margin-bottom: 20px;
+            font-size: 1.5em;
+            border-bottom: 2px solid #f4f6f9;
+            padding-bottom: 10px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        /* Formulário */
+        .form-row {
+            display: flex;
+            gap: 15px;
+            margin-bottom: 15px;
+        }
+        .form-group {
+            flex: 1;
+        }
+        .form-group label {
+            display: block;
+            margin-bottom: 5px;
+            color: #2c3e50;
+            font-weight: bold;
+        }
+        .form-control {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #bdc3c7;
+            border-radius: 6px;
+            font-size: 1em;
+            box-sizing: border-box;
+            font-family: inherit;
+        }
+        .btn-salvar {
+            background-color: #3f51b5;
+            color: white;
+            border: none;
+            padding: 12px 20px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 1em;
+            font-weight: bold;
+            width: 100%;
+            margin-top: 10px;
+        }
+        .btn-salvar:hover {
+            background-color: #303f9f;
+        }
+        .btn-salvar:disabled {
+            background-color: #9fa8da;
+            cursor: not-allowed;
+        }
+
+        /* Abas / Controle da Tabela */
+        .tab-container {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+        .tab-btn {
+            background-color: #ecf0f1;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: bold;
+            color: #7f8c8d;
+        }
+        .tab-btn.active {
+            background-color: #34495e;
+            color: white;
+        }
+
+        /* Tabelas */
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 20px;
+        }
+        table th, table td {
+            padding: 12px 15px;
+            text-align: left;
+            border-bottom: 1px solid #e0e0e0;
+        }
+        table th {
+            background-color: #f8f9fa;
+            color: #2c3e50;
+            font-weight: bold;
+        }
+        table tbody tr:hover {
+            background-color: #f1f2f6;
+        }
+
+        .etiqueta-badge {
+            background-color: #e8eaf6;
+            color: #3f51b5;
+            padding: 5px 10px;
+            border-radius: 6px;
+            font-family: monospace;
+            font-size: 1.1em;
+            font-weight: bold;
+            border: 1px solid #c5cae9;
+        }
+
+        .btn-acao {
+            border: none;
+            padding: 6px 12px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 0.9em;
+            font-weight: bold;
+            color: white;
+        }
+        .btn-baixa { background-color: #e74c3c; }
+        .btn-baixa:hover { background-color: #c0392b; }
+        
+        .btn-reativar { background-color: #2ecc71; }
+        .btn-reativar:hover { background-color: #27ae60; }
+        
+        .btn-info { background-color: #3498db; }
+        .btn-info:hover { background-color: #2980b9; }
+
+        .tabela-oculta {
+            display: none;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="header">
+        <div class="header-content">
+            <h1>Gestão de Patrimônio</h1>
+            <p>Cadastre novos itens, emita códigos e gerencie o acervo da casa.</p>
+        </div>
+        <a href="/manutencao-patrimonio.html" class="btn-voltar">&lt; Voltar</a>
+    </div>
+
+    <div id="loading-message">Carregando dados e verificando permissões...</div>
+
+    <div id="main-content" class="main-container">
+
+        <!-- Formulário de Cadastro -->
+        <div class="section-card">
+            <h2 class="section-title">
+                <span><i class="fas fa-plus-circle" style="color: #2ecc71; margin-right: 10px;"></i> Cadastrar Novo Patrimônio</span>
+            </h2>
+            
+            <form id="form-cadastro-patrimonio">
+                <div class="form-row">
+                    <div class="form-group" style="flex: 1;">
+                        <label for="inputNomeItem">Nome do Item</label>
+                        <input type="text" id="inputNomeItem" class="form-control" placeholder="Ex: Cadeira de Escritório Giratória" required>
+                    </div>
+                </div>
+                
+                <div class="form-group">
+                    <label for="inputDescricaoItem">Descrição / Observações / Localização</label>
+                    <textarea id="inputDescricaoItem" class="form-control" rows="2" placeholder="Ex: Cor preta, braços ajustáveis. Fica na sala da diretoria." required></textarea>
+                </div>
+
+                <button type="submit" class="btn-salvar" id="btnSalvarPatrimonio">Salvar e Gerar Etiqueta CEPAT</button>
+            </form>
+        </div>
+
+        <!-- Listagem de Patrimônio -->
+        <div class="section-card">
+            <h2 class="section-title">
+                <span><i class="fas fa-boxes" style="color: #3f51b5; margin-right: 10px;"></i> Acervo Cadastrado</span>
+            </h2>
+
+            <div class="tab-container">
+                <button class="tab-btn active" id="btnTabAtivos">Itens Ativos</button>
+                <button class="tab-btn" id="btnTabBaixados">Itens Baixados (Inativos)</button>
+            </div>
+
+            <!-- Tabela de Itens Ativos -->
+            <div id="container-ativos">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Código</th>
+                            <th>Nome do Item</th>
+                            <th>Data Cadastro</th>
+                            <th>Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tabela-ativos">
+                        <!-- Preenchido via JS -->
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- Tabela de Itens Baixados -->
+            <div id="container-baixados" class="tabela-oculta">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Código</th>
+                            <th>Nome do Item</th>
+                            <th>Data da Baixa</th>
+                            <th>Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tabela-baixados">
+                        <!-- Preenchido via JS -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+    </div>
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
+        import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-auth.js";
+        import { getFirestore, doc, collection, runTransaction, serverTimestamp, onSnapshot, query, where, orderBy, updateDoc } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
+
+        const firebaseConfig = {
+            apiKey: "AIzaSyBV7RPjk3cFTqL-aIpflJcUojKg1ZXMLuU",
+            authDomain: "voluntarios-ativos---cepat.firebaseapp.com",
+            projectId: "voluntarios-ativos---cepat",
+            storageBucket: "voluntarios-ativos---cepat.firebasestorage.app",
+            messagingSenderId: "66122858261",
+            appId: "1:66122858261:web:7fa21f1805463b5c08331c"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+        const db = getFirestore(app);
+
+        const rolesPermitidas = ['super-admin', 'diretor', 'tesoureiro', 'conselheiro'];
+
+        onAuthStateChanged(auth, (user) => {
+            if (user) {
+                user.getIdTokenResult(true).then((idTokenResult) => {
+                    const claims = idTokenResult.claims || {};
+                    const userRole = claims.role || 'voluntario';
+                    
+                    const temAcessoPeloRole = rolesPermitidas.includes(userRole);
+                    const temAcessoPeloClaim = rolesPermitidas.some(role => claims[role] === true);
+
+                    if (temAcessoPeloRole || temAcessoPeloClaim) {
+                        document.getElementById('loading-message').style.display = 'none';
+                        document.getElementById('main-content').style.display = 'flex';
+                        
+                        inicializarTabelas();
+                    } else {
+                        alert("Acesso Negado.");
+                        window.location.href = '/manutencao-patrimonio.html';
+                    }
+                }).catch(error => console.error(error));
+            } else {
+                window.location.href = '/login.html';
+            }
+        });
+
+        // ==========================================
+        // LÓGICA DE INTERFACE: ABAS
+        // ==========================================
+        const btnTabAtivos = document.getElementById('btnTabAtivos');
+        const btnTabBaixados = document.getElementById('btnTabBaixados');
+        const containerAtivos = document.getElementById('container-ativos');
+        const containerBaixados = document.getElementById('container-baixados');
+
+        btnTabAtivos.addEventListener('click', () => {
+            btnTabAtivos.classList.add('active');
+            btnTabBaixados.classList.remove('active');
+            containerAtivos.classList.remove('tabela-oculta');
+            containerBaixados.classList.add('tabela-oculta');
+        });
+
+        btnTabBaixados.addEventListener('click', () => {
+            btnTabBaixados.classList.add('active');
+            btnTabAtivos.classList.remove('active');
+            containerBaixados.classList.remove('tabela-oculta');
+            containerAtivos.classList.add('tabela-oculta');
+        });
+
+        // ==========================================
+        // LÓGICA DE BANCO: CADASTRO COM TRANSAÇÃO
+        // ==========================================
+        document.getElementById('form-cadastro-patrimonio').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const btnSalvar = document.getElementById('btnSalvarPatrimonio');
+            btnSalvar.disabled = true;
+            btnSalvar.innerText = "Gerando Código CEPAT...";
+
+            const nome = document.getElementById('inputNomeItem').value;
+            const descricao = document.getElementById('inputDescricaoItem').value;
+
+            try {
+                const referenciaContador = doc(db, "contadores", "patrimonio");
+                const referenciaNovoItem = doc(collection(db, "patrimonio"));
+
+                const codigoGerado = await runTransaction(db, async (transacao) => {
+                    const documentoContador = await transacao.get(referenciaContador);
+                    let proximoNumero = 1;
+
+                    if (documentoContador.exists()) {
+                        const dadosDoContador = documentoContador.data();
+                        proximoNumero = (dadosDoContador.numero_atual || 0) + 1;
+                    } else {
+                        transacao.set(referenciaContador, { numero_atual: 0 });
+                    }
+
+                    transacao.update(referenciaContador, { numero_atual: proximoNumero });
+
+                    const numeroFormatado = proximoNumero.toString().padStart(4, "0");
+                    const codigoDaEtiquetaFinal = `CEPAT-${numeroFormatado}`;
+
+                    transacao.set(referenciaNovoItem, {
+                        codigo_etiqueta: codigoDaEtiquetaFinal,
+                        nome_item: nome,
+                        descricao: descricao,
+                        status: "ativo",
+                        data_cadastro: serverTimestamp(),
+                        data_baixa: null,
+                        historico_manutencoes: []
+                    });
+
+                    return codigoDaEtiquetaFinal;
+                });
+
+                alert(`Item cadastrado com sucesso! Código gerado: ${codigoGerado}`);
+                document.getElementById('form-cadastro-patrimonio').reset();
+
+            } catch (error) {
+                console.error("Erro na transação de patrimônio: ", error);
+                alert("Ocorreu um erro ao salvar o item. Tente novamente.");
+            } finally {
+                btnSalvar.disabled = false;
+                btnSalvar.innerText = "Salvar e Gerar Etiqueta CEPAT";
+            }
+        });
+
+        // ==========================================
+        // LÓGICA DE BANCO: LEITURA EM TEMPO REAL
+        // ==========================================
+        function inicializarTabelas() {
+            const patrimonioRef = collection(db, 'patrimonio');
+
+            // Listener para itens ATIVOS
+            const qAtivos = query(patrimonioRef, where("status", "==", "ativo"), orderBy("codigo_etiqueta", "desc"));
+            onSnapshot(qAtivos, (snapshot) => {
+                const tabelaAtivos = document.getElementById('tabela-ativos');
+                tabelaAtivos.innerHTML = '';
+                
+                if (snapshot.empty) {
+                    tabelaAtivos.innerHTML = '<tr><td colspan="4" style="text-align: center; color: #7f8c8d;">Nenhum item ativo encontrado.</td></tr>';
+                }
+
+                snapshot.forEach(docSnap => {
+                    const dados = docSnap.data();
+                    const tr = document.createElement('tr');
+                    tr.innerHTML = `
+                        <td><span class="etiqueta-badge">${dados.codigo_etiqueta}</span></td>
+                        <td><strong>${dados.nome_item}</strong><br><small style="color:#7f8c8d;">${dados.descricao}</small></td>
+                        <td>${formatarTimestamp(dados.data_cadastro)}</td>
+                        <td>
+                            <button class="btn-acao btn-baixa" onclick="darBaixaPatrimonio('${docSnap.id}', '${dados.codigo_etiqueta}')" title="Dar Baixa neste item">
+                                <i class="fas fa-arrow-down"></i> Baixar
+                            </button>
+                        </td>
+                    `;
+                    tabelaAtivos.appendChild(tr);
+                });
+            });
+
+            // Listener para itens BAIXADOS
+            const qBaixados = query(patrimonioRef, where("status", "==", "baixado"), orderBy("data_baixa", "desc"));
+            onSnapshot(qBaixados, (snapshot) => {
+                const tabelaBaixados = document.getElementById('tabela-baixados');
+                tabelaBaixados.innerHTML = '';
+
+                if (snapshot.empty) {
+                    tabelaBaixados.innerHTML = '<tr><td colspan="4" style="text-align: center; color: #7f8c8d;">Nenhum item baixado.</td></tr>';
+                }
+
+                snapshot.forEach(docSnap => {
+                    const dados = docSnap.data();
+                    const tr = document.createElement('tr');
+                    tr.innerHTML = `
+                        <td><span class="etiqueta-badge">${dados.codigo_etiqueta}</span></td>
+                        <td><strong>${dados.nome_item}</strong><br><small style="color:#7f8c8d;">${dados.descricao}</small></td>
+                        <td>${formatarTimestamp(dados.data_baixa)}</td>
+                        <td>
+                            <button class="btn-acao btn-reativar" onclick="reativarPatrimonio('${docSnap.id}', '${dados.codigo_etiqueta}')" title="Reativar para o acervo">
+                                <i class="fas fa-undo"></i> Reativar
+                            </button>
+                        </td>
+                    `;
+                    tabelaBaixados.appendChild(tr);
+                });
+            });
+        }
+
+        // ==========================================
+        // LÓGICA DE BANCO: ATUALIZAÇÕES (BAIXA E REATIVAÇÃO)
+        // ==========================================
+        window.darBaixaPatrimonio = async function(docId, codigoItem) {
+            const confirmacao = confirm(`ATENÇÃO: Você tem certeza que deseja dar BAIXA no item ${codigoItem}? Ele será removido do acervo ativo.`);
+            if (!confirmacao) return;
+
+            try {
+                const docRef = doc(db, 'patrimonio', docId);
+                await updateDoc(docRef, {
+                    status: "baixado",
+                    data_baixa: serverTimestamp()
+                });
+            } catch (error) {
+                console.error("Erro ao dar baixa: ", error);
+                alert("Erro ao dar baixa no item.");
+            }
+        };
+
+        window.reativarPatrimonio = async function(docId, codigoItem) {
+            const confirmacao = confirm(`Você deseja REATIVAR o item ${codigoItem} e devolvê-lo ao acervo ativo?`);
+            if (!confirmacao) return;
+
+            try {
+                const docRef = doc(db, 'patrimonio', docId);
+                await updateDoc(docRef, {
+                    status: "ativo",
+                    data_baixa: null // Limpa a data de baixa
+                });
+            } catch (error) {
+                console.error("Erro ao reativar: ", error);
+                alert("Erro ao reativar o item.");
+            }
+        };
+
+        // Função utilitária para formatar Timestamp do Firebase para data legível
+        function formatarTimestamp(timestamp) {
+            if (!timestamp) return "N/A";
+            const data = timestamp.toDate ? timestamp.toDate() : new Date(timestamp);
+            const dia = data.getDate().toString().padStart(2, '0');
+            const mes = (data.getMonth() + 1).toString().padStart(2, '0');
+            const ano = data.getFullYear();
+            return `${dia}/${mes}/${ano}`;
+        }
+    </script>
+</body>
+</html>
