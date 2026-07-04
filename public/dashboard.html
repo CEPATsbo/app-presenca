@@ -85,7 +85,7 @@
             text-align: left;
         }
         
-        #card-ae-warning {
+        #card-ae-warning, #card-manutencao-warning {
              color: #dc3545;
              font-weight: bold;
              margin-top: 5px;
@@ -172,6 +172,13 @@
         <a href="/gerenciar-diretoria.html" class="card" data-role="super-admin,diretor,tesoureiro" style="border-left-color: #9b59b6;">
             <h2>Gestão e Auditoria</h2>
             <p>Convidar diretores, gerenciar cargos e visualizar logs do sistema.</p>
+        </a>
+
+        <a href="/manutencao-patrimonio.html" class="card" id="card-manutencao" data-role="super-admin,diretor,tesoureiro,conselheiro" style="border-left-color: #5D4037;">
+            <h2>Manutenção & Patrimônio</h2>
+            <p>Controle de bens, etiquetas, manutenções periódicas obrigatórias e reparos pontuais.</p>
+            <p id="card-manutencao-warning"></p>
+            <span class="notification-badge" id="card-manutencao-badge">0</span>
         </a>
 
         <a href="/secretaria.html" class="card" data-role="super-admin,diretor,tesoureiro" style="border-left-color: #e74c3c;">
@@ -304,7 +311,7 @@
 
         onAuthStateChanged(auth, (user) => {
             if (user) {
-                // Força o refresh dos Custom Claims para garantir que o cargo 'caritas' seja lido corretamente
+                // Força o refresh dos Custom Claims para garantir que os cargos sejam lidos corretamente
                 user.getIdTokenResult(true).then((idTokenResult) => {
                     const claims = idTokenResult.claims || {};
                     const userRole = claims.role || 'voluntario';
@@ -325,9 +332,16 @@
 
                     document.getElementById('main-content').style.display = 'grid';
 
+                    // Monitoramento Módulo AE
                     const cardAE = document.getElementById('card-assistencia-espiritual');
                     if (cardAE && cardAE.style.display !== 'none') {
                          monitorarEntrevistasPendentes();
+                    }
+
+                    // Monitoramento Módulo Manutenção e Patrimônio
+                    const cardManutencao = document.getElementById('card-manutencao');
+                    if (cardManutencao && cardManutencao.style.display !== 'none') {
+                         monitorarManutencoesPendentes();
                     }
                 });
             } else {
@@ -352,14 +366,14 @@
             );
 
             onSnapshot(qPendentes, (snapshot) => {
-                atualizarCardNotificacao(snapshot.size);
+                atualizarCardNotificacaoAE(snapshot.size);
             }, (error) => {
                 console.error("Erro ao monitorar entrevistas pendentes:", error);
-                atualizarCardNotificacao(0);
+                atualizarCardNotificacaoAE(0);
             });
         }
 
-        function atualizarCardNotificacao(count) {
+        function atualizarCardNotificacaoAE(count) {
             const warning = document.getElementById('card-ae-warning');
             const badge = document.getElementById('card-ae-badge');
 
@@ -367,6 +381,64 @@
 
             if (count > 0) {
                 warning.textContent = `Atenção: ${count} entrevista(s) aguardando preenchimento.`;
+                warning.style.display = 'block';
+                badge.textContent = count;
+                badge.style.display = 'flex';
+            } else {
+                warning.style.display = 'none';
+                badge.style.display = 'none';
+            }
+        }
+
+        // Nova função para monitorar as manutenções obrigatórias
+        function monitorarManutencoesPendentes() {
+            const manutencoesRef = collection(db, 'manutencoes_periodicas');
+
+            // Como as manutenções periódicas são uma coleção pequena (ex: caixa d'água, calha, AVCB), 
+            // trazemos os dados e filtramos a data no frontend para exibir as atrasadas e as próximas de 30 dias.
+            onSnapshot(manutencoesRef, (snapshot) => {
+                let countVencidasOuProximas = 0;
+                
+                const hoje = new Date();
+                const dataLimite = new Date();
+                dataLimite.setDate(hoje.getDate() + 30);
+
+                snapshot.forEach((doc) => {
+                    const dados = doc.data();
+                    
+                    if (dados.data_proxima) {
+                        let dataVencimento;
+
+                        // Verifica se a data foi salva como Timestamp do Firebase ou String 'YYYY-MM-DD'
+                        if (dados.data_proxima.toDate) {
+                            dataVencimento = dados.data_proxima.toDate();
+                        } else {
+                            // Se for salva como input de data HTML, ajustamos o fuso horário
+                            dataVencimento = new Date(dados.data_proxima + 'T00:00:00');
+                        }
+
+                        // Se a data de vencimento for menor ou igual à data limite (+30 dias)
+                        if (dataVencimento <= dataLimite) {
+                            countVencidasOuProximas++;
+                        }
+                    }
+                });
+
+                atualizarCardNotificacaoManutencao(countVencidasOuProximas);
+            }, (error) => {
+                console.error("Erro ao monitorar manutenções pendentes:", error);
+                atualizarCardNotificacaoManutencao(0);
+            });
+        }
+
+        function atualizarCardNotificacaoManutencao(count) {
+            const warning = document.getElementById('card-manutencao-warning');
+            const badge = document.getElementById('card-manutencao-badge');
+
+            if (!warning || !badge) return;
+
+            if (count > 0) {
+                warning.textContent = `Atenção: ${count} manutenção(ões) exige(m) ação (vencendo ou atrasada).`;
                 warning.style.display = 'block';
                 badge.textContent = count;
                 badge.style.display = 'flex';
