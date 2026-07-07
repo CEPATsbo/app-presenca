@@ -95,7 +95,7 @@
     </style>
 </head>
 <body>
-    <nav class="nav-voltar"><a href="/dashboard-ae-interno.html" class="btn-voltar">⬅ Voltar para o Dashboard AE</a></nav>
+    <nav class="nav-voltar"><a href="/dashboard-ae.html" class="btn-voltar">⬅ Voltar para o Dashboard AE</a></nav>
     <div id="acesso-negado" class="container hidden"><h1>Acesso Negado</h1></div>
 
     <div id="bloqueio-temporal" class="container hidden">
@@ -106,7 +106,7 @@
         </div>
     </div>
 
-    <!-- NOVA TELA DE ABERTURA MULTI-DIAS -->
+    <!-- TELA DE ABERTURA MULTI-DIAS -->
     <div id="tela-abertura" class="container hidden">
         <h1>Bem-vindo à Recepção</h1>
         <p style="font-size: 1.2em; color: #555;">Você está acessando o sistema em uma <strong><span id="nome-dia-semana"></span></strong>.</p>
@@ -138,7 +138,7 @@
             <ul id="lista-ativos"><li>Carregando...</li></ul>
         </fieldset>
 
-        <!-- NOVA PRATELEIRA: PASSES AVULSOS -->
+        <!-- PRATELEIRA: PASSES AVULSOS -->
         <fieldset style="margin-top: 20px;">
             <legend>Passes Avulsos de Hoje</legend>
             <ul id="lista-avulsos"><li>Carregando...</li></ul>
@@ -181,12 +181,6 @@
             </div>
         </form>
         <button id="btn-limpar" class="btn btn-secondary" style="margin-top: 20px; width: 100%;">Limpar Busca</button>
-
-        <!-- BOTÃO SAMARITANOS INJETADO AQUI -->
-        <hr style="border: 0; height: 1px; background: #ddd; margin: 25px 0;">
-        <a href="/recepcao-samaritanos.html?origem=ae" class="btn" style="background-color: #e67e22; width: 100%; text-align: center; display: block; box-sizing: border-box; text-decoration: none;">
-            ➕ Encaminhar para Samaritanos (Criar Nova Ficha)
-        </a>
     </div>
 
     <script type="module">
@@ -337,6 +331,8 @@
                 const hojeInicio = new Date(); hojeInicio.setHours(0, 0, 0, 0);
                 const hojeFim = new Date(); hojeFim.setHours(23, 59, 59, 999);
 
+                // Buscamos os avulsos do dia REAL, MAS filtramos no JS se o dia da semana bate
+                // com o dia que estamos simulando no painel admin.
                 const qAvulsos = query(atendimentosRef, 
                     where("tipo", "==", "avulso"), 
                     where("dataAtendimento", ">=", Timestamp.fromDate(hojeInicio)), 
@@ -348,6 +344,12 @@
 
                 const promessas = snapshot.docs.map(async (docSnap) => {
                     const data = docSnap.data();
+                    
+                    // Validação de Dia Simulado vs Real
+                    const dataAtendimentoObj = data.dataAtendimento.toDate();
+                    const diaSemanaAtendimento = dataAtendimentoObj.getDay();
+                    if (diaSemanaAtendimento !== diaTrabalhoAtual) return null; // Ignora se não for o dia simulado
+
                     const assistidoDocRef = doc(db, 'assistidos', data.assistidoId);
                     const assistidoDoc = await getDoc(assistidoDocRef);
                     return assistidoDoc.exists() ? { id: docSnap.id, assistido: { id: assistidoDoc.id, ...assistidoDoc.data() }, passe: data.passeRecomendado } : null;
@@ -723,6 +725,12 @@
                     const atendimentoPreRegistrado = dadosMeta?.atendimentoPreRegistrado;
                     const semanaCalculada = dadosMeta?.semanaAtual || await calcularSemanaAtual(tratamentoAtivoSelecionado.id);
 
+                    // =======================================================================
+                    // CORREÇÃO ZERO RETROCESSO: Variáveis puxadas para o nível correto da função!
+                    // =======================================================================
+                    const dataAtual = serverTimestamp();
+                    const batch = writeBatch(db);
+
                     if (atendimentoPreRegistrado && !isAltaSuspensa) {
                         const temDecisaoValida = atendimentoPreRegistrado.tipo === 'alta_programada' || atendimentoPreRegistrado.passePara;
 
@@ -734,8 +742,6 @@
                         }
 
                         const atendimentoDocRef = doc(db, 'atendimentos_ae', atendimentoPreRegistrado.id);
-                        const dataAtual = serverTimestamp();
-                        const batch = writeBatch(db);
 
                         if (atendimentoPreRegistrado.tipo === 'alta_programada') {
                             batch.update(atendimentoDocRef, { dataAtendimento: dataAtual });
@@ -812,7 +818,7 @@
                         await registrarLog('Cancelamento de Registro (AE)', { assistidoId: assistidoSelecionado.id });
                         ui.painelAcoesFrequencia.classList.add('hidden');
                         await carregarTratamentosAtivos();
-                        await carregarAvulsosDeHoje(); // Atualiza a lista de avulsos também
+                        await carregarAvulsosDeHoje();
                     } else {
                         alert("Nenhum registro encontrado hoje, ou a operação foi bloqueada por segurança.");
                     }
@@ -995,7 +1001,7 @@
                         await registrarLog('Cancelamento de Registro (AE)', { assistidoId: assistidoSelecionado.id });
                         resetarFormularioBusca();
                         await carregarTratamentosAtivos();
-                        await carregarAvulsosDeHoje(); // Atualiza avulsos após busca
+                        await carregarAvulsosDeHoje();
                     } else {
                         alert("Nenhum registro encontrado hoje, ou a operação foi bloqueada por segurança.");
                     }
@@ -1015,7 +1021,7 @@
                     await batch.commit(); alert('Passe avulso registrado e enviado para a fila!');
                     await registrarLog('Registro de Passe Avulso (AE)', { assistidoId: assistidoId, assistidoNome: nomeAssistido, passeRecomendado: passeAvulso });
                     resetarFormularioBusca();
-                    await carregarAvulsosDeHoje(); // Chama função para atualizar lista na hora
+                    await carregarAvulsosDeHoje();
                 } catch(error) { console.error("Erro ao registrar passe avulso:", error); e.target.disabled = false; }
             });
 
@@ -1042,7 +1048,7 @@
 
             resetarFormularioBusca();
             carregarTratamentosAtivos();
-            carregarAvulsosDeHoje(); // Chama ao carregar a página
+            carregarAvulsosDeHoje();
             
             monitorarAndamentoFila();
         }
