@@ -115,7 +115,7 @@
 
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
-        import { getFirestore, collection, onSnapshot, addDoc, deleteDoc, doc, getDoc, getDocs, orderBy, query, serverTimestamp, updateDoc, where } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
+        import { getFirestore, collection, onSnapshot, addDoc, deleteDoc, doc, getDoc, orderBy, query, serverTimestamp, updateDoc } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
         import { getFunctions, httpsCallable } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-functions.js";
         import { protegerPagina } from './auth.js';
         
@@ -207,7 +207,6 @@
             };
             let currentEditingId = null;
             
-            // Garantindo que lemos os cargos como array (compatibilidade com claims antigas)
             const userRoles = user.claims.roles || (user.claims.role ? [user.claims.role] : []);
 
             if (userRoles.includes('super-admin') || userRoles.includes('diretor')) {
@@ -231,12 +230,18 @@
             
             async function carregarVoluntarios() {
                 const anoVigente = new Date().getFullYear();
-                
                 const q = query(voluntariosCollection, orderBy("nome"));
-                onSnapshot(q, async (snapshot) => {
-                    const queryConselheiros = query(voluntariosCollection, where("roles", "array-contains", "conselheiro"));
-                    const conselheirosSnapshot = await getDocs(queryConselheiros);
-                    const totalConselheiros = conselheirosSnapshot.size;
+                
+                onSnapshot(q, (snapshot) => {
+                    // Contagem local de conselheiros para evitar consultas separadas e lidar com dados legados
+                    let totalConselheiros = 0;
+                    snapshot.forEach(docSnap => {
+                        const data = docSnap.data();
+                        const r = data.roles || (data.role ? [data.role] : []);
+                        if (r.includes('conselheiro')) {
+                            totalConselheiros++;
+                        }
+                    });
 
                     ui.tituloLista.textContent = `Lista de Voluntários Cadastrados (TOTAL = ${snapshot.size}) | Conselheiros Ativos: ${totalConselheiros}/5`;
                     ui.listaUl.innerHTML = '';
@@ -258,7 +263,6 @@
                         
                         let tagMedium = v.isMedium ? '<span class="tag-medium">Médium</span>' : '';
 
-                        // Normalização para o novo formato de múltiplos cargos
                         const rolesAtuais = v.roles || (v.role ? [v.role] : []);
                         let botoesPromocao = '';
                         
@@ -340,7 +344,6 @@
                             botaoCracha = `<button data-codigo="${v.codigoVoluntario}" data-nome-cracha="${v.nomeParaCracha}" class="btn-gerar-cracha">Gerar Crachá</button>`;
                         }
 
-                        // Formatação visual da lista de cargos
                         const labelCargos = rolesAtuais.length > 0 ? rolesAtuais.join(', ') : 'voluntário';
 
                         li.innerHTML = `
@@ -396,7 +399,7 @@
                         statusVoluntario: 'ativo', 
                         ultimaPresenca: null, 
                         tasvAssinadoAno: null,
-                        roles: [], // Inicializado como array vazio
+                        roles: [],
                         criadoEm: serverTimestamp() 
                     };
 
