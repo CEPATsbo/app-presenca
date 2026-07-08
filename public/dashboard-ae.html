@@ -69,20 +69,17 @@
 
     <div id="main-content" class="card-container">
         
-        <!-- CARD ASSISTÊNCIA ESPIRITUAL (AGRUPA OS OUTROS 4) -->
-        <a href="/dashboard-ae-interno.html" class="card" data-role="super-admin,diretor,entrevistador,recepcionista" style="border-left-color: #3498db;">
+        <a href="/dashboard-ae-interno.html" class="card" data-role="super-admin,entrevistador,recepcionista" style="border-left-color: #3498db;">
             <h2>Assistência Espiritual</h2>
             <p>Acessar a Recepção, Encaminhamento, Arquivo e Painel de TV.</p>
         </a>
 
-        <!-- CARD VINHA DE LUZ -->
-        <a href="/dashboard-vl.html" class="card" data-role="super-admin,diretor,entrevistador,recepcionista" style="border-left-color: #8e44ad;">
+        <a href="/dashboard-vl.html" class="card" data-role="super-admin,entrevistador,recepcionista" style="border-left-color: #8e44ad;">
             <h2 id="card-vl-titulo">Vinha de Luz</h2>
             <p id="card-vl-status">Gerenciar o fluxo de atendimento do trabalho de Cura.</p>
         </a>
 
-        <!-- CARD SAMARITANOS -->
-        <a href="/dashboard-samaritanos.html" class="card" data-role="super-admin,diretor,entrevistador,recepcionista" style="border-left-color: #e67e22;">
+        <a href="/dashboard-samaritanos.html" class="card" data-role="super-admin,entrevistador,recepcionista" style="border-left-color: #e67e22;">
             <h2 id="card-sam-titulo">Samaritanos</h2>
             <p id="card-sam-status">Gerenciar a fila e fichas de Assistência à Distância.</p>
         </a>
@@ -108,11 +105,16 @@
         onAuthStateChanged(auth, (user) => {
             if (user) {
                 user.getIdTokenResult(true).then((idTokenResult) => {
-                    const userRole = idTokenResult.claims.role || 'voluntario';
+                    const claims = idTokenResult.claims || {};
+                    // Lê a lista de cargos, com fallback para o sistema antigo
+                    const userRoles = claims.roles || (claims.role ? [claims.role] : ['voluntario']);
                     
                     document.querySelectorAll('.card').forEach(card => {
                         const rolesPermitidas = card.dataset.role.split(',');
-                        if (rolesPermitidas.includes(userRole)) {
+                        // Verifica se o usuário tem algum dos cargos permitidos ou se é super-admin
+                        const temAcessoPeloRole = userRoles.includes('super-admin') || rolesPermitidas.some(rolePermitida => userRoles.includes(rolePermitida));
+                        
+                        if (temAcessoPeloRole) {
                             card.style.display = 'block'; 
                         } else {
                             card.style.display = 'none';
@@ -126,6 +128,8 @@
                     onSnapshot(qPendentesVl, (snapshot) => {
                         const totalPendentesVl = snapshot.size;
                         const cardVl = document.querySelector('a[href="/dashboard-vl.html"]');
+                        if (!cardVl) return;
+                        
                         let alertaVl = cardVl.querySelector('.alerta-pendencia');
                         
                         if (totalPendentesVl > 0) {
@@ -139,6 +143,8 @@
                         } else if (alertaVl) {
                             alertaVl.remove();
                         }
+                    }, (error) => {
+                        console.error("Sem permissão para ler atendimentos VL:", error);
                     });
                     // ------------------------------------------------
 
@@ -149,6 +155,8 @@
                     onSnapshot(qPendentesSam, (snapshot) => {
                         const totalPendentesSam = snapshot.size;
                         const cardSam = document.querySelector('a[href="/dashboard-samaritanos.html"]');
+                        if (!cardSam) return;
+                        
                         let alertaSam = cardSam.querySelector('.alerta-pendencia');
                         
                         if (totalPendentesSam > 0) {
@@ -162,6 +170,8 @@
                         } else if (alertaSam) {
                             alertaSam.remove();
                         }
+                    }, (error) => {
+                        console.error("Sem permissão para ler atendimentos Samaritanos:", error);
                     });
                     // ------------------------------------------------
 
