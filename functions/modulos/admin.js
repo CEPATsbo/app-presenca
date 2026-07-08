@@ -44,27 +44,55 @@ async function enviarNotificacoesParaTodos(titulo, corpo) {
     return { successCount, failureCount, totalCount: inscricoesSnapshot.size };
 }
 
-const promoverUsuario = async (uid, novoPapel) => {
+// LÓGICA ATUALIZADA PARA MÚLTIPLOS CARGOS (ARRAY)
+const gerenciarPapel = async (uid, novoPapel, acao) => {
     if (!uid) throw new HttpsError('invalid-argument', 'UID não fornecido.');
     
-    let claims = { role: novoPapel };
-    if (['dirigente-escola', 'secretario-escola', 'facilitador'].includes(novoPapel)) {
-        claims[novoPapel.replace('-', '_')] = true;
-        if (['dirigente-escola', 'secretario-escola'].includes(novoPapel)) claims['facilitador'] = true;
-    } else if (novoPapel === 'voluntario') { 
-        claims = { role: 'voluntario' }; 
+    // 1. Busca os claims atuais do usuário no Auth
+    const userRecord = await admin.auth().getUser(uid);
+    let claims = userRecord.customClaims || {};
+    
+    // 2. Lê a lista atual (e converte do formato antigo, se necessário)
+    let roles = claims.roles || (claims.role ? [claims.role] : []);
+    
+    // 3. Adiciona ou remove da lista
+    if (acao === 'adicionar') {
+        if (!roles.includes(novoPapel)) roles.push(novoPapel);
+        
+        // Mantém as flags legadas para a escola, se você ainda usá-las em algum lugar antigo
+        if (['dirigente-escola', 'secretario-escola', 'facilitador'].includes(novoPapel)) {
+            claims[novoPapel.replace('-', '_')] = true;
+            if (['dirigente-escola', 'secretario-escola'].includes(novoPapel)) claims['facilitador'] = true;
+        }
+    } else if (acao === 'remover') {
+        roles = roles.filter(r => r !== novoPapel);
+        
+        // Remove as flags legadas
+        if (['dirigente-escola', 'secretario-escola', 'facilitador'].includes(novoPapel)) {
+            delete claims[novoPapel.replace('-', '_')];
+        }
     }
     
-    // Atualiza Claims no Auth
+    // 4. Limpa a string legada e salva a nova lista
+    delete claims.role;
+    claims.roles = roles;
+    
     await admin.auth().setCustomUserClaims(uid, claims);
     
-    // Sincroniza papel no Firestore
+    // 5. Sincroniza no Firestore usando ArrayUnion ou ArrayRemove
     const userQuery = await db.collection('voluntarios').where('authUid', '==', uid).limit(1).get();
     if (!userQuery.empty) {
-        await userQuery.docs[0].ref.update({ role: novoPapel });
-        return { message: `Usuário atualizado para ${novoPapel} com sucesso!`, success: true };
+        const operacaoBD = acao === 'adicionar' 
+            ? admin.firestore.FieldValue.arrayUnion(novoPapel) 
+            : admin.firestore.FieldValue.arrayRemove(novoPapel);
+            
+        await userQuery.docs[0].ref.update({ roles: operacaoBD });
+        
+        const textoAcao = acao === 'adicionar' ? 'atribuído' : 'revogado';
+        return { message: `Cargo '${novoPapel}' ${textoAcao} com sucesso!`, success: true };
     }
-    return { message: "Papel atualizado no Auth, mas documento de voluntário não encontrado para sincronizar.", success: true };
+    
+    return { message: "Papel atualizado no Auth, mas documento de voluntário não encontrado para sincronizar no BD.", success: true };
 };
 
 // --- EXPORTAÇÕES (ROBÓS ADMIN) ---
@@ -73,36 +101,46 @@ const definirSuperAdmin = onRequest(OPCOES_FUNCAO, async (req, res) => {
     const email = req.query.email;
     try {
         const user = await admin.auth().getUserByEmail(email);
-        await admin.auth().setCustomUserClaims(user.uid, { role: 'super-admin' });
+        
+        let claims = user.customClaims || {};
+        let roles = claims.roles || (claims.role ? [claims.role] : []);
+        if (!roles.includes('super-admin')) roles.push('super-admin');
+        delete claims.role;
+        claims.roles = roles;
+        
+        await admin.auth().setCustomUserClaims(user.uid, claims);
+        
         const snapshot = await db.collection('voluntarios').where('authUid', '==', user.uid).get();
-        if (!snapshot.empty) await snapshot.docs[0].ref.update({ role: 'super-admin' });
+        if (!snapshot.empty) {
+            await snapshot.docs[0].ref.update({ roles: admin.firestore.FieldValue.arrayUnion('super-admin') });
+        }
         return res.status(200).send(`Sucesso! ${email} é Super Admin.`);
     } catch (e) { return res.status(500).send(e.message); }
 });
 
-// PROMOÇÕES (Ajustado para retornar o campo 'message')
-const promoverParaDiretor = onCall(OPCOES_FUNCAO, async (req) => { return await promoverUsuario(req.data.uid, 'diretor'); });
-const promoverParaTesoureiro = onCall(OPCOES_FUNCAO, async (req) => { return await promoverUsuario(req.data.uid, 'tesoureiro'); });
-const promoverParaConselheiro = onCall(OPCOES_FUNCAO, async (req) => { return await promoverUsuario(req.data.uid, 'conselheiro'); });
-const promoverParaProdutorEvento = onCall(OPCOES_FUNCAO, async (req) => { return await promoverUsuario(req.data.uid, 'produtor-evento'); });
-const promoverParaIrradiador = onCall(OPCOES_FUNCAO, async (req) => { return await promoverUsuario(req.data.uid, 'irradiador'); });
-const promoverParaBibliotecario = onCall(OPCOES_FUNCAO, async (req) => { return await promoverUsuario(req.data.uid, 'bibliotecario'); });
-const promoverParaRecepcionista = onCall(OPCOES_FUNCAO, async (req) => { return await promoverUsuario(req.data.uid, 'recepcionista'); });
-const promoverParaEntrevistador = onCall(OPCOES_FUNCAO, async (req) => { return await promoverUsuario(req.data.uid, 'entrevistador'); });
-const promoverParaDirigenteEscola = onCall(OPCOES_FUNCAO, async (req) => { return await promoverUsuario(req.data.uid, 'dirigente-escola'); });
-const promoverParaSecretarioEscola = onCall(OPCOES_FUNCAO, async (req) => { return await promoverUsuario(req.data.uid, 'secretario-escola'); });
+// PROMOÇÕES (Usando a nova função gerenciarPapel com 'adicionar')
+const promoverParaDiretor = onCall(OPCOES_FUNCAO, async (req) => { return await gerenciarPapel(req.data.uid, 'diretor', 'adicionar'); });
+const promoverParaTesoureiro = onCall(OPCOES_FUNCAO, async (req) => { return await gerenciarPapel(req.data.uid, 'tesoureiro', 'adicionar'); });
+const promoverParaConselheiro = onCall(OPCOES_FUNCAO, async (req) => { return await gerenciarPapel(req.data.uid, 'conselheiro', 'adicionar'); });
+const promoverParaProdutorEvento = onCall(OPCOES_FUNCAO, async (req) => { return await gerenciarPapel(req.data.uid, 'produtor-evento', 'adicionar'); });
+const promoverParaIrradiador = onCall(OPCOES_FUNCAO, async (req) => { return await gerenciarPapel(req.data.uid, 'irradiador', 'adicionar'); });
+const promoverParaBibliotecario = onCall(OPCOES_FUNCAO, async (req) => { return await gerenciarPapel(req.data.uid, 'bibliotecario', 'adicionar'); });
+const promoverParaRecepcionista = onCall(OPCOES_FUNCAO, async (req) => { return await gerenciarPapel(req.data.uid, 'recepcionista', 'adicionar'); });
+const promoverParaEntrevistador = onCall(OPCOES_FUNCAO, async (req) => { return await gerenciarPapel(req.data.uid, 'entrevistador', 'adicionar'); });
+const promoverParaDirigenteEscola = onCall(OPCOES_FUNCAO, async (req) => { return await gerenciarPapel(req.data.uid, 'dirigente-escola', 'adicionar'); });
+const promoverParaSecretarioEscola = onCall(OPCOES_FUNCAO, async (req) => { return await gerenciarPapel(req.data.uid, 'secretario-escola', 'adicionar'); });
 
-// REVOGAÇÕES (Ajustado para retornar o campo 'message')
-const revogarAcessoDiretor = onCall(OPCOES_FUNCAO, async (req) => { return await promoverUsuario(req.data.uid, 'voluntario'); });
-const revogarAcessoTesoureiro = onCall(OPCOES_FUNCAO, async (req) => { return await promoverUsuario(req.data.uid, 'voluntario'); });
-const revogarAcessoConselheiro = onCall(OPCOES_FUNCAO, async (req) => { return await promoverUsuario(req.data.uid, 'voluntario'); });
-const revogarAcessoProdutorEvento = onCall(OPCOES_FUNCAO, async (req) => { return await promoverUsuario(req.data.uid, 'voluntario'); });
-const revogarAcessoIrradiador = onCall(OPCOES_FUNCAO, async (req) => { return await promoverUsuario(req.data.uid, 'voluntario'); });
-const revogarAcessoBibliotecario = onCall(OPCOES_FUNCAO, async (req) => { return await promoverUsuario(req.data.uid, 'voluntario'); });
-const revogarAcessoRecepcionista = onCall(OPCOES_FUNCAO, async (req) => { return await promoverUsuario(req.data.uid, 'voluntario'); });
-const revogarAcessoEntrevistador = onCall(OPCOES_FUNCAO, async (req) => { return await promoverUsuario(req.data.uid, 'voluntario'); });
-const revogarAcessoDirigenteEscola = onCall(OPCOES_FUNCAO, async (req) => { return await promoverUsuario(req.data.uid, 'voluntario'); });
-const revogarAcessoSecretarioEscola = onCall(OPCOES_FUNCAO, async (req) => { return await promoverUsuario(req.data.uid, 'voluntario'); });
+// REVOGAÇÕES (Usando a nova função gerenciarPapel com 'remover')
+const revogarAcessoDiretor = onCall(OPCOES_FUNCAO, async (req) => { return await gerenciarPapel(req.data.uid, 'diretor', 'remover'); });
+const revogarAcessoTesoureiro = onCall(OPCOES_FUNCAO, async (req) => { return await gerenciarPapel(req.data.uid, 'tesoureiro', 'remover'); });
+const revogarAcessoConselheiro = onCall(OPCOES_FUNCAO, async (req) => { return await gerenciarPapel(req.data.uid, 'conselheiro', 'remover'); });
+const revogarAcessoProdutorEvento = onCall(OPCOES_FUNCAO, async (req) => { return await gerenciarPapel(req.data.uid, 'produtor-evento', 'remover'); });
+const revogarAcessoIrradiador = onCall(OPCOES_FUNCAO, async (req) => { return await gerenciarPapel(req.data.uid, 'irradiador', 'remover'); });
+const revogarAcessoBibliotecario = onCall(OPCOES_FUNCAO, async (req) => { return await gerenciarPapel(req.data.uid, 'bibliotecario', 'remover'); });
+const revogarAcessoRecepcionista = onCall(OPCOES_FUNCAO, async (req) => { return await gerenciarPapel(req.data.uid, 'recepcionista', 'remover'); });
+const revogarAcessoEntrevistador = onCall(OPCOES_FUNCAO, async (req) => { return await gerenciarPapel(req.data.uid, 'entrevistador', 'remover'); });
+const revogarAcessoDirigenteEscola = onCall(OPCOES_FUNCAO, async (req) => { return await gerenciarPapel(req.data.uid, 'dirigente-escola', 'remover'); });
+const revogarAcessoSecretarioEscola = onCall(OPCOES_FUNCAO, async (req) => { return await gerenciarPapel(req.data.uid, 'secretario-escola', 'remover'); });
 
 const sincronizarStatusVoluntario = onDocumentWritten({ ...OPCOES_FUNCAO, document: 'presencas/{presencaId}' }, async (event) => {
     const d = event.data.after.data(); if (!d || d.status !== 'presente') return null;

@@ -111,18 +111,52 @@ const ativarNovosPedidos = onSchedule({ ...OPCOES_FUNCAO_SAOPAULO, schedule: '31
     }
 });
 
+// --- LÓGICA ATUALIZADA PARA O CARGO DE CÁRITAS ---
 const promoverParaCaritas = onCall({ region: REGIAO }, async (req) => {
-    await admin.auth().setCustomUserClaims(req.data.uid, { role: 'caritas' });
-    const snap = await db.collection('voluntarios').where('authUid', '==', req.data.uid).limit(1).get();
-    if (!snap.empty) await snap.docs[0].ref.update({ role: 'caritas', permissoes: ['assistencia_social'] });
-    return { success: true };
+    const uid = req.data.uid;
+    const userRecord = await admin.auth().getUser(uid);
+    
+    let claims = userRecord.customClaims || {};
+    let roles = claims.roles || (claims.role ? [claims.role] : []);
+    
+    if (!roles.includes('caritas')) roles.push('caritas');
+    delete claims.role;
+    claims.roles = roles;
+
+    await admin.auth().setCustomUserClaims(uid, claims);
+    
+    const snap = await db.collection('voluntarios').where('authUid', '==', uid).limit(1).get();
+    if (!snap.empty) {
+        await snap.docs[0].ref.update({ 
+            roles: admin.firestore.FieldValue.arrayUnion('caritas'),
+            permissoes: admin.firestore.FieldValue.arrayUnion('assistencia_social')
+        });
+    }
+    return { success: true, message: "Cargo de Cáritas atribuído com sucesso!" };
 });
 
 const revogarAcessoCaritas = onCall({ region: REGIAO }, async (req) => {
-    await admin.auth().setCustomUserClaims(req.data.uid, { caritas: false });
-    const snap = await db.collection('voluntarios').where('authUid', '==', req.data.uid).limit(1).get();
-    if (!snap.empty) await snap.docs[0].ref.update({ role: 'voluntario' });
-    return { success: true };
+    const uid = req.data.uid;
+    const userRecord = await admin.auth().getUser(uid);
+    
+    let claims = userRecord.customClaims || {};
+    let roles = claims.roles || (claims.role ? [claims.role] : []);
+    
+    roles = roles.filter(r => r !== 'caritas');
+    delete claims.role;
+    delete claims.caritas;
+    claims.roles = roles;
+
+    await admin.auth().setCustomUserClaims(uid, claims);
+    
+    const snap = await db.collection('voluntarios').where('authUid', '==', uid).limit(1).get();
+    if (!snap.empty) {
+        await snap.docs[0].ref.update({ 
+            roles: admin.firestore.FieldValue.arrayRemove('caritas'),
+            permissoes: admin.firestore.FieldValue.arrayRemove('assistencia_social')
+        });
+    }
+    return { success: true, message: "Cargo de Cáritas revogado com sucesso!" };
 });
 
 const atualizarContagemFilaVL = onDocumentWritten({ region: REGIAO, document: 'fila_atendimento_vl/{docId}' }, async () => {
@@ -321,6 +355,7 @@ const enviarPedidoVinhaDeLuz = onCall({ region: REGIAO }, async (request) => {
 
     return { success: true };
 });
+
 // 3. Arquivamento Automático do VL (Roda às quartas-feiras às 22:30)
 const arquivarVlConcluidos = onSchedule({ ...OPCOES_FUNCAO_SAOPAULO, schedule: '30 22 * * 3' }, async () => {
     const agora = admin.firestore.Timestamp.now();
@@ -394,7 +429,6 @@ const arquivarSamaritanosConcluidos = onSchedule({ ...OPCOES_FUNCAO_SAOPAULO, sc
     
     await batch.commit();
 });
-
 
 module.exports = {
     enviarPedidoVibracao,
