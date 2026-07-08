@@ -31,32 +31,32 @@
 
     <div id="main-content" class="card-container">
         
-        <a href="/recepcao-samaritanos.html" class="card" data-role="super-admin,diretor,entrevistador,recepcionista" style="border-left-color: #e67e22;">
+        <a href="/recepcao-samaritanos.html" class="card" data-role="super-admin,recepcionista" style="border-left-color: #e67e22;">
             <h2>Recepção</h2>
             <p>Cadastrar novos assistidos diretamente para o trabalho dos Samaritanos.</p>
         </a>
         
-        <a href="/encaminhamento-samaritanos.html" class="card" data-role="super-admin,diretor,entrevistador,recepcionista" style="border-left-color: #2980b9;">
+        <a href="/encaminhamento-samaritanos.html" class="card" data-role="super-admin,entrevistador,recepcionista" style="border-left-color: #2980b9;">
             <h2>Painel de Controle (Fila)</h2>
             <p>Gerenciar os assistidos ativos e realizar chamadas para vibração.</p>
         </a>
         
-        <a href="/arquivo-geral-samaritanos.html" class="card" data-role="super-admin,diretor,entrevistador" style="border-left-color: #34495e;">
+        <a href="/arquivo-geral-samaritanos.html" class="card" data-role="super-admin,entrevistador" style="border-left-color: #34495e;">
             <h2>Arquivo Geral</h2>
             <p>Consultar históricos, acompanhar as 7 semanas e administrar as altas.</p>
         </a>
 
-        <a href="/painel-samaritanos-tv.html" target="_blank" rel="noopener" class="card" data-role="super-admin,diretor,entrevistador,recepcionista" style="border-left-color: #8e44ad;">
+        <a href="/painel-samaritanos-tv.html" target="_blank" rel="noopener" class="card" data-role="super-admin,entrevistador,recepcionista" style="border-left-color: #8e44ad;">
             <h2><i class="fas fa-tv"></i> Painel TV (Irradiação)</h2>
             <p>Exibir os nomes na tela para a equipe de trabalhadores e irradiadores.</p>
         </a>
 
-        <a href="/orientacoes-samaritanos.html" id="card-orientacoes" class="card" data-role="super-admin,diretor,entrevistador,recepcionista" style="border-left-color: #27ae60;">
+        <a href="/orientacoes-samaritanos.html" id="card-orientacoes" class="card" data-role="super-admin,entrevistador,recepcionista" style="border-left-color: #27ae60;">
             <h2>WhatsApp (Orientações)</h2>
             <p>Disparar mensagens com orientações da 4ª semana em diante.</p>
         </a>
 
-        <a href="/lista-impressao-samaritanos.html" class="card" data-role="super-admin,diretor,entrevistador,recepcionista" style="border-left-color: #7f8c8d;">
+        <a href="/lista-impressao-samaritanos.html" class="card" data-role="super-admin,entrevistador,recepcionista" style="border-left-color: #7f8c8d;">
             <h2><i class="fas fa-print"></i> Lista de Contingência</h2>
             <p>Gere e imprima a lista de assistidos ativos para backup físico.</p>
         </a>
@@ -82,11 +82,14 @@
         onAuthStateChanged(auth, (user) => {
             if (user) {
                 user.getIdTokenResult(true).then((idTokenResult) => {
-                    const userRole = idTokenResult.claims.role || 'voluntario';
+                    const claims = idTokenResult.claims || {};
+                    const userRoles = claims.roles || (claims.role ? [claims.role] : ['voluntario']);
                     
                     document.querySelectorAll('.card').forEach(card => {
                         const rolesPermitidas = card.dataset.role.split(',');
-                        if (userRole === 'super-admin' || rolesPermitidas.includes(userRole)) {
+                        const temAcessoPeloRole = userRoles.includes('super-admin') || rolesPermitidas.some(rolePermitida => userRoles.includes(rolePermitida));
+                        
+                        if (temAcessoPeloRole) {
                             card.style.display = 'block'; 
                         } else {
                             card.style.display = 'none';
@@ -101,6 +104,8 @@
                     onSnapshot(qPendentes, (snapshot) => {
                         const totalPendentes = snapshot.docs.filter(doc => doc.data().orientacoes && doc.data().orientacoes.trim() !== '').length;
                         const cardZap = document.getElementById('card-orientacoes');
+                        if (!cardZap) return;
+                        
                         let alerta = cardZap.querySelector('.alerta-pendencia');
                         
                         if (totalPendentes > 0) {
@@ -113,6 +118,8 @@
                         } else if (alerta) {
                             alerta.remove();
                         }
+                    }, (error) => {
+                        console.error("Sem permissão para ler atendimentos Samaritanos:", error);
                     });
                 });
             } else {
