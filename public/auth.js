@@ -42,14 +42,14 @@ export function protegerPagina(rolesPermitidas = []) {
         const unsubscribe = onAuthStateChanged(auth, async (user) => {
             if (!user) {
                 const redirectUrl = window.location.pathname;
-                window.location.href = `/login.html?redirectUrl=${encodeURIComponent(redirectUrl)}`;
+                window.location.href = `./login.html?redirectUrl=${encodeURIComponent(redirectUrl)}`;
                 reject(new Error('Usuário não autenticado.'));
                 return;
             }
 
             if (verificarSessaoExpirada()) {
                 alert('Sua sessão expirou por segurança.');
-                window.location.href = `/login.html?redirectUrl=${encodeURIComponent(window.location.pathname)}`;
+                window.location.href = `./login.html?redirectUrl=${encodeURIComponent(window.location.pathname)}`;
                 reject(new Error('Sessão expirada.'));
                 return; 
             }
