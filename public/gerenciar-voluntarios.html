@@ -140,7 +140,6 @@
                 console.error(error.message);
             });
 
-        // Função de normalização para manter consistência com o restante do sistema
         function normalizarString(str) {
             if (!str) return "";
             return str
@@ -207,9 +206,11 @@
                 loader: document.getElementById('loader-overlay')
             };
             let currentEditingId = null;
-            const userRole = user.claims.role;
+            
+            // Garantindo que lemos os cargos como array (compatibilidade com claims antigas)
+            const userRoles = user.claims.roles || (user.claims.role ? [user.claims.role] : []);
 
-            if (['super-admin', 'diretor'].includes(userRole)) {
+            if (userRoles.includes('super-admin') || userRoles.includes('diretor')) {
                 ui.btnAtribuirCodigos.style.display = 'inline-block';
                 ui.btnBackfillNomes.style.display = 'inline-block';
             }
@@ -233,7 +234,7 @@
                 
                 const q = query(voluntariosCollection, orderBy("nome"));
                 onSnapshot(q, async (snapshot) => {
-                    const queryConselheiros = query(voluntariosCollection, where("role", "==", "conselheiro"));
+                    const queryConselheiros = query(voluntariosCollection, where("roles", "array-contains", "conselheiro"));
                     const conselheirosSnapshot = await getDocs(queryConselheiros);
                     const totalConselheiros = conselheirosSnapshot.size;
 
@@ -257,31 +258,33 @@
                         
                         let tagMedium = v.isMedium ? '<span class="tag-medium">Médium</span>' : '';
 
+                        // Normalização para o novo formato de múltiplos cargos
+                        const rolesAtuais = v.roles || (v.role ? [v.role] : []);
                         let botoesPromocao = '';
-                        if (userRole === 'super-admin' && v.authUid && v.role !== 'super-admin' && v.authUid !== user.uid) { 
-                            const cargoAtual = v.role || 'voluntario';
+                        
+                        if (userRoles.includes('super-admin') && v.authUid && !rolesAtuais.includes('super-admin') && v.authUid !== user.uid) { 
                             const authUid = v.authUid;
                             const nome = v.nome;
 
-                            if (cargoAtual === 'caritas') {
+                            if (rolesAtuais.includes('caritas')) {
                                 botoesPromocao += `<button data-auth-uid="${authUid}" data-nome="${nome}" class="btn-revogar btn-revogar-caritas">Revogar Cáritas</button>`;
                             } else {
                                 botoesPromocao += `<button data-auth-uid="${authUid}" data-nome="${nome}" class="btn-promover btn-promover-caritas">Promover a Cáritas</button>`;
                             }
 
-                            if (cargoAtual === 'diretor') {
+                            if (rolesAtuais.includes('diretor')) {
                                 botoesPromocao += `<button data-auth-uid="${authUid}" data-nome="${nome}" class="btn-revogar btn-revogar-diretor">Revogar Diretor</button>`;
                             } else {
                                 botoesPromocao += `<button data-auth-uid="${authUid}" data-nome="${nome}" class="btn-promover btn-promover-diretor">Promover a Diretor</button>`;
                             }
                             
-                            if (cargoAtual === 'tesoureiro') {
+                            if (rolesAtuais.includes('tesoureiro')) {
                                 botoesPromocao += `<button data-auth-uid="${authUid}" data-nome="${nome}" class="btn-revogar btn-revogar-tesoureiro">Revogar Tesoureiro</button>`;
                             } else {
                                 botoesPromocao += `<button data-auth-uid="${authUid}" data-nome="${nome}" class="btn-promover btn-promover-tesoureiro">Promover a Tesoureiro</button>`;
                             }
                             
-                            if (cargoAtual === 'conselheiro') {
+                            if (rolesAtuais.includes('conselheiro')) {
                                 botoesPromocao += `<button data-auth-uid="${authUid}" data-nome="${nome}" class="btn-revogar btn-revogar-conselheiro">Revogar Conselheiro</button>`;
                             } else if (totalConselheiros < 5) {
                                 botoesPromocao += `<button data-auth-uid="${authUid}" data-nome="${nome}" class="btn-promover btn-promover-conselheiro">Promover a Conselheiro</button>`;
@@ -289,43 +292,43 @@
                                 botoesPromocao += `<button disabled title="Limite de 5 conselheiros atingido.">Promover a Conselheiro</button>`;
                             }
 
-                            if (cargoAtual === 'produtor-evento') {
+                            if (rolesAtuais.includes('produtor-evento')) {
                                 botoesPromocao += `<button data-auth-uid="${authUid}" data-nome="${nome}" class="btn-revogar btn-revogar-produtor">Revogar Produtor</button>`;
                             } else {
                                 botoesPromocao += `<button data-auth-uid="${authUid}" data-nome="${nome}" class="btn-promover btn-promover-produtor">Promover a Produtor</button>`;
                             }
 
-                            if (cargoAtual === 'irradiador') {
+                            if (rolesAtuais.includes('irradiador')) {
                                 botoesPromocao += `<button data-auth-uid="${authUid}" data-nome="${nome}" class="btn-revogar btn-revogar-irradiador">Revogar Irradiador</button>`;
                             } else {
                                 botoesPromocao += `<button data-auth-uid="${authUid}" data-nome="${nome}" class="btn-promover btn-promover-irradiador">Promover a Irradiador</button>`;
                             }
 
-                            if (cargoAtual === 'bibliotecario') {
+                            if (rolesAtuais.includes('bibliotecario')) {
                                 botoesPromocao += `<button data-auth-uid="${authUid}" data-nome="${nome}" class="btn-revogar btn-revogar-bibliotecario">Revogar Bibliotecário</button>`;
                             } else {
                                 botoesPromocao += `<button data-auth-uid="${authUid}" data-nome="${nome}" class="btn-promover btn-promover-bibliotecario">Promover a Bibliotecário</button>`;
                             }
 
-                            if (cargoAtual === 'recepcionista') {
+                            if (rolesAtuais.includes('recepcionista')) {
                                 botoesPromocao += `<button data-auth-uid="${authUid}" data-nome="${nome}" class="btn-revogar btn-revogar-recepcionista">Revogar Recepcionista</button>`;
                             } else {
                                 botoesPromocao += `<button data-auth-uid="${authUid}" data-nome="${nome}" class="btn-promover btn-promover-recepcionista">Promover a Recepcionista</button>`;
                             }
 
-                            if (cargoAtual === 'entrevistador') {
+                            if (rolesAtuais.includes('entrevistador')) {
                                 botoesPromocao += `<button data-auth-uid="${authUid}" data-nome="${nome}" class="btn-revogar btn-revogar-entrevistador">Revogar Entrevistador(a)</button>`;
                             } else {
                                 botoesPromocao += `<button data-auth-uid="${authUid}" data-nome="${nome}" class="btn-promover btn-promover-entrevistador">Promover a Entrevistador(a)</button>`;
                             }
                             
-                            if (cargoAtual === 'dirigente-escola') {
+                            if (rolesAtuais.includes('dirigente-escola')) {
                                 botoesPromocao += `<button data-auth-uid="${authUid}" data-nome="${nome}" class="btn-revogar btn-revogar-dirigente-escola">Revogar Dirigente</button>`;
                             } else {
                                 botoesPromocao += `<button data-auth-uid="${authUid}" data-nome="${nome}" class="btn-promover btn-promover-dirigente-escola">Promover a Dirigente</button>`;
                             }
                             
-                            if (cargoAtual === 'secretario-escola') {
+                            if (rolesAtuais.includes('secretario-escola')) {
                                 botoesPromocao += `<button data-auth-uid="${authUid}" data-nome="${nome}" class="btn-revogar btn-revogar-secretario-escola">Revogar Secretário(a)</button>`;
                             } else {
                                 botoesPromocao += `<button data-auth-uid="${authUid}" data-nome="${nome}" class="btn-promover btn-promover-secretario-escola">Promover a Secretário(a)</button>`;
@@ -337,10 +340,13 @@
                             botaoCracha = `<button data-codigo="${v.codigoVoluntario}" data-nome-cracha="${v.nomeParaCracha}" class="btn-gerar-cracha">Gerar Crachá</button>`;
                         }
 
+                        // Formatação visual da lista de cargos
+                        const labelCargos = rolesAtuais.length > 0 ? rolesAtuais.join(', ') : 'voluntário';
+
                         li.innerHTML = `
                             <div class="voluntario-info">
                                 <strong>${v.nome} ${tagMedium}</strong>
-                                <small>${v.endereco || 'N/A'} | ${v.telefone || 'N/A'} | Cargo: ${v.role || 'voluntario'}</small>
+                                <small>${v.endereco || 'N/A'} | ${v.telefone || 'N/A'} | Cargos: ${labelCargos}</small>
                                 <div class="codigo-voluntario">
                                     Cód: ${v.codigoVoluntario || 'N/A'} | Nome Crachá: <strong>${v.nomeParaCracha || 'Pendente (sincronize)'}</strong>
                                 </div>
@@ -381,15 +387,16 @@
                     const nomeInformado = ui.nome.value.trim();
                     const novoVoluntario = { 
                         nome: nomeInformado,
-                        nome_normalizado: normalizarString(nomeInformado), // ADICIONADO: Normalização de busca
-                        authUid: null, // ADICIONADO: Essencial para o vínculo do Meu-CEPAT via Fuse.js
+                        nome_normalizado: normalizarString(nomeInformado),
+                        authUid: null,
                         endereco: ui.endereco.value.trim(), 
                         telefone: ui.telefone.value.trim(), 
                         aniversario: ui.aniversario.value.trim(), 
                         isMedium: ui.isMedium.checked,
                         statusVoluntario: 'ativo', 
                         ultimaPresenca: null, 
-                        tasvAssinadoAno: null, 
+                        tasvAssinadoAno: null,
+                        roles: [], // Inicializado como array vazio
                         criadoEm: serverTimestamp() 
                     };
 
@@ -418,35 +425,34 @@
                     const authUid = target.dataset.authUid;
 
                     if (target.classList.contains('btn-gerar-cracha')) {
-    target.disabled = true;
-    ui.loader.style.display = 'flex';
-    const codigo = target.dataset.codigo;
-    const nomeCracha = target.dataset.nomeCracha;
-    try {
-        const result = await gerarCracha({ codigoVoluntario: codigo, nomeParaCracha: nomeCracha });
-        
-        // Ajuste para Functions v2: os dados estão em result.data
-        const dados = result.data;
+                        target.disabled = true;
+                        ui.loader.style.display = 'flex';
+                        const codigo = target.dataset.codigo;
+                        const nomeCracha = target.dataset.nomeCracha;
+                        try {
+                            const result = await gerarCracha({ codigoVoluntario: codigo, nomeParaCracha: nomeCracha });
+                            
+                            const dados = result.data;
 
-        if (dados && dados.imageBase64) {
-            const link = document.createElement('a');
-            link.href = `data:image/png;base64,${dados.imageBase64}`;
-            link.download = `cracha_${nomeCracha.replace(/ /g, '_')}_${codigo}.png`;
-            document.body.appendChild(link);
-            link.click();
-            document.body.removeChild(link);
-        } else {
-            alert('A função executou, mas não retornou a imagem do crachá.');
-        }
-    } catch (error) {
-        console.error("Erro ao gerar crachá:", error);
-        alert(`Não foi possível gerar o crachá: ${error.message}`);
-    } finally {
-        ui.loader.style.display = 'none';
-        target.disabled = false;
-    }
-    return; 
-}
+                            if (dados && dados.imageBase64) {
+                                const link = document.createElement('a');
+                                link.href = `data:image/png;base64,${dados.imageBase64}`;
+                                link.download = `cracha_${nomeCracha.replace(/ /g, '_')}_${codigo}.png`;
+                                document.body.appendChild(link);
+                                link.click();
+                                document.body.removeChild(link);
+                            } else {
+                                alert('A função executou, mas não retornou a imagem do crachá.');
+                            }
+                        } catch (error) {
+                            console.error("Erro ao gerar crachá:", error);
+                            alert(`Não foi possível gerar o crachá: ${error.message}`);
+                        } finally {
+                            ui.loader.style.display = 'none';
+                            target.disabled = false;
+                        }
+                        return; 
+                    }
 
                     if (docId) {
                         const docRef = doc(db, 'voluntarios', docId);
@@ -536,27 +542,24 @@
                                 target.disabled = true;
                                 target.textContent = "Processando...";
                                 try {
-    const acaoFuncao = funcoesCargos[functionName];
-    if (!acaoFuncao) throw new Error(`Função ${functionName} não encontrada no map.`);
-    
-    const resultado = await acaoFuncao({ uid: authUid });
-    
-    // --- TRECHO CORRIGIDO ---
-    // Verifica se existe a mensagem no retorno, senão exibe um texto padrão de sucesso
-    const mensagemParaExibir = (resultado.data && resultado.data.message) 
-        ? resultado.data.message 
-        : "Operação realizada com sucesso!";
-    
-    alert(mensagemParaExibir);
-    // ------------------------
+                                    const acaoFuncao = funcoesCargos[functionName];
+                                    if (!acaoFuncao) throw new Error(`Função ${functionName} não encontrada no map.`);
+                                    
+                                    const resultado = await acaoFuncao({ uid: authUid });
+                                    
+                                    const mensagemParaExibir = (resultado.data && resultado.data.message) 
+                                        ? resultado.data.message 
+                                        : "Operação realizada com sucesso!";
+                                    
+                                    alert(mensagemParaExibir);
 
-    await registrarLog(logAction, { alvo: { nome, uid: authUid } });
-} catch (error) {
-    console.error(`Erro ao ${acaoTexto}:`, error);
-    alert(`Erro: ${error.message}`);
-} finally {
-    target.disabled = false;
-}
+                                    await registrarLog(logAction, { alvo: { nome, uid: authUid } });
+                                } catch (error) {
+                                    console.error(`Erro ao ${acaoTexto}:`, error);
+                                    alert(`Erro: ${error.message}`);
+                                } finally {
+                                    target.disabled = false;
+                                }
                             }
                         }
                     }
@@ -569,7 +572,7 @@
                     const nomeEditado = ui.editNome.value.trim();
                     const dadosNovos = { 
                         nome: nomeEditado,
-                        nome_normalizado: normalizarString(nomeEditado), // ADICIONADO: Atualiza normalização na edição
+                        nome_normalizado: normalizarString(nomeEditado),
                         endereco: ui.editEndereco.value.trim(), 
                         telefone: ui.editTelefone.value.trim(), 
                         aniversario: ui.editAniversario.value.trim(),

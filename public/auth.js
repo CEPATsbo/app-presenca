@@ -57,28 +57,33 @@ export function protegerPagina(rolesPermitidas = []) {
             atualizarTimestampAtividade();
 
             try {
-                // Força a atualização do Token para garantir que pegamos o cargo atualizado
+                // Força a atualização do Token para garantir que pegamos os cargos atualizados
                 const idTokenResult = await user.getIdTokenResult(true);
                 const claims = idTokenResult.claims || {};
                 user.claims = claims;
 
-                // Lógica de fallback: se não houver role, é voluntário
-                const userRole = claims.role || 'voluntario';
+                // Lógica de transição: Lê a nova estrutura 'roles' (array). 
+                // Se não existir, lê a estrutura antiga 'role' e converte para array. 
+                // Se nenhum existir, define como array contendo apenas ['voluntario'].
+                const userRoles = claims.roles || (claims.role ? [claims.role] : ['voluntario']);
 
-                // Super Admin sempre tem acesso total
-                if (userRole === 'super-admin') {
+                // Super Admin sempre tem acesso total a qualquer página
+                if (userRoles.includes('super-admin')) {
                     resolve(user);
                     return;
                 }
 
+                // Verifica se a página é pública (rolesPermitidas vazio), 
+                // OU se o array de cargos do usuário cruza com o array de cargos permitidos da página,
+                // OU se existe a flag booleana antiga na claim (fallback de segurança)
                 const temCargoNecessario = rolesPermitidas.length === 0 || 
-                    rolesPermitidas.includes(userRole) ||
+                    rolesPermitidas.some(rolePermitida => userRoles.includes(rolePermitida)) ||
                     rolesPermitidas.some(role => claims[role] === true);
 
                 if (temCargoNecessario) {
                     resolve(user);
                 } else {
-                    reject(new Error('Acesso negado: cargo insuficiente.'));
+                    reject(new Error('Acesso negado: cargo insuficiente para acessar esta página.'));
                 }
             } catch (error) {
                 console.error("Erro na proteção de página:", error);
