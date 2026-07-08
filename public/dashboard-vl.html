@@ -31,32 +31,32 @@
 
     <div id="main-content" class="card-container">
         
-        <a href="/recepcao-vl.html" class="card" data-role="super-admin,diretor,entrevistador,recepcionista" style="border-left-color: #8e44ad;">
+        <a href="/recepcao-vl.html" class="card" data-role="super-admin,recepcionista" style="border-left-color: #8e44ad;">
             <h2>Recepção (VL)</h2>
             <p>Registrar o 1º atendimento dos assistidos no Vinha de Luz.</p>
         </a>
         
-        <a href="/encaminhamento-vl.html" class="card" data-role="super-admin,diretor,entrevistador,recepcionista" style="border-left-color: #28a745;">
+        <a href="/encaminhamento-vl.html" class="card" data-role="super-admin,entrevistador,recepcionista" style="border-left-color: #28a745;">
             <h2>Encaminhamento (Fila)</h2>
             <p>Gerenciar a fila de espera e chamar assistidos para o passe.</p>
         </a>
         
-        <a href="/arquivo-geral-vl.html" class="card" data-role="super-admin,diretor,entrevistador" style="border-left-color: #34495e;">
+        <a href="/arquivo-geral-vl.html" class="card" data-role="super-admin,entrevistador" style="border-left-color: #34495e;">
             <h2>Arquivo Geral (VL)</h2>
             <p>Consultar históricos e definir a duração (retornos) dos tratamentos.</p>
         </a>
 
-        <a href="/painel-vl.tv.html" target="_blank" rel="noopener" class="card" data-role="super-admin,diretor,entrevistador,recepcionista" style="border-left-color: #17a2b8;">
+        <a href="/painel-vl.tv.html" target="_blank" rel="noopener" class="card" data-role="super-admin,entrevistador,recepcionista" style="border-left-color: #17a2b8;">
             <h2><i class="fas fa-tv"></i>Painel de Chamada (TV)</h2>
             <p>Exibir a chamada de assistidos em uma TV ou monitor.</p>
         </a>
 
-        <a href="/orientacoes-vl.html" id="card-orientacoes" class="card" data-role="super-admin,diretor,entrevistador,recepcionista" style="border-left-color: #25d366;">
+        <a href="/orientacoes-vl.html" id="card-orientacoes" class="card" data-role="super-admin,entrevistador,recepcionista" style="border-left-color: #25d366;">
             <h2>WhatsApp (Orientações)</h2>
             <p>Disparar mensagens com as orientações espirituais da semana.</p>
         </a>
 
-        <a href="/lista-impressao-vl.html" class="card" data-role="super-admin,diretor,entrevistador,recepcionista" style="border-left-color: #34495e;">
+        <a href="/lista-impressao-vl.html" class="card" data-role="super-admin,entrevistador,recepcionista" style="border-left-color: #34495e;">
     <h2><i class="fas fa-print"></i> Lista de Contingência</h2>
     <p>Gere e imprima a lista de assistidos ativos para backup físico.</p>
         </a>
@@ -82,11 +82,16 @@
         onAuthStateChanged(auth, (user) => {
             if (user) {
                 user.getIdTokenResult(true).then((idTokenResult) => {
-                    const userRole = idTokenResult.claims.role || 'voluntario';
+                    const claims = idTokenResult.claims || {};
+                    // Lê o array de cargos ou a string antiga
+                    const userRoles = claims.roles || (claims.role ? [claims.role] : ['voluntario']);
                     
                     document.querySelectorAll('.card').forEach(card => {
                         const rolesPermitidas = card.dataset.role.split(',');
-                        if (userRole === 'super-admin' || rolesPermitidas.includes(userRole)) {
+                        // Verifica permissões com .some()
+                        const temAcessoPeloRole = userRoles.includes('super-admin') || rolesPermitidas.some(rolePermitida => userRoles.includes(rolePermitida));
+                        
+                        if (temAcessoPeloRole) {
                             card.style.display = 'block'; 
                         } else {
                             card.style.display = 'none';
@@ -103,6 +108,8 @@
                         const totalPendentes = snapshot.docs.filter(doc => doc.data().orientacoes && doc.data().orientacoes.trim() !== '').length;
                         
                         const cardZap = document.getElementById('card-orientacoes');
+                        if(!cardZap) return;
+                        
                         let alerta = cardZap.querySelector('.alerta-pendencia');
                         
                         if (totalPendentes > 0) {
@@ -115,6 +122,8 @@
                         } else if (alerta) {
                             alerta.remove();
                         }
+                    }, (error) => {
+                        console.error("Sem permissão para ler atendimentos VL:", error);
                     });
 
                 });
