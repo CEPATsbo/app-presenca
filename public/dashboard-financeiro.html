@@ -1,6 +1,5 @@
 <!DOCTYPE html>
 <html lang="pt-br">
-    
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -157,13 +156,16 @@
         onAuthStateChanged(auth, (user) => {
             if (user) {
                 user.getIdTokenResult(true).then((idTokenResult) => {
-                    const userRole = idTokenResult.claims.role || 'voluntario';
+                    const claims = idTokenResult.claims || {};
+                    const userRoles = claims.roles || (claims.role ? [claims.role] : ['voluntario']);
                     
-                    // Lógica principal de permissão
+                    // Lógica principal de permissão atualizada
                     document.querySelectorAll('.card').forEach(card => {
                         const rolesPermitidas = card.dataset.role.split(',');
 
-                        if (userRole === 'super-admin' || rolesPermitidas.includes(userRole)) {
+                        const temAcessoPeloRole = userRoles.includes('super-admin') || rolesPermitidas.some(rolePermitida => userRoles.includes(rolePermitida));
+
+                        if (temAcessoPeloRole) {
                             card.style.display = 'block';
                         } else {
                             card.style.display = 'none';
