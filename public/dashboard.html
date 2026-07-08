@@ -147,7 +147,7 @@
 
     <div id="main-content" class="card-container">
 
-        <a href="/dashboard-ae.html" class="card" id="card-assistencia-espiritual" data-role="super-admin,diretor,entrevistador,recepcionista" style="border-left-color: #2ecc71;">
+        <a href="/dashboard-ae.html" class="card" id="card-assistencia-espiritual" data-role="super-admin,entrevistador,recepcionista" style="border-left-color: #2ecc71;">
             <h2>Módulo de Assistência</h2>
             <p>Gerenciar os fluxos da Assistência Geral, trabalho de Cura (VL) e à Distância (Samaritanos).</p>
             <p id="card-ae-warning"></p>
@@ -159,7 +159,7 @@
             <p>Gerenciar cursos, turmas, alunos, frequências e avaliações.</p>
         </a>
 
-        <a href="/modulo-caritas.html" class="card" data-role="super-admin,diretor,caritas" style="border-left-color: #e67e22;">
+        <a href="/modulo-caritas.html" class="card" data-role="super-admin,caritas" style="border-left-color: #e67e22;">
             <h2>Cáritas</h2>
             <p>Gestão de famílias, cestas básicas e campanhas solidárias.</p>
         </a>
@@ -246,7 +246,7 @@
             <p>Registrar manualmente a presença de um voluntário em uma atividade.</p>
         </a>
 
-        <a href="/mural.html" class="card" data-role="diretor,tesoureiro,entrevistador,super-admin" style="border-left-color: #d32f2f;">
+        <a href="/mural.html" class="card" data-role="diretor,entrevistador,super-admin" style="border-left-color: #d32f2f;">
             <h2>Editar Mural</h2>
             <p>Alterar a mensagem que aparece na tela de check-in dos voluntários.</p>
         </a>
@@ -314,13 +314,15 @@
                 // Força o refresh dos Custom Claims para garantir que os cargos sejam lidos corretamente
                 user.getIdTokenResult(true).then((idTokenResult) => {
                     const claims = idTokenResult.claims || {};
-                    const userRole = claims.role || 'voluntario';
+                    
+                    // Lê a matriz 'roles', faz fallback para a 'role' antiga, ou assume 'voluntario'
+                    const userRoles = claims.roles || (claims.role ? [claims.role] : ['voluntario']);
                     
                     document.querySelectorAll('.card').forEach(card => {
                         const rolesPermitidas = card.dataset.role.split(',');
 
-                        // Lógica Reforçada: Verifica o campo 'role' OU o claim booleano direto
-                        const temAcessoPeloRole = (userRole === 'super-admin' || rolesPermitidas.includes(userRole));
+                        // Lógica Reforçada: Verifica se algum dos cargos do usuário bate com os cargos do card
+                        const temAcessoPeloRole = userRoles.includes('super-admin') || rolesPermitidas.some(rolePermitida => userRoles.includes(rolePermitida));
                         const temAcessoPeloClaim = rolesPermitidas.some(role => claims[role] === true);
 
                         if (temAcessoPeloRole || temAcessoPeloClaim) {
