@@ -423,7 +423,7 @@ const arquivarSamaritanosConcluidos = onSchedule({ ...OPCOES_FUNCAO_SAOPAULO, sc
             arquivadoEm: admin.firestore.FieldValue.serverTimestamp()
         }); 
         
-        // Remove da coleção ativa para limpar a mesa
+        /// Remove da coleção ativa para limpar a mesa
         batch.delete(doc.ref); 
     });
     

@@ -59,7 +59,7 @@ const gerenciarPapel = async (uid, novoPapel, acao) => {
     if (acao === 'adicionar') {
         if (!roles.includes(novoPapel)) roles.push(novoPapel);
         
-        // Mantém as flags legadas para a escola, se você ainda usá-las em algum lugar antigo
+        // MANTÉM AS FLAGS DO MÓDULO EDUCACIONAL INTACTAS
         if (['dirigente-escola', 'secretario-escola', 'facilitador'].includes(novoPapel)) {
             claims[novoPapel.replace('-', '_')] = true;
             if (['dirigente-escola', 'secretario-escola'].includes(novoPapel)) claims['facilitador'] = true;
@@ -67,9 +67,20 @@ const gerenciarPapel = async (uid, novoPapel, acao) => {
     } else if (acao === 'remover') {
         roles = roles.filter(r => r !== novoPapel);
         
-        // Remove as flags legadas
+        /// REMOVE AS FLAGS DO MÓDULO EDUCACIONAL COM SEGURANÇA
         if (['dirigente-escola', 'secretario-escola', 'facilitador'].includes(novoPapel)) {
             delete claims[novoPapel.replace('-', '_')];
+            
+            // Se perdeu o cargo principal da escola, checamos se ele ainda tem o outro antes de tirar o acesso de facilitador
+            if (['dirigente-escola', 'secretario-escola'].includes(novoPapel)) {
+                const aindaEDirigente = roles.includes('dirigente-escola');
+                const aindaESecretario = roles.includes('secretario-escola');
+                
+                if (!aindaEDirigente && !aindaESecretario) {
+                    delete claims['facilitador'];
+                    roles = roles.filter(r => r !== 'facilitador');
+                }
+            }
         }
     }
     
