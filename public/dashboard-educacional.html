@@ -61,69 +61,51 @@
         const auth = getAuth(app);
         const mainContainer = document.getElementById('main-container');
         const acessoNegadoContainer = document.getElementById('acesso-negado-container');
-        // ### AJUSTE: Pegar referência aos cards ###
         const cardGerenciarCursos = document.getElementById('card-gerenciar-cursos');
         const cardGerenciarTurmas = document.getElementById('card-gerenciar-turmas');
-
 
         onAuthStateChanged(auth, async (user) => {
             if (user) {
                 try {
                     const idTokenResult = await user.getIdTokenResult(true);
                     const claims = idTokenResult.claims || {};
+                    const userRoles = claims.roles || (claims.role ? [claims.role] : ['voluntario']);
 
-                    const rolesPermitidasPagina = [ // Quem pode VER esta página
+                    const rolesPermitidasPagina = [ 
                         'super-admin', 'diretor', 
                         'dirigente-escola', 'secretario-escola'
                     ];
-                    const rolesAdminGlobal = [ // Quem pode gerenciar CURSOS
+                    const rolesAdminGlobal = [ 
                         'super-admin', 'diretor'
                     ];
 
-                    let temPermissaoPagina = false;
-                    let isAdminGlobal = false;
+                    // Verifica se tem permissão total analisando o Array novo e os booleanos antigos do Educacional
+                    const temPermissaoPagina = rolesPermitidasPagina.some(role => 
+                        userRoles.includes(role) || 
+                        claims[role] === true || 
+                        claims[role.replace('-', '_')] === true
+                    );
 
-                    // Verifica acesso à página
-                    if (rolesPermitidasPagina.includes(claims.role)) {
-                        temPermissaoPagina = true;
-                    } else {
-                        for (const role of rolesPermitidasPagina) {
-                            if (claims[role] === true) {
-                                temPermissaoPagina = true;
-                                break;
-                            }
-                        }
-                    }
-
-                    // Verifica se é admin global (para mostrar/esconder card de cursos)
-                    if (rolesAdminGlobal.includes(claims.role)) {
-                        isAdminGlobal = true;
-                    } else {
-                         for (const role of rolesAdminGlobal) {
-                            if (claims[role] === true) {
-                                isAdminGlobal = true;
-                                break;
-                            }
-                        }
-                    }
+                    const isAdminGlobal = rolesAdminGlobal.some(role => 
+                        userRoles.includes(role) || 
+                        claims[role] === true || 
+                        claims[role.replace('-', '_')] === true
+                    );
 
                     if (temPermissaoPagina) {
                         mainContainer.style.display = 'block';
                         acessoNegadoContainer.style.display = 'none';
-                        console.log("Acesso permitido para Dashboard Educacional:", user.displayName, "Claims:", claims);
+                        console.log("Acesso permitido para Dashboard Educacional:", user.displayName);
 
-                        // ### AJUSTE: Controla visibilidade do card "Gerenciar Cursos" ###
                         if (isAdminGlobal) {
-                            cardGerenciarCursos.style.display = 'block'; // Mostra para admins globais
+                            cardGerenciarCursos.style.display = 'block'; 
                         } else {
-                            cardGerenciarCursos.style.display = 'none'; // Esconde para outros (dirigente/secretário)
+                            cardGerenciarCursos.style.display = 'none'; 
                         }
-                        // O card "Gerenciar Turmas" fica sempre visível para quem tem acesso à página
-
                     } else {
                         mainContainer.style.display = 'none';
                         acessoNegadoContainer.style.display = 'block';
-                        console.warn("Acesso negado para Dashboard Educacional:", user.displayName, "Claims:", claims);
+                        console.warn("Acesso negado para Dashboard Educacional:", user.displayName);
                     }
                 } catch (error) {
                     console.error("Erro ao verificar permissões:", error);
@@ -135,6 +117,5 @@
             }
         });
     </script>
-
 </body>
 </html>
