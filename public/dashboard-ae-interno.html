@@ -68,22 +68,22 @@
     </div>
 
     <div id="main-content" class="card-container">
-        <a href="/recepcao-ae.html" class="card" data-role="super-admin,diretor,entrevistador,recepcionista" style="border-left-color: #2ecc71;">
+        <a href="/recepcao-ae.html" class="card" data-role="super-admin,entrevistador,recepcionista" style="border-left-color: #2ecc71;">
             <h2>Recepção</h2>
             <p>Iniciar atendimentos, registrar presenças e gerenciar a fila inicial.</p>
         </a>
         
-        <a href="/encaminhamento-ae.html" class="card" data-role="super-admin,diretor,recepcionista,entrevistador" style="border-left-color: #2ecc71;">
+        <a href="/encaminhamento-ae.html" class="card" data-role="super-admin,recepcionista,entrevistador" style="border-left-color: #2ecc71;">
             <h2>Encaminhamento</h2>
             <p>Controlar o fluxo de chamadas para entrevista e para as salas de passe.</p>
         </a>
         
-        <a href="/arquivo-geral-ae.html" class="card" data-role="super-admin,diretor,entrevistador" style="border-left-color: #2ecc71;">
+        <a href="/arquivo-geral-ae.html" class="card" data-role="super-admin,entrevistador" style="border-left-color: #2ecc71;">
             <h2>Arquivo e Entrevistas</h2> 
             <p>Consultar históricos e adicionar detalhes das entrevistas.</p> 
         </a>
         
-        <a href="/painel-ae.tv.html" target="_blank" class="card" data-role="super-admin,diretor,recepcionista,entrevistador" style="border-left-color: #2ecc71;">
+        <a href="/painel-ae.tv.html" target="_blank" class="card" data-role="super-admin,recepcionista,entrevistador" style="border-left-color: #2ecc71;">
             <h2>Painel TV</h2>
             <p>Abrir o painel de chamadas para exibição no salão.</p>
         </a>
@@ -107,11 +107,14 @@
         onAuthStateChanged(auth, (user) => {
             if (user) {
                 user.getIdTokenResult(true).then((idTokenResult) => {
-                    const userRole = idTokenResult.claims.role || 'voluntario';
+                    const claims = idTokenResult.claims || {};
+                    const userRoles = claims.roles || (claims.role ? [claims.role] : ['voluntario']);
                     
                     document.querySelectorAll('.card').forEach(card => {
                         const rolesPermitidas = card.dataset.role.split(',');
-                        if (rolesPermitidas.includes(userRole)) {
+                        const temAcessoPeloRole = userRoles.includes('super-admin') || rolesPermitidas.some(rolePermitida => userRoles.includes(rolePermitida));
+                        
+                        if (temAcessoPeloRole) {
                             card.style.display = 'block'; 
                         } else {
                             card.style.display = 'none';
