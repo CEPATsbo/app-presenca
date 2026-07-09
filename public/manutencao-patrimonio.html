@@ -130,14 +130,12 @@
 
     <div id="main-content" class="card-container">
 
-        <!-- Card de Patrimônio -->
         <a href="/patrimonio.html" class="card" id="card-patrimonio">
             <i class="fas fa-boxes"></i>
             <h2>Gestão de Patrimônio</h2>
             <p>Cadastrar novos bens, gerar etiquetas (CEPAT-XXXX), visualizar itens ativos e gerenciar baixas do acervo físico da instituição.</p>
         </a>
 
-        <!-- Card de Manutenção -->
         <a href="/manutencoes.html" class="card" id="card-manutencao">
             <i class="fas fa-tools"></i>
             <h2>Controle de Manutenções</h2>
@@ -171,10 +169,12 @@
                 // Força o refresh dos Custom Claims para garantir a leitura atualizada
                 user.getIdTokenResult(true).then((idTokenResult) => {
                     const claims = idTokenResult.claims || {};
-                    const userRole = claims.role || 'voluntario';
                     
-                    // Verifica se o usuário tem a role no campo 'role' ou como um claim booleano
-                    const temAcessoPeloRole = rolesPermitidas.includes(userRole);
+                    // LÓGICA ATUALIZADA: Leitura do array de múltiplos cargos
+                    const userRoles = claims.roles || (claims.role ? [claims.role] : ['voluntario']);
+                    
+                    // Verifica se o usuário tem a role no novo array ou como um claim booleano
+                    const temAcessoPeloRole = userRoles.includes('super-admin') || rolesPermitidas.some(rolePermitida => userRoles.includes(rolePermitida));
                     const temAcessoPeloClaim = rolesPermitidas.some(role => claims[role] === true);
 
                     if (temAcessoPeloRole || temAcessoPeloClaim) {
@@ -184,12 +184,12 @@
                     } else {
                         // Usuário não autorizado
                         alert("Acesso Negado: Você não tem permissão para acessar este módulo.");
-                        window.location.href = '/painel-gestao.html';
+                        window.location.href = '/dashboard.html'; // Corrigido para dashboard.html
                     }
                 }).catch((error) => {
                     console.error("Erro ao verificar permissões:", error);
                     alert("Ocorreu um erro ao verificar suas credenciais.");
-                    window.location.href = '/painel-gestao.html';
+                    window.location.href = '/dashboard.html'; // Corrigido para dashboard.html
                 });
             } else {
                 // Usuário não está logado
