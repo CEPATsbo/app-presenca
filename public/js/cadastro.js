@@ -162,7 +162,9 @@ formCadastro.addEventListener('submit', async (event) => {
                 ...dadosBase,
                 statusVoluntario: 'ativo',
                 criadoEm: serverTimestamp(),
-                cargos: { voluntario: true }
+                cargos: { voluntario: true }, // Mantido por retrocompatibilidade
+                roles: ['voluntario'],        // NOVO: Mochila de cargos oficial
+                role: 'voluntario'            // NOVO: Fallback para scripts antigos
             });
             console.log("Novo registro criado.");
         }
