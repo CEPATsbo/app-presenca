@@ -7,7 +7,7 @@ const firebaseConfig = {
     apiKey: "AIzaSyBV7RPjk3cFTqL-aIpflJcUojKg1ZXMLuU",
     authDomain: "voluntarios-ativos---cepat.firebaseapp.com",
     projectId: "voluntarios-ativos---cepat",
-    storageBucket: "voluntarios-ativos---cepat.firebasestorage.app", // Corrigido
+    storageBucket: "voluntarios-ativos---cepat.firebasestorage.app", 
     messagingSenderId: "66122858261",
     appId: "1:66122858261:web:7fa21f1805463b5c08331c"
 };
@@ -32,14 +32,12 @@ const btnSalvarTurma = document.getElementById('btn-salvar-turma');
 const mainContent = document.getElementById('main-content');
 const acessoNegadoContainer = document.getElementById('acesso-negado');
 
-// ### AJUSTE: Guarda o ID do perfil do usuário logado ###
 let currentUserProfileId = null;
 
 // --- VERIFICAÇÃO DE PERMISSÃO ---
 onAuthStateChanged(auth, async (user) => {
     if (user) {
         try {
-            // Pega perfil e claims
             const voluntariosRef = collection(db, "voluntarios");
             const userQuery = query(voluntariosRef, where("authUid", "==", user.uid), limit(1));
             const userSnapshot = await getDocs(userQuery);
@@ -48,31 +46,41 @@ onAuthStateChanged(auth, async (user) => {
                 throw new Error("Perfil de voluntário não encontrado.");
             }
             const userProfile = { id: userSnapshot.docs[0].id, ...userSnapshot.docs[0].data() };
-            currentUserProfileId = userProfile.id; // <-- Guarda o ID do Firestore
+            currentUserProfileId = userProfile.id; 
 
             const idTokenResult = await user.getIdTokenResult(true);
             const claims = idTokenResult.claims || {};
             
-            // LÓGICA ATUALIZADA: Leitura do array de múltiplos cargos
             const userRoles = claims.roles || (claims.role ? [claims.role] : ['voluntario']);
 
+            // 1. Quem pode abrir a página (Apenas módulo escolar + Super Admin)
             const rolesPermitidasPagina = [
                 'super-admin', 'dirigente-escola', 'secretario-escola'
-                // Facilitador comum NÃO entra aqui, pois ele acessa via Meu CEPAT
             ];
-            const rolesAdminGlobal = [
-                'super-admin', 'diretor', 'tesoureiro'
+            
+            // 2. Quem pode ver TODAS as turmas (se não estiver aqui, vê apenas as turmas onde atua)
+            const rolesPodeVerTodas = [
+                'super-admin', 'dirigente-escola'
             ];
 
-            // Verifica acesso à página através da nova mochila
+            // 3. Quem pode clicar no botão e CRIAR a turma
+            const rolesPodeCriarTurma = [
+                'super-admin', 'dirigente-escola'
+            ];
+
             const temPermissaoPagina = rolesPermitidasPagina.some(role => 
                 userRoles.includes(role) || 
                 claims[role] === true || 
                 claims[role.replace('-', '_')] === true
             );
 
-            // Verifica se é admin global
-            const isAdminGlobal = rolesAdminGlobal.some(role => 
+            const podeVerTodas = rolesPodeVerTodas.some(role => 
+                userRoles.includes(role) || 
+                claims[role] === true || 
+                claims[role.replace('-', '_')] === true
+            );
+
+            const podeCriar = rolesPodeCriarTurma.some(role => 
                 userRoles.includes(role) || 
                 claims[role] === true || 
                 claims[role.replace('-', '_')] === true
@@ -82,14 +90,14 @@ onAuthStateChanged(auth, async (user) => {
                  mainContent.style.display = 'block';
                  acessoNegadoContainer.style.display = 'none';
 
-                if (isAdminGlobal) {
-                    btnIniciarTurma.style.display = 'inline-flex'; // Usa inline-flex por causa do ícone
+                // Botão restrito estritamente a super-admin e dirigente-escola
+                if (podeCriar) {
+                    btnIniciarTurma.style.display = 'inline-flex'; 
                 } else {
                     btnIniciarTurma.style.display = 'none';
                 }
 
-                // ### AJUSTE: Passa isAdminGlobal e ID do usuário para carregarTurmas ###
-                carregarTurmas(isAdminGlobal, currentUserProfileId);
+                carregarTurmas(podeVerTodas, currentUserProfileId);
             } else {
                 mainContent.style.display = 'none';
                 acessoNegadoContainer.style.display = 'block';
@@ -98,7 +106,6 @@ onAuthStateChanged(auth, async (user) => {
              console.error("Erro ao verificar permissões em gerenciar-turmas:", error);
              mainContent.style.display = 'none';
              acessoNegadoContainer.style.display = 'block';
-             // Mostra o erro no container de acesso negado para depuração
              acessoNegadoContainer.innerHTML = `<h1>Erro</h1><p>${error.message}</p><a href="/dashboard.html">Voltar</a>`;
         }
     } else {
@@ -108,28 +115,24 @@ onAuthStateChanged(auth, async (user) => {
 
 // --- FUNÇÕES ---
 
-// ### AJUSTE: Função agora recebe parâmetros para a query condicional ###
-function carregarTurmas(isUserAdminGlobal, userFirestoreId) {
+function carregarTurmas(podeVerTodas, userFirestoreId) {
     const turmasRef = collection(db, "turmas");
-    let q; // Declara a query
+    let q; 
 
-    if (isUserAdminGlobal) {
-        // Admins globais veem todas as turmas
-        console.log("Carregando TODAS as turmas (Admin Global)");
+    if (podeVerTodas) {
+        console.log("Carregando TODAS as turmas (Admin/Dirigente).");
         q = query(turmasRef, orderBy("nomeDaTurma"));
     } else {
-        // Dirigentes/Secretários veem apenas as turmas onde são facilitadores
-        console.log(`Carregando turmas onde o usuário ${userFirestoreId} é facilitador.`);
+        console.log(`Carregando apenas as turmas onde o usuário ${userFirestoreId} atua.`);
         q = query(turmasRef,
                   where("facilitadoresIds", "array-contains", userFirestoreId),
                   orderBy("nomeDaTurma"));
     }
-    // ### FIM DO AJUSTE ###
 
     onSnapshot(q, (snapshot) => {
         turmasGridContainer.innerHTML = '';
         if (snapshot.empty) {
-            if (isUserAdminGlobal) {
+            if (podeVerTodas) {
                 turmasGridContainer.innerHTML = '<p>Nenhuma turma cadastrada. Clique em "Iniciar Nova Turma" para começar.</p>';
             } else {
                  turmasGridContainer.innerHTML = '<p>Você não está listado como facilitador em nenhuma turma ativa.</p>';
@@ -154,10 +157,9 @@ function carregarTurmas(isUserAdminGlobal, userFirestoreId) {
             `;
             turmasGridContainer.appendChild(card);
         });
-    }, (error) => { // Adiciona tratamento de erro para o onSnapshot
+    }, (error) => { 
         console.error("Erro ao carregar turmas:", error);
         turmasGridContainer.innerHTML = '<p style="color: red;">Erro ao carregar a lista de turmas. Verifique o console.</p>';
-        // Se o erro for de índice, pode adicionar a mensagem específica
         if (error.code === 'failed-precondition') {
              turmasGridContainer.innerHTML += '<p style="color: orange;">Pode ser necessário criar um índice no Firestore. Verifique o link no console de erro.</p>';
         }
@@ -166,14 +168,12 @@ function carregarTurmas(isUserAdminGlobal, userFirestoreId) {
 
 
 async function carregarDadosParaModal() {
-    // Limpa seletores
     selectCursoGabarito.innerHTML = '<option value="">Carregando cursos...</option>';
-    selectFacilitadores.innerHTML = ''; // Limpa completamente
+    selectFacilitadores.innerHTML = ''; 
 
     try {
-        // Carrega Cursos
         const cursosSnapshot = await getDocs(query(collection(db, "cursos"), orderBy("nome")));
-        selectCursoGabarito.innerHTML = '<option value="">Selecione um gabarito</option>'; // Restaura opção padrão
+        selectCursoGabarito.innerHTML = '<option value="">Selecione um gabarito</option>'; 
         cursosSnapshot.forEach(doc => {
             const option = document.createElement('option');
             option.value = doc.id;
@@ -182,11 +182,10 @@ async function carregarDadosParaModal() {
             selectCursoGabarito.appendChild(option);
         });
 
-        // Carrega Voluntários (Facilitadores)
         const voluntariosSnapshot = await getDocs(query(collection(db, "voluntarios"), where("statusVoluntario", "==", "ativo"), orderBy("nome")));
         voluntariosSnapshot.forEach(doc => {
             const option = document.createElement('option');
-            option.value = doc.id; // ID do documento do voluntário
+            option.value = doc.id; 
             option.textContent = doc.data().nome;
             selectFacilitadores.appendChild(option);
         });
@@ -199,7 +198,7 @@ async function carregarDadosParaModal() {
 
 function abrirModalTurma() {
     formTurma.reset();
-    carregarDadosParaModal(); // Carrega as opções atualizadas
+    carregarDadosParaModal(); 
     modalTurma.classList.add('visible');
 }
 
@@ -208,7 +207,7 @@ async function salvarTurma(event) {
     const nomeDaTurma = inputTurmaNome.value.trim();
     const cursoGabaritoId = selectCursoGabarito.value;
     const facilitadoresSelecionados = Array.from(selectFacilitadores.selectedOptions);
-    const dataInicioValue = inputDataInicio.value; // ex: "2025-09-24"
+    const dataInicioValue = inputDataInicio.value; 
     const diaSemanaValue = selectDiaSemana.value;
 
     if (!nomeDaTurma || !cursoGabaritoId || facilitadoresSelecionados.length === 0 || !dataInicioValue || diaSemanaValue === "") {
@@ -225,9 +224,7 @@ async function salvarTurma(event) {
     const facilitadores = facilitadoresSelecionados.map(option => ({ id: option.value, nome: option.textContent }));
     const facilitadoresIds = facilitadoresSelecionados.map(option => option.value);
 
-    // Converte a data string para Timestamp do Firebase (interpretando como UTC 00:00)
-   // LINHA NOVA (SEM 'Z'):
-const dataInicioTimestamp = Timestamp.fromDate(new Date(dataInicioValue + 'T00:00:00'));
+    const dataInicioTimestamp = Timestamp.fromDate(new Date(dataInicioValue + 'T00:00:00'));
     try {
         await addDoc(collection(db, "turmas"), {
             nomeDaTurma: nomeDaTurma,
@@ -266,11 +263,10 @@ if(modalTurma) modalTurma.addEventListener('click', (event) => {
 });
 if(formTurma) formTurma.addEventListener('submit', salvarTurma);
 
-// Adiciona a div de acesso negado ao HTML se não existir (Mantido como segurança)
 if (!document.getElementById('acesso-negado')) {
     const divAcessoNegado = document.createElement('div');
     divAcessoNegado.id = 'acesso-negado';
-    divAcessoNegado.style.display = 'none'; // Começa escondida
+    divAcessoNegado.style.display = 'none'; 
     divAcessoNegado.innerHTML = '<h1>Acesso Negado</h1><p>Você não tem permissão para acessar esta página.</p>';
     document.body.appendChild(divAcessoNegado);
 }
