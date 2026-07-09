@@ -95,10 +95,12 @@ let turmaData = null; // Guarda os dados da turma carregada
 let currentAulaIdParaFrequencia = null;
 let currentUser = null; // Guarda o objeto 'user' do Auth
 let currentUserProfile = null; // Guarda os dados do Firestore ('voluntarios') ID e Data
+let currentUserRoles = []; // Guarda o array de cargos final
 let currentUserClaims = null; // Guarda os claims (cargos)
 let userIsAdminGlobal = false; // Flag para admin global
 let userIsAdminEducacional = false; // Flag para dirigente/secretário
 let userIsFacilitatorDaTurma = false; // Flag para facilitador DESTA turma
+let userIsFacilitatorGeral = false; // Flag genérica de facilitador
 
 onAuthStateChanged(auth, async (user) => {
     console.log("AUTH STATE CHANGED:", user ? user.uid : 'No user'); // Log inicial
@@ -120,14 +122,24 @@ onAuthStateChanged(auth, async (user) => {
             // 2. Pega os claims (cargos)
             const idTokenResult = await user.getIdTokenResult(true); // Força refresh
             currentUserClaims = idTokenResult.claims || {};
-            console.log("Claims do Usuário Carregados:", currentUserClaims); // Log Claims
+            
+            // 3. Monta a mochila de cargos baseada na string nova ou antiga
+            currentUserRoles = currentUserClaims.roles || (currentUserClaims.role ? [currentUserClaims.role] : ['voluntario']);
+            console.log("Mochila de Cargos do Usuário:", currentUserRoles);
 
-            // 3. Define as flags de permissão globais
-            userIsAdminGlobal = ['super-admin', 'diretor', 'tesoureiro'].some(role => currentUserClaims[role] === true || currentUserClaims.role === role);
-            userIsAdminEducacional = currentUserClaims['dirigente-escola'] === true || currentUserClaims['secretario-escola'] === true || currentUserClaims.role === 'dirigente-escola' || currentUserClaims.role === 'secretario-escola';
+            // 4. Define as flags de permissão globais usando a mochila
+            userIsAdminGlobal = ['super-admin', 'diretor', 'tesoureiro'].some(role => currentUserRoles.includes(role));
+            
+            userIsAdminEducacional = ['dirigente-escola', 'secretario-escola'].some(role => 
+                currentUserRoles.includes(role) || 
+                currentUserClaims[role.replace('-', '_')] === true
+            );
+            
+            userIsFacilitatorGeral = userIsAdminEducacional || currentUserRoles.includes('facilitador') || currentUserClaims.facilitador === true;
+
             console.log(`Flags Globais: isAdminGlobal=${userIsAdminGlobal}, isAdminEducacional=${userIsAdminEducacional}`); // Log Flags
 
-            // 4. Pega o ID da turma da URL
+            // 5. Pega o ID da turma da URL
             const params = new URLSearchParams(window.location.search);
             turmaId = params.get('turmaId');
             if (!turmaId) {
@@ -135,7 +147,7 @@ onAuthStateChanged(auth, async (user) => {
             }
             console.log("ID da Turma:", turmaId); // Log Turma ID
 
-            // 5. Carrega os dados da turma E verifica a permissão específica para esta turma
+            // 6. Carrega os dados da turma E verifica a permissão específica para esta turma
             await carregarDadosDaTurmaEVerificarPermissao();
 
         } catch (error) {
@@ -168,9 +180,8 @@ async function carregarDadosDaTurmaEVerificarPermissao() {
     console.log(`Usuário (ID: ${currentUserProfile.id}) é facilitador desta turma? ${userIsFacilitatorDaTurma}`); // Log Verificação Facilitador
 
     // Verifica a permissão de ACESSO à página
-    const podeAcessarPagina = userIsAdminGlobal || // Admins globais podem ver tudo
-        (userIsFacilitatorDaTurma && (userIsAdminEducacional || currentUserProfile.role === 'facilitador' || currentUserClaims.facilitador === true));
-    console.log(`Pode acessar a página? ${podeAcessarPagina} (isAdminGlobal=${userIsAdminGlobal}, isFacilitator=${userIsFacilitatorDaTurma}, isAdminEdu=${userIsAdminEducacional}, profileRole=${currentUserProfile.role}, claimFacilitador=${currentUserClaims.facilitador})`); // Log Decisão Final
+    const podeAcessarPagina = userIsAdminGlobal || (userIsFacilitatorDaTurma && userIsFacilitatorGeral);
+    console.log(`Pode acessar a página? ${podeAcessarPagina}`); // Log Decisão Final
 
     if (!podeAcessarPagina) {
         throw new Error("Você não tem permissão para gerenciar esta turma específica.");
@@ -1018,22 +1029,22 @@ async function getDadosCompletosParaRelatorio() {
 // ## FUNÇÃO AUXILIAR PARA CARREGAR IMAGENS DO CERTIFICADO ##
 // ==========================================================
 function precarregarImagem(url) {
-    return new Promise((resolve) => {
-        if (!url) {
-            // Se a URL for nula (ex: sem assinatura), resolve com null
-            resolve(null);
-            return;
-        }
-        const img = new Image();
-        // Essencial para o html2canvas ler imagens de outro domínio (Firebase Storage)
-        img.crossOrigin = "Anonymous"; 
-        img.onload = () => resolve(img);
-        img.onerror = () => {
-            console.warn(`Falha ao precarregar imagem: ${url}`);
-            resolve(null); // Resolve com null para não quebrar o Promise.all
-        };
-        img.src = url;
-    });
+    return new Promise((resolve) => {
+        if (!url) {
+            // Se a URL for nula (ex: sem assinatura), resolve com null
+            resolve(null);
+            return;
+        }
+        const img = new Image();
+        // Essencial para o html2canvas ler imagens de outro domínio (Firebase Storage)
+        img.crossOrigin = "Anonymous"; 
+        img.onload = () => resolve(img);
+        img.onerror = () => {
+            console.warn(`Falha ao precarregar imagem: ${url}`);
+            resolve(null); // Resolve com null para não quebrar o Promise.all
+        };
+        img.src = url;
+    });
 }
 // ==========================================================
 
@@ -1248,7 +1259,11 @@ async function gerarCertificados() {
 
             if (voluntarioDoc.exists()) {
                 const voluntarioData = voluntarioDoc.data();
-                if (voluntarioData.role === 'dirigente-escola') {
+                
+                // MUDANÇA: Verifica array de roles para encontrar a assinatura do dirigente
+                const rolesVoluntario = voluntarioData.roles || (voluntarioData.role ? [voluntarioData.role] : []);
+                
+                if (rolesVoluntario.includes('dirigente-escola')) {
                     if (voluntarioData.assinaturaUrl) {
                         dirigenteEncontrado = voluntarioData;
                         console.log(`Dirigente encontrado: ${voluntarioData.nome}, Assinatura: ${voluntarioData.assinaturaUrl}`);
