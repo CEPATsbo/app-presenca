@@ -423,10 +423,26 @@ function renderizarCardsDeAcolhimento(listaDeVoluntarios) {
     }
 }
 
-// INICIA O PROCESSO SOMENTE SE O DIRETOR ESTIVER LOGADO NO SISTEMA
-onAuthStateChanged(auth, (user) => {
+// INICIA O PROCESSO SOMENTE SE USUÁRIO AUTORIZADO ESTIVER LOGADO NO SISTEMA
+onAuthStateChanged(auth, async (user) => {
     if (user) {
-        iniciarAnaliseDeAcolhimento();
+        try {
+            const idTokenResult = await user.getIdTokenResult(true);
+            const claims = idTokenResult.claims || {};
+            const userRoles = claims.roles || (claims.role ? [claims.role] : ['voluntario']);
+            
+            const rolesPermitidas = ['super-admin', 'diretor', 'entrevistador'];
+            const temAcesso = rolesPermitidas.some(role => userRoles.includes(role) || claims[role] === true);
+
+            if (temAcesso) {
+                iniciarAnaliseDeAcolhimento();
+            } else {
+                document.body.innerHTML = '<div style="text-align: center; margin-top: 50px; font-family: sans-serif;"><h1>Acesso Negado</h1><p>Você não tem permissão para acessar o painel de acolhimento.</p><a href="/dashboard.html" style="color: #3498db; text-decoration: none; font-weight: bold;">Voltar ao Dashboard</a></div>';
+            }
+        } catch (error) {
+            console.error("Erro ao verificar permissões:", error);
+            document.body.innerHTML = '<div style="text-align: center; margin-top: 50px;"><h1>Erro</h1><p>Falha ao verificar as credenciais.</p></div>';
+        }
     } else {
         // Se não estiver logado, redireciona para a página de login
         window.location.href = '/login.html';
