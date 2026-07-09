@@ -38,7 +38,7 @@ onAuthStateChanged(auth, async (user) => {
     if (user) {
         mainContainer.style.display = 'block';
         await carregarDadosDoFacilitador(user);
-  M   } else {
+     } else {
         window.location.href = 'login.html';
     }
 });
