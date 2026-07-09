@@ -42,10 +42,15 @@ onAuthStateChanged(auth, async (user) => {
         const voluntariosRef = collection(db, "voluntarios");
         const q = query(voluntariosRef, where("authUid", "==", user.uid), limit(1));
         const querySnapshot = await getDocs(q);
+        
         if (!querySnapshot.empty) {
             const userProfile = querySnapshot.docs[0].data();
-            const userRole = userProfile.role;
-            if (userRole === 'super-admin' || userRole === 'diretor') {
+            
+            // Lemos o campo 'roles' ou a string 'role' para o array
+            const userRoles = userProfile.roles || (userProfile.role ? [userProfile.role] : ['voluntario']);
+
+            // Verificamos se 'super-admin' ou 'diretor' estão presentes no array de cargos
+            if (userRoles.includes('super-admin') || userRoles.includes('diretor')) {
                 const params = new URLSearchParams(window.location.search);
                 cursoId = params.get('cursoId');
                 if (cursoId) {
@@ -84,6 +89,7 @@ async function carregarDetalhesDoCursoEAulas() {
     const q = query(aulasRef, orderBy("numeroDaAula"));
     
     onSnapshot(q, (snapshot) => {
+        if (!aulasTableBody) return;
         aulasTableBody.innerHTML = '';
         if (snapshot.empty) {
             aulasTableBody.innerHTML = '<tr><td colspan="4" style="text-align: center;">Nenhuma aula cadastrada. Clique em "Adicionar Nova Aula" para começar.</td></tr>';
@@ -106,65 +112,67 @@ async function carregarDetalhesDoCursoEAulas() {
         });
     }, (error) => {
         console.error("Erro no listener de aulas:", error);
-        aulasTableBody.innerHTML = '<tr><td colspan="4" style="text-align: center; color: red;">Erro ao carregar aulas. Verifique o console.</td></tr>';
+        if (aulasTableBody) aulasTableBody.innerHTML = '<tr><td colspan="4" style="text-align: center; color: red;">Erro ao carregar aulas. Verifique o console.</td></tr>';
     });
 }
 
 function abrirModalAula(aulaId = null) {
-    formAula.reset();
-    inputAulaId.value = '';
+    if (formAula) formAula.reset();
+    if (inputAulaId) inputAulaId.value = '';
 
     if (aulaId) {
-        modalAulaTitulo.textContent = 'Editar Aula';
+        if (modalAulaTitulo) modalAulaTitulo.textContent = 'Editar Aula';
         const aulaRef = doc(db, "cursos", cursoId, "curriculo", aulaId);
         getDoc(aulaRef).then(docSnap => {
             if (docSnap.exists()) {
                 const data = docSnap.data();
-                inputAulaId.value = docSnap.id;
-                inputAulaNumero.value = data.numeroDaAula;
-                inputAulaTitulo.value = data.titulo;
-                if (cursoIsEAE) {
+                if (inputAulaId) inputAulaId.value = docSnap.id;
+                if (inputAulaNumero) inputAulaNumero.value = data.numeroDaAula;
+                if (inputAulaTitulo) inputAulaTitulo.value = data.titulo;
+                if (cursoIsEAE && selectAulaAno) {
                     selectAulaAno.value = data.anoCorrespondente || '1';
                 }
             }
         });
     } else {
-        modalAulaTitulo.textContent = 'Adicionar Nova Aula';
+        if (modalAulaTitulo) modalAulaTitulo.textContent = 'Adicionar Nova Aula';
     }
-    modalAula.classList.add('visible');
+    if (modalAula) modalAula.classList.add('visible');
 }
 
 async function salvarAula(event) {
     event.preventDefault();
-    const id = inputAulaId.value;
+    const id = inputAulaId ? inputAulaId.value : '';
     const dadosAula = {
-        numeroDaAula: Number(inputAulaNumero.value),
-        titulo: inputAulaTitulo.value.trim()
+        numeroDaAula: Number(inputAulaNumero ? inputAulaNumero.value : 0),
+        titulo: inputAulaTitulo ? inputAulaTitulo.value.trim() : ''
     };
-    if (cursoIsEAE) {
+    if (cursoIsEAE && selectAulaAno) {
         dadosAula.anoCorrespondente = selectAulaAno.value;
     }
 
-    btnSalvarAula.disabled = true;
-    btnSalvarAula.textContent = 'Salvando...';
+    if (btnSalvarAula) {
+        btnSalvarAula.disabled = true;
+        btnSalvarAula.textContent = 'Salvando...';
+    }
 
     try {
         if (id) {
-            // CORREÇÃO: Usar a referência direta ao documento
             const aulaRef = doc(db, "cursos", cursoId, "curriculo", id);
             await updateDoc(aulaRef, dadosAula);
         } else {
-            // A adição de um novo documento já estava correta
             const aulasRef = collection(db, "cursos", cursoId, "curriculo");
             await addDoc(aulasRef, dadosAula);
         }
-        modalAula.classList.remove('visible');
+        if (modalAula) modalAula.classList.remove('visible');
     } catch (error) {
         console.error("Erro ao salvar aula:", error);
         alert("Ocorreu um erro ao salvar a aula.");
     } finally {
-        btnSalvarAula.disabled = false;
-        btnSalvarAula.textContent = 'Salvar Aula';
+        if (btnSalvarAula) {
+            btnSalvarAula.disabled = false;
+            btnSalvarAula.textContent = 'Salvar Aula';
+        }
     }
 }
 
@@ -173,10 +181,8 @@ async function deletarAula(aulaId) {
         return;
     }
     try {
-        // A lógica de exclusão já estava correta, mas a mantemos aqui para consistência.
         const aulaRef = doc(db, "cursos", cursoId, "curriculo", aulaId);
         await deleteDoc(aulaRef);
-        // O onSnapshot cuidará de remover a linha da tela automaticamente.
     } catch (error) {
         console.error("Erro ao deletar aula:", error);
         alert("Ocorreu um erro ao excluir a aula.");
