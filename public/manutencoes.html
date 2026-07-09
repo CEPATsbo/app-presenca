@@ -228,7 +228,6 @@
 
     <div id="main-content" class="main-container">
 
-        <!-- NOVO: Seção do Relatório WhatsApp -->
         <div class="section-card">
             <h2 class="section-title">
                 <span><i class="fab fa-whatsapp" style="color: #25D366; margin-right: 10px;"></i> Relatório para Diretoria</span>
@@ -251,7 +250,6 @@
             </button>
         </div>
 
-        <!-- Seção: Manutenções Periódicas -->
         <div class="section-card">
             <h2 class="section-title">
                 <span><i class="fas fa-calendar-check" style="color: #ff9800; margin-right: 10px;"></i> Manutenções Periódicas e Obrigatórias</span>
@@ -270,12 +268,10 @@
                     </tr>
                 </thead>
                 <tbody id="tabela-periodicas">
-                    <!-- Preenchido pelo JavaScript -->
-                </tbody>
+                    </tbody>
             </table>
         </div>
 
-        <!-- Seção: Manutenções Pontuais -->
         <div class="section-card">
             <h2 class="section-title">
                 <span><i class="fas fa-tools" style="color: #3f51b5; margin-right: 10px;"></i> Registrar Manutenção Pontual</span>
@@ -291,8 +287,7 @@
                     <label for="selectPatrimonio">Vincular a um Item de Patrimônio (Opcional)</label>
                     <select id="selectPatrimonio" class="form-control">
                         <option value="">-- Não vincular / Manutenção geral na casa --</option>
-                        <!-- Preenchido pelo JS com os itens ativos -->
-                    </select>
+                        </select>
                 </div>
 
                 <div class="form-group">
@@ -315,14 +310,12 @@
                     </tr>
                 </thead>
                 <tbody id="tabela-pontuais">
-                    <!-- Preenchido pelo JS -->
-                </tbody>
+                    </tbody>
             </table>
         </div>
 
     </div>
 
-    <!-- Modal para Atualizar Manutenção Periódica -->
     <div class="modal-overlay" id="modalPeriodica">
         <div class="modal-content">
             <button class="btn-fechar-modal" id="btnFecharModal">&times;</button>
@@ -382,9 +375,12 @@
             if (user) {
                 user.getIdTokenResult(true).then((idTokenResult) => {
                     const claims = idTokenResult.claims || {};
-                    const userRole = claims.role || 'voluntario';
                     
-                    const temAcessoPeloRole = rolesPermitidas.includes(userRole);
+                    // LÓGICA ATUALIZADA: Leitura do array de múltiplos cargos
+                    const userRoles = claims.roles || (claims.role ? [claims.role] : ['voluntario']);
+                    
+                    // Verifica se o usuário tem a role no novo array ou como um claim booleano
+                    const temAcessoPeloRole = userRoles.includes('super-admin') || rolesPermitidas.some(rolePermitida => userRoles.includes(rolePermitida));
                     const temAcessoPeloClaim = rolesPermitidas.some(role => claims[role] === true);
 
                     if (temAcessoPeloRole || temAcessoPeloClaim) {
