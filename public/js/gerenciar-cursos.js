@@ -11,57 +11,87 @@ const firebaseConfig = {
     messagingSenderId: "66122858261",
     appId: "1:66122858261:web:7fa21f1805463b5c08331c"
 };
-
-// --- INICIALIZAÇÃO ---
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
 
-// --- ELEMENTOS DA PÁGINA ---
-const coursesGridContainer = document.getElementById('courses-grid-container');
-const btnCriarCurso = document.getElementById('btn-criar-curso');
-const modalCurso = document.getElementById('modal-curso');
-const closeModalCursoBtn = document.getElementById('close-modal-curso');
-const modalCursoTitulo = document.getElementById('modal-curso-titulo');
-const formCurso = document.getElementById('form-curso');
-const inputCursoId = document.getElementById('curso-id');
-const inputCursoNome = document.getElementById('curso-nome');
-const inputCursoDescricao = document.getElementById('curso-descricao');
-const inputCursoIsEAE = document.getElementById('curso-is-eae');
-const btnSalvarCurso = document.getElementById('btn-salvar-curso');
+// ELEMENTOS DA TELA
+const mainContainer = document.getElementById('main-container');
+const acessoNegadoContainer = document.getElementById('acesso-negado-container');
+const cardGerenciarCursos = document.getElementById('card-gerenciar-cursos');
+const cardGerenciarTurmas = document.getElementById('card-gerenciar-turmas');
 
-// --- VERIFICAÇÃO DE PERMISSÃO ---
 onAuthStateChanged(auth, async (user) => {
     if (user) {
-        const voluntariosRef = collection(db, "voluntarios");
-        const q = query(voluntariosRef, where("authUid", "==", user.uid), limit(1));
-        const querySnapshot = await getDocs(q);
-
-        if (!querySnapshot.empty) {
-            const userProfile = querySnapshot.docs[0].data();
+        try {
+            const idTokenResult = await user.getIdTokenResult(true);
+            const claims = idTokenResult.claims || {};
             
-            // ***** CORREÇÃO APLICADA AQUI *****
-            // Lemos o campo 'role' que é uma string.
-            const userRole = userProfile.role; 
+            // CONVERSÃO UNIFICADA PARA SUPORTE A MÚLTIPLOS CARGOS
+            const userRoles = claims.roles || (claims.role ? [claims.role] : ['voluntario']);
 
-            // Verificamos se 'role' é a string 'super-admin' ou 'diretor'.
-            if (userRole === 'super-admin' || userRole === 'diretor') {
-                // Permissão concedida
+            const rolesPermitidasPagina = [ // Quem pode VER esta página
+                'super-admin', 'diretor', 
+                'dirigente-escola', 'secretario-escola'
+            ];
+            const rolesAdminGlobal = [ // Quem pode gerenciar CURSOS
+                'super-admin', 'diretor'
+            ];
+
+            // Varre o array e os formatos alternativos booleanos da escola
+            const temPermissaoPagina = userRoles.includes('super-admin') || rolesPermitidasPagina.some(role => 
+                userRoles.includes(role) || 
+                claims[role] === true || 
+                claims[role.replace('-', '_')] === true
+            );
+
+            const isAdminGlobal = userRoles.includes('super-admin') || rolesAdminGlobal.some(role => 
+                userRoles.includes(role) || 
+                claims[role] === true || 
+                claims[role.replace('-', '_')] === true
+            );
+
+            if (temPermissaoPagina) {
+                if (mainContainer) mainContainer.style.display = 'block';
+                if (acessoNegadoContainer) acessoNegadoContainer.style.display = 'none';
+                console.log("Acesso permitido para Gerenciamento de Cursos:", user.displayName);
+
+                // Controla a exibição do card de gabaritos
+                if (cardGerenciarCursos) {
+                    if (isAdminGlobal) {
+                        cardGerenciarCursos.style.display = 'block';
+                    } else {
+                        cardGerenciarCursos.style.display = 'none';
+                    }
+                }
+                
                 carregarCursos();
             } else {
-                // Permissão negada
-                document.body.innerHTML = '<h1>Acesso Negado</h1><p>Você não tem permissão para acessar esta página.</p>';
+                if (mainContainer) mainContainer.style.display = 'none';
+                if (acessoNegadoContainer) {
+                    acessoNegadoContainer.style.display = 'block';
+                } else {
+                    document.body.innerHTML = '<h1>Acesso Negado</h1><p>Você não tem permissão para acessar esta página.</p>';
+                }
+                console.warn("Acesso negado para Gerenciamento de Cursos:", user.displayName);
             }
-        } else {
-            document.body.innerHTML = '<h1>Acesso Negado</h1><p>Seu perfil de voluntário não foi encontrado.</p>';
+        } catch (error) {
+            console.error("Erro ao verificar permissões:", error);
+            if (mainContainer) mainContainer.style.display = 'none';
+            if (acessoNegadoContainer) {
+                acessoNegadoContainer.style.display = 'block';
+            } else {
+                document.body.innerHTML = '<h1>Erro do Sistema</h1><p>Houve uma falha ao processar suas credenciais.</p>';
+            }
         }
     } else {
-        window.location.href = '/index.html'; // Redireciona para login se não estiver autenticado
+        window.location.href = '/index.html';
     }
 });
 
 // --- FUNÇÕES ---
 function carregarCursos() {
+    const coursesGridContainer = document.getElementById('courses-grid-container');
     const cursosRef = collection(db, "cursos");
     onSnapshot(cursosRef, (snapshot) => {
         if (!coursesGridContainer) return;
@@ -89,38 +119,55 @@ function carregarCursos() {
 }
 
 function abrirModal(cursoId = null) {
-    formCurso.reset();
-    inputCursoId.value = '';
+    const formCurso = document.getElementById('form-curso');
+    const inputCursoId = document.getElementById('curso-id');
+    const modalCursoTitulo = document.getElementById('modal-curso-titulo');
+    const inputCursoNome = document.getElementById('curso-nome');
+    const inputCursoDescricao = document.getElementById('curso-descricao');
+    const inputCursoIsEAE = document.getElementById('curso-is-eae');
+    const modalCurso = document.getElementById('modal-curso');
+
+    if (formCurso) formCurso.reset();
+    if (inputCursoId) inputCursoId.value = '';
 
     if (cursoId) {
-        modalCursoTitulo.textContent = 'Editar Gabarito';
+        if (modalCursoTitulo) modalCursoTitulo.textContent = 'Editar Gabarito';
         const cursoRef = doc(db, "cursos", cursoId);
         getDoc(cursoRef).then(docSnap => {
             if (docSnap.exists()) {
                 const data = docSnap.data();
-                inputCursoId.value = docSnap.id;
-                inputCursoNome.value = data.nome;
-                inputCursoDescricao.value = data.descricao || '';
-                inputCursoIsEAE.checked = data.isEAE || false;
+                if (inputCursoId) inputCursoId.value = docSnap.id;
+                if (inputCursoNome) inputCursoNome.value = data.nome;
+                if (inputCursoDescricao) inputCursoDescricao.value = data.descricao || '';
+                if (inputCursoIsEAE) inputCursoIsEAE.checked = data.isEAE || false;
             }
         });
     } else {
-        modalCursoTitulo.textContent = 'Criar Novo Gabarito';
+        if (modalCursoTitulo) modalCursoTitulo.textContent = 'Criar Novo Gabarito';
     }
-    modalCurso.classList.add('visible');
+    if (modalCurso) modalCurso.classList.add('visible');
 }
 
 async function salvarCurso(event) {
     event.preventDefault();
-    const id = inputCursoId.value;
+    const inputCursoId = document.getElementById('curso-id');
+    const inputCursoNome = document.getElementById('curso-nome');
+    const inputCursoDescricao = document.getElementById('curso-descricao');
+    const inputCursoIsEAE = document.getElementById('curso-is-eae');
+    const btnSalvarCurso = document.getElementById('btn-salvar-curso');
+    const modalCurso = document.getElementById('modal-curso');
+
+    const id = inputCursoId ? inputCursoId.value : '';
     const dadosCurso = {
-        nome: inputCursoNome.value.trim(),
-        descricao: inputCursoDescricao.value.trim(),
-        isEAE: inputCursoIsEAE.checked
+        nome: inputCursoNome ? inputCursoNome.value.trim() : '',
+        descricao: inputCursoDescricao ? inputCursoDescricao.value.trim() : '',
+        isEAE: inputCursoIsEAE ? inputCursoIsEAE.checked : false
     };
 
-    btnSalvarCurso.disabled = true;
-    btnSalvarCurso.textContent = 'Salvando...';
+    if (btnSalvarCurso) {
+        btnSalvarCurso.disabled = true;
+        btnSalvarCurso.textContent = 'Salvando...';
+    }
 
     try {
         if (id) {
@@ -129,17 +176,25 @@ async function salvarCurso(event) {
         } else {
             await addDoc(collection(db, "cursos"), dadosCurso);
         }
-        modalCurso.classList.remove('visible');
+        if (modalCurso) modalCurso.classList.remove('visible');
     } catch (error) {
         console.error("Erro ao salvar curso:", error);
         alert("Ocorreu um erro ao salvar. Tente novamente.");
     } finally {
-        btnSalvarCurso.disabled = false;
-        btnSalvarCurso.textContent = 'Salvar Gabarito';
+        if (btnSalvarCurso) {
+            btnSalvarCurso.disabled = false;
+            btnSalvarCurso.textContent = 'Salvar Gabarito';
+        }
     }
 }
 
 // --- EVENTOS ---
+const btnCriarCurso = document.getElementById('btn-criar-curso');
+const closeModalCursoBtn = document.getElementById('close-modal-curso');
+const modalCurso = document.getElementById('modal-curso');
+const formCurso = document.getElementById('form-curso');
+const coursesGridContainer = document.getElementById('courses-grid-container');
+
 if(btnCriarCurso) btnCriarCurso.addEventListener('click', () => abrirModal());
 if(closeModalCursoBtn) closeModalCursoBtn.addEventListener('click', () => modalCurso.classList.remove('visible'));
 if(modalCurso) modalCurso.addEventListener('click', (event) => {
