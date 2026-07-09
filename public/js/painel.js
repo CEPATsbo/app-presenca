@@ -65,11 +65,22 @@ let atividadesDoDia = [];
 let detalhesPendenciasCantina = [];
 let detalhesPendenciasBiblioteca = [];
 let detalhesEmprestimos = [];
+let currentUserRoles = [];
 
 // --- LÓGICA PRINCIPAL ---
 onAuthStateChanged(auth, async (user) => {
     if (user) {
         currentUser = user;
+        
+        // Pega as permissões para montar a mochila global no front
+        try {
+            const idTokenResult = await user.getIdTokenResult();
+            const claims = idTokenResult.claims || {};
+            currentUserRoles = claims.roles || (claims.role ? [claims.role] : ['voluntario']);
+        } catch(e) {
+            console.warn("Erro silencioso na leitura de claims:", e);
+        }
+
         carregarMural();
         const voluntariosRef = collection(db, "voluntarios");
         const q = query(voluntariosRef, where("authUid", "==", user.uid), limit(1));
@@ -201,8 +212,14 @@ function abrirModalEdicao() {
 async function salvarAlteracoesPerfil(event) {
     event.preventDefault();
     if (!voluntarioProfile || !voluntarioProfile.id) return;
+    
+    // NOVO: Sanitiza o nome atualizado para a busca
+    const nomeLimpo = inputEditNome.value.trim();
+    const nomeNormalizado = nomeLimpo.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+
     const dadosAtualizados = {
-        nome: inputEditNome.value.trim(),
+        nome: nomeLimpo,
+        nome_normalizado: nomeNormalizado,
         telefone: inputEditTelefone.value.trim(),
         endereco: inputEditEndereco.value.trim(),
         aniversario: inputEditAniversario.value.trim()
