@@ -33,6 +33,7 @@ const mainContent = document.getElementById('main-content');
 const acessoNegadoContainer = document.getElementById('acesso-negado');
 
 let currentUserProfileId = null;
+let currentUserProfileName = null; // Guarda o nome para auto-vincular na criação
 
 // --- VERIFICAÇÃO DE PERMISSÃO ---
 onAuthStateChanged(auth, async (user) => {
@@ -47,20 +48,21 @@ onAuthStateChanged(auth, async (user) => {
             }
             const userProfile = { id: userSnapshot.docs[0].id, ...userSnapshot.docs[0].data() };
             currentUserProfileId = userProfile.id; 
+            currentUserProfileName = userProfile.nome; // Salvamos o nome
 
             const idTokenResult = await user.getIdTokenResult(true);
             const claims = idTokenResult.claims || {};
             
             const userRoles = claims.roles || (claims.role ? [claims.role] : ['voluntario']);
 
-            // 1. Quem pode abrir a página (Apenas módulo escolar + Super Admin)
+            // 1. Quem pode abrir a página
             const rolesPermitidasPagina = [
                 'super-admin', 'dirigente-escola', 'secretario-escola'
             ];
             
-            // 2. Quem pode ver TODAS as turmas (se não estiver aqui, vê apenas as turmas onde atua)
+            // 2. Quem pode ver TODAS as turmas da casa sem ser facilitador
             const rolesPodeVerTodas = [
-                'super-admin', 'dirigente-escola'
+                'super-admin'
             ];
 
             // 3. Quem pode clicar no botão e CRIAR a turma
@@ -90,7 +92,6 @@ onAuthStateChanged(auth, async (user) => {
                  mainContent.style.display = 'block';
                  acessoNegadoContainer.style.display = 'none';
 
-                // Botão restrito estritamente a super-admin e dirigente-escola
                 if (podeCriar) {
                     btnIniciarTurma.style.display = 'inline-flex'; 
                 } else {
@@ -120,7 +121,7 @@ function carregarTurmas(podeVerTodas, userFirestoreId) {
     let q; 
 
     if (podeVerTodas) {
-        console.log("Carregando TODAS as turmas (Admin/Dirigente).");
+        console.log("Carregando TODAS as turmas (Visão Super-Admin).");
         q = query(turmasRef, orderBy("nomeDaTurma"));
     } else {
         console.log(`Carregando apenas as turmas onde o usuário ${userFirestoreId} atua.`);
@@ -210,7 +211,7 @@ async function salvarTurma(event) {
     const dataInicioValue = inputDataInicio.value; 
     const diaSemanaValue = selectDiaSemana.value;
 
-    if (!nomeDaTurma || !cursoGabaritoId || facilitadoresSelecionados.length === 0 || !dataInicioValue || diaSemanaValue === "") {
+    if (!nomeDaTurma || !cursoGabaritoId || !dataInicioValue || diaSemanaValue === "") {
         return alert("Por favor, preencha todos os campos obrigatórios.");
     }
 
@@ -223,6 +224,12 @@ async function salvarTurma(event) {
 
     const facilitadores = facilitadoresSelecionados.map(option => ({ id: option.value, nome: option.textContent }));
     const facilitadoresIds = facilitadoresSelecionados.map(option => option.value);
+
+    // AUTO-VINCULAÇÃO DO CRIADOR DA TURMA (Creator is Owner)
+    if (!facilitadoresIds.includes(currentUserProfileId)) {
+        facilitadoresIds.push(currentUserProfileId);
+        facilitadores.push({ id: currentUserProfileId, nome: currentUserProfileName || 'Criador da Turma' });
+    }
 
     const dataInicioTimestamp = Timestamp.fromDate(new Date(dataInicioValue + 'T00:00:00'));
     try {
@@ -241,7 +248,7 @@ async function salvarTurma(event) {
         });
 
         modalTurma.classList.remove('visible');
-        alert("Turma iniciada com sucesso! O cronograma será gerado em segundo plano.");
+        alert("Turma iniciada com sucesso! Você foi vinculado a ela automaticamente.");
 
     } catch (error) {
         console.error("Erro ao iniciar turma:", error);
