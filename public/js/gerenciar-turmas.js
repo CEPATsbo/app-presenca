@@ -52,42 +52,31 @@ onAuthStateChanged(auth, async (user) => {
 
             const idTokenResult = await user.getIdTokenResult(true);
             const claims = idTokenResult.claims || {};
+            
+            // LÓGICA ATUALIZADA: Leitura do array de múltiplos cargos
+            const userRoles = claims.roles || (claims.role ? [claims.role] : ['voluntario']);
 
             const rolesPermitidasPagina = [
-                'super-admin', 'diretor', 'tesoureiro',
-                'dirigente-escola', 'secretario-escola'
+                'super-admin', 'dirigente-escola', 'secretario-escola'
                 // Facilitador comum NÃO entra aqui, pois ele acessa via Meu CEPAT
             ];
             const rolesAdminGlobal = [
                 'super-admin', 'diretor', 'tesoureiro'
             ];
 
-            let temPermissaoPagina = false;
-            let isAdminGlobal = false;
-
-            // Verifica acesso à página
-            if (rolesPermitidasPagina.includes(claims.role)) {
-                temPermissaoPagina = true;
-            } else {
-                for (const role of rolesPermitidasPagina) {
-                    if (claims[role] === true) {
-                        temPermissaoPagina = true;
-                        break;
-                    }
-                }
-            }
+            // Verifica acesso à página através da nova mochila
+            const temPermissaoPagina = rolesPermitidasPagina.some(role => 
+                userRoles.includes(role) || 
+                claims[role] === true || 
+                claims[role.replace('-', '_')] === true
+            );
 
             // Verifica se é admin global
-             if (rolesAdminGlobal.includes(claims.role)) {
-                isAdminGlobal = true;
-            } else {
-                 for (const role of rolesAdminGlobal) {
-                    if (claims[role] === true) {
-                        isAdminGlobal = true;
-                        break;
-                    }
-                }
-            }
+            const isAdminGlobal = rolesAdminGlobal.some(role => 
+                userRoles.includes(role) || 
+                claims[role] === true || 
+                claims[role.replace('-', '_')] === true
+            );
 
             if (temPermissaoPagina) {
                  mainContent.style.display = 'block';
