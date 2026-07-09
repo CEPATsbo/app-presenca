@@ -313,8 +313,11 @@ if (formPresencaRapida) {
                     nome: voluntarioParaRegistrar.nome,
                     nome_normalizado: nomeNormalizado,
                     statusVoluntario: 'ativo',
-                    authUid: null, // MUDANÇA ESSENCIAL: Garante que o campo exista para o Cadastro encontrar
-                    criadoEm: serverTimestamp()
+                    authUid: null,
+                    criadoEm: serverTimestamp(),
+                    cargos: { voluntario: true }, // Mantido por retrocompatibilidade
+                    roles: ['voluntario'],        // NOVO: Mochila de cargos padrão
+                    role: 'voluntario'            // NOVO: Fallback antigo
                 });
                 voluntarioParaRegistrar.id = novoVoluntarioDoc.id;
             }
