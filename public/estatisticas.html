@@ -120,8 +120,8 @@
 
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
+        import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-auth.js";
         import { getFirestore, collection, getDocs, query, orderBy, where, documentId, Timestamp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
-        import { protegerPagina } from '/auth.js';
 
         const firebaseConfig = {
             apiKey: "AIzaSyBV7RPjk3cFTqL-aIpflJcUojKg1ZXMLuU",
@@ -133,17 +133,42 @@
         };
         
         const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
         const db = getFirestore(app);
 
-        protegerPagina(['super-admin', 'voluntario', 'diretor', 'tesoureiro','caritas', 'conselheiro', 'entrevistador', 'recepcionista', 'irradiador', 'secretario-escola', 'dirigente-escola', 'produtor-evento', 'bibliotecario'])
-            .then(user => {
-                document.getElementById('main-content').style.display = 'block';
-                inicializar();
-            })
-            .catch(error => {
-                document.getElementById('loading-message').style.display = 'none';
-                document.getElementById('acesso-negado').style.display = 'block';
-            });
+        // NOVA LÓGICA DE AUTENTICAÇÃO INLINE (Substitui o auth.js)
+        const rolesPermitidas = ['super-admin', 'voluntario', 'diretor', 'tesoureiro','caritas', 'conselheiro', 'entrevistador', 'recepcionista', 'irradiador', 'secretario-escola', 'dirigente-escola', 'produtor-evento', 'bibliotecario'];
+
+        onAuthStateChanged(auth, (user) => {
+            if (user) {
+                user.getIdTokenResult(true).then((idTokenResult) => {
+                    const claims = idTokenResult.claims || {};
+                    let userRoles = claims.roles || (claims.role ? [claims.role] : []);
+                    
+                    // Garante que todo mundo seja voluntário no mínimo
+                    if (!userRoles.includes('voluntario')) {
+                        userRoles.push('voluntario');
+                    }
+
+                    const temAcessoPeloRole = userRoles.includes('super-admin') || rolesPermitidas.some(rolePermitida => userRoles.includes(rolePermitida));
+                    const temAcessoPeloClaim = rolesPermitidas.some(role => claims[role.replace('-', '_')] === true || claims[role] === true);
+
+                    if (temAcessoPeloRole || temAcessoPeloClaim) {
+                        document.getElementById('loading-message').style.display = 'none';
+                        document.getElementById('main-content').style.display = 'block';
+                        inicializar();
+                    } else {
+                        document.getElementById('loading-message').style.display = 'none';
+                        document.getElementById('acesso-negado').style.display = 'block';
+                    }
+                }).catch(error => {
+                    document.getElementById('loading-message').style.display = 'none';
+                    document.getElementById('acesso-negado').style.display = 'block';
+                });
+            } else {
+                window.location.href = '/login.html';
+            }
+        });
 
         function inicializar() {
             let todosOsDados = [];
@@ -290,60 +315,18 @@
                 new Chart(document.getElementById('grafico-financeiro'), { type: 'line', data: { labels, datasets: [{ label: 'Receitas', data: rec, borderColor: 'green' }, { label: 'Despesas', data: des, borderColor: 'red' }] } });
             }
 
-            async function carregarGraficoFinanceiro() {
-
-                const snap = await getDocs(query(collection(db, "balancetes"), where("status", "==", "aprovado"), orderBy(documentId())));
-
-                if (snap.empty) return;
-
-                document.getElementById('financeiro-feedback').style.display = 'none';
-
-                const labels = [], rec = [], des = [];
-
-                snap.forEach(doc => {
-
-                    labels.push(doc.id);
-
-                    let r = 0, d = 0;
-
-                    Object.values(doc.data().receitas || {}).flat().forEach(i => r += i.valor || 0);
-
-                    Object.values(doc.data().despesas || {}).flat().forEach(i => d += i.valor || 0);
-
-                    rec.push(r); des.push(d);
-
-                });
-
-                new Chart(document.getElementById('grafico-financeiro'), { type: 'line', data: { labels, datasets: [{ label: 'Receitas', data: rec, borderColor: 'green' }, { label: 'Despesas', data: des, borderColor: 'red' }] } });
-
-            }
-
-
-
             async function carregarGraficoVibracoes() {
-
                 const snap = await getDocs(query(collection(db, "historico_vibracoes"), orderBy("semanaDeReferencia", "asc")));
-
                 if (snap.empty) return;
-
                 document.getElementById('vibracoes-feedback').style.display = 'none';
-
                 const sem = {};
-
                 snap.forEach(doc => {
-
                     const d = doc.data();
-
                     if(!sem[d.semanaDeReferencia]) sem[d.semanaDeReferencia] = { e: 0, d: 0 };
-
                     d.tipo === 'encarnado' ? sem[d.semanaDeReferencia].e++ : sem[d.semanaDeReferencia].d++;
-
                 });
-
                 const labels = Object.keys(sem);
-
                 new Chart(document.getElementById('grafico-vibracoes'), { type: 'bar', data: { labels, datasets: [{ label: 'Encarnados', data: labels.map(l => sem[l].e), backgroundColor: 'teal' }, { label: 'Desencarnados', data: labels.map(l => sem[l].d), backgroundColor: 'blue' }] } });
-
             }
 
             async function carregarDadosCaritas() {
@@ -379,7 +362,6 @@
                     const anoAtual = new Date().getFullYear();
                     const contagemMensal = new Array(12).fill(0);
                     cestaSnap.forEach(doc => {
-                        // CORREÇÃO: Usando 'data' conforme banco e validando ano atual (2026)
                         const timestamp = doc.data().data; 
                         if (timestamp) {
                             const d = timestamp.toDate();
