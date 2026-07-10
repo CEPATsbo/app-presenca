@@ -261,7 +261,7 @@
             <p>Gerar o relatório de presenças de um dia específico para impressão.</p>
         </a>
 
-        <a href="/tv.html" target="_blank" class="card" data-role="diretor,tesoureiro,super-admin,conselheiro,recepcionista,entrevistador,dirigente-escola,produtor-evento" style="border-left-color: #34495e;">
+        <a href="/tv.html" target="_blank" class="card" data-role="voluntario,diretor,tesoureiro,super-admin,conselheiro,recepcionista,entrevistador,dirigente-escola,produtor-evento" style="border-left-color: #34495e;">
             <h2>Painel da TV (Voluntários)</h2>
             <p>Abrir o painel de exibição de presenças em tempo real para a TV.</p>
         </a>
@@ -311,19 +311,22 @@
 
         onAuthStateChanged(auth, (user) => {
             if (user) {
-                // Força o refresh dos Custom Claims para garantir que os cargos sejam lidos corretamente
                 user.getIdTokenResult(true).then((idTokenResult) => {
                     const claims = idTokenResult.claims || {};
                     
-                    // Lê a matriz 'roles', faz fallback para a 'role' antiga, ou assume 'voluntario'
-                    const userRoles = claims.roles || (claims.role ? [claims.role] : ['voluntario']);
+                    // LÓGICA REFORÇADA: Garante que a mochila seja um array.
+                    let userRoles = claims.roles || (claims.role ? [claims.role] : []);
+                    
+                    // Garante que todo usuário autenticado seja lido, no mínimo, como voluntário.
+                    if (!userRoles.includes('voluntario')) {
+                        userRoles.push('voluntario');
+                    }
                     
                     document.querySelectorAll('.card').forEach(card => {
-                        const rolesPermitidas = card.dataset.role.split(',');
+                        const rolesPermitidas = card.dataset.role.split(',').map(r => r.trim());
 
-                        // Lógica Reforçada: Verifica se algum dos cargos do usuário bate com os cargos do card
                         const temAcessoPeloRole = userRoles.includes('super-admin') || rolesPermitidas.some(rolePermitida => userRoles.includes(rolePermitida));
-                        const temAcessoPeloClaim = rolesPermitidas.some(role => claims[role] === true);
+                        const temAcessoPeloClaim = rolesPermitidas.some(role => claims[role.replace('-', '_')] === true || claims[role] === true);
 
                         if (temAcessoPeloRole || temAcessoPeloClaim) {
                             card.style.display = 'block';
@@ -392,12 +395,9 @@
             }
         }
 
-        // Nova função para monitorar as manutenções obrigatórias
         function monitorarManutencoesPendentes() {
             const manutencoesRef = collection(db, 'manutencoes_periodicas');
 
-            // Como as manutenções periódicas são uma coleção pequena (ex: caixa d'água, calha, AVCB), 
-            // trazemos os dados e filtramos a data no frontend para exibir as atrasadas e as próximas de 30 dias.
             onSnapshot(manutencoesRef, (snapshot) => {
                 let countVencidasOuProximas = 0;
                 
@@ -411,15 +411,12 @@
                     if (dados.data_proxima) {
                         let dataVencimento;
 
-                        // Verifica se a data foi salva como Timestamp do Firebase ou String 'YYYY-MM-DD'
                         if (dados.data_proxima.toDate) {
                             dataVencimento = dados.data_proxima.toDate();
                         } else {
-                            // Se for salva como input de data HTML, ajustamos o fuso horário
                             dataVencimento = new Date(dados.data_proxima + 'T00:00:00');
                         }
 
-                        // Se a data de vencimento for menor ou igual à data limite (+30 dias)
                         if (dataVencimento <= dataLimite) {
                             countVencidasOuProximas++;
                         }
