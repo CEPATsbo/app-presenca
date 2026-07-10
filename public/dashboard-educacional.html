@@ -71,22 +71,36 @@
                     const claims = idTokenResult.claims || {};
                     const userRoles = claims.roles || (claims.role ? [claims.role] : ['voluntario']);
 
+                    // 1. Quem tem acesso à página em si
                     const rolesPermitidasPagina = [ 
                         'super-admin', 'diretor', 
                         'dirigente-escola', 'secretario-escola'
                     ];
-                    const rolesAdminGlobal = [ 
+                    
+                    // 2. Quem pode ver o card de CURSOS (Gabaritos)
+                    const rolesPodeVerCursos = [ 
                         'super-admin', 'diretor'
                     ];
 
-                    // Verifica se tem permissão total analisando o Array novo e os booleanos antigos do Educacional
+                    // 3. Quem pode ver o card de TURMAS
+                    const rolesPodeVerTurmas = [ 
+                        'super-admin', 'dirigente-escola', 'secretario-escola'
+                    ];
+
+                    // Verifica as permissões varrendo a "mochila"
                     const temPermissaoPagina = rolesPermitidasPagina.some(role => 
                         userRoles.includes(role) || 
                         claims[role] === true || 
                         claims[role.replace('-', '_')] === true
                     );
 
-                    const isAdminGlobal = rolesAdminGlobal.some(role => 
+                    const podeVerCursos = rolesPodeVerCursos.some(role => 
+                        userRoles.includes(role) || 
+                        claims[role] === true || 
+                        claims[role.replace('-', '_')] === true
+                    );
+
+                    const podeVerTurmas = rolesPodeVerTurmas.some(role => 
                         userRoles.includes(role) || 
                         claims[role] === true || 
                         claims[role.replace('-', '_')] === true
@@ -95,17 +109,24 @@
                     if (temPermissaoPagina) {
                         mainContainer.style.display = 'block';
                         acessoNegadoContainer.style.display = 'none';
-                        console.log("Acesso permitido para Dashboard Educacional:", user.displayName);
 
-                        if (isAdminGlobal) {
+                        // Controle do Card de Cursos
+                        if (podeVerCursos) {
                             cardGerenciarCursos.style.display = 'block'; 
                         } else {
                             cardGerenciarCursos.style.display = 'none'; 
                         }
+
+                        // Controle do Card de Turmas
+                        if (podeVerTurmas) {
+                            cardGerenciarTurmas.style.display = 'block'; 
+                        } else {
+                            cardGerenciarTurmas.style.display = 'none'; 
+                        }
+
                     } else {
                         mainContainer.style.display = 'none';
                         acessoNegadoContainer.style.display = 'block';
-                        console.warn("Acesso negado para Dashboard Educacional:", user.displayName);
                     }
                 } catch (error) {
                     console.error("Erro ao verificar permissões:", error);
