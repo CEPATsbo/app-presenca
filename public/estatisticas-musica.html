@@ -62,8 +62,8 @@
 
     <script type="module">
         import { initializeApp, getApps } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
+        import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-auth.js";
         import { getFirestore, collection, getDocs } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
-        import { protegerPagina } from '/auth.js';
 
         const firebaseConfig = {
             apiKey: "AIzaSyBV7RPjk3cFTqL-aIpflJcUojKg1ZXMLuU",
@@ -71,18 +71,40 @@
             projectId: "voluntarios-ativos---cepat"
         };
 
-        // Inicialização Seguraa1
         const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApps()[0];
+        const auth = getAuth(app);
         const db = getFirestore(app);
 
-        // Proteção de Rota (Cargos autorizados)
-        protegerPagina(['super-admin', 'diretor', 'tesoureiro', 'conselheiro'])
-            .then(() => {
-                inicializarEstatisticas();
-            })
-            .catch(() => {
-                window.location.href = "/acesso-negado.html";
-            });
+        // NOVA LÓGICA DE AUTENTICAÇÃO INLINE COM ACESSO TOTAL PARA VOLUNTÁRIOS
+        const rolesPermitidas = ['super-admin', 'diretor', 'voluntario', 'tesoureiro', 'conselheiro', 'entrevistador', 'recepcionista', 'irradiador', 'secretario-escola', 'dirigente-escola', 'produtor-evento','caritas','bibliotecario'];
+
+        onAuthStateChanged(auth, (user) => {
+            if (user) {
+                user.getIdTokenResult(true).then((idTokenResult) => {
+                    const claims = idTokenResult.claims || {};
+                    let userRoles = claims.roles || (claims.role ? [claims.role] : []);
+                    
+                    // Garante que todo usuário é, no mínimo, um voluntário
+                    if (!userRoles.includes('voluntario')) {
+                        userRoles.push('voluntario');
+                    }
+
+                    const temAcessoPeloRole = rolesPermitidas.some(rolePermitida => userRoles.includes(rolePermitida));
+                    const temAcessoPeloClaim = rolesPermitidas.some(role => claims[role.replace('-', '_')] === true || claims[role] === true);
+
+                    if (temAcessoPeloRole || temAcessoPeloClaim) {
+                        inicializarEstatisticas();
+                    } else {
+                        window.location.href = "/acesso-negado.html";
+                    }
+                }).catch(error => {
+                    console.error(error);
+                    window.location.href = "/acesso-negado.html";
+                });
+            } else {
+                window.location.href = '/login.html';
+            }
+        });
 
         async function inicializarEstatisticas() {
             try {
@@ -177,4 +199,3 @@
     </script>
 </body>
 </html>
-
