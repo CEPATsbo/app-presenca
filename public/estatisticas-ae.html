@@ -136,8 +136,8 @@
 
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
+        import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-auth.js";
         import { getFirestore, collection, getDocs, query, where, Timestamp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
-        import { protegerPagina } from '/auth.js';
 
         const firebaseConfig = {
             apiKey: "AIzaSyBV7RPjk3cFTqL-aIpflJcUojKg1ZXMLuU",
@@ -148,14 +148,40 @@
             appId: "1:66122858261:web:7fa21f1805463b5c08331c"
         };
         
-        initializeApp(firebaseConfig);
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
 
-        protegerPagina(['super-admin', 'diretor', 'voluntario', 'tesoureiro', 'conselheiro', 'entrevistador', 'recepcionista', 'irradiador', 'secretario-escola', 'dirigente-escola', 'produtor-evento','caritas','bibliotecario']).then(user => {
-            document.getElementById('main-content').style.display = 'block';
-            inicializar();
-        }).catch(error => {
-            document.getElementById('feedback').style.display = 'none';
-            document.getElementById('acesso-negado').style.display = 'block';
+        // NOVA LÓGICA DE AUTENTICAÇÃO INLINE COM ACESSO TOTAL PARA VOLUNTÁRIOS
+        const rolesPermitidas = ['super-admin', 'diretor', 'voluntario', 'tesoureiro', 'conselheiro', 'entrevistador', 'recepcionista', 'irradiador', 'secretario-escola', 'dirigente-escola', 'produtor-evento','caritas','bibliotecario'];
+
+        onAuthStateChanged(auth, (user) => {
+            if (user) {
+                user.getIdTokenResult(true).then((idTokenResult) => {
+                    const claims = idTokenResult.claims || {};
+                    let userRoles = claims.roles || (claims.role ? [claims.role] : []);
+                    
+                    // Garante que todo usuário é, no mínimo, um voluntário
+                    if (!userRoles.includes('voluntario')) {
+                        userRoles.push('voluntario');
+                    }
+
+                    const temAcessoPeloRole = rolesPermitidas.some(rolePermitida => userRoles.includes(rolePermitida));
+                    const temAcessoPeloClaim = rolesPermitidas.some(role => claims[role.replace('-', '_')] === true || claims[role] === true);
+
+                    if (temAcessoPeloRole || temAcessoPeloClaim) {
+                        document.getElementById('main-content').style.display = 'block';
+                        inicializar();
+                    } else {
+                        document.getElementById('feedback').style.display = 'none';
+                        document.getElementById('acesso-negado').style.display = 'block';
+                    }
+                }).catch(error => {
+                    document.getElementById('feedback').style.display = 'none';
+                    document.getElementById('acesso-negado').style.display = 'block';
+                });
+            } else {
+                window.location.href = '/login.html';
+            }
         });
 
         async function inicializar() {
