@@ -257,6 +257,92 @@ const resetarTasvAnual = onSchedule({ ...OPCOES_FUNCAO_SAOPAULO, schedule: '0 4 
     await batch.commit();
 });
 
+
+
+// --- NOTIFICAÇÃO DE ANIVERSARIANTES VIA TELEGRAM ---
+const notificarAniversariosTelegram = onSchedule({ ...OPCOES_FUNCAO_SAOPAULO, schedule: '0 8 * * *' }, async () => {
+    // 1. Obtém a data de hoje no fuso horário de Brasília/São Paulo no formato DD/MM
+    const hoje = new Date();
+    const dataBrasil = new Date(hoje.toLocaleString("en-US", { timeZone: "America/Sao_Paulo" }));
+    
+    const dia = String(dataBrasil.getDate()).padStart(2, '0');
+    const mes = String(dataBrasil.getMonth() + 1).padStart(2, '0');
+    const aniversarioHojeStr = `${dia}/${mes}`;
+
+    console.log(`[Aniversários] Buscando voluntários ativos para hoje: ${aniversarioHojeStr}`);
+
+    try {
+        // 2. Busca no Firestore apenas os voluntários ativos que fazem aniversário hoje
+        const snapshot = await db.collection('voluntarios')
+            .where('aniversario', '==', aniversarioHojeStr)
+            .where('statusVoluntario', '==', 'ativo')
+            .get();
+
+        if (snapshot.empty) {
+            console.log('[Aniversários] Nenhum voluntário ativo aniversariando hoje.');
+            return;
+        }
+
+        // 3. Monta o cabeçalho do aviso para o Telegram
+        let textoTelegram = "🎂 *ANIVERSARIANTES DO DIA - CEPAT*\n\n";
+        textoTelegram += "Toque no link abaixo de cada nome para abrir o WhatsApp na conversa com a linda mensagem espírita de aniversário pronta para o disparo:\n\n";
+
+        snapshot.forEach((docSnap) => {
+            const v = docSnap.data();
+            
+            if (v.telefone) {
+                const telefoneLimpo = v.telefone.replace(/\D/g, '');
+                const primeiroNome = v.nome.split(' ')[0];
+                
+                // --- MENSAGEM ESPÍRITA DE ANIVERSÁRIO ---
+                const msgWhatsApp = `Olá, ${primeiroNome}!\n\n` +
+                    `Que a paz de Jesus esteja em seu coração nesta data tão bonita! 🕊️✨\n\n` +
+                    `Celebrar o seu aniversário é render graças a Deus pelo dom precioso da vida e pela oportunidade bendita de estarmos juntos na Seara do Bem. Nós da casa agradecemos imensamente pela sua dedicação, pelo carinho do seu trabalho e por toda a luz que você espalha entre nós.\n\n` +
+                    `Que os bons Espíritos envolveram você e sua família em vibrações de muita harmonia, saúde, amor e renovação espiritual para este novo ano de bênçãos e realizações.\n\n` +
+                    `Parabéns e um abraço fraterno de todos nós! 🎂🌟`;
+                
+                // Codifica o texto para formato de URL do WhatsApp
+                const linkWhatsApp = `https://wa.me/${telefoneLimpo}?text=${encodeURIComponent(msgWhatsApp)}`;
+                
+                textoTelegram += `👤 *${v.nome}* (${v.aniversario})\n`;
+                textoTelegram += `👉 [CLIQUE AQUI PARA ENVIAR O PARABÉNS](${linkWhatsApp})\n\n`;
+            } else {
+                textoTelegram += `👤 *${v.nome}* (${v.aniversario})\n`;
+                textoTelegram += `⚠️ *Aviso:* Este voluntário está sem telefone cadastrado para gerar o link.\n\n`;
+            }
+        });
+
+        // 4. Envia o resumo matinal para o Telegram do celular da entidade
+        const TELEGRAM_TOKEN = 'SEU_TOKEN_DO_BOTFATHER_AQUI'; // Insira o Token aqui
+        const CHAT_ID = 'ID_DO_CELULAR_DA_CASA_AQUI';         // Insira o ID aqui
+
+        const urlTelegram = `https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendMessage`;
+        
+        // Uso do fetch nativo (suportado por padrão no Node 18+ do Firebase Functions v2)
+        const resposta = await fetch(urlTelegram, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                chat_id: CHAT_ID,
+                text: textoTelegram,
+                parse_mode: 'Markdown',
+                disable_web_page_preview: true // Evita carregar card de preview da web para o link ficar limpo
+            })
+        });
+
+        const resultado = await resposta.json();
+        if (resultado.ok) {
+            console.log('[Aniversários] Alerta matinal com os links enviado com sucesso ao Telegram da casa!');
+        } else {
+            console.error('[Aniversários] Falha na resposta da API do Telegram:', resultado);
+        }
+
+    } catch (erro) {
+        console.error('[Aniversários] Erro na execução da rotina de agendamento:', erro);
+    }
+});
+
+
 // EXPORTAÇÕES
 module.exports = {
     definirSuperAdmin,
@@ -291,5 +377,6 @@ module.exports = {
     registrarLogDeAcesso,
     uploadAtaParaStorage,
     backfillNomesCracha,
-    resetarTasvAnual
+    resetarTasvAnual,
+    notificarAniversariosTelegram
 };
