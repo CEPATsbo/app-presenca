@@ -6,6 +6,7 @@ const webpush = require("web-push");
 const cors = require("cors")({ origin: true });
 const sharp = require('sharp');
 const bwipjs = require('bwip-js');
+const axios = require('axios');
 
 const db = admin.firestore();
 const storage = admin.storage();
@@ -290,18 +291,26 @@ const notificarAniversariosTelegram = onSchedule({ ...OPCOES_FUNCAO_SAOPAULO, sc
         snapshot.forEach((docSnap) => {
             const v = docSnap.data();
             
+            // --- AQUI ESTAVA FALTANDO O IF E O TRATAMENTO DO TELEFONE ---
             if (v.telefone) {
-                const telefoneLimpo = v.telefone.replace(/\D/g, '');
+                // 1. Limpa tudo o que não for número (tira parênteses, traços e espaços)
+                let telefoneLimpo = v.telefone.replace(/\D/g, '');
+                
+                // 2. Garante que o código do Brasil (55) esteja na frente
+                if (telefoneLimpo.length <= 11 && !telefoneLimpo.startsWith('55')) {
+                    telefoneLimpo = '55' + telefoneLimpo;
+                }
+                
                 const primeiroNome = v.nome.split(' ')[0];
                 
                 // --- MENSAGEM ESPÍRITA DE ANIVERSÁRIO ---
                 const msgWhatsApp = `Olá, ${primeiroNome}!\n\n` +
                     `Que a paz de Jesus esteja em seu coração nesta data tão bonita! 🕊️✨\n\n` +
                     `Celebrar o seu aniversário é render graças a Deus pelo dom precioso da vida e pela oportunidade bendita de estarmos juntos na Seara do Bem. Nós da casa agradecemos imensamente pela sua dedicação, pelo carinho do seu trabalho e por toda a luz que você espalha entre nós.\n\n` +
-                    `Que os bons Espíritos envolveram você e sua família em vibrações de muita harmonia, saúde, amor e renovação espiritual para este novo ano de bênçãos e realizações.\n\n` +
+                    `Que os bons Espíritos envolvam você e sua família em vibrações de muita harmonia, saúde, amor e renovação espiritual para este novo ano de bênçãos e realizações.\n\n` +
                     `Parabéns e um abraço fraterno de todos nós! 🎂🌟`;
                 
-                // Codifica o texto para formato de URL do WhatsApp
+                // 3. Codifica o texto para formato de URL do WhatsApp
                 const linkWhatsApp = `https://wa.me/${telefoneLimpo}?text=${encodeURIComponent(msgWhatsApp)}`;
                 
                 textoTelegram += `👤 *${v.nome}* (${v.aniversario})\n`;
@@ -313,32 +322,26 @@ const notificarAniversariosTelegram = onSchedule({ ...OPCOES_FUNCAO_SAOPAULO, sc
         });
 
         // 4. Envia o resumo matinal para o Telegram do celular da entidade
-        const TELEGRAM_TOKEN = 'SEU_TOKEN_DO_BOTFATHER_AQUI'; // Insira o Token aqui
-        const CHAT_ID = 'ID_DO_CELULAR_DA_CASA_AQUI';         // Insira o ID aqui
+        const TELEGRAM_TOKEN = '8624732081:AAG0hfGjIukA4GnF7x9EOp6ZqyoP9YOVmaM'; 
+        const CHAT_ID = '6752400553';         // Insira o ID aqui
 
         const urlTelegram = `https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendMessage`;
         
-        // Uso do fetch nativo (suportado por padrão no Node 18+ do Firebase Functions v2)
-        const resposta = await fetch(urlTelegram, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                chat_id: CHAT_ID,
-                text: textoTelegram,
-                parse_mode: 'Markdown',
-                disable_web_page_preview: true // Evita carregar card de preview da web para o link ficar limpo
-            })
+        const resposta = await axios.post(urlTelegram, {
+            chat_id: CHAT_ID,
+            text: textoTelegram,
+            parse_mode: 'Markdown',
+            disable_web_page_preview: true
         });
 
-        const resultado = await resposta.json();
-        if (resultado.ok) {
+        if (resposta.data && resposta.data.ok) {
             console.log('[Aniversários] Alerta matinal com os links enviado com sucesso ao Telegram da casa!');
         } else {
-            console.error('[Aniversários] Falha na resposta da API do Telegram:', resultado);
+            console.error('[Aniversários] Falha na resposta da API do Telegram:', resposta.data);
         }
 
     } catch (erro) {
-        console.error('[Aniversários] Erro na execução da rotina de agendamento:', erro);
+        console.error('[Aniversários] Erro na execução da rotina de agendamento:', erro.response ? erro.response.data : erro.message);
     }
 });
 
