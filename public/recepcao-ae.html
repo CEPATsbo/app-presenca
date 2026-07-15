@@ -95,7 +95,7 @@
     </style>
 </head>
 <body>
-    <nav class="nav-voltar"><a href="dashboard-ae-interno.html" class="btn-voltar">⬅ Voltar para o Dashboard AE</a></nav>
+    <nav class="nav-voltar"><a href="/dashboard-ae-interno.html" class="btn-voltar">⬅ Voltar para o Dashboard AE</a></nav>
     <div id="acesso-negado" class="container hidden"><h1>Acesso Negado</h1></div>
 
     <div id="bloqueio-temporal" class="container hidden">
@@ -200,7 +200,7 @@
 
         let diaTrabalhoAtual = new Date().getDay(); 
 
-        protegerPagina(['recepcionista', 'super-admin']).then(user => {
+        protegerPagina(['recepcionista', 'diretor', 'conselheiro', 'tesoureiro', 'entrevistador', 'super-admin']).then(user => {
             const diasSemana = ['Domingo', 'Segunda-feira', 'Terça-feira', 'Quarta-feira', 'Quinta-feira', 'Sexta-feira', 'Sábado'];
             document.getElementById('nome-dia-semana').textContent = diasSemana[diaTrabalhoAtual];
             
@@ -702,7 +702,7 @@
             });
 
              // =======================================================================
-             // CORREÇÃO: Lógica Blindada para Migração e Alta Programada
+             // BLOQUEIO ABSOLUTO E INTELIGENTE DA 5ª SEMANA (PRESENÇA)
              // =======================================================================
              ui.btnMarcarPresenca.addEventListener('click', async (e) => {
                 e.target.disabled = true;
@@ -726,20 +726,24 @@
                     const atendimentoPreRegistrado = dadosMeta?.atendimentoPreRegistrado;
                     const semanaCalculada = dadosMeta?.semanaAtual || await calcularSemanaAtual(tratamentoAtivoSelecionado.id);
 
+                    // A MURALHA DA 5ª SEMANA: Se é semana 5 ou mais, EXIGE decisão válida
+                    if (semanaCalculada >= 5 && !isAltaSuspensa) {
+                        const passeDestino = atendimentoPreRegistrado?.passePara || atendimentoPreRegistrado?.novoPasse || atendimentoPreRegistrado?.passe_destino;
+                        const temDecisaoValida = atendimentoPreRegistrado?.tipo === 'alta_programada' || passeDestino;
+
+                        if (!temDecisaoValida) {
+                            alert(`⛔ BLOQUEIO DE SEGURANÇA DA 5ª SEMANA!\n\n${assistidoSelecionado.nome} chegou na 5ª semana (Reavaliação), mas o sistema não encontrou a decisão final do Colegiado (Alta ou Migração).\n\nO Colegiado precisa abrir o Arquivo Geral e salvar a decisão antes que você possa registrar a presença.`);
+                            e.target.disabled = false;
+                            ui.painelAcoesFrequencia.classList.add('hidden');
+                            return; 
+                        }
+                    }
+
                     const dataAtual = serverTimestamp();
                     const batch = writeBatch(db);
 
                     if (atendimentoPreRegistrado && !isAltaSuspensa) {
                         const passeDestino = atendimentoPreRegistrado.passePara || atendimentoPreRegistrado.novoPasse || atendimentoPreRegistrado.passe_destino;
-                        const temDecisaoValida = atendimentoPreRegistrado.tipo === 'alta_programada' || passeDestino;
-
-                        if (!temDecisaoValida) {
-                            alert(`⚠️ BLOQUEIO DE SEGURANÇA!\n\n${assistidoSelecionado.nome} tem uma reavaliação pendente (Semana ${atendimentoPreRegistrado.semana}), mas a decisão do Colegiado NÃO foi registrada.\n\nVá ao Arquivo Geral e preencha a decisão antes de dar presença.`);
-                            e.target.disabled = false;
-                            ui.painelAcoesFrequencia.classList.add('hidden');
-                            return; 
-                        }
-
                         const atendimentoDocRef = doc(db, 'atendimentos_ae', atendimentoPreRegistrado.id);
 
                         if (atendimentoPreRegistrado.tipo === 'alta_programada') {
@@ -871,6 +875,9 @@
                 await carregarTratamentosAtivos();
             });
 
+             // =======================================================================
+             // BLOQUEIO ABSOLUTO E INTELIGENTE DA 5ª SEMANA (FALTA)
+             // =======================================================================
              ui.btnMarcarFaltaRapido.addEventListener('click', async (e) => {
                 e.target.disabled = true;
                 if (confirm(`Confirmar uma falta para ${assistidoSelecionado.nome}?`)) {
@@ -880,6 +887,19 @@
                     const atendimentoPreRegistrado = dadosMeta?.atendimentoPreRegistrado;
                     const semanaAtual = dadosMeta?.semanaAtual || await calcularSemanaAtual(tratamentoAtivoSelecionado.id);
                     
+                    // A MURALHA DA 5ª SEMANA: Se for semana 5 e o Colegiado não decidiu, bloqueia a falta também!
+                    if (semanaAtual >= 5 && !isAltaSuspensa) {
+                        const passeDestino = atendimentoPreRegistrado?.passePara || atendimentoPreRegistrado?.novoPasse || atendimentoPreRegistrado?.passe_destino;
+                        const temDecisaoValida = atendimentoPreRegistrado?.tipo === 'alta_programada' || passeDestino;
+
+                        if (!temDecisaoValida) {
+                            alert(`⛔ BLOQUEIO DE SEGURANÇA DA 5ª SEMANA!\n\nO sistema bloqueou a falta para ${assistidoSelecionado.nome}.\n\nComo ele está na 5ª semana, o Colegiado precisa registrar o retorno (Alta ou Migração) no Arquivo Geral ANTES que qualquer ação de presença ou falta possa ser feita.`);
+                            e.target.disabled = false;
+                            ui.painelAcoesFrequencia.classList.add('hidden');
+                            return;
+                        }
+                    }
+
                     const tratamentoDocRef = doc(db, 'tratamentos_ae', tratamentoAtivoSelecionado.id);
                     const novoTotalFaltas = (tratamentoAtivoSelecionado.faltas_acumuladas || 0) + 1;
                     const passeDoCiclo = tratamentoAtivoSelecionado.passe_ciclo_atual;
