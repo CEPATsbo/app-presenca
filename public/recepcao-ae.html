@@ -95,7 +95,7 @@
     </style>
 </head>
 <body>
-    <nav class="nav-voltar"><a href="/dashboard-ae.html" class="btn-voltar">⬅ Voltar para o Dashboard AE</a></nav>
+    <nav class="nav-voltar"><a href="/dashboard-ae-interno.html" class="btn-voltar">⬅ Voltar para o Dashboard AE</a></nav>
     <div id="acesso-negado" class="container hidden"><h1>Acesso Negado</h1></div>
 
     <div id="bloqueio-temporal" class="container hidden">
@@ -331,8 +331,6 @@
                 const hojeInicio = new Date(); hojeInicio.setHours(0, 0, 0, 0);
                 const hojeFim = new Date(); hojeFim.setHours(23, 59, 59, 999);
 
-                // Buscamos os avulsos do dia REAL, MAS filtramos no JS se o dia da semana bate
-                // com o dia que estamos simulando no painel admin.
                 const qAvulsos = query(atendimentosRef, 
                     where("tipo", "==", "avulso"), 
                     where("dataAtendimento", ">=", Timestamp.fromDate(hojeInicio)), 
@@ -345,10 +343,9 @@
                 const promessas = snapshot.docs.map(async (docSnap) => {
                     const data = docSnap.data();
                     
-                    // Validação de Dia Simulado vs Real
                     const dataAtendimentoObj = data.dataAtendimento.toDate();
                     const diaSemanaAtendimento = dataAtendimentoObj.getDay();
-                    if (diaSemanaAtendimento !== diaTrabalhoAtual) return null; // Ignora se não for o dia simulado
+                    if (diaSemanaAtendimento !== diaTrabalhoAtual) return null; 
 
                     const assistidoDocRef = doc(db, 'assistidos', data.assistidoId);
                     const assistidoDoc = await getDoc(assistidoDocRef);
@@ -375,7 +372,6 @@
                         ui.nomeFrequencia.textContent = item.assistido.nome + " (Avulso)";
                         ui.painelAcoesFrequencia.classList.remove('hidden');
                         
-                        // Esconde os botões de ação normais e deixa só a lixeira
                         ui.btnMarcarPresenca.classList.add('hidden');
                         ui.btnMarcarFaltaRapido.classList.add('hidden');
                         ui.btnLiberarAltaSuspensa.classList.add('hidden');
@@ -579,7 +575,7 @@
                         const placeholderData = { id: placeholderSnapshot.docs[0].id, ...placeholderSnapshot.docs[0].data() };
                         metadadosTratamento[tratamento.id] = { atendimentoPreRegistrado: placeholderData, semanaAtual: placeholderData.semana };
                         if (placeholderData.tipo === 'alta_programada') { statusHoje = 'alta-programada'; }
-                        else if (placeholderData.passePara) { statusHoje = 'novo-ciclo'; }
+                        else if (placeholderData.passePara || placeholderData.novoPasse || placeholderData.passe_destino) { statusHoje = 'novo-ciclo'; }
                     } else {
                          metadadosTratamento[tratamento.id] = { semanaAtual: semanaAtualHoje };
                     }
@@ -609,7 +605,7 @@
                         iconeStatus = ' 🔴 (Alta)';
                         li.title = "Decisão: ALTA PROGRAMADA (Aguardando Entrevista)";
                     } else if (item.statusHoje === 'novo-ciclo') {
-                        const passeNovo = metadadosTratamento[item.tratamento.id]?.atendimentoPreRegistrado?.passePara || 'N/I';
+                        const passeNovo = metadadosTratamento[item.tratamento.id]?.atendimentoPreRegistrado?.passePara || metadadosTratamento[item.tratamento.id]?.atendimentoPreRegistrado?.novoPasse || metadadosTratamento[item.tratamento.id]?.atendimentoPreRegistrado?.passe_destino || 'N/I';
                         iconeStatus = ' 🔄 (Migração)';
                         li.title = `Decisão: NOVO CICLO (Passe ${passeNovo})`;
                     } else if (item.statusHoje === 'alta-suspensa') {
@@ -705,6 +701,9 @@
                 }
             });
 
+             // =======================================================================
+             // CORREÇÃO: Lógica Blindada para Migração e Alta Programada
+             // =======================================================================
              ui.btnMarcarPresenca.addEventListener('click', async (e) => {
                 e.target.disabled = true;
                 const hojeInicio = new Date();
@@ -727,14 +726,12 @@
                     const atendimentoPreRegistrado = dadosMeta?.atendimentoPreRegistrado;
                     const semanaCalculada = dadosMeta?.semanaAtual || await calcularSemanaAtual(tratamentoAtivoSelecionado.id);
 
-                    // =======================================================================
-                    // CORREÇÃO ZERO RETROCESSO: Variáveis puxadas para o nível correto da função!
-                    // =======================================================================
                     const dataAtual = serverTimestamp();
                     const batch = writeBatch(db);
 
                     if (atendimentoPreRegistrado && !isAltaSuspensa) {
-                        const temDecisaoValida = atendimentoPreRegistrado.tipo === 'alta_programada' || atendimentoPreRegistrado.passePara;
+                        const passeDestino = atendimentoPreRegistrado.passePara || atendimentoPreRegistrado.novoPasse || atendimentoPreRegistrado.passe_destino;
+                        const temDecisaoValida = atendimentoPreRegistrado.tipo === 'alta_programada' || passeDestino;
 
                         if (!temDecisaoValida) {
                             alert(`⚠️ BLOQUEIO DE SEGURANÇA!\n\n${assistidoSelecionado.nome} tem uma reavaliação pendente (Semana ${atendimentoPreRegistrado.semana}), mas a decisão do Colegiado NÃO foi registrada.\n\nVá ao Arquivo Geral e preencha a decisão antes de dar presença.`);
@@ -757,21 +754,24 @@
                             await registrarLog('Ativação de Entrevista de Alta (AE)', { assistidoId: assistidoSelecionado.id, assistidoNome: assistidoSelecionado.nome, tratamentoId: tratamentoAtivoSelecionado.id });
                             alert(`Presença registrada para ${assistidoSelecionado.nome}. Assistido encaminhado para a ENTREVISTA DE ALTA.`);
 
-                        } else if (atendimentoPreRegistrado.passePara) {
-                            const novoPasse = atendimentoPreRegistrado.passePara;
+                        } else if (passeDestino) {
                             const tratamentoAtualDocRef = doc(db, 'tratamentos_ae', tratamentoAtivoSelecionado.id);
                             batch.update(tratamentoAtualDocRef, { status: 'concluido_por_reavaliacao', dataFim: dataAtual });
+                            
                             const novoTratamentoRef = doc(tratamentosRef);
-                            batch.set(novoTratamentoRef, { assistidoId: assistidoSelecionado.id, dataInicio: dataAtual, status: 'ativo', faltas_acumuladas: 0, passe_ciclo_atual: novoPasse, dia_trabalho: diaTrabalhoAtual });
-                            batch.update(atendimentoDocRef, { dataAtendimento: dataAtual, tratamentoId: novoTratamentoRef.id, semana: 1, passeRecomendado: novoPasse, tipo: 'tratamento_semanal' });
+                            batch.set(novoTratamentoRef, { assistidoId: assistidoSelecionado.id, dataInicio: dataAtual, status: 'ativo', faltas_acumuladas: 0, passe_ciclo_atual: passeDestino, dia_trabalho: diaTrabalhoAtual });
+                            
+                            batch.update(atendimentoDocRef, { dataAtendimento: dataAtual, tratamentoId: novoTratamentoRef.id, semana: 1, passeRecomendado: passeDestino, tipo: 'tratamento_semanal' });
+                            
                             batch.set(doc(filaRef), {
                                 assistidoId: assistidoSelecionado.id, nomeAssistido: assistidoSelecionado.nome, tratamentoId: novoTratamentoRef.id,
-                                atendimentoId: atendimentoDocRef.id, status: 'aguardando_entrevista_ou_passe', passeRecomendado: novoPasse,
+                                atendimentoId: atendimentoDocRef.id, status: 'aguardando_entrevista_ou_passe', passeRecomendado: passeDestino,
                                 semana_atual: 1, chegadaEm: dataAtual, recepcionista: { uid: user.uid, nome: user.displayName }
                             });
+                            
                             await batch.commit();
-                            await registrarLog('Ativação de Novo Ciclo (AE)', { assistidoId: assistidoSelecionado.id, assistidoNome: assistidoSelecionado.nome, tratamentoAntigoId: tratamentoAtivoSelecionado.id, tratamentoNovoId: novoTratamentoRef.id, novoPasse: novoPasse });
-                            alert(`Presença registrada. ${assistidoSelecionado.nome} iniciou um NOVO CICLO (Semana 1, Passe ${novoPasse}) e foi enviado para a fila.`);
+                            await registrarLog('Ativação de Novo Ciclo (AE)', { assistidoId: assistidoSelecionado.id, assistidoNome: assistidoSelecionado.nome, tratamentoAntigoId: tratamentoAtivoSelecionado.id, tratamentoNovoId: novoTratamentoRef.id, novoPasse: passeDestino });
+                            alert(`Presença registrada. ${assistidoSelecionado.nome} iniciou um NOVO CICLO (Semana 1, Passe ${passeDestino}) e foi enviado para a fila.`);
                         }
                     } else {
                         const passeDoCiclo = tratamentoAtivoSelecionado.passe_ciclo_atual;
@@ -895,8 +895,8 @@
                         const faltasJaNaSemana5 = snapFaltasW5.size;
 
                         let isDestinoP3 = false;
-                        if (atendimentoPreRegistrado && atendimentoPreRegistrado.passePara) {
-                            const proximoPasse = atendimentoPreRegistrado.passePara;
+                        if (atendimentoPreRegistrado) {
+                            const proximoPasse = atendimentoPreRegistrado.passePara || atendimentoPreRegistrado.novoPasse || atendimentoPreRegistrado.passe_destino;
                             if (proximoPasse === 'P3A' || proximoPasse === 'P3B') isDestinoP3 = true;
                         }
 
