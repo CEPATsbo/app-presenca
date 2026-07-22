@@ -914,18 +914,18 @@
                         const snapFaltasW5 = await getDocs(qFaltasW5);
                         const faltasJaNaSemana5 = snapFaltasW5.size;
 
-                        let isDestinoP3 = false;
+                        let proximoPasse = '';
                         if (atendimentoPreRegistrado) {
-                            const proximoPasse = atendimentoPreRegistrado.passePara || atendimentoPreRegistrado.novoPasse || atendimentoPreRegistrado.passe_destino;
-                            if (proximoPasse === 'P3A' || proximoPasse === 'P3B') isDestinoP3 = true;
+                            proximoPasse = atendimentoPreRegistrado.passePara || atendimentoPreRegistrado.novoPasse || atendimentoPreRegistrado.passe_destino || '';
                         }
 
-                        if (passeDoCiclo === 'P3A' || passeDoCiclo === 'P3B') {
+                        const passeAtualIsP3 = (passeDoCiclo === 'P3A' || passeDoCiclo === 'P3B');
+                        const destinoIsP3 = (proximoPasse === 'P3A' || proximoPasse === 'P3B');
+                        const isToleranciaZeroMigracao = passeAtualIsP3 && destinoIsP3;
+
+                        if (isToleranciaZeroMigracao) {
                             encerrarTratamento = true;
-                            motivo = `Falta registrada na Reavaliação. ATENÇÃO: Tratamento encerrado por falta (Tolerância Zero para o ciclo atual de P3A/P3B).`;
-                        } else if (isDestinoP3) {
-                            encerrarTratamento = true;
-                            motivo = `Falta registrada na Reavaliação. ATENÇÃO: Tratamento encerrado por falta (Tolerância Zero para o destino P3A/P3B).`;
+                            motivo = `Falta registrada na Reavaliação. ATENÇÃO: Tratamento encerrado por falta (Tolerância Zero mantida para transição restrita entre passes P3A e P3B).`;
                         } else if (faltasJaNaSemana5 >= 1) {
                             encerrarTratamento = true;
                             motivo = `Falta registrada. ATENÇÃO: Tratamento encerrado! O assistido já utilizou o bônus e não pode ter uma segunda falta na 5ª semana.`;
