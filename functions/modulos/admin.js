@@ -321,23 +321,34 @@ const notificarAniversariosTelegram = onSchedule({ ...OPCOES_FUNCAO_SAOPAULO, sc
             }
         });
 
-        // 4. Envia o resumo matinal para o Telegram do celular da entidade
-        const TELEGRAM_TOKEN = '8624732081:AAG0hfGjIukA4GnF7x9EOp6ZqyoP9YOVmaM'; 
-        const CHAT_ID = '6752400553';         // Insira o ID aqui
+        // 4. Envia o resumo matinal para o Telegram usando AXIOS
+        const TELEGRAM_TOKEN = '8624732081:AAH5LkOMXbIgryetTS-u0AXAzvyWb2Rol4c'; 
+        
+        // AGORA É UMA LISTA [ ]: Coloque o seu ID e o ID oficial da casa separados por vírgula
+        const CHAT_IDS = [
+            '6752400553',         // Seu celular (Contingência)
+            '8884489023' // Celular oficial da entidade
+        ];
 
         const urlTelegram = `https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendMessage`;
         
-        const resposta = await axios.post(urlTelegram, {
-            chat_id: CHAT_ID,
-            text: textoTelegram,
-            parse_mode: 'Markdown',
-            disable_web_page_preview: true
-        });
+        // Percorre a lista disparando a notificação para cada celular cadastrado
+        for (const id of CHAT_IDS) {
+            try {
+                const resposta = await axios.post(urlTelegram, {
+                    chat_id: id,
+                    text: textoTelegram,
+                    parse_mode: 'Markdown',
+                    disable_web_page_preview: true
+                });
 
-        if (resposta.data && resposta.data.ok) {
-            console.log('[Aniversários] Alerta matinal com os links enviado com sucesso ao Telegram da casa!');
-        } else {
-            console.error('[Aniversários] Falha na resposta da API do Telegram:', resposta.data);
+                if (resposta.data && resposta.data.ok) {
+                    console.log(`[Aniversários] Alerta enviado com sucesso para o ID: ${id}`);
+                }
+            } catch (erroEnvio) {
+                // Se falhar para um ID, ele registra no log mas NÃO impede o envio para os outros aparelhos da lista!
+                console.error(`[Aniversários] Falha ao enviar para o ID ${id}:`, erroEnvio.response ? erroEnvio.response.data : erroEnvio.message);
+            }
         }
 
     } catch (erro) {
